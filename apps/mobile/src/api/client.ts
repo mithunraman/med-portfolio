@@ -2,6 +2,9 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { createApiClient, type TokenProvider, type HttpAdapter } from '@acme/api-client';
 import { env } from '../config/env';
+import { logger } from '../utils/logger';
+
+const apiLogger = logger.createScope('API');
 
 /**
  * Mobile token provider using Expo SecureStore.
@@ -43,6 +46,8 @@ function createRNHttpAdapter(): HttpAdapter {
       const controller = new AbortController();
       const timeoutId = timeout ? setTimeout(() => controller.abort(), timeout) : undefined;
 
+      apiLogger.debug('Request', { method, url });
+
       try {
         const response = await fetch(url, {
           method,
@@ -61,7 +66,12 @@ function createRNHttpAdapter(): HttpAdapter {
           responseHeaders[key] = value;
         });
 
+        apiLogger.debug('Response', { method, url, status: response.status });
+
         return { data, status: response.status, headers: responseHeaders };
+      } catch (error) {
+        apiLogger.error('Request failed', { method, url, error: String(error) });
+        throw error;
       } finally {
         if (timeoutId) clearTimeout(timeoutId);
       }

@@ -1,6 +1,9 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { AuthUser, LoginRequest, RegisterRequest } from '@acme/shared';
 import { api, mobileTokenProvider, setOnUnauthorized } from '../api/client';
+import { logger } from '../utils/logger';
+
+const authLogger = logger.createScope('Auth');
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -30,6 +33,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   const logout = useCallback(async () => {
+    authLogger.info('Logout initiated');
     try {
       await api.auth.logout();
     } catch {
@@ -37,32 +41,42 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } finally {
       await mobileTokenProvider.clearAccessToken();
       setUser(null);
+      authLogger.info('Logout completed');
     }
   }, []);
 
   const login = useCallback(async (credentials: LoginRequest) => {
+    authLogger.info('Login attempt', { email: credentials.email });
     const response = await api.auth.login(credentials);
     await mobileTokenProvider.setAccessToken(response.accessToken);
     setUser(response.user);
+    authLogger.info('Login successful', { userId: response.user.id });
   }, []);
 
   const register = useCallback(async (data: RegisterRequest) => {
+    authLogger.info('Registration attempt', { email: data.email });
     const response = await api.auth.register(data);
     await mobileTokenProvider.setAccessToken(response.accessToken);
     setUser(response.user);
+    authLogger.info('Registration successful', { userId: response.user.id });
   }, []);
 
   // Check for existing token on mount
   useEffect(() => {
     const checkAuth = async () => {
+      authLogger.debug('Checking existing auth token');
       const token = await mobileTokenProvider.getAccessToken();
       if (token) {
         try {
           const currentUser = await api.auth.me();
           setUser(currentUser);
+          authLogger.info('Session restored', { userId: currentUser.id });
         } catch {
+          authLogger.warn('Session invalid, clearing token');
           await mobileTokenProvider.clearAccessToken();
         }
+      } else {
+        authLogger.debug('No existing token found');
       }
       setIsLoading(false);
     };

@@ -31,6 +31,13 @@ export interface NudgeState {
 }
 
 /**
+ * User preferences state.
+ */
+export interface UserPreferences {
+  themeMode: 'light' | 'dark';
+}
+
+/**
  * Type-safe mapping of storage keys to their value types.
  * Non-sensitive app state belongs here.
  */
@@ -38,6 +45,7 @@ export interface StorageSchema {
   accountHint: AccountHint;
   onboarding: OnboardingState;
   nudge: NudgeState;
+  preferences: UserPreferences;
 }
 
 export type StorageKey = keyof StorageSchema;
@@ -97,7 +105,7 @@ class AppStorageService {
    * Clear all non-sensitive app data.
    */
   async clearAll(): Promise<void> {
-    const keys: StorageKey[] = ['accountHint', 'onboarding', 'nudge'];
+    const keys: StorageKey[] = ['accountHint', 'onboarding', 'nudge', 'preferences'];
     await Promise.all(keys.map((key) => this.remove(key)));
     storageLogger.info('All storage cleared');
   }

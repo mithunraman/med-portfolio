@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RestoreAccountBanner } from '../components/RestoreAccountBanner';
 import { SignupNudgeModal } from '../components/SignupNudgeModal';
@@ -9,7 +9,7 @@ import { useTheme } from '../theme';
 
 export function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, isDark, toggleMode } = useTheme();
   const { user, isGuest, logout } = useAuth();
   const dispatch = useAppDispatch();
 
@@ -63,6 +63,17 @@ export function HomeScreen() {
             {isGuest ? 'Exit Guest Mode' : 'Sign Out'}
           </Text>
         </TouchableOpacity>
+
+        {/* Dark mode toggle */}
+        <View style={[styles.themeToggleRow, { borderColor: colors.border }]}>
+          <Text style={[styles.themeToggleLabel, { color: colors.text }]}>Dark Mode</Text>
+          <Switch
+            value={isDark}
+            onValueChange={toggleMode}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor="#fff"
+          />
+        </View>
       </View>
 
       {/* Signup Nudge Modal (for guest users after meaningful action) */}
@@ -123,6 +134,21 @@ const styles = StyleSheet.create({
   },
   logoutButtonText: {
     fontSize: 14,
+    fontWeight: '500',
+  },
+  themeToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginTop: 24,
+  },
+  themeToggleLabel: {
+    fontSize: 16,
     fontWeight: '500',
   },
 });

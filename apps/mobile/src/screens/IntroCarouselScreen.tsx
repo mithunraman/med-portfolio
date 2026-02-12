@@ -1,18 +1,19 @@
-import { useState, useRef, useCallback } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import { useCallback, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
   Dimensions,
+  FlatList,
+  StyleSheet,
+  Switch,
+  Text,
   TouchableOpacity,
-  type ViewToken,
+  View,
   type ListRenderItem,
+  type ViewToken,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { useTheme } from '../theme';
 import type { OnboardingStackScreenProps } from '../navigation/types';
+import { useTheme } from '../theme';
 
 type NavigationProp = OnboardingStackScreenProps<'IntroCarousel'>['navigation'];
 
@@ -55,18 +56,21 @@ const SLIDES: Slide[] = [
 export function IntroCarouselScreen() {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, isDark, toggleMode } = useTheme();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList<Slide>>(null);
 
   const isLastSlide = currentIndex === SLIDES.length - 1;
 
-  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    if (viewableItems.length > 0 && viewableItems[0].index !== null) {
-      setCurrentIndex(viewableItems[0].index);
-    }
-  }, []);
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (viewableItems.length > 0 && viewableItems[0].index !== null) {
+        setCurrentIndex(viewableItems[0].index);
+      }
+    },
+    []
+  );
 
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 50,
@@ -94,7 +98,9 @@ export function IntroCarouselScreen() {
           <Text style={[styles.iconText, { color: colors.primary }]}>{item.icon}</Text>
         </View>
         <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
-        <Text style={[styles.description, { color: colors.textSecondary }]}>{item.description}</Text>
+        <Text style={[styles.description, { color: colors.textSecondary }]}>
+          {item.description}
+        </Text>
       </View>
     ),
     [colors]
@@ -153,6 +159,17 @@ export function IntroCarouselScreen() {
         >
           <Text style={styles.ctaText}>{isLastSlide ? "Let's Go" : 'Next'}</Text>
         </TouchableOpacity>
+
+        {/* Dark mode toggle */}
+        <View style={styles.themeToggle}>
+          <Text style={[styles.themeToggleText, { color: colors.textSecondary }]}>Dark Mode</Text>
+          <Switch
+            value={isDark}
+            onValueChange={toggleMode}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor="#fff"
+          />
+        </View>
       </View>
     </View>
   );
@@ -227,5 +244,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
+  },
+  themeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  themeToggleText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

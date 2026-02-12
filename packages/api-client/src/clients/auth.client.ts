@@ -2,7 +2,7 @@ import type { LoginRequest, LoginResponse, AuthUser, RegisterRequest } from '@ac
 import { BaseApiClient } from '../core/api-client';
 
 export class AuthClient {
-  constructor(private readonly client: BaseApiClient) {}
+  constructor(private readonly client: BaseApiClient) { }
 
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     return this.client.post<LoginResponse>('/auth/login', credentials, {
@@ -17,7 +17,7 @@ export class AuthClient {
   }
 
   async logout(): Promise<void> {
-    return this.client.post<void>('/auth/logout', {});
+    return this.client.post<void>('/auth/logout', {}, { skipUnauthorizedCallback: true });
   }
 
   async refreshToken(): Promise<{ accessToken: string }> {

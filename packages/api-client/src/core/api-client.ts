@@ -5,7 +5,10 @@ import { generateRequestId } from './request-id';
 interface RequestOptions extends Omit<HttpRequestConfig, 'url' | 'method'> {
   method?: HttpRequestConfig['method'];
   authenticated?: boolean;
+  skipUnauthorizedCallback?: boolean;
 }
+
+type PublicRequestOptions = Pick<RequestOptions, 'authenticated' | 'skipUnauthorizedCallback'>;
 
 /**
  * Base API client with dependency injection.
@@ -18,7 +21,7 @@ export class BaseApiClient {
     this.config = {
       ...config,
       requestIdGenerator: config.requestIdGenerator || generateRequestId,
-      onUnauthorized: config.onUnauthorized || (() => {}),
+      onUnauthorized: config.onUnauthorized || (() => { }),
     };
   }
 
@@ -26,7 +29,7 @@ export class BaseApiClient {
    * Make an authenticated API request.
    */
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const { authenticated = true, ...requestOptions } = options;
+    const { authenticated = true, skipUnauthorizedCallback = false, ...requestOptions } = options;
     const requestId = this.config.requestIdGenerator();
     const url = `${this.config.baseUrl}${path}`;
 
@@ -67,7 +70,9 @@ export class BaseApiClient {
       const errorData = response.data as { message?: string | string[]; code?: string } | null;
 
       if (response.status === 401) {
-        this.config.onUnauthorized();
+        if (!skipUnauthorizedCallback) {
+          this.config.onUnauthorized();
+        }
         throw new UnauthorizedError('Authentication required', requestId, response.status);
       }
 
@@ -94,35 +99,35 @@ export class BaseApiClient {
   /**
    * GET request
    */
-  get<T>(path: string, options?: { authenticated?: boolean }): Promise<T> {
+  get<T>(path: string, options?: PublicRequestOptions): Promise<T> {
     return this.request<T>(path, { method: 'GET', ...options });
   }
 
   /**
    * POST request
    */
-  post<T>(path: string, body: unknown, options?: { authenticated?: boolean }): Promise<T> {
+  post<T>(path: string, body: unknown, options?: PublicRequestOptions): Promise<T> {
     return this.request<T>(path, { method: 'POST', body, ...options });
   }
 
   /**
    * PUT request
    */
-  put<T>(path: string, body: unknown, options?: { authenticated?: boolean }): Promise<T> {
+  put<T>(path: string, body: unknown, options?: PublicRequestOptions): Promise<T> {
     return this.request<T>(path, { method: 'PUT', body, ...options });
   }
 
   /**
    * PATCH request
    */
-  patch<T>(path: string, body: unknown, options?: { authenticated?: boolean }): Promise<T> {
+  patch<T>(path: string, body: unknown, options?: PublicRequestOptions): Promise<T> {
     return this.request<T>(path, { method: 'PATCH', body, ...options });
   }
 
   /**
    * DELETE request
    */
-  delete<T>(path: string, options?: { authenticated?: boolean }): Promise<T> {
+  delete<T>(path: string, options?: PublicRequestOptions): Promise<T> {
     return this.request<T>(path, { method: 'DELETE', ...options });
   }
 }

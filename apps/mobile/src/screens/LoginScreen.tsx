@@ -112,7 +112,7 @@ export function LoginScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Don't have an account? </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+          <TouchableOpacity onPress={() => navigation.replace('Register')}>
             <Text style={styles.footerLink}>Create account</Text>
           </TouchableOpacity>
         </View>

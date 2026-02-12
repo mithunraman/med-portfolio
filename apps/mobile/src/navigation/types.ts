@@ -1,11 +1,6 @@
 import type { CompositeScreenProps, NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-export type RootStackParamList = {
-  Onboarding: NavigatorScreenParams<OnboardingStackParamList>;
-  Main: NavigatorScreenParams<MainStackParamList>;
-};
-
 export type OnboardingStackParamList = {
   IntroCarousel: undefined;
   Welcome: undefined;
@@ -17,6 +12,11 @@ export type MainStackParamList = {
   Home: undefined;
   Dashboard: undefined;
   ItemDetail: { id: string };
+};
+
+export type RootStackParamList = {
+  Onboarding: NavigatorScreenParams<OnboardingStackParamList>;
+  Main: NavigatorScreenParams<MainStackParamList>;
 };
 
 export type RootStackScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<

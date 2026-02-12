@@ -1,10 +1,16 @@
-import { useCallback, useRef } from 'react';
-import { View, StyleSheet } from 'react-native';
-import { NavigationContainer, DefaultTheme, DarkTheme, type NavigationState } from '@react-navigation/native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import {
+  DarkTheme,
+  DefaultTheme,
+  NavigationContainer,
+  type NavigationState,
+} from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { AuthProvider } from './auth';
+import { useCallback, useRef } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Provider as ReduxProvider } from 'react-redux';
 import { RootNavigator } from './navigation';
+import { store } from './store';
 import { ThemeProvider, useTheme } from './theme';
 import { logger } from './utils/logger';
 
@@ -44,10 +50,8 @@ function ThemedApp({ onNavigationReady, onNavigationStateChange }: ThemedAppProp
         onReady={onNavigationReady}
         onStateChange={onNavigationStateChange}
       >
-        <AuthProvider>
-          <RootNavigator />
-          <StatusBar style={isDark ? 'light' : 'dark'} />
-        </AuthProvider>
+        <RootNavigator />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
       </NavigationContainer>
     </View>
   );
@@ -72,14 +76,16 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <ThemedApp
-          onNavigationReady={onNavigationReady}
-          onNavigationStateChange={onNavigationStateChange}
-        />
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <ReduxProvider store={store}>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <ThemedApp
+            onNavigationReady={onNavigationReady}
+            onNavigationStateChange={onNavigationStateChange}
+          />
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </ReduxProvider>
   );
 }
 

@@ -1,6 +1,5 @@
+import { createApiClient, type HttpAdapter, type TokenProvider } from '@acme/api-client';
 import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
-import { createApiClient, type TokenProvider, type HttpAdapter } from '@acme/api-client';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
@@ -8,29 +7,15 @@ const apiLogger = logger.createScope('API');
 
 /**
  * Mobile token provider using Expo SecureStore.
- * Falls back to a simple in-memory store for web.
  */
-let inMemoryToken: string | null = null;
-
 const mobileTokenProvider: TokenProvider = {
   async getAccessToken() {
-    if (Platform.OS === 'web') {
-      return inMemoryToken;
-    }
     return SecureStore.getItemAsync('accessToken');
   },
   async setAccessToken(token: string) {
-    if (Platform.OS === 'web') {
-      inMemoryToken = token;
-      return;
-    }
     await SecureStore.setItemAsync('accessToken', token);
   },
   async clearAccessToken() {
-    if (Platform.OS === 'web') {
-      inMemoryToken = null;
-      return;
-    }
     await SecureStore.deleteItemAsync('accessToken');
   },
 };

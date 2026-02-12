@@ -16,6 +16,12 @@ export class AuthClient {
     });
   }
 
+  async registerGuest(): Promise<LoginResponse> {
+    return this.client.post<LoginResponse>('/auth/guest', {}, {
+      authenticated: false,
+    });
+  }
+
   async logout(): Promise<void> {
     return this.client.post<void>('/auth/logout', {}, { skipUnauthorizedCallback: true });
   }

@@ -15,10 +15,10 @@ import { useNavigation } from '@react-navigation/native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { RegisterRequestSchema, type RegisterRequest } from '@acme/shared';
-import { useAuth } from '../auth';
-import type { AuthStackScreenProps } from '../navigation/types';
+import { useAuth } from '../hooks';
+import type { OnboardingStackScreenProps } from '../navigation/types';
 
-type NavigationProp = AuthStackScreenProps<'Register'>['navigation'];
+type NavigationProp = OnboardingStackScreenProps<'Register'>['navigation'];
 
 export function RegisterScreen() {
   const navigation = useNavigation<NavigationProp>();

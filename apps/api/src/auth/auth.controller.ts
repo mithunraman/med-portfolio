@@ -7,7 +7,7 @@ import type { LoginResponse, AuthUser } from '@acme/shared';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Public()
   @Post('register')
@@ -20,6 +20,12 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto): Promise<LoginResponse> {
     return this.authService.login(dto);
+  }
+
+  @Public()
+  @Post('guest')
+  async registerGuest(): Promise<LoginResponse> {
+    return this.authService.registerGuest();
   }
 
   @Get('me')

@@ -1,8 +1,8 @@
 // Enums
 export * from './enums';
 
-// Schemas and DTOs
-export * from './schemas';
+// DTOs
+export * from './dto';
 
 // Types
 export * from './types';

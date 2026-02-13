@@ -1,28 +1,28 @@
-import { useEffect, useState } from 'react';
-import {
-  Container,
-  Title,
-  Text,
-  Button,
-  Group,
-  Card,
-  Stack,
-  Badge,
-  TextInput,
-  Textarea,
-  Modal,
-  ActionIcon,
-  Loader,
-  Center,
-  Alert,
-} from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { IconPlus, IconTrash, IconAlertCircle } from '@tabler/icons-react';
-import { CreateItemSchema, ItemStatusLabels, type Item, type CreateItemDto } from '@acme/shared';
 import { api } from '@/api/client';
 import { useAuth } from '@/auth';
+import { CreateItemSchema, ItemStatusLabels, type CreateItemDto, type Item } from '@acme/shared';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  ActionIcon,
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Center,
+  Container,
+  Group,
+  Loader,
+  Modal,
+  Stack,
+  Text,
+  TextInput,
+  Textarea,
+  Title,
+} from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
+import { IconAlertCircle, IconPlus, IconTrash } from '@tabler/icons-react';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 
 export function DashboardPage() {
   const { user, logout } = useAuth();
@@ -126,11 +126,7 @@ export function DashboardPage() {
                     </Text>
                   )}
                 </div>
-                <ActionIcon
-                  color="red"
-                  variant="subtle"
-                  onClick={() => onDeleteItem(item.id)}
-                >
+                <ActionIcon color="red" variant="subtle" onClick={() => onDeleteItem(item.id)}>
                   <IconTrash size={16} />
                 </ActionIcon>
               </Group>

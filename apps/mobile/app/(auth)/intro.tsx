@@ -1,4 +1,4 @@
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
   Dimensions,
@@ -12,10 +12,7 @@ import {
   type ViewToken,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { OnboardingStackScreenProps } from '../navigation/types';
-import { useTheme } from '../theme';
-
-type NavigationProp = OnboardingStackScreenProps<'IntroCarousel'>['navigation'];
+import { useTheme } from '@/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -53,8 +50,8 @@ const SLIDES: Slide[] = [
   },
 ];
 
-export function IntroCarouselScreen() {
-  const navigation = useNavigation<NavigationProp>();
+export default function IntroScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, isDark, toggleMode } = useTheme();
 
@@ -77,19 +74,19 @@ export function IntroCarouselScreen() {
   }).current;
 
   const handleSkip = useCallback(() => {
-    navigation.navigate('Welcome');
-  }, [navigation]);
+    router.push('/(auth)/welcome');
+  }, [router]);
 
   const handleNext = useCallback(() => {
     if (isLastSlide) {
-      navigation.navigate('Welcome');
+      router.push('/(auth)/welcome');
     } else {
       flatListRef.current?.scrollToIndex({
         index: currentIndex + 1,
         animated: true,
       });
     }
-  }, [currentIndex, isLastSlide, navigation]);
+  }, [currentIndex, isLastSlide, router]);
 
   const renderSlide: ListRenderItem<Slide> = useCallback(
     ({ item }) => (

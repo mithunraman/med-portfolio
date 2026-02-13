@@ -1,4 +1,5 @@
 import { useAuth } from '@/hooks';
+import { api } from '@/api/client';
 import { CreateItemSchema, ItemStatusLabels, type CreateItemDto, type Item } from '@acme/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useEffect, useState } from 'react';
@@ -15,9 +16,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { api } from '../api/client';
 
-export function DashboardScreen() {
+export default function DashboardScreen() {
   const { user, logout } = useAuth();
   const [items, setItems] = useState<Item[]>([]);
   const [isLoading, setIsLoading] = useState(true);

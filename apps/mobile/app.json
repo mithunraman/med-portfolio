@@ -1,43 +1,56 @@
 {
   "expo": {
-    "name": "My App",
-    "slug": "my-app",
+    "name": "Mobile2",
+    "slug": "mobile2",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/icon.png",
+    "scheme": "mobile2",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
-    "assetBundlePatterns": ["**/*"],
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.acme.myapp",
+      "bundleIdentifier": "com.acme.mobile2",
       "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
-      "package": "com.acme.myapp",
-      "versionCode": 1
+      "package": "com.acme.mobile2",
+      "versionCode": 1,
+      "edgeToEdgeEnabled": true
     },
     "plugins": [
+      "expo-router",
       "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#121212"
+          }
+        }
+      ],
       [
         "expo-build-properties",
         {
           "ios": { "deploymentTarget": "15.1" },
           "android": {
             "minSdkVersion": 24,
-            "compileSdkVersion": 34,
-            "targetSdkVersion": 34
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35
           }
         }
       ]
-    ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
   }
 }

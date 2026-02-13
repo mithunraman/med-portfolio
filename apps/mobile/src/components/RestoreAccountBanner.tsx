@@ -1,26 +1,23 @@
+import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { useTheme } from '../theme';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAppDispatch } from '../hooks';
-import { dismissAccountHint } from '../store';
 import type { AccountHint } from '../services';
-import type { MainStackScreenProps } from '../navigation/types';
-
-type NavigationProp = MainStackScreenProps<'Home'>['navigation'];
+import { dismissAccountHint } from '../store';
+import { useTheme } from '../theme';
 
 interface RestoreAccountBannerProps {
   accountHint: AccountHint;
 }
 
 export function RestoreAccountBanner({ accountHint }: RestoreAccountBannerProps) {
-  const navigation = useNavigation<NavigationProp>();
+  const router = useRouter();
   const { colors } = useTheme();
   const dispatch = useAppDispatch();
 
   const handleRestore = useCallback(() => {
-    navigation.navigate('Onboarding', { screen: 'Login' });
-  }, [navigation]);
+    router.push('/(auth)/login');
+  }, [router]);
 
   const handleDismiss = useCallback(() => {
     dispatch(dismissAccountHint());

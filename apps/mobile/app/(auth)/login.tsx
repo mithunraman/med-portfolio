@@ -1,26 +1,23 @@
+import { LoginRequestSchema, type LoginRequest } from '@acme/shared';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ActivityIndicator,
+  View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { LoginRequestSchema, type LoginRequest } from '@acme/shared';
-import { useAuth } from '../hooks';
-import type { OnboardingStackScreenProps } from '../navigation/types';
+import { useAuth } from '@/hooks';
 
-type NavigationProp = OnboardingStackScreenProps<'Login'>['navigation'];
-
-export function LoginScreen() {
-  const navigation = useNavigation<NavigationProp>();
+export default function LoginScreen() {
+  const router = useRouter();
   const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -112,7 +109,7 @@ export function LoginScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Don't have an account? </Text>
-          <TouchableOpacity onPress={() => navigation.replace('Register')}>
+          <TouchableOpacity onPress={() => router.replace('/(auth)/register')}>
             <Text style={styles.footerLink}>Create account</Text>
           </TouchableOpacity>
         </View>

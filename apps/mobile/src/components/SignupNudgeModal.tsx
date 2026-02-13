@@ -1,28 +1,25 @@
+import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { useTheme } from '../theme';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAppDispatch, useAppSelector } from '../hooks';
-import { markNudgeShown, hideNudge } from '../store';
-import type { MainStackScreenProps } from '../navigation/types';
-
-type NavigationProp = MainStackScreenProps<'Home'>['navigation'];
+import { hideNudge, markNudgeShown } from '../store';
+import { useTheme } from '../theme';
 
 export function SignupNudgeModal() {
-  const navigation = useNavigation<NavigationProp>();
+  const router = useRouter();
   const { colors } = useTheme();
   const dispatch = useAppDispatch();
   const shouldShow = useAppSelector((state) => state.nudge.shouldShowNudge);
 
   const handleSignUp = useCallback(async () => {
     await dispatch(markNudgeShown());
-    navigation.navigate('Onboarding', { screen: 'Register' });
-  }, [dispatch, navigation]);
+    router.push('/(auth)/register');
+  }, [dispatch, router]);
 
   const handleSignIn = useCallback(async () => {
     await dispatch(markNudgeShown());
-    navigation.navigate('Onboarding', { screen: 'Login' });
-  }, [dispatch, navigation]);
+    router.push('/(auth)/login');
+  }, [dispatch, router]);
 
   const handleDismiss = useCallback(async () => {
     await dispatch(markNudgeShown());

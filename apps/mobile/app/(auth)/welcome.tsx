@@ -1,15 +1,12 @@
-import { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { useTheme } from '../theme';
-import { useAuth } from '../hooks';
-import type { OnboardingStackScreenProps } from '../navigation/types';
+import { useAuth } from '@/hooks';
+import { useTheme } from '@/theme';
 
-type NavigationProp = OnboardingStackScreenProps<'Welcome'>['navigation'];
-
-export function WelcomeScreen() {
-  const navigation = useNavigation<NavigationProp>();
+export default function WelcomeScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { registerGuest } = useAuth();
@@ -31,8 +28,8 @@ export function WelcomeScreen() {
   }, [registerGuest]);
 
   const handleSignIn = useCallback(() => {
-    navigation.navigate('Login');
-  }, [navigation]);
+    router.push('/(auth)/login');
+  }, [router]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -92,7 +89,7 @@ export function WelcomeScreen() {
           <Text style={[styles.createAccountText, { color: colors.textSecondary }]}>
             New here?{' '}
           </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+          <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
             <Text style={[styles.createAccountLink, { color: colors.primary }]}>
               Create an account
             </Text>

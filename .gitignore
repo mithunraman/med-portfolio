@@ -31,16 +31,5 @@ pnpm-debug.log*
 # Testing
 coverage/
 
-# Mobile
-apps/mobile/ios/
-apps/mobile/android/
-apps/mobile/.expo/
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-*.orig.*
-
 # Misc
 *.tsbuildinfo

@@ -5,12 +5,15 @@ import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import { recordMeaningfulAction } from '@/store';
 import { useTheme } from '@/theme';
 import { Feather } from '@expo/vector-icons';
+import { randomUUID } from 'expo-crypto';
+import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { colors } = useTheme();
   const { user, isGuest } = useAuth();
   const dispatch = useAppDispatch();
@@ -24,9 +27,9 @@ export default function HomeScreen() {
   }, [dispatch]);
 
   const handleCompose = useCallback(() => {
-    // TODO: Navigate to compose screen or open compose modal
-    console.log('Compose pressed');
-  }, []);
+    const newConversationId = randomUUID();
+    router.push(`/(messages)/${newConversationId}?isNew=true`);
+  }, [router]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

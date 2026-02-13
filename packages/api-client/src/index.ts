@@ -1,6 +1,7 @@
 import type { ApiClientConfig } from './adapters/types';
 import { BaseApiClient } from './core/api-client';
 import { AuthClient } from './clients/auth.client';
+import { ConversationsClient } from './clients/conversations.client';
 import { ItemsClient } from './clients/items.client';
 
 // Re-export types and adapters
@@ -18,8 +19,8 @@ export function createApiClient(config: ApiClientConfig) {
 
   return {
     auth: new AuthClient(baseClient),
+    conversations: new ConversationsClient(baseClient),
     items: new ItemsClient(baseClient),
-    // Add more domain clients as needed
   };
 }
 

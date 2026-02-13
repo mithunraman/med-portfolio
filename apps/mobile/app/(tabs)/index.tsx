@@ -1,11 +1,13 @@
-import { useCallback } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FloatingActionButton } from '@/components/FloatingActionButton';
 import { RestoreAccountBanner } from '@/components/RestoreAccountBanner';
 import { SignupNudgeModal } from '@/components/SignupNudgeModal';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import { recordMeaningfulAction } from '@/store';
 import { useTheme } from '@/theme';
+import { Feather } from '@expo/vector-icons';
+import { useCallback } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -20,6 +22,11 @@ export default function HomeScreen() {
   const handleMeaningfulAction = useCallback(() => {
     dispatch(recordMeaningfulAction());
   }, [dispatch]);
+
+  const handleCompose = useCallback(() => {
+    // TODO: Navigate to compose screen or open compose modal
+    console.log('Compose pressed');
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -56,6 +63,14 @@ export default function HomeScreen() {
 
       {/* Signup Nudge Modal (for guest users after meaningful action) */}
       {isGuest && shouldShowNudge && <SignupNudgeModal />}
+
+      {/* Compose FAB */}
+      <FloatingActionButton
+        icon={<Feather name="edit-2" size={20} color="#fff" />}
+        label="Compose"
+        onPress={handleCompose}
+        style={{ right: 20, bottom: 16 }}
+      />
     </View>
   );
 }

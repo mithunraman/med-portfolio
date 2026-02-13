@@ -4,6 +4,7 @@ import { ConfigModule } from './config';
 import { DatabaseModule } from './database';
 import { AuthModule } from './auth/auth.module';
 import { ItemsModule } from './items/items.module';
+import { ConversationsModule } from './conversations/conversations.module';
 import { JwtAuthGuard, RolesGuard } from './common/guards';
 
 @Module({
@@ -12,6 +13,7 @@ import { JwtAuthGuard, RolesGuard } from './common/guards';
     DatabaseModule,
     AuthModule,
     ItemsModule,
+    ConversationsModule,
   ],
   providers: [
     {

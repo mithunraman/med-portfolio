@@ -1,5 +1,6 @@
 import { useAuth } from '@/hooks';
 import { api } from '@/api/client';
+import { useTheme } from '@/theme';
 import { CreateItemSchema, ItemStatusLabels, type CreateItemDto, type Item } from '@acme/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useEffect, useState } from 'react';
@@ -16,8 +17,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DashboardScreen() {
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const { user, logout } = useAuth();
   const [items, setItems] = useState<Item[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -118,8 +122,8 @@ export default function DashboardScreen() {
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View>
           <Text style={styles.greeting}>Welcome, {user?.name}</Text>
         </View>

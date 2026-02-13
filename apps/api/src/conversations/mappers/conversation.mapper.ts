@@ -4,7 +4,7 @@ import { extractConversationId } from '../utils/conversation-id.util';
 
 export function toConversationDto(doc: ConversationDocument): Conversation {
   return {
-    id: doc._id.toString(),
+    id: doc.xid,
     conversationId: extractConversationId(doc.conversationId),
     title: doc.title,
     status: doc.status,

@@ -1,6 +1,7 @@
 import { ConversationStatus } from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { nanoid } from 'nanoid';
 
 @Schema({
   collection: 'conversations',
@@ -8,6 +9,9 @@ import { Document, Types } from 'mongoose';
 })
 export class Conversation {
   _id!: Types.ObjectId;
+
+  @Prop({ required: true, unique: true, index: true, default: () => nanoid() })
+  xid!: string;
 
   @Prop({ required: true, unique: true, index: true })
   conversationId!: string; // Format: {userId}_{clientId}

@@ -6,9 +6,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "react-native-gifted-chat": ["src/types/vendor.d.ts"]
+      "react-native-gifted-chat": ["src/types/gifted-chat.d.ts"],
+      "react-native-zoom-reanimated": ["src/types/zoom-reanimated.d.ts"]
     }
   },
   "include": ["app/**/*.ts", "app/**/*.tsx", "src/**/*.ts", "src/**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
-  "exclude": ["node_modules", "**/node_modules", "../../node_modules", "ios", "android"]
+  "exclude": ["node_modules", "**/node_modules", "../../node_modules", "../../node_modules/.pnpm", "ios", "android"]
 }

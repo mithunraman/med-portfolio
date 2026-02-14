@@ -39,15 +39,19 @@ export default function ChatScreen() {
     };
   }, []);
 
-  const { messages, loadingMessages, sendingMessage, conversationExists } = useAppSelector(
-    (state) => ({
-      messages: state.conversations.messages[conversationId ?? ''] ?? [],
-      loadingMessages: state.conversations.loadingMessages,
-      sendingMessage: state.conversations.sendingMessage,
-      conversationExists: state.conversations.conversations.some(
-        (c) => c.conversationId === conversationId
-      ),
-    })
+  const messagesMap = useAppSelector((state) => state.conversations.messages);
+  const loadingMessages = useAppSelector((state) => state.conversations.loadingMessages);
+  const sendingMessage = useAppSelector((state) => state.conversations.sendingMessage);
+  const conversations = useAppSelector((state) => state.conversations.conversations);
+
+  const messages = useMemo(
+    () => messagesMap[conversationId ?? ''] ?? [],
+    [messagesMap, conversationId]
+  );
+
+  const conversationExists = useMemo(
+    () => conversations.some((c) => c.conversationId === conversationId),
+    [conversations, conversationId]
   );
 
   // Only fetch messages if this is an existing conversation (not newly created)

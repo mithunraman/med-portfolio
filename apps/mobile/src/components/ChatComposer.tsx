@@ -209,11 +209,11 @@ export function ChatComposer({
             onChangeText={setText}
             placeholder="Message"
             placeholderTextColor={COLORS.placeholder}
-            returnKeyType="send"
-            onSubmitEditing={handleSend}
             onFocus={handleFocus}
             onBlur={handleBlur}
-            multiline={false}
+            multiline={true}
+            numberOfLines={5}
+            textAlignVertical="center"
             accessibilityLabel="Message input"
             accessibilityHint="Type your message here"
           />
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.text,
     paddingVertical: 10,
-    maxHeight: 100,
+    maxHeight: 120,
   },
   stickerButton: {
     width: 36,

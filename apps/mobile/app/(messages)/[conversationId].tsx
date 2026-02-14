@@ -150,6 +150,10 @@ export default function ChatScreen() {
           renderInputToolbar={renderInputToolbar}
           renderLoading={renderLoading}
           minInputToolbarHeight={0}
+          listViewProps={{
+            keyboardDismissMode: 'on-drag',
+            keyboardShouldPersistTaps: 'never',
+          }}
         />
       </View>
 

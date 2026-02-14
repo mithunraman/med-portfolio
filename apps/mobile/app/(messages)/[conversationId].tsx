@@ -1,12 +1,14 @@
+import { ChatComposer } from '@/components';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import { fetchMessages, sendMessage } from '@/store';
 import { useTheme } from '@/theme';
 import { Message, MessageRole } from '@acme/shared';
-import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
-import { Bubble, GiftedChat, IMessage, InputToolbar, Send } from 'react-native-gifted-chat';
+import { Bubble, GiftedChat, IMessage } from 'react-native-gifted-chat';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 export default function ChatScreen() {
   const { conversationId, isNew } = useLocalSearchParams<{
     conversationId: string;
@@ -15,6 +17,7 @@ export default function ChatScreen() {
   const dispatch = useAppDispatch();
   const { colors } = useTheme();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const { messages, loadingMessages, sendingMessage, conversationExists } = useAppSelector(
     (state) => ({
@@ -52,11 +55,9 @@ export default function ChatScreen() {
   }, [messages, toGiftedMessage]);
 
   const handleSend = useCallback(
-    (newMessages: IMessage[] = []) => {
-      if (!conversationId || newMessages.length === 0) return;
-
-      const messageText = newMessages[0].text;
-      dispatch(sendMessage({ conversationId, content: messageText }));
+    (text: string) => {
+      if (!conversationId || !text.trim()) return;
+      dispatch(sendMessage({ conversationId, content: text }));
     },
     [conversationId, dispatch]
   );
@@ -86,37 +87,8 @@ export default function ChatScreen() {
     [colors]
   );
 
-  const renderInputToolbar = useCallback(
-    (props: any) => (
-      <InputToolbar
-        {...props}
-        containerStyle={[
-          styles.inputToolbar,
-          {
-            backgroundColor: colors.surface,
-            borderTopColor: colors.border,
-          },
-        ]}
-        primaryStyle={styles.inputPrimary}
-      />
-    ),
-    [colors]
-  );
-
-  const renderSend = useCallback(
-    (props: any) => (
-      <Send {...props} containerStyle={styles.sendContainer}>
-        <View style={[styles.sendButton, { backgroundColor: colors.primary }]}>
-          {sendingMessage ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Feather name="send" size={18} color="#fff" />
-          )}
-        </View>
-      </Send>
-    ),
-    [colors, sendingMessage]
-  );
+  // Hide GiftedChat's input toolbar - we use our own ChatComposer
+  const renderInputToolbar = useCallback(() => null, []);
 
   const renderLoading = useCallback(
     () => (
@@ -146,22 +118,30 @@ export default function ChatScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      <GiftedChat
-        messages={giftedMessages}
+      <View style={styles.messagesContainer}>
+        <GiftedChat
+          messages={giftedMessages}
+          onSend={() => {}}
+          user={{
+            _id: user?.id ?? 'user',
+            name: user?.name ?? 'You',
+          }}
+          renderBubble={renderBubble}
+          renderInputToolbar={renderInputToolbar}
+          renderLoading={renderLoading}
+          minInputToolbarHeight={0}
+        />
+      </View>
+
+      <ChatComposer
         onSend={handleSend}
-        user={{
-          _id: user?.id ?? 'user',
-          name: user?.name ?? 'You',
-        }}
-        renderBubble={renderBubble}
-        renderInputToolbar={renderInputToolbar}
-        renderSend={renderSend}
-        renderLoading={renderLoading}
-        textInputProps={{
-          style: [styles.textInput, { color: colors.text }],
-          placeholder: 'Type a message...',
-          placeholderTextColor: colors.textSecondary,
-        }}
+        isSending={sendingMessage}
+        onOpenAttachments={() => console.log('Open attachments')}
+        onOpenCamera={() => console.log('Open camera')}
+        onToggleStickers={() => console.log('Toggle stickers')}
+        onStartRecording={() => console.log('Start recording')}
+        onStopRecording={() => console.log('Stop recording')}
+        style={{ paddingBottom: insets.bottom }}
       />
     </KeyboardAvoidingView>
   );
@@ -171,35 +151,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  messagesContainer: {
+    flex: 1,
+  },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  inputToolbar: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderTopWidth: 1,
-  },
-  inputPrimary: {
-    alignItems: 'center',
-  },
-  textInput: {
-    flex: 1,
-    marginHorizontal: 8,
-    fontSize: 16,
-    lineHeight: 20,
-  },
-  sendContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 4,
-    marginBottom: 4,
-  },
-  sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },

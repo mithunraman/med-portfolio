@@ -14,7 +14,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { Bubble, GiftedChat, IMessage } from 'react-native-gifted-chat';
+import { Bubble, GiftedChat, IMessage, Message as GiftedMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ChatScreen() {
@@ -113,6 +113,19 @@ export default function ChatScreen() {
     [colors]
   );
 
+  const renderMessage = useCallback(
+    (props: any) => (
+      <GiftedMessage
+        {...props}
+        containerStyle={{
+          left: { maxWidth: '80%' },
+          right: { maxWidth: '80%' },
+        }}
+      />
+    ),
+    []
+  );
+
   // Hide GiftedChat's input toolbar - we use our own ChatComposer
   const renderInputToolbar = useCallback(() => null, []);
 
@@ -153,12 +166,13 @@ export default function ChatScreen() {
             name: user?.name ?? 'You',
           }}
           renderBubble={renderBubble}
+          renderMessage={renderMessage}
           renderInputToolbar={renderInputToolbar}
           renderLoading={renderLoading}
           minInputToolbarHeight={0}
-          listViewProps={{
-            keyboardDismissMode: 'on-drag',
-            keyboardShouldPersistTaps: 'never',
+          listProps={{
+            keyboardDismissMode: 'interactive',
+            keyboardShouldPersistTaps: 'handled',
           }}
         />
       </View>

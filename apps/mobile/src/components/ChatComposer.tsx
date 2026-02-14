@@ -1,5 +1,5 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -70,7 +70,7 @@ interface IconButtonProps {
 // ICON BUTTON COMPONENT
 // ============================================================================
 
-function IconButton({
+const IconButton = memo(function IconButton({
   icon,
   onPress,
   onPressIn,
@@ -108,6 +108,17 @@ function IconButton({
     [onPressOut, scaleAnim]
   );
 
+  const animatedStyle = useMemo(
+    () => [
+      styles.iconButton,
+      isActive && styles.iconButtonActive,
+      disabled && styles.iconButtonDisabled,
+      { transform: [{ scale: scaleAnim }] },
+      style,
+    ],
+    [isActive, disabled, scaleAnim, style]
+  );
+
   return (
     <Pressable
       onPress={onPress}
@@ -119,20 +130,12 @@ function IconButton({
       accessibilityState={{ disabled }}
       hitSlop={4}
     >
-      <Animated.View
-        style={[
-          styles.iconButton,
-          isActive && styles.iconButtonActive,
-          disabled && styles.iconButtonDisabled,
-          { transform: [{ scale: scaleAnim }] },
-          style,
-        ]}
-      >
+      <Animated.View style={animatedStyle}>
         {icon}
       </Animated.View>
     </Pressable>
   );
-}
+});
 
 // ============================================================================
 // CHAT COMPOSER COMPONENT
@@ -179,7 +182,46 @@ export function ChatComposer({
     setIsFocused(false);
   }, []);
 
-  const hasText = text.trim().length > 0;
+  const hasText = useMemo(() => text.trim().length > 0, [text]);
+
+  // Memoized icons to prevent re-renders
+  const attachIcon = useMemo(
+    () => <Feather name="plus" size={SPACING.iconSize} color={COLORS.iconDefault} />,
+    []
+  );
+  const stickerIcon = useMemo(
+    () => (
+      <MaterialCommunityIcons
+        name="sticker-emoji"
+        size={SPACING.iconSize}
+        color={COLORS.iconDefault}
+      />
+    ),
+    []
+  );
+  const cameraIcon = useMemo(
+    () => <Feather name="camera" size={SPACING.iconSize} color={COLORS.iconDefault} />,
+    []
+  );
+  const sendButtonIcon = useMemo(
+    () =>
+      isSending ? (
+        <ActivityIndicator size="small" color={COLORS.iconActive} />
+      ) : (
+        <Feather name="send" size={20} color={COLORS.iconActive} />
+      ),
+    [isSending]
+  );
+  const micIcon = useMemo(
+    () => (
+      <Feather
+        name="mic"
+        size={SPACING.iconSize}
+        color={isRecording ? COLORS.recording : COLORS.iconDefault}
+      />
+    ),
+    [isRecording]
+  );
 
   return (
     <View style={[styles.container, style]}>
@@ -194,7 +236,7 @@ export function ChatComposer({
       <View style={styles.toolbar}>
         {/* Attachment button */}
         <IconButton
-          icon={<Feather name="plus" size={SPACING.iconSize} color={COLORS.iconDefault} />}
+          icon={attachIcon}
           onPress={onOpenAttachments}
           accessibilityLabel="Open attachments"
           style={styles.attachButton}
@@ -220,13 +262,7 @@ export function ChatComposer({
 
           {/* Sticker/emoji button inside input */}
           <IconButton
-            icon={
-              <MaterialCommunityIcons
-                name="sticker-emoji"
-                size={SPACING.iconSize}
-                color={COLORS.iconDefault}
-              />
-            }
+            icon={stickerIcon}
             onPress={onToggleStickers}
             accessibilityLabel="Open stickers and emoji"
             style={styles.stickerButton}
@@ -236,13 +272,7 @@ export function ChatComposer({
         {/* Camera or Send button */}
         {hasText ? (
           <IconButton
-            icon={
-              isSending ? (
-                <ActivityIndicator size="small" color={COLORS.iconActive} />
-              ) : (
-                <Feather name="send" size={20} color={COLORS.iconActive} />
-              )
-            }
+            icon={sendButtonIcon}
             onPress={handleSend}
             accessibilityLabel="Send message"
             style={styles.sendButton}
@@ -251,20 +281,14 @@ export function ChatComposer({
         ) : (
           <>
             <IconButton
-              icon={<Feather name="camera" size={SPACING.iconSize} color={COLORS.iconDefault} />}
+              icon={cameraIcon}
               onPress={onOpenCamera}
               accessibilityLabel="Open camera"
             />
 
             {/* Microphone button */}
             <IconButton
-              icon={
-                <Feather
-                  name="mic"
-                  size={SPACING.iconSize}
-                  color={isRecording ? COLORS.recording : COLORS.iconDefault}
-                />
-              }
+              icon={micIcon}
               onPressIn={handleMicPressIn}
               onPressOut={handleMicPressOut}
               accessibilityLabel="Hold to record voice message"

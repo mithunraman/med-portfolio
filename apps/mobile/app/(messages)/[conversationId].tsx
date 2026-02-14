@@ -100,9 +100,11 @@ export default function ChatScreen() {
         }}
         textStyle={{
           left: {
+            fontSize: 16,
             color: colors.text,
           },
           right: {
+            fontSize: 16,
             color: '#fff',
           },
         }}

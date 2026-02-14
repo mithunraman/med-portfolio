@@ -3,9 +3,17 @@ import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import { fetchMessages, sendMessage } from '@/store';
 import { useTheme } from '@/theme';
 import { Message, MessageRole } from '@acme/shared';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { Bubble, GiftedChat, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -18,6 +26,18 @@ export default function ChatScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  // Track keyboard visibility to adjust bottom padding
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener('keyboardWillHide', () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const { messages, loadingMessages, sendingMessage, conversationExists } = useAppSelector(
     (state) => ({
@@ -105,7 +125,7 @@ export default function ChatScreen() {
       <KeyboardAvoidingView
         style={[styles.container, { backgroundColor: colors.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={headerHeight}
       >
         {renderLoading()}
       </KeyboardAvoidingView>
@@ -116,7 +136,7 @@ export default function ChatScreen() {
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      keyboardVerticalOffset={headerHeight}
     >
       <View style={styles.messagesContainer}>
         <GiftedChat
@@ -141,7 +161,7 @@ export default function ChatScreen() {
         onToggleStickers={() => console.log('Toggle stickers')}
         onStartRecording={() => console.log('Start recording')}
         onStopRecording={() => console.log('Stop recording')}
-        style={{ paddingBottom: insets.bottom }}
+        style={{ paddingBottom: keyboardVisible ? 0 : insets.bottom }}
       />
     </KeyboardAvoidingView>
   );

@@ -213,9 +213,7 @@ export function ChatComposer({
             onSubmitEditing={handleSend}
             onFocus={handleFocus}
             onBlur={handleBlur}
-            editable={!isSending && !isRecording}
             multiline={false}
-            blurOnSubmit
             accessibilityLabel="Message input"
             accessibilityHint="Type your message here"
           />

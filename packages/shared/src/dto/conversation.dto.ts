@@ -17,7 +17,6 @@ export type Message = z.infer<typeof MessageSchema>;
 // Conversation schemas
 export const ConversationSchema = z.object({
   id: z.string(),
-  conversationId: z.string(), // Client-generated UUID
   title: z.string(),
   status: z.nativeEnum(ConversationStatus),
   createdAt: z.string().datetime(),
@@ -28,7 +27,6 @@ export type Conversation = z.infer<typeof ConversationSchema>;
 
 // Request schemas
 export const SendMessageRequestSchema = z.object({
-  conversationId: z.string().min(1, 'Conversation ID is required'),
   content: z.string().min(1, 'Message content is required'),
 });
 

@@ -1,7 +1,7 @@
 import { MessageRole } from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { nanoid } from 'nanoid';
+import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
 import { Conversation } from './conversation.schema';
 
 @Schema({
@@ -11,7 +11,7 @@ import { Conversation } from './conversation.schema';
 export class Message {
   _id!: Types.ObjectId;
 
-  @Prop({ required: true, unique: true, index: true, default: () => nanoid() })
+  @Prop({ required: true, unique: true, index: true, default: () => nanoidAlphanumeric() })
   xid!: string;
 
   @Prop({ required: true, type: Types.ObjectId, ref: Conversation.name, index: true })

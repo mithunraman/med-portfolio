@@ -1,7 +1,7 @@
 import { ConversationStatus } from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { nanoid } from 'nanoid';
+import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
 
 @Schema({
   collection: 'conversations',
@@ -10,14 +10,14 @@ import { nanoid } from 'nanoid';
 export class Conversation {
   _id!: Types.ObjectId;
 
-  @Prop({ required: true, unique: true, index: true, default: () => nanoid() })
+  @Prop({ required: true, unique: true, index: true, default: () => nanoidAlphanumeric() })
   xid!: string;
-
-  @Prop({ required: true, unique: true, index: true })
-  conversationId!: string; // Format: {userId}_{clientId}
 
   @Prop({ required: true, type: Types.ObjectId, index: true })
   userId!: Types.ObjectId;
+
+  @Prop({ required: true, type: Types.ObjectId, ref: 'Artefact', index: true })
+  artefact!: Types.ObjectId;
 
   @Prop({ required: true, maxlength: 200 })
   title!: string;
@@ -33,6 +33,6 @@ export type ConversationDocument = Conversation & Document;
 
 export const ConversationSchema = SchemaFactory.createForClass(Conversation);
 
-// Indexes for cursor-based pagination (sort by _id descending)
+// Indexes
 ConversationSchema.index({ userId: 1, _id: -1 });
-ConversationSchema.index({ conversationId: 1 }, { unique: true });
+ConversationSchema.index({ artefact: 1, status: 1 });

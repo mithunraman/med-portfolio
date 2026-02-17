@@ -24,6 +24,6 @@ import { Message, MessageSchema } from './schemas/message.schema';
       useClass: ConversationsRepository,
     },
   ],
-  exports: [ConversationsService],
+  exports: [ConversationsService, CONVERSATIONS_REPOSITORY],
 })
 export class ConversationsModule {}

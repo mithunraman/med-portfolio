@@ -12,20 +12,10 @@ export interface DBError {
 }
 
 // Conversation types
-export interface UpsertConversationData {
-  conversationId: string;
+export interface CreateConversationData {
   userId: Types.ObjectId;
+  artefact: Types.ObjectId;
   title: string;
-}
-
-export interface ListConversationsQuery {
-  userId: Types.ObjectId;
-  cursor?: Types.ObjectId;
-  limit: number;
-}
-
-export interface ListConversationsResult {
-  conversations: ConversationDocument[];
 }
 
 // Message types
@@ -47,21 +37,26 @@ export interface ListMessagesResult {
 
 export interface IConversationsRepository {
   // Conversation methods
-  upsertConversation(
-    data: UpsertConversationData,
+  createConversation(
+    data: CreateConversationData,
     session?: ClientSession
   ): Promise<Result<ConversationDocument, DBError>>;
 
-  findConversationById(
-    conversationId: string,
+  findConversationByXid(
+    xid: string,
     userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<ConversationDocument | null, DBError>>;
 
-  listConversations(
-    query: ListConversationsQuery,
+  findActiveConversationByArtefact(
+    artefactId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<ListConversationsResult, DBError>>;
+  ): Promise<Result<ConversationDocument | null, DBError>>;
+
+  findActiveConversationsByArtefacts(
+    artefactIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<Map<string, ConversationDocument>, DBError>>;
 
   // Message methods
   createMessage(

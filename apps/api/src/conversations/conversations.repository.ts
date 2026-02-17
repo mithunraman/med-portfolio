@@ -1,16 +1,15 @@
+import { ConversationStatus } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import { Result, err, ok } from '../common/utils/result.util';
 import {
+  CreateConversationData,
   CreateMessageData,
   DBError,
   IConversationsRepository,
-  ListConversationsQuery,
-  ListConversationsResult,
   ListMessagesQuery,
   ListMessagesResult,
-  UpsertConversationData,
 } from './conversations.repository.interface';
 import { Conversation, ConversationDocument } from './schemas/conversation.schema';
 import { Message, MessageDocument } from './schemas/message.schema';
@@ -26,37 +25,36 @@ export class ConversationsRepository implements IConversationsRepository {
     private messageModel: Model<MessageDocument>
   ) {}
 
-  async upsertConversation(
-    data: UpsertConversationData,
+  async createConversation(
+    data: CreateConversationData,
     session?: ClientSession
   ): Promise<Result<ConversationDocument, DBError>> {
     try {
-      const conversation = await this.conversationModel.findOneAndUpdate(
-        { conversationId: data.conversationId },
-        {
-          $setOnInsert: {
-            conversationId: data.conversationId,
+      const [conversation] = await this.conversationModel.create(
+        [
+          {
             userId: data.userId,
+            artefact: data.artefact,
             title: data.title,
           },
-        },
-        { upsert: true, new: true, session }
+        ],
+        { session }
       );
       return ok(conversation);
     } catch (error) {
-      this.logger.error('Failed to upsert conversation', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to upsert conversation' });
+      this.logger.error('Failed to create conversation', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to create conversation' });
     }
   }
 
-  async findConversationById(
-    conversationId: string,
+  async findConversationByXid(
+    xid: string,
     userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<ConversationDocument | null, DBError>> {
     try {
       const conversation = await this.conversationModel
-        .findOne({ conversationId, userId })
+        .findOne({ xid, userId })
         .session(session || null);
       return ok(conversation);
     } catch (error) {
@@ -65,29 +63,42 @@ export class ConversationsRepository implements IConversationsRepository {
     }
   }
 
-  async listConversations(
-    query: ListConversationsQuery,
+  async findActiveConversationByArtefact(
+    artefactId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<ListConversationsResult, DBError>> {
+  ): Promise<Result<ConversationDocument | null, DBError>> {
     try {
-      const filter: { userId: Types.ObjectId; _id?: { $lt: Types.ObjectId } } = {
-        userId: query.userId,
-      };
+      const conversation = await this.conversationModel
+        .findOne({ artefact: artefactId, status: ConversationStatus.ACTIVE })
+        .session(session || null);
+      return ok(conversation);
+    } catch (error) {
+      this.logger.error('Failed to find active conversation', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find active conversation' });
+    }
+  }
 
-      if (query.cursor) {
-        filter._id = { $lt: query.cursor };
-      }
-
+  async findActiveConversationsByArtefacts(
+    artefactIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<Map<string, ConversationDocument>, DBError>> {
+    try {
       const conversations = await this.conversationModel
-        .find(filter)
-        .sort({ _id: -1 })
-        .limit(query.limit)
+        .find({
+          artefact: { $in: artefactIds },
+          status: ConversationStatus.ACTIVE,
+        })
         .session(session || null);
 
-      return ok({ conversations });
+      const conversationMap = new Map<string, ConversationDocument>();
+      for (const conversation of conversations) {
+        conversationMap.set(conversation.artefact.toString(), conversation);
+      }
+
+      return ok(conversationMap);
     } catch (error) {
-      this.logger.error('Failed to list conversations', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to list conversations' });
+      this.logger.error('Failed to find active conversations', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find active conversations' });
     }
   }
 

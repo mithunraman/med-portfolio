@@ -14,7 +14,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { Bubble, GiftedChat, IMessage, Message as GiftedMessage } from 'react-native-gifted-chat';
+import { Bubble, GiftedChat, Message as GiftedMessage, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ChatScreen() {
@@ -170,9 +170,11 @@ export default function ChatScreen() {
           renderInputToolbar={renderInputToolbar}
           renderLoading={renderLoading}
           minInputToolbarHeight={0}
+          isDayAnimationEnabled={false}
           listProps={{
             keyboardDismissMode: 'interactive',
             keyboardShouldPersistTaps: 'handled',
+            contentContainerStyle: { paddingBottom: 20 },
           }}
         />
       </View>

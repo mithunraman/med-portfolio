@@ -1,34 +1,24 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
-  Pressable,
   StyleSheet,
-  Text,
   TextInput,
   View,
-  type GestureResponderEvent,
   type StyleProp,
   type TextInput as TextInputType,
   type ViewStyle,
 } from 'react-native';
+import { useTheme } from '../theme';
+import { IconButton } from './IconButton';
+import { VoiceNoteRecorderBar } from './VoiceNoteRecorderBar';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-const COLORS = {
-  background: '#0b141a',
-  inputBackground: '#1f2c34',
-  iconDefault: '#8696a0',
-  iconActive: '#ffffff',
-  accent: '#00a884',
-  border: '#222d34',
-  placeholder: '#8696a0',
-  text: '#ffffff',
-  recording: '#ef4444',
-} as const;
+// Fixed accent color (consistent across themes)
+const ACCENT_COLOR = '#00a884';
 
 const SPACING = {
   toolbarPadding: 8,
@@ -51,91 +41,13 @@ interface ChatComposerProps {
   onToggleStickers?: () => void;
   onStartRecording?: () => void;
   onStopRecording?: () => void;
+  /** Called when a voice note is sent with its duration */
+  onSendVoiceNote?: (result: { durationMs: number }) => void;
   isSending?: boolean;
+  /** Bottom safe area inset for voice recorder */
+  safeAreaBottomInset?: number;
   style?: StyleProp<ViewStyle>;
 }
-
-interface IconButtonProps {
-  icon: React.ReactNode;
-  onPress?: () => void;
-  onPressIn?: (e: GestureResponderEvent) => void;
-  onPressOut?: (e: GestureResponderEvent) => void;
-  accessibilityLabel: string;
-  style?: StyleProp<ViewStyle>;
-  isActive?: boolean;
-  disabled?: boolean;
-}
-
-// ============================================================================
-// ICON BUTTON COMPONENT
-// ============================================================================
-
-const IconButton = memo(function IconButton({
-  icon,
-  onPress,
-  onPressIn,
-  onPressOut,
-  accessibilityLabel,
-  style,
-  isActive = false,
-  disabled = false,
-}: IconButtonProps) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = useCallback(
-    (e: GestureResponderEvent) => {
-      Animated.spring(scaleAnim, {
-        toValue: 0.9,
-        useNativeDriver: true,
-        friction: 8,
-        tension: 100,
-      }).start();
-      onPressIn?.(e);
-    },
-    [onPressIn, scaleAnim]
-  );
-
-  const handlePressOut = useCallback(
-    (e: GestureResponderEvent) => {
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        friction: 8,
-        tension: 100,
-      }).start();
-      onPressOut?.(e);
-    },
-    [onPressOut, scaleAnim]
-  );
-
-  const animatedStyle = useMemo(
-    () => [
-      styles.iconButton,
-      isActive && styles.iconButtonActive,
-      disabled && styles.iconButtonDisabled,
-      { transform: [{ scale: scaleAnim }] },
-      style,
-    ],
-    [isActive, disabled, scaleAnim, style]
-  );
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled }}
-      hitSlop={4}
-    >
-      <Animated.View style={animatedStyle}>
-        {icon}
-      </Animated.View>
-    </Pressable>
-  );
-});
 
 // ============================================================================
 // CHAT COMPOSER COMPONENT
@@ -148,11 +60,14 @@ export function ChatComposer({
   onToggleStickers,
   onStartRecording,
   onStopRecording,
+  onSendVoiceNote,
   isSending = false,
+  safeAreaBottomInset = 0,
   style,
 }: ChatComposerProps) {
+  const { colors, isDark } = useTheme();
   const [text, setText] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<TextInputType>(null);
 
@@ -164,15 +79,25 @@ export function ChatComposer({
     }
   }, [text, isSending, onSend]);
 
-  const handleMicPressIn = useCallback(() => {
-    setIsRecording(true);
+  // Voice recorder handlers
+  const handleMicPress = useCallback(() => {
+    setShowVoiceRecorder(true);
     onStartRecording?.();
   }, [onStartRecording]);
 
-  const handleMicPressOut = useCallback(() => {
-    setIsRecording(false);
+  const handleVoiceRecorderDiscard = useCallback(() => {
+    setShowVoiceRecorder(false);
     onStopRecording?.();
   }, [onStopRecording]);
+
+  const handleVoiceRecorderSend = useCallback(
+    (result: { durationMs: number }) => {
+      setShowVoiceRecorder(false);
+      onStopRecording?.();
+      onSendVoiceNote?.(result);
+    },
+    [onStopRecording, onSendVoiceNote]
+  );
 
   const handleFocus = useCallback(() => {
     setIsFocused(true);
@@ -184,73 +109,106 @@ export function ChatComposer({
 
   const hasText = useMemo(() => text.trim().length > 0, [text]);
 
-  // Memoized icons to prevent re-renders
+  // Memoized icons with theme colors
   const attachIcon = useMemo(
-    () => <Feather name="plus" size={SPACING.iconSize} color={COLORS.iconDefault} />,
-    []
+    () => <Feather name="plus" size={SPACING.iconSize} color={colors.textSecondary} />,
+    [colors.textSecondary]
   );
   const stickerIcon = useMemo(
     () => (
       <MaterialCommunityIcons
         name="sticker-emoji"
         size={SPACING.iconSize}
-        color={COLORS.iconDefault}
+        color={colors.textSecondary}
       />
     ),
-    []
+    [colors.textSecondary]
   );
   const cameraIcon = useMemo(
-    () => <Feather name="camera" size={SPACING.iconSize} color={COLORS.iconDefault} />,
-    []
+    () => <Feather name="camera" size={SPACING.iconSize} color={colors.textSecondary} />,
+    [colors.textSecondary]
   );
   const sendButtonIcon = useMemo(
     () =>
       isSending ? (
-        <ActivityIndicator size="small" color={COLORS.iconActive} />
+        <ActivityIndicator size="small" color="#ffffff" />
       ) : (
-        <Feather name="send" size={20} color={COLORS.iconActive} />
+        <Feather name="send" size={20} color="#ffffff" />
       ),
     [isSending]
   );
   const micIcon = useMemo(
-    () => (
-      <Feather
-        name="mic"
-        size={SPACING.iconSize}
-        color={isRecording ? COLORS.recording : COLORS.iconDefault}
-      />
-    ),
-    [isRecording]
+    () => <Feather name="mic" size={SPACING.iconSize} color={colors.textSecondary} />,
+    [colors.textSecondary]
   );
 
-  return (
-    <View style={[styles.container, style]}>
-      {/* Recording indicator */}
-      {isRecording && (
-        <View style={styles.recordingIndicator}>
-          <View style={styles.recordingDot} />
-          <Text style={styles.recordingText}>Recording...</Text>
-        </View>
-      )}
+  // Dynamic styles based on theme
+  const containerStyle = useMemo(
+    () => [
+      styles.container,
+      {
+        backgroundColor: isDark ? colors.surface : colors.background,
+        borderTopColor: colors.border,
+      },
+      style,
+    ],
+    [isDark, colors.surface, colors.background, colors.border, style]
+  );
 
+  const inputContainerStyle = useMemo(
+    () => [
+      styles.inputContainer,
+      {
+        backgroundColor: isDark ? colors.background : colors.surface,
+      },
+      isFocused && { borderWidth: 1, borderColor: colors.primary },
+    ],
+    [isDark, colors.background, colors.surface, colors.primary, isFocused]
+  );
+
+  const attachButtonStyle = useMemo(
+    () => [styles.attachButton, { backgroundColor: isDark ? colors.background : colors.surface }],
+    [isDark, colors.background, colors.surface]
+  );
+
+  const textInputStyle = useMemo(
+    () => [styles.textInput, { color: colors.text }],
+    [colors.text]
+  );
+
+  // If voice recorder is visible, show it instead of the regular toolbar
+  if (showVoiceRecorder) {
+    return (
+      <VoiceNoteRecorderBar
+        visible={showVoiceRecorder}
+        safeAreaBottomInset={safeAreaBottomInset}
+        onDiscard={handleVoiceRecorderDiscard}
+        onSend={handleVoiceRecorderSend}
+        testIDPrefix="voice-recorder"
+      />
+    );
+  }
+
+  return (
+    <View style={containerStyle}>
       <View style={styles.toolbar}>
         {/* Attachment button */}
         <IconButton
           icon={attachIcon}
           onPress={onOpenAttachments}
           accessibilityLabel="Open attachments"
-          style={styles.attachButton}
+          style={attachButtonStyle}
         />
 
         {/* Input pill */}
-        <View style={[styles.inputContainer, isFocused && styles.inputContainerFocused]}>
+        <View style={inputContainerStyle}>
           <TextInput
             ref={inputRef}
-            style={styles.textInput}
+            style={textInputStyle}
             value={text}
             onChangeText={setText}
             placeholder="Message"
-            placeholderTextColor={COLORS.placeholder}
+            placeholderTextColor={colors.textSecondary}
             onFocus={handleFocus}
             onBlur={handleBlur}
             multiline={true}
@@ -289,11 +247,8 @@ export function ChatComposer({
             {/* Microphone button */}
             <IconButton
               icon={micIcon}
-              onPressIn={handleMicPressIn}
-              onPressOut={handleMicPressOut}
-              accessibilityLabel="Hold to record voice message"
-              isActive={isRecording}
-              style={isRecording ? styles.micRecording : undefined}
+              onPress={handleMicPress}
+              accessibilityLabel="Record voice message"
             />
           </>
         )}
@@ -308,9 +263,7 @@ export function ChatComposer({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: COLORS.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: COLORS.border,
   },
   toolbar: {
     flexDirection: 'row',
@@ -319,40 +272,21 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.toolbarPadding,
     gap: SPACING.gap,
   },
-  iconButton: {
-    width: SPACING.iconButtonSize,
-    height: SPACING.iconButtonSize,
-    borderRadius: SPACING.iconButtonSize / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconButtonActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  iconButtonDisabled: {
-    opacity: 0.5,
-  },
   attachButton: {
-    backgroundColor: COLORS.inputBackground,
+    borderRadius: SPACING.iconButtonSize / 2,
   },
   inputContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.inputBackground,
     borderRadius: SPACING.inputBorderRadius,
     minHeight: SPACING.inputHeight,
     paddingLeft: SPACING.inputPaddingHorizontal,
     paddingRight: 4,
   },
-  inputContainerFocused: {
-    borderWidth: 1,
-    borderColor: COLORS.accent,
-  },
   textInput: {
     flex: 1,
     fontSize: 16,
-    color: COLORS.text,
     paddingVertical: 10,
     maxHeight: 120,
   },
@@ -361,28 +295,7 @@ const styles = StyleSheet.create({
     height: 36,
   },
   sendButton: {
-    backgroundColor: COLORS.accent,
-  },
-  micRecording: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-  },
-  recordingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    gap: 8,
-  },
-  recordingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.recording,
-  },
-  recordingText: {
-    color: COLORS.recording,
-    fontSize: 14,
-    fontWeight: '500',
+    backgroundColor: ACCENT_COLOR,
   },
 });
 

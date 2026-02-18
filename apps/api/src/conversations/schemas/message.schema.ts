@@ -1,8 +1,23 @@
-import { MessageRole } from '@acme/shared';
+import { MessageProcessingStatus, MessageRole } from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
+import { Media } from '../../media/schemas/media.schema';
 import { Conversation } from './conversation.schema';
+
+/**
+ * Transcription metadata from AssemblyAI
+ */
+export class TranscriptionMetadata {
+  @Prop({ type: Number, default: null })
+  confidence!: number | null;
+
+  @Prop({ type: Number, default: null })
+  audioDurationMs!: number | null;
+
+  @Prop({ type: Number, default: null })
+  wordCount!: number | null;
+}
 
 @Schema({
   collection: 'messages',
@@ -20,8 +35,30 @@ export class Message {
   @Prop({ required: true, type: Number })
   role!: MessageRole;
 
-  @Prop({ required: true })
-  content!: string;
+  // Content stages
+  @Prop({ type: String, default: null })
+  rawContent!: string | null; // Original text input OR raw transcript from audio
+
+  @Prop({ type: String, default: null })
+  cleanedContent!: string | null; // After cleaning stage
+
+  @Prop({ type: String, default: null })
+  content!: string | null; // Final processed content (displayed to user)
+
+  // Media attachment
+  @Prop({ type: Types.ObjectId, ref: Media.name, default: null })
+  media!: Types.ObjectId | null;
+
+  // Processing status
+  @Prop({ required: true, type: Number, default: MessageProcessingStatus.PENDING })
+  processingStatus!: MessageProcessingStatus;
+
+  @Prop({ type: String, default: null })
+  processingError!: string | null;
+
+  // Transcription metadata (populated after audio transcription)
+  @Prop({ type: TranscriptionMetadata, default: null })
+  transcription!: TranscriptionMetadata | null;
 
   createdAt!: Date;
   updatedAt!: Date;
@@ -33,3 +70,4 @@ export const MessageSchema = SchemaFactory.createForClass(Message);
 
 // Indexes for cursor-based pagination (sort by _id descending)
 MessageSchema.index({ conversation: 1, _id: -1 });
+MessageSchema.index({ conversation: 1, processingStatus: 1 });

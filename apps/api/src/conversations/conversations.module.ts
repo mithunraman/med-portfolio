@@ -1,6 +1,8 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { DatabaseModule } from '../database';
+import { MediaModule } from '../media';
+import { ProcessingModule } from '../processing';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsRepository } from './conversations.repository';
 import { CONVERSATIONS_REPOSITORY } from './conversations.repository.interface';
@@ -15,6 +17,8 @@ import { Message, MessageSchema } from './schemas/message.schema';
       { name: Conversation.name, schema: ConversationSchema },
       { name: Message.name, schema: MessageSchema },
     ]),
+    MediaModule,
+    forwardRef(() => ProcessingModule),
   ],
   controllers: [ConversationsController],
   providers: [

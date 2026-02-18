@@ -23,6 +23,29 @@ export const envSchema = z.object({
     .string({ required_error: 'JWT_SECRET is required' })
     .min(32, 'JWT_SECRET must be at least 32 characters for security'),
   JWT_EXPIRES_IN: z.string().default('7d'),
+
+  // Storage (S3/R2)
+  S3_ENDPOINT: z.string().url().optional(),
+  S3_REGION: z.string().default('auto'),
+  S3_ACCESS_KEY_ID: z
+    .string({ required_error: 'S3_ACCESS_KEY_ID is required' })
+    .min(1, 'S3_ACCESS_KEY_ID cannot be empty'),
+  S3_SECRET_ACCESS_KEY: z
+    .string({ required_error: 'S3_SECRET_ACCESS_KEY is required' })
+    .min(1, 'S3_SECRET_ACCESS_KEY cannot be empty'),
+  S3_BUCKET_MEDIA: z
+    .string({ required_error: 'S3_BUCKET_MEDIA is required' })
+    .min(1, 'S3_BUCKET_MEDIA cannot be empty'),
+
+  // OpenAI
+  OPENAI_API_KEY: z
+    .string({ required_error: 'OPENAI_API_KEY is required' })
+    .min(1, 'OPENAI_API_KEY cannot be empty'),
+
+  // AssemblyAI
+  ASSEMBLYAI_API_KEY: z
+    .string({ required_error: 'ASSEMBLYAI_API_KEY is required' })
+    .min(1, 'ASSEMBLYAI_API_KEY cannot be empty'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
@@ -42,7 +65,7 @@ function validateEnv(): EnvConfig {
 
     throw new Error(
       `\n❌ Environment validation failed:\n${errors.join('\n')}\n\n` +
-      `Please check your .env file against .env.example\n`,
+        `Please check your .env file against .env.example\n`
     );
   }
 
@@ -74,6 +97,19 @@ export const appConfig = registerAs('app', () => {
     jwt: {
       secret: env.JWT_SECRET,
       expiresIn: env.JWT_EXPIRES_IN,
+    },
+    storage: {
+      endpoint: env.S3_ENDPOINT,
+      region: env.S3_REGION,
+      accessKeyId: env.S3_ACCESS_KEY_ID,
+      secretAccessKey: env.S3_SECRET_ACCESS_KEY,
+      mediaBucket: env.S3_BUCKET_MEDIA,
+    },
+    openai: {
+      apiKey: env.OPENAI_API_KEY,
+    },
+    assemblyai: {
+      apiKey: env.ASSEMBLYAI_API_KEY,
     },
   };
 });

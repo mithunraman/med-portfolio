@@ -7,6 +7,8 @@ export function toMessageDto(doc: MessageDocument, conversationXid: string): Mes
     conversationId: conversationXid,
     role: doc.role,
     content: doc.content,
+    processingStatus: doc.processingStatus,
+    hasMedia: !!doc.media,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   };

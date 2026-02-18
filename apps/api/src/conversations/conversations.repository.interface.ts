@@ -1,8 +1,8 @@
-import { MessageRole } from '@acme/shared';
+import { MessageProcessingStatus, MessageRole } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
 import type { Result } from '../common/utils/result.util';
 import type { ConversationDocument } from './schemas/conversation.schema';
-import type { MessageDocument } from './schemas/message.schema';
+import type { MessageDocument, TranscriptionMetadata } from './schemas/message.schema';
 
 export const CONVERSATIONS_REPOSITORY = Symbol('CONVERSATIONS_REPOSITORY');
 
@@ -22,7 +22,17 @@ export interface CreateConversationData {
 export interface CreateMessageData {
   conversation: Types.ObjectId;
   role: MessageRole;
-  content: string;
+  rawContent?: string | null;
+  media?: Types.ObjectId | null;
+}
+
+export interface UpdateMessageData {
+  rawContent?: string | null;
+  cleanedContent?: string | null;
+  content?: string | null;
+  processingStatus?: MessageProcessingStatus;
+  processingError?: string | null;
+  transcription?: TranscriptionMetadata | null;
 }
 
 export interface ListMessagesQuery {
@@ -63,6 +73,17 @@ export interface IConversationsRepository {
     data: CreateMessageData,
     session?: ClientSession
   ): Promise<Result<MessageDocument, DBError>>;
+
+  findMessageById(
+    messageId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<MessageDocument | null, DBError>>;
+
+  updateMessage(
+    messageId: Types.ObjectId,
+    data: UpdateMessageData,
+    session?: ClientSession
+  ): Promise<Result<MessageDocument | null, DBError>>;
 
   listMessages(
     query: ListMessagesQuery,

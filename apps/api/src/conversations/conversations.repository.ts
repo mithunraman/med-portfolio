@@ -10,6 +10,7 @@ import {
   IConversationsRepository,
   ListMessagesQuery,
   ListMessagesResult,
+  UpdateMessageData,
 } from './conversations.repository.interface';
 import { Conversation, ConversationDocument } from './schemas/conversation.schema';
 import { Message, MessageDocument } from './schemas/message.schema';
@@ -120,6 +121,38 @@ export class ConversationsRepository implements IConversationsRepository {
     } catch (error) {
       this.logger.error('Failed to create message', error);
       return err({ code: 'DB_ERROR', message: 'Failed to create message' });
+    }
+  }
+
+  async findMessageById(
+    messageId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<MessageDocument | null, DBError>> {
+    try {
+      const message = await this.messageModel
+        .findById(messageId)
+        .populate('media')
+        .session(session || null);
+      return ok(message);
+    } catch (error) {
+      this.logger.error('Failed to find message', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find message' });
+    }
+  }
+
+  async updateMessage(
+    messageId: Types.ObjectId,
+    data: UpdateMessageData,
+    session?: ClientSession
+  ): Promise<Result<MessageDocument | null, DBError>> {
+    try {
+      const message = await this.messageModel
+        .findByIdAndUpdate(messageId, { $set: data }, { new: true })
+        .session(session || null);
+      return ok(message);
+    } catch (error) {
+      this.logger.error('Failed to update message', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to update message' });
     }
   }
 

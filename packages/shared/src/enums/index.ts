@@ -4,3 +4,7 @@ export * from './message-role.enum';
 export * from './conversation-status.enum';
 export * from './artefact-status.enum';
 export * from './specialty.enum';
+export * from './media-status.enum';
+export * from './media-type.enum';
+export * from './media-ref-collection.enum';
+export * from './message-processing-status.enum';

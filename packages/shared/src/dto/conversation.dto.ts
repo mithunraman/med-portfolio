@@ -1,13 +1,16 @@
 import { z } from 'zod';
-import { MessageRole } from '../enums/message-role.enum';
 import { ConversationStatus } from '../enums/conversation-status.enum';
+import { MessageProcessingStatus } from '../enums/message-processing-status.enum';
+import { MessageRole } from '../enums/message-role.enum';
 
 // Message schemas
 export const MessageSchema = z.object({
   id: z.string(),
   conversationId: z.string(),
   role: z.nativeEnum(MessageRole),
-  content: z.string(),
+  content: z.string().nullable(),
+  processingStatus: z.nativeEnum(MessageProcessingStatus),
+  hasMedia: z.boolean(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

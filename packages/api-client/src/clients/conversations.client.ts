@@ -42,7 +42,7 @@ export class ConversationsClient {
     );
   }
 
-  async sendMessage(data: SendMessageRequest): Promise<Message> {
-    return this.client.post<Message>('/conversations/messages', data);
+  async sendMessage(conversationId: string, data: SendMessageRequest): Promise<Message> {
+    return this.client.post<Message>(`/conversations/${conversationId}/messages`, data);
   }
 }

@@ -85,8 +85,7 @@ export const sendMessage = createAsyncThunk(
     conversationsLogger.info('Sending message', { conversationId: params.conversationId });
 
     try {
-      const response = await api.conversations.sendMessage({
-        conversationId: params.conversationId,
+      const response = await api.conversations.sendMessage(params.conversationId, {
         content: params.content,
       });
       conversationsLogger.info('Message sent', { messageId: response.id });

@@ -44,7 +44,7 @@ export default function ConversationsListScreen() {
 
   const handleConversationPress = useCallback(
     (conversation: Conversation) => {
-      router.push(`/(messages)/${conversation.conversationId}`);
+      router.push(`/(messages)/${conversation.id}`);
     },
     [router]
   );

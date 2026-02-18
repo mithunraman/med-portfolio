@@ -50,7 +50,7 @@ export default function ChatScreen() {
   );
 
   const conversationExists = useMemo(
-    () => conversations.some((c) => c.conversationId === conversationId),
+    () => conversations.some((c) => c.id === conversationId),
     [conversations, conversationId]
   );
 
@@ -64,7 +64,7 @@ export default function ChatScreen() {
   const toGiftedMessage = useCallback(
     (msg: Message): IMessage => ({
       _id: msg.id,
-      text: msg.content,
+      text: msg.content ?? '',
       createdAt: new Date(msg.createdAt),
       user: {
         _id: msg.role === MessageRole.USER ? (user?.id ?? 'user') : 'assistant',

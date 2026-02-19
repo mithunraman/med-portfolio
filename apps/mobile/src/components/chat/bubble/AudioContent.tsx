@@ -1,4 +1,4 @@
-import { MessageProcessingStatus, PROCESSING_STATUS_LABELS, type Message } from '@acme/shared';
+import { type Message } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -8,7 +8,6 @@ import { CircularButton } from '../../CircularButton';
 import { useAudioPlayback } from '../hooks/useAudioPlayback';
 
 const BAR_COUNT = 30;
-const TERMINAL = new Set([MessageProcessingStatus.COMPLETE, MessageProcessingStatus.FAILED]);
 
 // Generate pseudo-random bar heights seeded from message id characters
 function generateBars(seed: string): number[] {
@@ -33,9 +32,6 @@ export const AudioContent = memo(function AudioContent({ message }: Props) {
 
   const bars = useMemo(() => generateBars(message.id), [message.id]);
 
-  const isProcessing = !TERMINAL.has(message.processingStatus);
-  const statusLabel = isProcessing ? PROCESSING_STATUS_LABELS[message.processingStatus] : null;
-
   const playheadFraction = durationMs > 0 ? currentMs / durationMs : 0;
   const filledBars = Math.floor(playheadFraction * BAR_COUNT);
 
@@ -45,12 +41,6 @@ export const AudioContent = memo(function AudioContent({ message }: Props) {
   };
 
   const playIcon = <Ionicons name={isPlaying ? 'pause' : 'play'} size={14} color="#ffffff" />;
-
-  if (statusLabel) {
-    return (
-      <Text style={[styles.processingText, { color: colors.textSecondary }]}>{statusLabel}</Text>
-    );
-  }
 
   return (
     <View style={styles.wrapper}>
@@ -104,6 +94,8 @@ export const AudioContent = memo(function AudioContent({ message }: Props) {
           <Text style={[styles.speedText, { color: colors.textSecondary }]}>{speed}×</Text>
         </Pressable>
       </View>
+
+
     </View>
   );
 });
@@ -113,7 +105,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   textContent: {
-    fontSize: 14,
+    fontSize: 16,
     lineHeight: 20,
   },
   container: {
@@ -147,9 +139,5 @@ const styles = StyleSheet.create({
   speedText: {
     fontSize: 10,
     fontWeight: '600',
-  },
-  processingText: {
-    fontSize: 14,
-    fontStyle: 'italic',
   },
 });

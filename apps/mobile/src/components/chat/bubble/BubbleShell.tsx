@@ -1,6 +1,6 @@
-import { MessageProcessingStatus, MessageRole, type Message } from '@acme/shared';
+import { MessageProcessingStatus, MessageRole, PROCESSING_STATUS_LABELS, type Message } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../../theme';
 
@@ -11,6 +11,21 @@ const BUBBLE_COLORS = {
 } as const;
 
 const TERMINAL = new Set([MessageProcessingStatus.COMPLETE, MessageProcessingStatus.FAILED]);
+
+function ProcessingLabel({ label, color }: { label: string; color: string }) {
+  const [dots, setDots] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setDots(d => (d + 1) % 6), 500);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <Text style={[styles.processingLabel, { color }]}>
+      {label}{'·'.repeat(dots)}
+    </Text>
+  );
+}
 
 function formatTimestamp(dateStr: string): string {
   const d = new Date(dateStr);
@@ -40,6 +55,11 @@ export const BubbleShell = memo(function BubbleShell({
   const mode = isDark ? 'dark' : 'light';
   const bubbleColor = isUser ? BUBBLE_COLORS.sent[mode] : BUBBLE_COLORS.received[mode];
 
+  const isProcessing = !TERMINAL.has(message.processingStatus);
+  const statusLabel = isProcessing ? PROCESSING_STATUS_LABELS[message.processingStatus] : null;
+
+  const metaColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)';
+
   // Status tick for user messages
   const tick = (() => {
     if (!isUser) return null;
@@ -65,8 +85,11 @@ export const BubbleShell = memo(function BubbleShell({
 
       {/* Timestamp + ticks row */}
       <View style={styles.footer}>
-        <Text style={styles.timestamp}>{formatTimestamp(message.createdAt)}</Text>
-        {tick}
+        {statusLabel ? <ProcessingLabel label={statusLabel} color={metaColor} /> : null}
+        <View style={styles.footerRight}>
+          <Text style={[styles.timestamp, { color: metaColor }]}>{formatTimestamp(message.createdAt)}</Text>
+          {tick}
+        </View>
       </View>
 
       {/* Tail — only on last message in group */}
@@ -95,13 +118,22 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 2,
+    justifyContent: 'space-between',
+    gap: 4,
     marginTop: 2,
   },
+  processingLabel: {
+    fontSize: 13,
+    fontStyle: 'italic',
+  },
+  footerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginLeft: 'auto',
+  },
   timestamp: {
-    fontSize: 11,
-    color: '#8696a0',
+    fontSize: 13,
   },
   // CSS triangle tail
   tailBase: {

@@ -1,11 +1,14 @@
 import { ChatComposer } from '@/components';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
-import { fetchMessages, sendMessage } from '@/store';
+import { createArtefact, fetchMessages, sendMessage } from '@/store';
 import { useTheme } from '@/theme';
+import { logger } from '@/utils/logger';
 import { Message, MessageRole } from '@acme/shared';
+
+const chatLogger = logger.createScope('ChatScreen');
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -29,6 +32,16 @@ export default function ChatScreen() {
   const headerHeight = useHeaderHeight();
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
+  // Track the real conversation ID (from backend) for new conversations
+  const realConversationIdRef = useRef<string | null>(null);
+  const isPendingConversation = isNew === 'true' && !realConversationIdRef.current;
+  // Use real conversation ID if available, otherwise use URL param
+  const effectiveConversationId = realConversationIdRef.current ?? conversationId ?? '';
+
+  const messagesMap = useAppSelector((state) => state.conversations.messages);
+  const loadingMessages = useAppSelector((state) => state.conversations.loadingMessages);
+  const sendingMessage = useAppSelector((state) => state.conversations.sendingMessage);
+
   // Track keyboard visibility to adjust bottom padding
   useEffect(() => {
     const showSub = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true));
@@ -39,27 +52,17 @@ export default function ChatScreen() {
     };
   }, []);
 
-  const messagesMap = useAppSelector((state) => state.conversations.messages);
-  const loadingMessages = useAppSelector((state) => state.conversations.loadingMessages);
-  const sendingMessage = useAppSelector((state) => state.conversations.sendingMessage);
-  const conversations = useAppSelector((state) => state.conversations.conversations);
-
   const messages = useMemo(
-    () => messagesMap[conversationId ?? ''] ?? [],
-    [messagesMap, conversationId]
+    () => messagesMap[effectiveConversationId] ?? [],
+    [messagesMap, effectiveConversationId]
   );
 
-  const conversationExists = useMemo(
-    () => conversations.some((c) => c.id === conversationId),
-    [conversations, conversationId]
-  );
-
-  // Only fetch messages if this is an existing conversation (not newly created)
+  // Fetch messages for existing conversations (not newly created ones)
   useEffect(() => {
-    if (conversationId && isNew !== 'true' && conversationExists) {
+    if (conversationId && isNew !== 'true') {
       dispatch(fetchMessages({ conversationId }));
     }
-  }, [conversationId, isNew, conversationExists, dispatch]);
+  }, [conversationId, isNew, dispatch]);
 
   const toGiftedMessage = useCallback(
     (msg: Message): IMessage => ({
@@ -79,11 +82,28 @@ export default function ChatScreen() {
   }, [messages, toGiftedMessage]);
 
   const handleSend = useCallback(
-    (text: string) => {
+    async (text: string) => {
       if (!conversationId || !text.trim()) return;
-      dispatch(sendMessage({ conversationId, content: text }));
+
+      // For new conversations, create artefact first to get real conversation ID
+      if (isPendingConversation) {
+        try {
+          // Create artefact using the local UUID as artefactId
+          const artefact = await dispatch(createArtefact({ artefactId: conversationId })).unwrap();
+          const realId = artefact.conversation.id;
+          realConversationIdRef.current = realId;
+
+          // Send message to the real conversation
+          await dispatch(sendMessage({ conversationId: realId, content: text }));
+        } catch (error) {
+          chatLogger.error('Failed to create conversation', { error });
+        }
+      } else {
+        // Normal flow - use effective conversation ID
+        dispatch(sendMessage({ conversationId: effectiveConversationId, content: text }));
+      }
     },
-    [conversationId, dispatch]
+    [conversationId, effectiveConversationId, isPendingConversation, dispatch]
   );
 
   const renderBubble = useCallback(
@@ -182,11 +202,11 @@ export default function ChatScreen() {
       <ChatComposer
         onSend={handleSend}
         isSending={sendingMessage}
-        onOpenAttachments={() => console.log('Open attachments')}
-        onOpenCamera={() => console.log('Open camera')}
-        onToggleStickers={() => console.log('Toggle stickers')}
-        onStartRecording={() => console.log('Start recording')}
-        onStopRecording={() => console.log('Stop recording')}
+        onOpenAttachments={() => {}}
+        onOpenCamera={() => {}}
+        onToggleStickers={() => {}}
+        onStartRecording={() => {}}
+        onStopRecording={() => {}}
         style={{ paddingBottom: keyboardVisible ? 0 : insets.bottom }}
       />
     </KeyboardAvoidingView>

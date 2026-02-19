@@ -1,3 +1,6 @@
+export * from './artefacts';
+export { artefactsReducer } from './artefacts';
+
 export * from './authSlice';
 export { default as authReducer } from './authSlice';
 

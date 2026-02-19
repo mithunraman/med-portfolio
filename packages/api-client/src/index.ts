@@ -1,5 +1,6 @@
 import type { ApiClientConfig } from './adapters/types';
 import { BaseApiClient } from './core/api-client';
+import { ArtefactsClient } from './clients/artefacts.client';
 import { AuthClient } from './clients/auth.client';
 import { ConversationsClient } from './clients/conversations.client';
 import { ItemsClient } from './clients/items.client';
@@ -18,6 +19,7 @@ export function createApiClient(config: ApiClientConfig) {
   const baseClient = new BaseApiClient(config);
 
   return {
+    artefacts: new ArtefactsClient(baseClient),
     auth: new AuthClient(baseClient),
     conversations: new ConversationsClient(baseClient),
     items: new ItemsClient(baseClient),

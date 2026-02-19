@@ -38,8 +38,8 @@ export default function ConversationsListScreen() {
   }, [loadConversations]);
 
   const handleNewConversation = useCallback(() => {
-    const newConversationId = randomUUID();
-    router.push(`/(messages)/${newConversationId}?isNew=true`);
+    const localId = randomUUID();
+    router.push(`/(messages)/${localId}?isNew=true`);
   }, [router]);
 
   const handleConversationPress = useCallback(

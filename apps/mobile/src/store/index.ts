@@ -1,8 +1,15 @@
 import { configureStore } from '@reduxjs/toolkit';
-import { authReducer, conversationsReducer, nudgeReducer, onboardingReducer } from './slices';
+import {
+  artefactsReducer,
+  authReducer,
+  conversationsReducer,
+  nudgeReducer,
+  onboardingReducer,
+} from './slices';
 
 export const store = configureStore({
   reducer: {
+    artefacts: artefactsReducer,
     auth: authReducer,
     conversations: conversationsReducer,
     onboarding: onboardingReducer,

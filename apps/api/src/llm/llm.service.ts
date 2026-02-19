@@ -41,8 +41,6 @@ export interface TranscriptionResult {
  * UK-compliant PII policies for medical portfolio entries
  * Redacts identifiers while preserving clinical content
  * Covers GDPR, UK Data Protection Act 2018, and NHS guidelines
- *
- * Note: 'medical_record_number' is cast as PiiPolicy since SDK types may lag behind API
  */
 const UK_PII_POLICIES: PiiPolicy[] = [
   'person_name', // Patient/relative/staff names
@@ -53,7 +51,7 @@ const UK_PII_POLICIES: PiiPolicy[] = [
   'organization', // Hospital names, GP surgery names
   'date', // Specific dates that could identify patient
   'drivers_license', // ID numbers
-  'medical_record_number' as PiiPolicy, // NHS numbers and medical IDs
+  'healthcare_number', // NHS numbers and medical IDs
   'credit_card_number', // Financial info
   'banking_information', // Financial info
 ];
@@ -122,7 +120,7 @@ export class LLMService {
     // Create transcription with timeout
     const transcriptPromise = this.assemblyai.transcripts.transcribe({
       audio_url: audioUrl,
-      speech_model: 'universal-3-pro' as SpeechModel, // Cast: SDK types lag behind API
+      speech_models: ['universal-3-pro'] as unknown as SpeechModel[],
       language_code: 'en_uk',
       // Medical keyterms for improved accuracy
       keyterms_prompt: MEDICAL_KEYTERMS,

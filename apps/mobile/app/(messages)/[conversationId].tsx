@@ -1,11 +1,11 @@
+import { api } from '@/api/client';
 import { ChatComposer } from '@/components';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
+import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
 import { createArtefact, fetchMessages, sendMessage } from '@/store';
 import { useTheme } from '@/theme';
 import { logger } from '@/utils/logger';
-import { Message, MessageRole } from '@acme/shared';
-
-const chatLogger = logger.createScope('ChatScreen');
+import { MediaType, Message, MessageRole } from '@acme/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,6 +19,12 @@ import {
 } from 'react-native';
 import { Bubble, GiftedChat, Message as GiftedMessage, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { shallowEqual } from 'react-redux';
+
+// Stable empty array — prevents a new reference on every render for unseen conversations
+const EMPTY_IDS: string[] = [];
+
+const chatLogger = logger.createScope('ChatScreen');
 
 export default function ChatScreen() {
   const { conversationId, isNew } = useLocalSearchParams<{
@@ -38,9 +44,20 @@ export default function ChatScreen() {
   // Use real conversation ID if available, otherwise use URL param
   const effectiveConversationId = realConversationIdRef.current ?? conversationId ?? '';
 
-  const messagesMap = useAppSelector((state) => state.conversations.messages);
-  const loadingMessages = useAppSelector((state) => state.conversations.loadingMessages);
-  const sendingMessage = useAppSelector((state) => state.conversations.sendingMessage);
+  const loadingMessages = useAppSelector((state) => state.messages.loading);
+  const sendingMessage = useAppSelector((state) => state.messages.sending);
+
+  // Step 1: stable ID list — only changes when this conversation's message list changes
+  const messageIds = useAppSelector(
+    (state) => state.messages.idsByConversation[effectiveConversationId] ?? EMPTY_IDS
+  );
+
+  // Step 2: map IDs → entities — shallowEqual means re-render only when a message
+  // object in THIS conversation changes, not when any other conversation is updated
+  const messages = useAppSelector(
+    (state) => messageIds.map((id) => state.messages.entities[id]).filter(Boolean) as Message[],
+    shallowEqual
+  );
 
   // Track keyboard visibility to adjust bottom padding
   useEffect(() => {
@@ -51,11 +68,6 @@ export default function ChatScreen() {
       hideSub.remove();
     };
   }, []);
-
-  const messages = useMemo(
-    () => messagesMap[effectiveConversationId] ?? [],
-    [messagesMap, effectiveConversationId]
-  );
 
   // Fetch messages for existing conversations (not newly created ones)
   useEffect(() => {
@@ -80,6 +92,34 @@ export default function ChatScreen() {
   const giftedMessages = useMemo(() => {
     return messages.map(toGiftedMessage);
   }, [messages, toGiftedMessage]);
+
+  const handleSendVoiceNote = useCallback(
+    async (recording: AudioRecordingResult) => {
+      const targetConversationId = realConversationIdRef.current ?? conversationId;
+      if (!targetConversationId) return;
+
+      try {
+        const { mediaId, uploadUrl } = await api.media.initiateUpload({
+          mediaType: MediaType.AUDIO,
+          mimeType: recording.mime,
+        });
+
+        // Upload the audio file directly to S3 via the presigned URL
+        const fileResponse = await fetch(recording.uri);
+        const blob = await fileResponse.blob();
+        await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': recording.mime },
+          body: blob,
+        });
+
+        dispatch(sendMessage({ conversationId: targetConversationId, mediaId }));
+      } catch (error) {
+        chatLogger.error('Failed to send voice note', { error });
+      }
+    },
+    [conversationId, dispatch]
+  );
 
   const handleSend = useCallback(
     async (text: string) => {
@@ -201,12 +241,11 @@ export default function ChatScreen() {
 
       <ChatComposer
         onSend={handleSend}
+        onSendVoiceNote={handleSendVoiceNote}
         isSending={sendingMessage}
         onOpenAttachments={() => {}}
         onOpenCamera={() => {}}
         onToggleStickers={() => {}}
-        onStartRecording={() => {}}
-        onStopRecording={() => {}}
         style={{ paddingBottom: keyboardVisible ? 0 : insets.bottom }}
       />
     </KeyboardAvoidingView>

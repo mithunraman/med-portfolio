@@ -4,6 +4,7 @@ import { ArtefactsClient } from './clients/artefacts.client';
 import { AuthClient } from './clients/auth.client';
 import { ConversationsClient } from './clients/conversations.client';
 import { ItemsClient } from './clients/items.client';
+import { MediaClient } from './clients/media.client';
 
 // Re-export types and adapters
 export * from './adapters/types';
@@ -23,6 +24,7 @@ export function createApiClient(config: ApiClientConfig) {
     auth: new AuthClient(baseClient),
     conversations: new ConversationsClient(baseClient),
     items: new ItemsClient(baseClient),
+    media: new MediaClient(baseClient),
   };
 }
 

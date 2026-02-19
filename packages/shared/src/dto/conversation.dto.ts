@@ -29,9 +29,14 @@ export const ConversationSchema = z.object({
 export type Conversation = z.infer<typeof ConversationSchema>;
 
 // Request schemas
-export const SendMessageRequestSchema = z.object({
-  content: z.string().min(1, 'Message content is required'),
-});
+export const SendMessageRequestSchema = z
+  .object({
+    content: z.string().min(1).optional(),
+    mediaId: z.string().min(1).optional(),
+  })
+  .refine((data) => Boolean(data.content) !== Boolean(data.mediaId), {
+    message: 'Exactly one of content or mediaId must be provided',
+  });
 
 export type SendMessageRequest = z.infer<typeof SendMessageRequestSchema>;
 

@@ -3,6 +3,7 @@ import {
   artefactsReducer,
   authReducer,
   conversationsReducer,
+  messagesReducer,
   nudgeReducer,
   onboardingReducer,
 } from './slices';
@@ -12,6 +13,7 @@ export const store = configureStore({
     artefacts: artefactsReducer,
     auth: authReducer,
     conversations: conversationsReducer,
+    messages: messagesReducer,
     onboarding: onboardingReducer,
     nudge: nudgeReducer,
   },

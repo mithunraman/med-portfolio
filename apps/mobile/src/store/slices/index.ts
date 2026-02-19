@@ -4,8 +4,11 @@ export { artefactsReducer } from './artefacts';
 export * from './authSlice';
 export { default as authReducer } from './authSlice';
 
-export * from './conversationsSlice';
-export { default as conversationsReducer } from './conversationsSlice';
+export * from './conversations';
+export { conversationsReducer } from './conversations';
+
+export * from './messages';
+export { messagesReducer } from './messages';
 
 export * from './onboardingSlice';
 export { default as onboardingReducer } from './onboardingSlice';

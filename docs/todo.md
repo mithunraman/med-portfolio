@@ -1,0 +1,2 @@
+- Pages not supporting swiping and Gestures
+- Example: When I open a chat and swipe back, nothing happens. It should go back to the previous screen.

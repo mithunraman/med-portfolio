@@ -40,12 +40,20 @@
       [
         "expo-build-properties",
         {
-          "ios": { "deploymentTarget": "15.1" },
+          "ios": {
+            "deploymentTarget": "15.1"
+          },
           "android": {
             "minSdkVersion": 24,
             "compileSdkVersion": 35,
             "targetSdkVersion": 35
           }
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone to record voice notes."
         }
       ]
     ],

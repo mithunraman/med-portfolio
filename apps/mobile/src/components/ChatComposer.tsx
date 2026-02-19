@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
@@ -9,9 +10,12 @@ import {
   type TextInput as TextInputType,
   type ViewStyle,
 } from 'react-native';
+import type { AudioRecordingResult } from '../hooks/useAudioRecorder';
 import { useTheme } from '../theme';
 import { IconButton } from './IconButton';
 import { VoiceNoteRecorderBar } from './VoiceNoteRecorderBar';
+
+const _logger = logger.createScope('ChatComposer');
 
 // ============================================================================
 // CONSTANTS
@@ -39,10 +43,8 @@ interface ChatComposerProps {
   onOpenAttachments?: () => void;
   onOpenCamera?: () => void;
   onToggleStickers?: () => void;
-  onStartRecording?: () => void;
-  onStopRecording?: () => void;
-  /** Called when a voice note is sent with its duration */
-  onSendVoiceNote?: (result: { durationMs: number }) => void;
+  /** Called when a voice note is sent with the recording result */
+  onSendVoiceNote?: (result: AudioRecordingResult) => void;
   isSending?: boolean;
   /** Bottom safe area inset for voice recorder */
   safeAreaBottomInset?: number;
@@ -58,8 +60,6 @@ export function ChatComposer({
   onOpenAttachments,
   onOpenCamera,
   onToggleStickers,
-  onStartRecording,
-  onStopRecording,
   onSendVoiceNote,
   isSending = false,
   safeAreaBottomInset = 0,
@@ -82,21 +82,19 @@ export function ChatComposer({
   // Voice recorder handlers
   const handleMicPress = useCallback(() => {
     setShowVoiceRecorder(true);
-    onStartRecording?.();
-  }, [onStartRecording]);
+  }, []);
 
   const handleVoiceRecorderDiscard = useCallback(() => {
     setShowVoiceRecorder(false);
-    onStopRecording?.();
-  }, [onStopRecording]);
+  }, []);
 
   const handleVoiceRecorderSend = useCallback(
-    (result: { durationMs: number }) => {
+    (result: AudioRecordingResult) => {
       setShowVoiceRecorder(false);
-      onStopRecording?.();
+      _logger.info('Voice recorder send', result);
       onSendVoiceNote?.(result);
     },
-    [onStopRecording, onSendVoiceNote]
+    [onSendVoiceNote]
   );
 
   const handleFocus = useCallback(() => {
@@ -171,10 +169,7 @@ export function ChatComposer({
     [isDark, colors.background, colors.surface]
   );
 
-  const textInputStyle = useMemo(
-    () => [styles.textInput, { color: colors.text }],
-    [colors.text]
-  );
+  const textInputStyle = useMemo(() => [styles.textInput, { color: colors.text }], [colors.text]);
 
   // If voice recorder is visible, show it instead of the regular toolbar
   if (showVoiceRecorder) {
@@ -238,11 +233,7 @@ export function ChatComposer({
           />
         ) : (
           <>
-            <IconButton
-              icon={cameraIcon}
-              onPress={onOpenCamera}
-              accessibilityLabel="Open camera"
-            />
+            <IconButton icon={cameraIcon} onPress={onOpenCamera} accessibilityLabel="Open camera" />
 
             {/* Microphone button */}
             <IconButton

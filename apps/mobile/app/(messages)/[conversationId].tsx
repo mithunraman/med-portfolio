@@ -2,15 +2,23 @@ import { api } from '@/api/client';
 import { ChatComposer } from '@/components';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
-import { createArtefact, fetchMessages, sendMessage } from '@/store';
+import { createArtefact, fetchMessages, pollMessages, sendMessage } from '@/store';
 import { useTheme } from '@/theme';
 import { logger } from '@/utils/logger';
-import { MediaType, Message, MessageRole } from '@acme/shared';
+import {
+  MediaType,
+  Message,
+  MessageProcessingStatus,
+  MessageRole,
+  MessageType,
+  PROCESSING_STATUS_LABELS,
+} from '@acme/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -23,6 +31,13 @@ import { shallowEqual } from 'react-redux';
 
 // Stable empty array — prevents a new reference on every render for unseen conversations
 const EMPTY_IDS: string[] = [];
+
+const TERMINAL_STATUSES = new Set<MessageProcessingStatus>([
+  MessageProcessingStatus.COMPLETE,
+  MessageProcessingStatus.FAILED,
+]);
+
+const POLL_INTERVAL_MS = __DEV__ ? 2000 : 5000;
 
 const chatLogger = logger.createScope('ChatScreen');
 
@@ -76,16 +91,70 @@ export default function ChatScreen() {
     }
   }, [conversationId, isNew, dispatch]);
 
+  // Derive pending message IDs — stable boolean to control interval lifecycle
+  const pendingMessageIds = useMemo(
+    () => messages.filter((m) => !TERMINAL_STATUSES.has(m.processingStatus)).map((m) => m.id),
+    [messages]
+  );
+  const hasPendingMessages = pendingMessageIds.length > 0;
+
+  // Always-fresh ref so the interval closure never captures stale IDs
+  const pendingIdsRef = useRef<string[]>(pendingMessageIds);
+  pendingIdsRef.current = pendingMessageIds;
+
+  // Polling: start when there are pending messages, pause when app is backgrounded
+  useEffect(() => {
+    if (!hasPendingMessages) return;
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const startPolling = () => {
+      if (intervalId !== null) return;
+      intervalId = setInterval(() => {
+        if (pendingIdsRef.current.length > 0) {
+          dispatch(pollMessages(pendingIdsRef.current));
+        }
+      }, POLL_INTERVAL_MS);
+    };
+
+    const stopPolling = () => {
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    startPolling();
+
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') startPolling();
+      else stopPolling();
+    });
+
+    return () => {
+      stopPolling();
+      appStateSub.remove();
+    };
+  }, [hasPendingMessages, dispatch]);
+
   const toGiftedMessage = useCallback(
-    (msg: Message): IMessage => ({
-      _id: msg.id,
-      text: msg.content ?? '',
-      createdAt: new Date(msg.createdAt),
-      user: {
-        _id: msg.role === MessageRole.USER ? (user?.id ?? 'user') : 'assistant',
-        name: msg.role === MessageRole.USER ? (user?.name ?? 'You') : 'Assistant',
-      },
-    }),
+    (msg: Message): IMessage => {
+      // For non-terminal audio messages, show a processing label instead of content
+      const statusLabel =
+        !TERMINAL_STATUSES.has(msg.processingStatus) && msg.messageType !== MessageType.TEXT
+          ? PROCESSING_STATUS_LABELS[msg.processingStatus]
+          : null;
+
+      return {
+        _id: msg.id,
+        text: statusLabel ?? msg.content ?? '',
+        createdAt: new Date(msg.createdAt),
+        user: {
+          _id: msg.role === MessageRole.USER ? (user?.id ?? 'user') : 'assistant',
+          name: msg.role === MessageRole.USER ? (user?.name ?? 'You') : 'Assistant',
+        },
+      };
+    },
     [user]
   );
 

@@ -8,3 +8,4 @@ export * from './media-status.enum';
 export * from './media-type.enum';
 export * from './media-ref-collection.enum';
 export * from './message-processing-status.enum';
+export * from './message-type.enum';

@@ -35,6 +35,9 @@ export interface ValidatedMediaUpload {
   mediaId: Types.ObjectId;
   xid: string;
   sizeBytes: number;
+  mediaType: MediaType;
+  mimeType: string;
+  durationMs: number | null;
 }
 
 @Injectable()
@@ -130,6 +133,9 @@ export class MediaService {
       mediaId: media._id,
       xid: media.xid,
       sizeBytes: headResult.ContentLength ?? 0,
+      mediaType: media.mediaType,
+      mimeType: media.mimeType,
+      durationMs: media.durationMs,
     };
   }
 

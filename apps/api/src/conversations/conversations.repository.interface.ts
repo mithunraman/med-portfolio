@@ -1,4 +1,4 @@
-import { MessageProcessingStatus, MessageRole } from '@acme/shared';
+import { MessageProcessingStatus, MessageRole, MessageType } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
 import type { Result } from '../common/utils/result.util';
 import type { ConversationDocument } from './schemas/conversation.schema';
@@ -21,7 +21,9 @@ export interface CreateConversationData {
 // Message types
 export interface CreateMessageData {
   conversation: Types.ObjectId;
+  userId: Types.ObjectId;
   role: MessageRole;
+  messageType: MessageType;
   rawContent?: string | null;
   media?: Types.ObjectId | null;
 }
@@ -78,6 +80,16 @@ export interface IConversationsRepository {
     messageId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<MessageDocument | null, DBError>>;
+
+  /**
+   * Find messages by their xids, scoped to a specific user.
+   * Populates both media and conversation (for conversationXid resolution).
+   */
+  findMessagesByXids(
+    xids: string[],
+    userId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<MessageDocument[], DBError>>;
 
   updateMessage(
     messageId: Types.ObjectId,

@@ -6,3 +6,7 @@
 # Chat
 
 - Text messages not getting populated in the chat screen. This is because content is not yet available when the message is being processed.
+
+# Login screen
+
+- WHen API error is returned during login, the user is signed out. Fix this later.

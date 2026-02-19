@@ -45,4 +45,10 @@ export class ConversationsClient {
   async sendMessage(conversationId: string, data: SendMessageRequest): Promise<Message> {
     return this.client.post<Message>(`/conversations/${conversationId}/messages`, data);
   }
+
+  async pollPendingMessages(ids: string[]): Promise<Message[]> {
+    if (ids.length === 0) return [];
+    const query = `ids=${ids.join(',')}`;
+    return this.client.get<Message[]>(`/conversations/messages/pending?${query}`);
+  }
 }

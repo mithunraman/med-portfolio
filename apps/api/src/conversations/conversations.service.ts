@@ -1,5 +1,5 @@
 import type { Message, MessageListResponse } from '@acme/shared';
-import { MediaRefCollection, MediaStatus, MessageRole } from '@acme/shared';
+import { MediaRefCollection, MediaStatus, MediaType, MessageRole, MessageType } from '@acme/shared';
 import {
   BadRequestException,
   Inject,
@@ -12,13 +12,14 @@ import { Types } from 'mongoose';
 import { isErr } from '../common/utils/result.util';
 import { TransactionService } from '../database';
 import { IMediaRepository, MEDIA_REPOSITORY, MediaService } from '../media';
+import { MediaDocument } from '../media/schemas/media.schema';
 import { ProcessingService } from '../processing/processing.service';
 import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from './conversations.repository.interface';
 import { ListMessagesDto, SendMessageDto } from './dto';
-import { toMessageDto } from './mappers/message.mapper';
+import { buildMediaData, toMessageDto } from './mappers/message.mapper';
 import { MessageDocument } from './schemas/message.schema';
 
 @Injectable()
@@ -53,11 +54,18 @@ export class ConversationsService {
     const conversation = conversationResult.value;
 
     // Validate media upload if provided (S3 HEAD + content-type check)
-    let validatedMedia: { mediaId: Types.ObjectId; xid: string; sizeBytes: number } | null = null;
+    let validatedMedia: Awaited<ReturnType<MediaService['validateMediaUpload']>> | null = null;
 
     if (dto.mediaId) {
       validatedMedia = await this.mediaService.validateMediaUpload(userId, dto.mediaId);
     }
+
+    // Determine message type
+    const messageType = validatedMedia
+      ? validatedMedia.mediaType === MediaType.AUDIO
+        ? MessageType.AUDIO
+        : MessageType.IMAGE
+      : MessageType.TEXT;
 
     // Phase 2: Transaction (message creation + media attachment)
     const message = await this.transactionService.withTransaction<MessageDocument>(
@@ -66,7 +74,9 @@ export class ConversationsService {
         const messageResult = await this.conversationsRepository.createMessage(
           {
             conversation: conversation._id,
+            userId: new Types.ObjectId(userId),
             role: MessageRole.USER,
+            messageType,
             rawContent: dto.content || null,
             media: validatedMedia?.mediaId || null,
           },
@@ -106,7 +116,18 @@ export class ConversationsService {
       this.logger.error(`Processing failed for message ${message.xid}: ${err.message}`);
     });
 
-    return toMessageDto(message, conversation.xid);
+    // Build media data from validated media info (no presigned URL — audio is still PENDING)
+    const mediaData = validatedMedia
+      ? {
+          id: validatedMedia.xid,
+          mimeType: validatedMedia.mimeType,
+          sizeBytes: validatedMedia.sizeBytes,
+          durationMs: validatedMedia.durationMs,
+          audioUrl: null,
+        }
+      : null;
+
+    return toMessageDto(message, conversation.xid, mediaData);
   }
 
   async listMessages(
@@ -133,7 +154,7 @@ export class ConversationsService {
 
     const conversation = conversationResult.value;
 
-    // Get messages
+    // Get messages (media is populated by the repository)
     const messagesResult = await this.conversationsRepository.listMessages({
       conversation: conversation._id,
       cursor,
@@ -148,10 +169,52 @@ export class ConversationsService {
     const hasMore = messages.length === limit;
     const nextCursor = hasMore ? messages[messages.length - 1]._id.toString() : null;
 
-    return {
-      messages: messages.map((msg) => toMessageDto(msg, conversation.xid)),
-      nextCursor,
-      limit,
-    };
+    // Enrich audio messages with presigned download URLs in parallel
+    const enriched = await Promise.all(
+      messages.map(async (msg) => {
+        const audioUrl = await this.resolveAudioUrl(msg);
+        return toMessageDto(msg, conversation.xid, buildMediaData(msg, audioUrl));
+      })
+    );
+
+    return { messages: enriched, nextCursor, limit };
+  }
+
+  async pollMessages(userId: string, xids: string[]): Promise<Message[]> {
+    if (xids.length === 0) return [];
+
+    const result = await this.conversationsRepository.findMessagesByXids(
+      xids,
+      new Types.ObjectId(userId)
+    );
+
+    if (isErr(result)) {
+      throw new InternalServerErrorException(result.error.message);
+    }
+
+    const messages = result.value;
+
+    // Enrich audio messages with presigned download URLs in parallel
+    return Promise.all(
+      messages.map(async (msg) => {
+        const conversationDoc = msg.conversation as unknown as { xid: string };
+        const audioUrl = await this.resolveAudioUrl(msg);
+        return toMessageDto(msg, conversationDoc.xid, buildMediaData(msg, audioUrl));
+      })
+    );
+  }
+
+  /**
+   * Generate a presigned download URL for audio messages.
+   * Returns null for non-audio messages or if the media is not yet attached.
+   */
+  private async resolveAudioUrl(msg: MessageDocument): Promise<string | null> {
+    if (msg.messageType !== MessageType.AUDIO || !msg.media) return null;
+    const mediaDoc = msg.media as unknown as MediaDocument;
+    try {
+      return await this.mediaService.getPresignedUrl(mediaDoc.xid);
+    } catch {
+      return null;
+    }
   }
 }

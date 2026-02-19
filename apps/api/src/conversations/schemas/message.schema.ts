@@ -1,4 +1,4 @@
-import { MessageProcessingStatus, MessageRole } from '@acme/shared';
+import { MessageProcessingStatus, MessageRole, MessageType } from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
@@ -32,8 +32,14 @@ export class Message {
   @Prop({ required: true, type: Types.ObjectId, ref: Conversation.name, index: true })
   conversation!: Types.ObjectId;
 
+  @Prop({ required: true, type: Types.ObjectId })
+  userId!: Types.ObjectId;
+
   @Prop({ required: true, type: Number })
   role!: MessageRole;
+
+  @Prop({ required: true, type: Number })
+  messageType!: MessageType;
 
   // Content stages
   @Prop({ type: String, default: null })
@@ -70,4 +76,3 @@ export const MessageSchema = SchemaFactory.createForClass(Message);
 
 // Indexes for cursor-based pagination (sort by _id descending)
 MessageSchema.index({ conversation: 1, _id: -1 });
-MessageSchema.index({ conversation: 1, processingStatus: 1 });

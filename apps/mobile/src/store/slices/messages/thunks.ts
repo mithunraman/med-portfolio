@@ -59,3 +59,20 @@ export const sendMessage = createAsyncThunk(
     }
   }
 );
+
+/**
+ * Poll a batch of pending messages by XID and return their latest state.
+ * Called on a polling interval while any messages have non-terminal processing status.
+ */
+export const pollMessages = createAsyncThunk(
+  'messages/pollMessages',
+  async (ids: string[], { rejectWithValue }) => {
+    try {
+      return await api.conversations.pollPendingMessages(ids);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to poll messages';
+      messagesLogger.error('Failed to poll messages', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);

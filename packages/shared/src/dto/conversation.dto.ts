@@ -2,15 +2,28 @@ import { z } from 'zod';
 import { ConversationStatus } from '../enums/conversation-status.enum';
 import { MessageProcessingStatus } from '../enums/message-processing-status.enum';
 import { MessageRole } from '../enums/message-role.enum';
+import { MessageType } from '../enums/message-type.enum';
+
+// Message media
+export const MessageMediaSchema = z.object({
+  id: z.string(),
+  mimeType: z.string(),
+  sizeBytes: z.number().nullable(),
+  durationMs: z.number().nullable(),
+  audioUrl: z.string().nullable(),
+});
+
+export type MessageMedia = z.infer<typeof MessageMediaSchema>;
 
 // Message schemas
 export const MessageSchema = z.object({
   id: z.string(),
   conversationId: z.string(),
   role: z.nativeEnum(MessageRole),
-  content: z.string().nullable(),
+  messageType: z.nativeEnum(MessageType).catch(MessageType.UNKNOWN),
   processingStatus: z.nativeEnum(MessageProcessingStatus),
-  hasMedia: z.boolean(),
+  content: z.string().nullable(),
+  media: MessageMediaSchema.nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

@@ -1,6 +1,6 @@
 import type { Message } from '@acme/shared';
 import { createEntityAdapter, createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { fetchMessages, sendMessage } from './thunks';
+import { fetchMessages, pollMessages, sendMessage } from './thunks';
 
 const messagesAdapter = createEntityAdapter<Message>({
   // RTK uses the 'id' field automatically — no selectId needed
@@ -107,6 +107,11 @@ const messagesSlice = createSlice({
       .addCase(sendMessage.rejected, (state, action) => {
         state.sending = false;
         state.error = action.payload as string;
+      })
+
+      // Poll messages — silently upsert updated messages (no loading state)
+      .addCase(pollMessages.fulfilled, (state, action) => {
+        messagesAdapter.upsertMany(state, action.payload);
       });
   },
 });

@@ -140,6 +140,24 @@ export class ConversationsRepository implements IConversationsRepository {
     }
   }
 
+  async findMessagesByXids(
+    xids: string[],
+    userId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<MessageDocument[], DBError>> {
+    try {
+      const messages = await this.messageModel
+        .find({ xid: { $in: xids }, userId })
+        .populate('media')
+        .populate('conversation', 'xid')
+        .session(session || null);
+      return ok(messages);
+    } catch (error) {
+      this.logger.error('Failed to find messages by xids', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find messages by xids' });
+    }
+  }
+
   async updateMessage(
     messageId: Types.ObjectId,
     data: UpdateMessageData,
@@ -171,6 +189,7 @@ export class ConversationsRepository implements IConversationsRepository {
 
       const messages = await this.messageModel
         .find(filter)
+        .populate('media')
         .sort({ _id: -1 })
         .limit(query.limit)
         .session(session || null);

@@ -1,31 +1,15 @@
 import { api } from '@/api/client';
-import { ChatComposer } from '@/components';
+import { ChatComposer, MessageList } from '@/components';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
 import { createArtefact, fetchMessages, pollMessages, sendMessage } from '@/store';
 import { useTheme } from '@/theme';
 import { logger } from '@/utils/logger';
-import {
-  MediaType,
-  Message,
-  MessageProcessingStatus,
-  MessageRole,
-  MessageType,
-  PROCESSING_STATUS_LABELS,
-} from '@acme/shared';
+import { MediaType, Message, MessageProcessingStatus } from '@acme/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  AppState,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  View,
-} from 'react-native';
-import { Bubble, GiftedChat, Message as GiftedMessage, IMessage } from 'react-native-gifted-chat';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { AppState, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { shallowEqual } from 'react-redux';
 
@@ -51,7 +35,6 @@ export default function ChatScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   // Track the real conversation ID (from backend) for new conversations
   const realConversationIdRef = useRef<string | null>(null);
@@ -73,16 +56,6 @@ export default function ChatScreen() {
     (state) => messageIds.map((id) => state.messages.entities[id]).filter(Boolean) as Message[],
     shallowEqual
   );
-
-  // Track keyboard visibility to adjust bottom padding
-  useEffect(() => {
-    const showSub = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener('keyboardWillHide', () => setKeyboardVisible(false));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
 
   // Fetch messages for existing conversations (not newly created ones)
   useEffect(() => {
@@ -137,31 +110,6 @@ export default function ChatScreen() {
     };
   }, [hasPendingMessages, dispatch]);
 
-  const toGiftedMessage = useCallback(
-    (msg: Message): IMessage => {
-      // For non-terminal audio messages, show a processing label instead of content
-      const statusLabel =
-        !TERMINAL_STATUSES.has(msg.processingStatus) && msg.messageType !== MessageType.TEXT
-          ? PROCESSING_STATUS_LABELS[msg.processingStatus]
-          : null;
-
-      return {
-        _id: msg.id,
-        text: statusLabel ?? msg.content ?? '',
-        createdAt: new Date(msg.createdAt),
-        user: {
-          _id: msg.role === MessageRole.USER ? (user?.id ?? 'user') : 'assistant',
-          name: msg.role === MessageRole.USER ? (user?.name ?? 'You') : 'Assistant',
-        },
-      };
-    },
-    [user]
-  );
-
-  const giftedMessages = useMemo(() => {
-    return messages.map(toGiftedMessage);
-  }, [messages, toGiftedMessage]);
-
   const handleSendVoiceNote = useCallback(
     async (recording: AudioRecordingResult) => {
       if (!conversationId) return;
@@ -206,88 +154,21 @@ export default function ChatScreen() {
       // For new conversations, create artefact first to get real conversation ID
       if (isPendingConversation) {
         try {
-          // Create artefact using the local UUID as artefactId
           const artefact = await dispatch(createArtefact({ artefactId: conversationId })).unwrap();
           const realId = artefact.conversation.id;
           realConversationIdRef.current = realId;
-
-          // Send message to the real conversation
           await dispatch(sendMessage({ conversationId: realId, content: text }));
         } catch (error) {
           chatLogger.error('Failed to create conversation', { error });
         }
       } else {
-        // Normal flow - use effective conversation ID
         dispatch(sendMessage({ conversationId: effectiveConversationId, content: text }));
       }
     },
     [conversationId, effectiveConversationId, isPendingConversation, dispatch]
   );
 
-  const renderBubble = useCallback(
-    (props: any) => (
-      <Bubble
-        {...props}
-        wrapperStyle={{
-          left: {
-            backgroundColor: colors.surface,
-          },
-          right: {
-            backgroundColor: colors.primary,
-          },
-        }}
-        textStyle={{
-          left: {
-            fontSize: 16,
-            color: colors.text,
-          },
-          right: {
-            fontSize: 16,
-            color: '#fff',
-          },
-        }}
-      />
-    ),
-    [colors]
-  );
-
-  const renderMessage = useCallback(
-    (props: any) => (
-      <GiftedMessage
-        {...props}
-        containerStyle={{
-          left: { maxWidth: '80%' },
-          right: { maxWidth: '80%' },
-        }}
-      />
-    ),
-    []
-  );
-
-  // Hide GiftedChat's input toolbar - we use our own ChatComposer
-  const renderInputToolbar = useCallback(() => null, []);
-
-  const renderLoading = useCallback(
-    () => (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    ),
-    [colors]
-  );
-
-  // Only show loading for existing conversations that are fetching
-  if (loadingMessages && messages.length === 0 && isNew !== 'true') {
-    return (
-      <KeyboardAvoidingView
-        style={[styles.container, { backgroundColor: colors.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={headerHeight}
-      >
-        {renderLoading()}
-      </KeyboardAvoidingView>
-    );
-  }
+  const isLoading = loadingMessages && messages.length === 0 && isNew !== 'true';
 
   return (
     <KeyboardAvoidingView
@@ -295,27 +176,11 @@ export default function ChatScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={headerHeight}
     >
-      <View style={styles.messagesContainer}>
-        <GiftedChat
-          messages={giftedMessages}
-          onSend={() => {}}
-          user={{
-            _id: user?.id ?? 'user',
-            name: user?.name ?? 'You',
-          }}
-          renderBubble={renderBubble}
-          renderMessage={renderMessage}
-          renderInputToolbar={renderInputToolbar}
-          renderLoading={renderLoading}
-          minInputToolbarHeight={0}
-          isDayAnimationEnabled={false}
-          listProps={{
-            keyboardDismissMode: 'interactive',
-            keyboardShouldPersistTaps: 'handled',
-            contentContainerStyle: { paddingBottom: 20 },
-          }}
-        />
-      </View>
+      <MessageList
+        messages={messages}
+        currentUserId={user?.id ?? ''}
+        isLoading={isLoading}
+      />
 
       <ChatComposer
         onSend={handleSend}
@@ -324,7 +189,7 @@ export default function ChatScreen() {
         onOpenAttachments={() => {}}
         onOpenCamera={() => {}}
         onToggleStickers={() => {}}
-        style={{ paddingBottom: keyboardVisible ? 0 : insets.bottom }}
+        style={{ paddingBottom: insets.bottom }}
       />
     </KeyboardAvoidingView>
   );
@@ -333,13 +198,5 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  messagesContainer: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 });

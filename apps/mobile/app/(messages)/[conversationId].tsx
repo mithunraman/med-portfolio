@@ -164,8 +164,7 @@ export default function ChatScreen() {
 
   const handleSendVoiceNote = useCallback(
     async (recording: AudioRecordingResult) => {
-      const targetConversationId = realConversationIdRef.current ?? conversationId;
-      if (!targetConversationId) return;
+      if (!conversationId) return;
 
       try {
         const { mediaId, uploadUrl } = await api.media.initiateUpload({
@@ -182,12 +181,22 @@ export default function ChatScreen() {
           body: blob,
         });
 
-        dispatch(sendMessage({ conversationId: targetConversationId, mediaId }));
+        // For new conversations, create artefact first — same as handleSend
+        let targetConversationId = realConversationIdRef.current;
+        if (!targetConversationId && isNew === 'true') {
+          const artefact = await dispatch(
+            createArtefact({ artefactId: conversationId })
+          ).unwrap();
+          targetConversationId = artefact.conversation.id;
+          realConversationIdRef.current = targetConversationId;
+        }
+
+        dispatch(sendMessage({ conversationId: targetConversationId ?? conversationId, mediaId }));
       } catch (error) {
         chatLogger.error('Failed to send voice note', { error });
       }
     },
-    [conversationId, dispatch]
+    [conversationId, isNew, dispatch]
   );
 
   const handleSend = useCallback(

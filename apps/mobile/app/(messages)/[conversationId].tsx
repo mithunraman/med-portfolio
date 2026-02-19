@@ -9,7 +9,8 @@ import { MediaType, Message, MessageProcessingStatus } from '@acme/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { AppState, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { shallowEqual } from 'react-redux';
 
@@ -31,7 +32,7 @@ export default function ChatScreen() {
     isNew?: string;
   }>();
   const dispatch = useAppDispatch();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -169,34 +170,42 @@ export default function ChatScreen() {
   );
 
   const isLoading = loadingMessages && messages.length === 0 && isNew !== 'true';
+  const composerBg = isDark ? colors.surface : colors.background;
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={headerHeight}
-    >
-      <MessageList
-        messages={messages}
-        currentUserId={user?.id ?? ''}
-        isLoading={isLoading}
-      />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <KeyboardAvoidingView
+        style={styles.kav}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={headerHeight}
+      >
+        <MessageList
+          messages={messages}
+          currentUserId={user?.id ?? ''}
+          isLoading={isLoading}
+        />
 
-      <ChatComposer
-        onSend={handleSend}
-        onSendVoiceNote={handleSendVoiceNote}
-        isSending={sendingMessage}
-        onOpenAttachments={() => {}}
-        onOpenCamera={() => {}}
-        onToggleStickers={() => {}}
-        style={{ paddingBottom: insets.bottom }}
-      />
-    </KeyboardAvoidingView>
+        <ChatComposer
+          onSend={handleSend}
+          onSendVoiceNote={handleSendVoiceNote}
+          isSending={sendingMessage}
+          onOpenAttachments={() => {}}
+          onOpenCamera={() => {}}
+          onToggleStickers={() => {}}
+        />
+      </KeyboardAvoidingView>
+
+      {/* Safe area spacer — keyboard covers this when open, visible when closed */}
+      <View style={{ height: insets.bottom, backgroundColor: composerBg }} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  kav: {
     flex: 1,
   },
 });

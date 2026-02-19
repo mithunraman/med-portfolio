@@ -105,7 +105,7 @@ export function useAudioRecorder() {
       return null;
     }
 
-    return { uri, mime: 'audio/m4a', duration: finalDuration };
+    return { uri, mime: 'audio/mp4', duration: finalDuration };
   }, [recorder, isRecording, duration]);
 
   const cancelRecording = useCallback(async () => {

@@ -8,6 +8,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider as ReduxProvider } from 'react-redux';
 
@@ -136,9 +137,11 @@ export default function RootLayout() {
     <ErrorBoundary>
       <ReduxProvider store={store}>
         <SafeAreaProvider>
-          <ThemeProvider>
-            <RootLayoutNav />
-          </ThemeProvider>
+          <KeyboardProvider>
+            <ThemeProvider>
+              <RootLayoutNav />
+            </ThemeProvider>
+          </KeyboardProvider>
         </SafeAreaProvider>
       </ReduxProvider>
     </ErrorBoundary>

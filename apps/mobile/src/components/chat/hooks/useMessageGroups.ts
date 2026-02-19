@@ -1,5 +1,4 @@
 import type { Message } from '@acme/shared';
-import { MessageRole } from '@acme/shared';
 import { useMemo } from 'react';
 import type { FlatListItem } from '../types';
 
@@ -37,8 +36,15 @@ export function useMessageGroups(messages: Message[], options: Options = {}): Fl
       const next = sorted[i + 1]; // older
 
       // Group logic: same role as neighbours = same group
-      const isFirstInGroup = !prev || prev.role !== msg.role;
-      const isLastInGroup = !next || next.role !== msg.role;
+      // In an inverted FlatList (newest-first data, newest rendered at bottom):
+      //   prev = sorted[i-1] = newer message = rendered BELOW on screen
+      //   next = sorted[i+1] = older message = rendered ABOVE on screen
+      //
+      // isLastInGroup (tail goes here) = bottom of group = newest = prev differs
+      // isFirstInGroup (top of group)  = oldest = next differs
+      // const isLastInGroup = !prev || prev.role !== msg.role;
+      const isLastInGroup = false; // disabling this for now
+      const isFirstInGroup = !next || next.role !== msg.role;
 
       items.push({ type: 'message', data: msg, isLastInGroup, isFirstInGroup });
 

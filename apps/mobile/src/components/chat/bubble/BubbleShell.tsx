@@ -1,8 +1,4 @@
-import {
-  MessageProcessingStatus,
-  MessageRole,
-  type Message,
-} from '@acme/shared';
+import { MessageProcessingStatus, MessageRole, type Message } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -74,25 +70,12 @@ export const BubbleShell = memo(function BubbleShell({
       </View>
 
       {/* Tail — only on last message in group */}
-      {isLastInGroup && (
-        isUser ? (
-          <View
-            style={[
-              styles.tailBase,
-              styles.tailRight,
-              { borderTopColor: bubbleColor },
-            ]}
-          />
+      {isLastInGroup &&
+        (isUser ? (
+          <View style={[styles.tailBase, styles.tailRight, { borderTopColor: bubbleColor }]} />
         ) : (
-          <View
-            style={[
-              styles.tailBase,
-              styles.tailLeft,
-              { borderTopColor: bubbleColor },
-            ]}
-          />
-        )
-      )}
+          <View style={[styles.tailBase, styles.tailLeft, { borderTopColor: bubbleColor }]} />
+        ))}
     </View>
   );
 });

@@ -1,9 +1,4 @@
-import {
-  MessageProcessingStatus,
-  MessageRole,
-  MessageType,
-  type Message,
-} from '@acme/shared';
+import { MessageProcessingStatus, MessageRole, MessageType, type Message } from '@acme/shared';
 import { memo, useCallback, useRef } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { AudioContent } from './bubble/AudioContent';
@@ -78,7 +73,7 @@ export const MessageRow = memo(function MessageRow({
 
 const styles = StyleSheet.create({
   row: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
   },
   rowLeft: {
     alignItems: 'flex-start',
@@ -93,7 +88,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   pressable: {
-    maxWidth: '80%',
+    maxWidth: '90%',
   },
   pressableLeft: {
     marginLeft: 4,

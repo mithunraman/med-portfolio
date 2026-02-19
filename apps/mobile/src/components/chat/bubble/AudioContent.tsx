@@ -1,14 +1,10 @@
-import {
-  PROCESSING_STATUS_LABELS,
-  type Message,
-  MessageProcessingStatus,
-} from '@acme/shared';
+import { MessageProcessingStatus, PROCESSING_STATUS_LABELS, type Message } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { CircularButton } from '../../CircularButton';
 import { useTheme } from '../../../theme';
 import { formatTime } from '../../../utils/formatTime';
+import { CircularButton } from '../../CircularButton';
 import { useAudioPlayback } from '../hooks/useAudioPlayback';
 
 const BAR_COUNT = 30;
@@ -48,13 +44,7 @@ export const AudioContent = memo(function AudioContent({ message }: Props) {
     else play();
   };
 
-  const playIcon = (
-    <Ionicons
-      name={isPlaying ? 'pause' : 'play'}
-      size={20}
-      color="#ffffff"
-    />
-  );
+  const playIcon = <Ionicons name={isPlaying ? 'pause' : 'play'} size={14} color="#ffffff" />;
 
   if (statusLabel) {
     return (
@@ -63,80 +53,99 @@ export const AudioContent = memo(function AudioContent({ message }: Props) {
   }
 
   return (
-    <View style={styles.container}>
-      {/* Play / pause button */}
-      <CircularButton
-        icon={playIcon}
-        backgroundColor={colors.primary}
-        onPress={handleTogglePlay}
-        accessibilityLabel={isPlaying ? 'Pause audio' : 'Play audio'}
-        size={36}
-      />
+    <View style={styles.wrapper}>
+      {/* Text message — primary focus */}
+      {message.content ? (
+        <Text style={[styles.textContent, { color: colors.text }]}>{message.content}</Text>
+      ) : null}
 
-      {/* Waveform + duration row */}
-      <View style={styles.middle}>
-        {/* Waveform bars */}
-        <View style={styles.waveform}>
-          {bars.map((height, index) => (
-            <View
-              key={index}
-              style={[
-                styles.bar,
-                {
-                  height,
-                  backgroundColor: index < filledBars ? colors.primary : colors.border,
-                },
-              ]}
-            />
-          ))}
+      {/* Compact audio player pill */}
+      <View style={[styles.container, { backgroundColor: colors.border }]}>
+        {/* Play / pause button */}
+        <CircularButton
+          icon={playIcon}
+          backgroundColor={colors.primary}
+          onPress={handleTogglePlay}
+          accessibilityLabel={isPlaying ? 'Pause audio' : 'Play audio'}
+          size={28}
+        />
+
+        {/* Waveform + duration row */}
+        <View style={styles.middle}>
+          {/* Waveform bars */}
+          <View style={styles.waveform}>
+            {bars.map((height, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.bar,
+                  {
+                    height: Math.round(height * 0.5),
+                    backgroundColor: index < filledBars ? colors.primary : colors.textSecondary,
+                  },
+                ]}
+              />
+            ))}
+          </View>
+
+          {/* Duration countdown */}
+          <Text style={[styles.duration, { color: colors.textSecondary }]}>
+            {formatTime(durationMs - currentMs)}
+          </Text>
         </View>
 
-        {/* Duration */}
-        <Text style={[styles.duration, { color: colors.textSecondary }]}>
-          {formatTime(currentMs > 0 ? currentMs : durationMs)} /{' '}
-          {formatTime(durationMs)}
-        </Text>
+        {/* Speed toggle */}
+        <Pressable
+          onPress={toggleSpeed}
+          style={styles.speedChip}
+          accessibilityLabel="Playback speed"
+          accessibilityRole="button"
+        >
+          <Text style={[styles.speedText, { color: colors.textSecondary }]}>{speed}×</Text>
+        </Pressable>
       </View>
-
-      {/* Speed toggle */}
-      <Pressable onPress={toggleSpeed} style={styles.speedChip} accessibilityLabel="Playback speed">
-        <Text style={[styles.speedText, { color: colors.textSecondary }]}>{speed}×</Text>
-      </Pressable>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
+  wrapper: {
+    gap: 8,
+  },
+  textContent: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    minWidth: 200,
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 20,
   },
   middle: {
-    flex: 1,
-    gap: 4,
+    gap: 2,
   },
   waveform: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    height: 28,
+    height: 14,
   },
   bar: {
     width: 2,
     borderRadius: 1,
   },
   duration: {
-    fontSize: 11,
+    fontSize: 10,
   },
   speedChip: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 4,
   },
   speedText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
   },
   processingText: {

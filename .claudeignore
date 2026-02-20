@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+android/**/build/
+android/**/.gradle/
+android/**/.cxx/
+ios/build/
+ios/Pods/
+.expo/
+dist/
+
+# Generated files
+*.lock
+*.log
+
+# Large binary files
+*.aab
+*.apk
+*.ipa
+*.zip
+*.tar.gz

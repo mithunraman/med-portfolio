@@ -6,9 +6,11 @@ import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from '../conversations/conversations.repository.interface';
+import { ConversationDocument } from '../conversations/schemas/conversation.schema';
 import { MessageDocument } from '../conversations/schemas/message.schema';
 import { MediaService } from '../media/media.service';
 import { MediaDocument } from '../media/schemas/media.schema';
+import { PortfolioGraphService } from '../portfolio-graph/portfolio-graph.service';
 import { CleaningStage } from './stages/cleaning.stage';
 import { StageContext } from './stages/stage.interface';
 import { TranscriptionStage, TranscriptionStageResult } from './stages/transcription.stage';
@@ -22,7 +24,8 @@ export class ProcessingService {
     private readonly conversationsRepository: IConversationsRepository,
     private readonly mediaService: MediaService,
     private readonly transcriptionStage: TranscriptionStage,
-    private readonly cleaningStage: CleaningStage
+    private readonly cleaningStage: CleaningStage,
+    private readonly portfolioGraphService: PortfolioGraphService,
   ) {}
 
   /**
@@ -111,7 +114,10 @@ export class ProcessingService {
       processingStatus: MessageProcessingStatus.COMPLETE,
     });
 
-    this.logger.log(`Processing complete for message ${message.xid}`);
+    this.logger.log(`Message processing complete for ${message.xid}, triggering portfolio graph`);
+
+    // Layer 2: Portfolio graph (classification, reflection, etc.)
+    await this.triggerPortfolioGraph(context.conversationId, message.userId);
   }
 
   /**
@@ -136,7 +142,51 @@ export class ProcessingService {
       processingStatus: MessageProcessingStatus.COMPLETE,
     });
 
-    this.logger.log(`Processing complete for message ${message.xid}`);
+    this.logger.log(`Message processing complete for ${message.xid}, triggering portfolio graph`);
+
+    // Layer 2: Portfolio graph (classification, reflection, etc.)
+    await this.triggerPortfolioGraph(context.conversationId, message.userId);
+  }
+
+  /**
+   * Trigger the portfolio graph after message cleaning completes.
+   * Checks if a graph checkpoint already exists (user responded to follow-up)
+   * and either resumes or starts a new graph execution.
+   */
+  private async triggerPortfolioGraph(
+    conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ): Promise<void> {
+    const convIdStr = conversationId.toString();
+
+    try {
+      const hasCheckpoint = await this.portfolioGraphService.hasCheckpoint(convIdStr);
+
+      if (hasCheckpoint) {
+        // Graph was paused (follow-up or review) — resume it
+        this.logger.log(`Resuming portfolio graph for conversation ${convIdStr}`);
+        await this.portfolioGraphService.resumeGraph(convIdStr);
+      } else {
+        // First run — look up the artefact ID from the conversation
+        const convResult = await this.conversationsRepository.findConversationById(conversationId);
+        if (isErr(convResult) || !convResult.value) {
+          this.logger.error(`Cannot find conversation ${convIdStr} to start portfolio graph`);
+          return;
+        }
+
+        const conversation = convResult.value as ConversationDocument;
+        await this.portfolioGraphService.startGraph({
+          conversationId: convIdStr,
+          artefactId: conversation.artefact.toString(),
+          userId: userId.toString(),
+          specialty: Specialty.GP.toString(),
+        });
+      }
+    } catch (error) {
+      // Portfolio graph errors should not fail the message processing
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Portfolio graph error for conversation ${convIdStr}: ${errorMessage}`);
+    }
   }
 
   private async updateStatus(

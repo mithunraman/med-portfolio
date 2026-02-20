@@ -48,6 +48,21 @@ export class ConversationsRepository implements IConversationsRepository {
     }
   }
 
+  async findConversationById(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<ConversationDocument | null, DBError>> {
+    try {
+      const conversation = await this.conversationModel
+        .findById(conversationId)
+        .session(session || null);
+      return ok(conversation);
+    } catch (error) {
+      this.logger.error('Failed to find conversation by id', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find conversation by id' });
+    }
+  }
+
   async findConversationByXid(
     xid: string,
     userId: Types.ObjectId,

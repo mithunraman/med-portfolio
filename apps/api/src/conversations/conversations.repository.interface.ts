@@ -54,6 +54,11 @@ export interface IConversationsRepository {
     session?: ClientSession
   ): Promise<Result<ConversationDocument, DBError>>;
 
+  findConversationById(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<ConversationDocument | null, DBError>>;
+
   findConversationByXid(
     xid: string,
     userId: Types.ObjectId,

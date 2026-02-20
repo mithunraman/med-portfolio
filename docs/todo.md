@@ -10,3 +10,7 @@
 # Login screen
 
 - WHen API error is returned during login, the user is signed out. Fix this later.
+
+# LLM
+
+- Make await classificationPrompt.formatMessages typescript safe

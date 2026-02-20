@@ -1,13 +1,10 @@
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AssemblyAI, PiiPolicy, SpeechModel } from 'assemblyai';
-import {
-  MEDICAL_KEYTERMS,
-  NHS_NUMBER_PATTERN,
-  TRANSCRIPTION_TIMEOUT_MS,
-} from './medical-keyterms';
+import { z } from 'zod';
+import { MEDICAL_KEYTERMS, NHS_NUMBER_PATTERN, TRANSCRIPTION_TIMEOUT_MS } from './medical-keyterms';
 
 export const OpenAIModels = {
   GPT_4_1: 'gpt-4.1',
@@ -26,6 +23,12 @@ export interface LLMOptions {
 
 export interface LLMResponse {
   content: string;
+  model: OpenAIModel;
+  tokensUsed: number | null;
+}
+
+export interface StructuredResponse<T> {
+  data: T;
   model: OpenAIModel;
   tokensUsed: number | null;
 }
@@ -72,39 +75,70 @@ export class LLMService {
   }
 
   /**
-   * Invoke an LLM with a system prompt and user content
-   * Uses LangChain for model abstraction
+   * Invoke an LLM with a system prompt and user content.
+   * Returns the raw string response.
    */
   async invoke(
     systemPrompt: string,
     userContent: string,
     options: LLMOptions = {}
   ): Promise<LLMResponse> {
-    const { model = 'gpt-4.1', temperature = 0.1, maxTokens = 2000 } = options;
+    const { model = DEFAULT_MODEL, temperature = 0.1, maxTokens = 2000 } = options;
 
-    const chatModel = new ChatOpenAI({
-      openAIApiKey: this.openaiApiKey,
-      model: model,
-      temperature,
-      maxTokens,
-    });
-
+    const chatModel = this.createChatModel({ model, temperature, maxTokens });
     const messages = [new SystemMessage(systemPrompt), new HumanMessage(userContent)];
 
     const response = await chatModel.invoke(messages);
 
-    // Extract content - LangChain returns AIMessage
     const content =
       typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
 
-    // Extract token usage if available
     const tokensUsed = response.usage_metadata?.total_tokens ?? null;
 
-    return {
-      content,
-      model,
-      tokensUsed,
-    };
+    return { content, model, tokensUsed };
+  }
+
+  /**
+   * Invoke an LLM and return a validated, typed object.
+   *
+   * Uses OpenAI's structured output (function calling) under the hood —
+   * the API constrains token generation to only produce valid JSON matching
+   * the Zod schema. No string parsing or markdown fence extraction needed.
+   *
+   * Accepts a pre-formatted BaseMessage[] array (from ChatPromptTemplate)
+   * so callers own prompt composition while this service owns model config.
+   *
+   * @param messages - Chat messages (from ChatPromptTemplate.formatMessages())
+   * @param schema   - Zod schema defining the expected response shape
+   * @param options  - Model, temperature, maxTokens overrides
+   */
+  async invokeStructured<T>(
+    messages: BaseMessage[],
+    schema: z.ZodType<T>,
+    options: LLMOptions = {}
+  ): Promise<StructuredResponse<T>> {
+    const { model = DEFAULT_MODEL, temperature = 0.1, maxTokens = 2000 } = options;
+
+    const chatModel = this.createChatModel({ model, temperature, maxTokens });
+
+    // Cast to `any` to avoid TS2589 (excessive type depth) from LangChain's
+    // heavily overloaded withStructuredOutput generics. Caller-side type
+    // safety is preserved by the method signature: schema: ZodType<T> → T.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const structuredModel = (chatModel as any).withStructuredOutput(schema);
+
+    const data = (await structuredModel.invoke(messages)) as T;
+
+    return { data, model, tokensUsed: null };
+  }
+
+  private createChatModel(options: Required<LLMOptions>): ChatOpenAI {
+    return new ChatOpenAI({
+      openAIApiKey: this.openaiApiKey,
+      model: options.model,
+      temperature: options.temperature,
+      maxTokens: options.maxTokens,
+    });
   }
 
   /**
@@ -145,8 +179,7 @@ export class LLMService {
     }
 
     // Post-process: catch any NHS numbers that slipped through PII redaction
-    const sanitizedText =
-      transcript.text?.replace(NHS_NUMBER_PATTERN, '[NHS_NUMBER]') ?? '';
+    const sanitizedText = transcript.text?.replace(NHS_NUMBER_PATTERN, '[NHS_NUMBER]') ?? '';
 
     const wordCount = transcript.words?.length ?? 0;
     const confidence = transcript.confidence ?? null;

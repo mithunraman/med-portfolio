@@ -23,6 +23,17 @@ export class Capability {
   evidence!: string;
 }
 
+export class ClassificationAlternative {
+  @Prop({ required: true })
+  entryType!: string;
+
+  @Prop({ required: true })
+  confidence!: number;
+
+  @Prop({ required: true })
+  reasoning!: string;
+}
+
 @Schema({
   collection: 'artefacts',
   timestamps: true,
@@ -47,6 +58,15 @@ export class Artefact {
 
   @Prop({ type: String, default: null })
   artefactType!: string | null;
+
+  @Prop({ type: Number, default: null })
+  classificationConfidence!: number | null;
+
+  @Prop({ type: String, enum: ['AUTO', 'MANUAL'], default: null })
+  classificationSource!: 'AUTO' | 'MANUAL' | null;
+
+  @Prop({ type: [ClassificationAlternative], default: null })
+  classificationAlternatives!: ClassificationAlternative[] | null;
 
   @Prop({ type: String, maxlength: 200, default: null })
   title!: string | null;

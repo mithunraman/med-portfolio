@@ -24,6 +24,7 @@ export const MessageSchema = z.object({
   processingStatus: z.nativeEnum(MessageProcessingStatus),
   content: z.string().nullable(),
   media: MessageMediaSchema.nullable(),
+  metadata: z.record(z.unknown()).nullable().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

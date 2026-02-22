@@ -26,6 +26,7 @@ export interface CreateMessageData {
   messageType: MessageType;
   rawContent?: string | null;
   media?: Types.ObjectId | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface UpdateMessageData {

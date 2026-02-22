@@ -62,6 +62,10 @@ export class Message {
   @Prop({ type: String, default: null })
   processingError!: string | null;
 
+  // Structured metadata for special message types (e.g. classification options)
+  @Prop({ type: Object, default: null })
+  metadata!: Record<string, unknown> | null;
+
   // Transcription metadata (populated after audio transcription)
   @Prop({ type: TranscriptionMetadata, default: null })
   transcription!: TranscriptionMetadata | null;

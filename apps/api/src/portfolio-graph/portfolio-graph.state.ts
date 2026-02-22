@@ -87,11 +87,10 @@ export const PortfolioState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => [],
   }),
-
-  // ── Clarification loop (pre-classification) ──
-  clarificationRound: Annotation<number>({
+  /** Whether the entry type was confirmed by the user or only suggested by the LLM */
+  classificationSource: Annotation<'LLM' | 'USER_CONFIRMED' | null>({
     reducer: (_, next) => next,
-    default: () => 0,
+    default: () => null,
   }),
 
   // ── Completeness ──

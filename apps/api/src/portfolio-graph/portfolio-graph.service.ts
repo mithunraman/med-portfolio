@@ -10,6 +10,18 @@ import {
 import { LLMService } from '../llm';
 import { buildPortfolioGraph } from './portfolio-graph.builder';
 
+/**
+ * Maps each interrupt node to its expected resume value type.
+ * `true` means the node resumes with no payload (just a signal).
+ */
+export interface GraphResumeMap {
+  present_classification: { entryType: string };
+  ask_followup: true;
+  present_draft: { approved: boolean };
+}
+
+export type InterruptNode = keyof GraphResumeMap;
+
 @Injectable()
 export class PortfolioGraphService implements OnModuleInit {
   private readonly logger = new Logger(PortfolioGraphService.name);
@@ -88,16 +100,25 @@ export class PortfolioGraphService implements OnModuleInit {
   }
 
   /**
-   * Resume a paused graph after the user responds (to follow-up or review).
-   * Called when a new message arrives in a conversation that has a paused graph.
+   * Resume a paused graph after the user responds (to classification, follow-up, or review).
+   *
+   * Type-safe: each interrupt node declares its resume value shape in GraphResumeMap.
+   * Nodes that resume with just a signal (e.g. ask_followup) take no resumeValue arg.
    */
-  async resumeGraph(conversationId: string, resumeValue?: unknown): Promise<void> {
+  async resumeGraph<N extends InterruptNode>(
+    conversationId: string,
+    node: N,
+    ...args: GraphResumeMap[N] extends true ? [] : [resumeValue: GraphResumeMap[N]]
+  ): Promise<void> {
     const config = { configurable: { thread_id: conversationId } };
+    const resumeValue = args.length > 0 ? args[0] : true;
 
-    this.logger.log(`Resuming portfolio graph for conversation ${conversationId}`);
+    this.logger.log(
+      `Resuming portfolio graph for conversation ${conversationId} at node "${node}"`
+    );
 
     try {
-      await this.graph.invoke(new Command({ resume: resumeValue ?? true }), config);
+      await this.graph.invoke(new Command({ resume: resumeValue }), config);
     } catch (error) {
       if (this.isInterruptError(error)) {
         this.logger.log(`Graph paused again (interrupt) for conversation ${conversationId}`);
@@ -119,6 +140,37 @@ export class PortfolioGraphService implements OnModuleInit {
     const config = { configurable: { thread_id: conversationId } };
     const state = await this.graph.getState(config);
     return !!state?.values?.conversationId;
+  }
+
+  /**
+   * Inspect the graph checkpoint to determine which interrupt node (if any)
+   * the graph is currently paused at.
+   *
+   * LangGraph's StateSnapshot.next contains the node(s) scheduled to run
+   * on the next invocation. When a node calls interrupt(), the checkpoint
+   * saves with that node still in `next` (it re-executes on resume).
+   *
+   * Returns the interrupt node name if paused at a known interrupt point,
+   * or null if the graph is not paused at an interrupt node.
+   */
+  async getPausedNode(conversationId: string): Promise<InterruptNode | null> {
+    const config = { configurable: { thread_id: conversationId } };
+    const state = await this.graph.getState(config);
+
+    if (!state?.next?.length) return null;
+
+    const nextNode = state.next[0];
+    const interruptNodes = new Set<string>([
+      'present_classification',
+      'ask_followup',
+      'present_draft',
+    ]);
+
+    if (interruptNodes.has(nextNode)) {
+      return nextNode as InterruptNode;
+    }
+
+    return null;
   }
 
   /**

@@ -1,6 +1,6 @@
 export { createGatherContextNode } from './gather-context.node';
 export { createClassifyNode } from './classify.node';
-export { askClarificationNode } from './ask-clarification.node';
+export { createPresentClassificationNode } from './present-classification.node';
 export { checkCompletenessNode } from './check-completeness.node';
 export { askFollowupNode } from './ask-followup.node';
 export { tagCapabilitiesNode } from './tag-capabilities.node';

@@ -2,11 +2,11 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 import { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 import { GraphDeps } from './graph-deps';
 import {
-  askClarificationNode,
   askFollowupNode,
   checkCompletenessNode,
   createClassifyNode,
   createGatherContextNode,
+  createPresentClassificationNode,
   generatePdpNode,
   presentDraftNode,
   qualityCheckNode,
@@ -18,26 +18,18 @@ import {
 import { PortfolioState, PortfolioStateType } from './portfolio-graph.state';
 
 // ── Max loop limits ──
-const MAX_CLARIFICATION_ROUNDS = 2;
 const MAX_FOLLOWUP_ROUNDS = 2;
 const MAX_REPAIR_ROUNDS = 1;
-
-// ── Confidence threshold for classification ──
-const CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.7;
 
 // ── Router functions ──
 
 /**
- * After classify: proceed to completeness check or ask for clarification.
+ * After gather_context: if the user has already confirmed the entry type,
+ * skip classification and go straight to completeness check.
+ * Otherwise (first run), proceed to classify.
  */
-function classifyRouter(state: PortfolioStateType): 'ask_clarification' | 'check_completeness' {
-  if (
-    state.classificationConfidence < CLASSIFICATION_CONFIDENCE_THRESHOLD &&
-    state.clarificationRound < MAX_CLARIFICATION_ROUNDS
-  ) {
-    return 'ask_clarification';
-  }
-  return 'check_completeness';
+function gatherContextRouter(state: PortfolioStateType): 'classify' | 'check_completeness' {
+  return state.classificationSource === 'USER_CONFIRMED' ? 'check_completeness' : 'classify';
 }
 
 /**
@@ -65,36 +57,34 @@ function qualityRouter(state: PortfolioStateType): 'present_draft' | 'repair' {
  *
  * Graph structure:
  *
- *   START → gather_context → classify
- *                              ↓
- *                    ┌── classifyRouter ──┐
- *                    ↓                    ↓
- *           ask_clarification    check_completeness
- *                    ↓                    ↓
- *           gather_context      ┌── completenessRouter ──┐
- *             (loop back)       ↓                        ↓
- *                          ask_followup          tag_capabilities
- *                               ↓                        ↓
- *                          gather_context              reflect
- *                            (loop back →                ↓
- *                             re-classify)         generate_pdp
- *                                                        ↓
- *                                                 quality_check
- *                                                        ↓
- *                                              ┌── qualityRouter ──┐
- *                                              ↓                    ↓
- *                                         present_draft           repair
- *                                              ↓                    ↓
- *                                            save           quality_check
- *                                              ↓              (loop back)
- *                                             END
+ *   START → gather_context ──┬── (first run) ──→ classify → present_classification (INTERRUPT)
+ *               ↑            │                                       ↓
+ *               │            └── (type confirmed) ──→ check_completeness
+ *               │                                              ↓
+ *               │                                   ┌── completenessRouter ──┐
+ *               │                                   ↓                        ↓
+ *               │                              ask_followup          tag_capabilities
+ *               │                                   ↓                        ↓
+ *               └───────────────────────────────────┘                      reflect
+ *                  (loop back, skip classification)                          ↓
+ *                                                                      generate_pdp
+ *                                                                            ↓
+ *                                                                     quality_check
+ *                                                                            ↓
+ *                                                                  ┌── qualityRouter ──┐
+ *                                                                  ↓                    ↓
+ *                                                             present_draft           repair
+ *                                                                  ↓                    ↓
+ *                                                                save           quality_check
+ *                                                                  ↓              (loop back)
+ *                                                                 END
  */
 export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: GraphDeps) {
   const graph = new StateGraph(PortfolioState)
     // ── Nodes (factories receive deps, stubs are plain functions) ──
     .addNode('gather_context', createGatherContextNode(deps))
     .addNode('classify', createClassifyNode(deps))
-    .addNode('ask_clarification', askClarificationNode)
+    .addNode('present_classification', createPresentClassificationNode(deps))
     .addNode('check_completeness', checkCompletenessNode)
     .addNode('ask_followup', askFollowupNode)
     .addNode('tag_capabilities', tagCapabilitiesNode)
@@ -109,28 +99,30 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
 
     // Entry point
     .addEdge(START, 'gather_context')
-    .addEdge('gather_context', 'classify')
 
-    // Classification routing (loop 1: clarification)
-    .addConditionalEdges('classify', classifyRouter, {
-      ask_clarification: 'ask_clarification',
+    // After gathering context: classify on first run, skip to completeness if type confirmed
+    .addConditionalEdges('gather_context', gatherContextRouter, {
+      classify: 'classify',
       check_completeness: 'check_completeness',
     })
-    .addEdge('ask_clarification', 'gather_context') // Loop back after user responds
 
-    // Completeness routing (loop 2: follow-up)
+    // Classification → always present to user for confirmation
+    .addEdge('classify', 'present_classification')
+    .addEdge('present_classification', 'check_completeness')
+
+    // Completeness routing (loop 1: follow-up)
     .addConditionalEdges('check_completeness', completenessRouter, {
       ask_followup: 'ask_followup',
       tag_capabilities: 'tag_capabilities',
     })
-    .addEdge('ask_followup', 'gather_context') // Loop back, re-gather + re-classify
+    .addEdge('ask_followup', 'gather_context') // Loop back, re-gather + re-check completeness
 
     // Linear chain: tag → reflect → PDP → quality check
     .addEdge('tag_capabilities', 'reflect')
     .addEdge('reflect', 'generate_pdp')
     .addEdge('generate_pdp', 'quality_check')
 
-    // Quality routing (loop 3: repair)
+    // Quality routing (loop 2: repair)
     .addConditionalEdges('quality_check', qualityRouter, {
       present_draft: 'present_draft',
       repair: 'repair',

@@ -1,10 +1,4 @@
-import {
-  MediaType,
-  MessageProcessingStatus,
-  MessageRole,
-  MessageType,
-  Specialty,
-} from '@acme/shared';
+import { MediaType, MessageProcessingStatus, Specialty } from '@acme/shared';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { isErr } from '../common/utils/result.util';
@@ -12,11 +6,9 @@ import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from '../conversations/conversations.repository.interface';
-import { ConversationDocument } from '../conversations/schemas/conversation.schema';
 import { MessageDocument } from '../conversations/schemas/message.schema';
 import { MediaService } from '../media/media.service';
 import { MediaDocument } from '../media/schemas/media.schema';
-import { PortfolioGraphService } from '../portfolio-graph/portfolio-graph.service';
 import { CleaningStage } from './stages/cleaning.stage';
 import { StageContext } from './stages/stage.interface';
 import { TranscriptionStage, TranscriptionStageResult } from './stages/transcription.stage';
@@ -30,8 +22,7 @@ export class ProcessingService {
     private readonly conversationsRepository: IConversationsRepository,
     private readonly mediaService: MediaService,
     private readonly transcriptionStage: TranscriptionStage,
-    private readonly cleaningStage: CleaningStage,
-    private readonly portfolioGraphService: PortfolioGraphService
+    private readonly cleaningStage: CleaningStage
   ) {}
 
   /**
@@ -122,10 +113,7 @@ export class ProcessingService {
       processingStatus: MessageProcessingStatus.COMPLETE,
     });
 
-    this.logger.log(`Message processing complete for ${message.xid}, triggering portfolio graph`);
-
-    // Layer 2: Portfolio graph (classification, reflection, etc.)
-    await this.triggerPortfolioGraph(context.conversationId, message.userId);
+    this.logger.log(`Message processing complete for ${message.xid}`);
   }
 
   /**
@@ -150,107 +138,7 @@ export class ProcessingService {
       processingStatus: MessageProcessingStatus.COMPLETE,
     });
 
-    this.logger.log(`Message processing complete for ${message.xid}, triggering portfolio graph`);
-
-    // Layer 2: Portfolio graph (classification, reflection, etc.)
-    await this.triggerPortfolioGraph(context.conversationId, message.userId);
-  }
-
-  /**
-   * Trigger the portfolio graph after message cleaning completes.
-   *
-   * Inspects which node the graph is paused at before deciding whether to resume:
-   *  - ask_followup: resume — the user's content answers the follow-up question
-   *  - present_classification / present_draft: DON'T resume — these need a structured
-   *    response (entry type selection or approval), not free-form content.
-   *    Send an acknowledgment so the doctor knows their input was noted.
-   *  - null / unknown: DON'T resume — fail-safe to avoid corrupting graph state
-   */
-  private async triggerPortfolioGraph(
-    conversationId: Types.ObjectId,
-    userId: Types.ObjectId
-  ): Promise<void> {
-    const convIdStr = conversationId.toString();
-
-    try {
-      const hasCheckpoint = await this.portfolioGraphService.hasCheckpoint(convIdStr);
-
-      if (hasCheckpoint) {
-        const pausedNode = await this.portfolioGraphService.getPausedNode(convIdStr);
-
-        if (pausedNode === 'ask_followup') {
-          // Graph was paused waiting for user content — resume it
-          this.logger.log(`Resuming portfolio graph for conversation ${convIdStr}`);
-          await this.portfolioGraphService.resumeGraph(convIdStr, 'ask_followup');
-        } else if (pausedNode === 'present_classification' || pausedNode === 'present_draft') {
-          // Graph is waiting for a structured response (entry type selection or draft approval).
-          // A content message can't satisfy these — leave the graph paused.
-          // The new message will be picked up by gather_context on the next loop.
-          this.logger.log(
-            `Graph paused at "${pausedNode}" for conversation ${convIdStr} — ` +
-              `content message noted, graph not resumed`
-          );
-          await this.sendPendingActionAcknowledgment(conversationId, userId, pausedNode);
-        } else {
-          // Unknown or no interrupt node — don't resume to avoid corrupting state
-          this.logger.warn(
-            `Graph checkpoint exists for conversation ${convIdStr} but ` +
-              `paused node is "${pausedNode}" — skipping resume`
-          );
-        }
-      } else {
-        // First run — look up the artefact ID from the conversation
-        const convResult = await this.conversationsRepository.findConversationById(conversationId);
-        if (isErr(convResult) || !convResult.value) {
-          this.logger.error(`Cannot find conversation ${convIdStr} to start portfolio graph`);
-          return;
-        }
-
-        const conversation = convResult.value as ConversationDocument;
-        await this.portfolioGraphService.startGraph({
-          conversationId: convIdStr,
-          artefactId: conversation.artefact.toString(),
-          userId: userId.toString(),
-          specialty: Specialty.GP.toString(),
-        });
-      }
-    } catch (error) {
-      // Portfolio graph errors should not fail the message processing
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Portfolio graph error for conversation ${convIdStr}: ${errorMessage}`);
-    }
-  }
-
-  /**
-   * Send an acknowledgment message when the doctor sends content while
-   * the graph is waiting for a structured action (classification or approval).
-   * Lets the doctor know their input was received without resuming the graph.
-   */
-  private async sendPendingActionAcknowledgment(
-    conversationId: Types.ObjectId,
-    userId: Types.ObjectId,
-    pausedNode: 'present_classification' | 'present_draft'
-  ): Promise<void> {
-    const content =
-      pausedNode === 'present_classification'
-        ? "Got it, I've noted your additional details. Please select the entry type above to continue."
-        : "Got it, I've noted your additional details. Please review the draft above to continue.";
-
-    const result = await this.conversationsRepository.createMessage({
-      conversation: conversationId,
-      userId,
-      role: MessageRole.ASSISTANT,
-      messageType: MessageType.TEXT,
-      rawContent: content,
-      metadata: { type: 'pending_action_acknowledgment', pausedNode },
-    });
-
-    if (result.ok) {
-      await this.conversationsRepository.updateMessage(result.value._id, {
-        content,
-        processingStatus: MessageProcessingStatus.COMPLETE,
-      });
-    }
+    this.logger.log(`Message processing complete for ${message.xid}`);
   }
 
   private async updateStatus(

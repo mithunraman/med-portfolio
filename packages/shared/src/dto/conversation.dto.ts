@@ -54,6 +54,32 @@ export const SendMessageRequestSchema = z
 
 export type SendMessageRequest = z.infer<typeof SendMessageRequestSchema>;
 
+// Analysis action request (unified start + resume)
+// Uses z.union because z.discriminatedUnion requires unique discriminator values
+// and we have multiple variants with type: "resume" (differentiated by node).
+const AnalysisResumeSchema = z
+  .object({ type: z.literal('resume') })
+  .and(
+    z.discriminatedUnion('node', [
+      z.object({ node: z.literal('ask_followup') }),
+      z.object({
+        node: z.literal('present_classification'),
+        value: z.object({ entryType: z.string().min(1) }),
+      }),
+      z.object({
+        node: z.literal('present_draft'),
+        value: z.object({ approved: z.boolean() }),
+      }),
+    ]),
+  );
+
+export const AnalysisActionRequestSchema = z.union([
+  z.object({ type: z.literal('start') }),
+  AnalysisResumeSchema,
+]);
+
+export type AnalysisActionRequest = z.infer<typeof AnalysisActionRequestSchema>;
+
 // Response schemas
 export const ConversationListResponseSchema = z.object({
   conversations: z.array(ConversationSchema),

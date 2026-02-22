@@ -1,7 +1,16 @@
 import type { Message, MessageListResponse } from '@acme/shared';
-import { MediaRefCollection, MediaStatus, MediaType, MessageRole, MessageType } from '@acme/shared';
+import {
+  MediaRefCollection,
+  MediaStatus,
+  MediaType,
+  MessageProcessingStatus,
+  MessageRole,
+  MessageType,
+  Specialty,
+} from '@acme/shared';
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -13,12 +22,13 @@ import { isErr } from '../common/utils/result.util';
 import { TransactionService } from '../database';
 import { IMediaRepository, MEDIA_REPOSITORY, MediaService } from '../media';
 import { MediaDocument } from '../media/schemas/media.schema';
+import { PortfolioGraphService } from '../portfolio-graph/portfolio-graph.service';
 import { ProcessingService } from '../processing/processing.service';
 import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from './conversations.repository.interface';
-import { ListMessagesDto, SendMessageDto } from './dto';
+import { AnalysisActionDto, ListMessagesDto, SendMessageDto } from './dto';
 import { buildMediaData, toMessageDto } from './mappers/message.mapper';
 import { MessageDocument } from './schemas/message.schema';
 
@@ -33,7 +43,8 @@ export class ConversationsService {
     private readonly mediaRepository: IMediaRepository,
     private readonly mediaService: MediaService,
     private readonly transactionService: TransactionService,
-    private readonly processingService: ProcessingService
+    private readonly processingService: ProcessingService,
+    private readonly portfolioGraphService: PortfolioGraphService
   ) {}
 
   async sendMessage(userId: string, conversationId: string, dto: SendMessageDto): Promise<Message> {
@@ -128,6 +139,177 @@ export class ConversationsService {
       : null;
 
     return toMessageDto(message, conversation.xid, mediaData);
+  }
+
+  /**
+   * Unified analysis endpoint — handles both starting and resuming the graph.
+   *
+   * Discriminated on dto.type:
+   *  - "start": First AI button tap. Starts a new graph.
+   *  - "resume": Doctor responds to an AI prompt (classification, follow-up, draft).
+   *
+   * Steps:
+   *  1. Validate conversation ownership
+   *  2. Branch on type: start → launch graph, resume → validate pause state + resume
+   *  3. For structured actions (classification, draft) create an audit message
+   *  4. Fire-and-forget the graph invocation
+   */
+  async handleAnalysis(
+    userId: string,
+    conversationId: string,
+    dto: AnalysisActionDto
+  ): Promise<void> {
+    // 1. Validate conversation ownership
+    const conversationResult = await this.conversationsRepository.findConversationByXid(
+      conversationId,
+      new Types.ObjectId(userId)
+    );
+
+    if (isErr(conversationResult))
+      throw new InternalServerErrorException(conversationResult.error.message);
+    if (!conversationResult.value) throw new NotFoundException('Conversation not found');
+
+    const conversation = conversationResult.value;
+    const convIdStr = conversation._id.toString();
+
+    // 2. Branch on action type
+    if (dto.type === 'start') {
+      return this.handleStart(userId, convIdStr, conversation);
+    }
+
+    // type === 'resume' — validate node is required
+    if (!dto.node) {
+      throw new BadRequestException('node is required for resume actions');
+    }
+
+    return this.handleResume(userId, convIdStr, conversation._id, dto.node, dto.value);
+  }
+
+  /**
+   * Start a new graph. Rejects if a checkpoint already exists (the client
+   * should send { type: "resume" } instead).
+   */
+  private async handleStart(
+    userId: string,
+    convIdStr: string,
+    conversation: { artefact: Types.ObjectId }
+  ): Promise<void> {
+    const hasCheckpoint = await this.portfolioGraphService.hasCheckpoint(convIdStr);
+
+    if (hasCheckpoint) {
+      throw new ConflictException('Analysis already started. Use { type: "resume" } to continue.');
+    }
+
+    this.portfolioGraphService
+      .startGraph({
+        conversationId: convIdStr,
+        artefactId: conversation.artefact.toString(),
+        userId,
+        specialty: Specialty.GP.toString(),
+      })
+      .catch((err) => {
+        this.logger.error(`Graph start failed for conversation ${convIdStr}: ${err.message}`);
+      });
+  }
+
+  /**
+   * Resume a paused graph at the specified node.
+   * Validates that the graph is actually paused at the expected node (409 if mismatch).
+   * Creates audit messages for structured actions (classification, draft).
+   */
+  private async handleResume(
+    userId: string,
+    convIdStr: string,
+    conversationOid: Types.ObjectId,
+    node: NonNullable<AnalysisActionDto['node']>,
+    value?: Record<string, unknown>
+  ): Promise<void> {
+    const pausedNode = await this.portfolioGraphService.getPausedNode(convIdStr);
+
+    if (!pausedNode) {
+      throw new ConflictException('Analysis is not paused at any node');
+    }
+
+    if (pausedNode !== node) {
+      throw new ConflictException(`Analysis is paused at "${pausedNode}", not "${node}"`);
+    }
+
+    const userOid = new Types.ObjectId(userId);
+
+    switch (node) {
+      case 'ask_followup': {
+        this.portfolioGraphService.resumeGraph(convIdStr, 'ask_followup').catch((err) => {
+          this.logger.error(`Graph resume failed for conversation ${convIdStr}: ${err.message}`);
+        });
+        break;
+      }
+
+      case 'present_classification': {
+        const entryType = value?.entryType;
+        if (!entryType || typeof entryType !== 'string') {
+          throw new BadRequestException('value.entryType is required and must be a string');
+        }
+
+        await this.createAuditMessage(conversationOid, userOid, {
+          type: 'classification_selection',
+          entryType,
+        });
+
+        this.portfolioGraphService
+          .resumeGraph(convIdStr, 'present_classification', { entryType })
+          .catch((err) => {
+            this.logger.error(`Graph resume failed for conversation ${convIdStr}: ${err.message}`);
+          });
+        break;
+      }
+
+      case 'present_draft': {
+        const approved = value?.approved;
+        if (typeof approved !== 'boolean') {
+          throw new BadRequestException('value.approved is required and must be a boolean');
+        }
+
+        await this.createAuditMessage(conversationOid, userOid, {
+          type: 'draft_review',
+          approved,
+        });
+
+        this.portfolioGraphService
+          .resumeGraph(convIdStr, 'present_draft', { approved })
+          .catch((err) => {
+            this.logger.error(`Graph resume failed for conversation ${convIdStr}: ${err.message}`);
+          });
+        break;
+      }
+    }
+  }
+
+  /**
+   * Create a USER message that records a structured action in the chat.
+   * Marked COMPLETE immediately since it doesn't need processing.
+   */
+  private async createAuditMessage(
+    conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
+    metadata: Record<string, unknown>
+  ): Promise<void> {
+    const result = await this.conversationsRepository.createMessage({
+      conversation: conversationId,
+      userId,
+      role: MessageRole.USER,
+      messageType: MessageType.TEXT,
+      metadata,
+    });
+
+    if (result.ok) {
+      await this.conversationsRepository.updateMessage(result.value._id, {
+        content:
+          metadata.type === 'classification_selection'
+            ? `Selected: ${metadata.entryType}`
+            : `Draft ${metadata.approved ? 'approved' : 'rejected'}`,
+        processingStatus: MessageProcessingStatus.COMPLETE,
+      });
+    }
   }
 
   async listMessages(

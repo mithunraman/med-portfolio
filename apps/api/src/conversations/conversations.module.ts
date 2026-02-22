@@ -2,6 +2,7 @@ import { forwardRef, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { DatabaseModule } from '../database';
 import { MediaModule } from '../media';
+import { PortfolioGraphModule } from '../portfolio-graph';
 import { ProcessingModule } from '../processing';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsRepository } from './conversations.repository';
@@ -19,6 +20,7 @@ import { Message, MessageSchema } from './schemas/message.schema';
     ]),
     MediaModule,
     forwardRef(() => ProcessingModule),
+    forwardRef(() => PortfolioGraphModule),
   ],
   controllers: [ConversationsController],
   providers: [

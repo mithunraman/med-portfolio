@@ -1,8 +1,8 @@
 import type { Message, MessageListResponse } from '@acme/shared';
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ConversationsService } from './conversations.service';
-import { GetPendingMessagesDto, ListMessagesDto, SendMessageDto } from './dto';
+import { AnalysisActionDto, GetPendingMessagesDto, ListMessagesDto, SendMessageDto } from './dto';
 
 @Controller('conversations')
 export class ConversationsController {
@@ -27,6 +27,24 @@ export class ConversationsController {
     @Body() dto: SendMessageDto
   ): Promise<Message> {
     return this.conversationsService.sendMessage(user.userId, conversationId, dto);
+  }
+
+  /**
+   * Unified analysis endpoint.
+   *
+   * - { type: "start" } — AI Button, first time (starts the graph)
+   * - { type: "resume", node: "ask_followup" } — AI Button after sending more content
+   * - { type: "resume", node: "present_classification", value } — classification selection
+   * - { type: "resume", node: "present_draft", value } — draft approval/rejection
+   */
+  @Post(':conversationId/analysis')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async analysis(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('conversationId') conversationId: string,
+    @Body() dto: AnalysisActionDto
+  ): Promise<void> {
+    await this.conversationsService.handleAnalysis(user.userId, conversationId, dto);
   }
 
   @Get(':conversationId/messages')

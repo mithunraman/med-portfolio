@@ -216,6 +216,27 @@ export class ConversationsRepository implements IConversationsRepository {
     }
   }
 
+  async hasCompleteMessages(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<boolean, DBError>> {
+    try {
+      const count = await this.messageModel
+        .countDocuments({
+          conversation: conversationId,
+          role: MessageRole.USER,
+          processingStatus: MessageProcessingStatus.COMPLETE,
+        })
+        .limit(1)
+        .session(session || null);
+
+      return ok(count > 0);
+    } catch (error) {
+      this.logger.error('Failed to check complete messages', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to check complete messages' });
+    }
+  }
+
   async hasProcessingMessages(
     conversationId: Types.ObjectId,
     session?: ClientSession

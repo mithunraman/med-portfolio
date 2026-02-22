@@ -22,7 +22,10 @@ import { isErr } from '../common/utils/result.util';
 import { TransactionService } from '../database';
 import { IMediaRepository, MEDIA_REPOSITORY, MediaService } from '../media';
 import { MediaDocument } from '../media/schemas/media.schema';
-import { PortfolioGraphService } from '../portfolio-graph/portfolio-graph.service';
+import {
+  type GraphStatus,
+  PortfolioGraphService,
+} from '../portfolio-graph/portfolio-graph.service';
 import { ProcessingService } from '../processing/processing.service';
 import { getSpecialtyConfig } from '../specialties/specialty.registry';
 import {
@@ -64,6 +67,9 @@ export class ConversationsService {
     if (!conversationResult.value) throw new NotFoundException('Conversation not found');
 
     const conversation = conversationResult.value;
+
+    // Guard: reject messages when the graph state doesn't accept them
+    await this.assertCanSendMessage(conversation._id.toString());
 
     // Validate media upload if provided (S3 HEAD + content-type check)
     let validatedMedia: Awaited<ReturnType<MediaService['validateMediaUpload']>> | null = null;
@@ -187,32 +193,34 @@ export class ConversationsService {
     }
 
     // 3. Branch on action type
-    if (dto.type === 'start') {
-      return this.handleStart(userId, convIdStr, conversation);
-    }
+    if (dto.type === 'start') return this.handleStart(userId, convIdStr, conversation);
 
     // type === 'resume' — validate node is required
-    if (!dto.node) {
-      throw new BadRequestException('node is required for resume actions');
-    }
+    if (!dto.node) throw new BadRequestException('node is required for resume actions');
 
     return this.handleResume(userId, convIdStr, conversation._id, dto.node, dto.value);
   }
 
   /**
    * Start a new graph. Rejects if a checkpoint already exists (the client
-   * should send { type: "resume" } instead).
+   * should send { type: "resume" } instead) or if no messages are ready.
    */
   private async handleStart(
     userId: string,
     convIdStr: string,
-    conversation: { artefact: Types.ObjectId }
+    conversation: { _id: Types.ObjectId; artefact: Types.ObjectId }
   ): Promise<void> {
     const hasCheckpoint = await this.portfolioGraphService.hasCheckpoint(convIdStr);
 
     if (hasCheckpoint) {
       throw new ConflictException('Analysis already started. Use { type: "resume" } to continue.');
     }
+
+    // Guard: require at least one COMPLETE user message before starting
+    const completeResult = await this.conversationsRepository.hasCompleteMessages(conversation._id);
+    if (isErr(completeResult)) throw new InternalServerErrorException(completeResult.error.message);
+    if (!completeResult.value)
+      throw new BadRequestException('Cannot start analysis without any completed messages.');
 
     this.portfolioGraphService
       .startGraph({
@@ -239,14 +247,9 @@ export class ConversationsService {
     value?: Record<string, unknown>
   ): Promise<void> {
     const pausedNode = await this.portfolioGraphService.getPausedNode(convIdStr);
-
-    if (!pausedNode) {
-      throw new ConflictException('Analysis is not paused at any node');
-    }
-
-    if (pausedNode !== node) {
+    if (!pausedNode) throw new ConflictException('Analysis is not paused at any node');
+    if (pausedNode !== node)
       throw new ConflictException(`Analysis is paused at "${pausedNode}", not "${node}"`);
-    }
 
     const userOid = new Types.ObjectId(userId);
 
@@ -304,6 +307,32 @@ export class ConversationsService {
           });
         break;
       }
+    }
+  }
+
+  /**
+   * Reject sendMessage() calls when the graph is in a state that doesn't accept new messages.
+   *
+   * Allowed: not_started (user composing first messages), paused at ask_followup (answering questions).
+   * Rejected: running (transcript already gathered), paused at classification/draft (wrong action),
+   *           completed (analysis finished).
+   */
+  private async assertCanSendMessage(convIdStr: string): Promise<void> {
+    const graphStatus: GraphStatus = await this.portfolioGraphService.getGraphStatus(convIdStr);
+
+    switch (graphStatus.status) {
+      case 'not_started':
+        return; // User is composing initial messages
+      case 'running':
+        throw new ConflictException('Analysis is in progress. Please wait for it to complete.');
+      case 'completed':
+        throw new ConflictException('Analysis is complete. No further messages can be sent.');
+      case 'paused':
+        if (graphStatus.node === 'ask_followup') return; // User is answering follow-up questions
+        if (graphStatus.node === 'present_classification')
+          throw new ConflictException('Please select an entry type to continue.');
+        if (graphStatus.node === 'present_draft')
+          throw new ConflictException('Please approve or reject the draft to continue.');
     }
   }
 

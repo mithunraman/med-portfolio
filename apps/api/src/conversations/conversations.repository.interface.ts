@@ -118,4 +118,12 @@ export interface IConversationsRepository {
     conversationId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<boolean, DBError>>;
+
+  /**
+   * Check if at least one COMPLETE USER message exists in a conversation.
+   */
+  hasCompleteMessages(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<boolean, DBError>>;
 }

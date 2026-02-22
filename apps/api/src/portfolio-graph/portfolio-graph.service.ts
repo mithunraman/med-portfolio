@@ -24,6 +24,13 @@ export interface GraphResumeMap {
 
 export type InterruptNode = keyof GraphResumeMap;
 
+/** Discriminated union representing the current state of the graph for a conversation. */
+export type GraphStatus =
+  | { status: 'not_started' }
+  | { status: 'running' }
+  | { status: 'paused'; node: InterruptNode }
+  | { status: 'completed' };
+
 @Injectable()
 export class PortfolioGraphService implements OnModuleInit {
   private readonly logger = new Logger(PortfolioGraphService.name);
@@ -171,6 +178,33 @@ export class PortfolioGraphService implements OnModuleInit {
   async getGraphState(conversationId: string) {
     const config = { configurable: { thread_id: conversationId } };
     return this.graph.getState(config);
+  }
+
+  /**
+   * Determine the high-level status of the graph for a conversation.
+   *
+   * - not_started: no checkpoint exists (conversationId not set)
+   * - paused: graph is waiting at an interrupt node for user input
+   * - running: checkpoint exists with pending nodes that aren't interrupt points
+   * - completed: checkpoint exists but no pending nodes remain
+   */
+  async getGraphStatus(conversationId: string): Promise<GraphStatus> {
+    const config = { configurable: { thread_id: conversationId } };
+    const state = await this.graph.getState(config);
+
+    if (!state?.values?.conversationId) return { status: 'not_started' };
+    if (!state.next?.length) return { status: 'completed' };
+
+    const nextNode = state.next[0];
+    const interruptNodes = new Set<string>([
+      'present_classification',
+      'ask_followup',
+      'present_draft',
+    ]);
+
+    if (interruptNodes.has(nextNode)) return { status: 'paused', node: nextNode as InterruptNode };
+
+    return { status: 'running' };
   }
 
   /**

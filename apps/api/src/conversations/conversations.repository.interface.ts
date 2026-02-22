@@ -109,4 +109,13 @@ export interface IConversationsRepository {
     query: ListMessagesQuery,
     session?: ClientSession
   ): Promise<Result<ListMessagesResult, DBError>>;
+
+  /**
+   * Check if any USER messages in a conversation are still being processed
+   * (status < COMPLETE, i.e. PENDING, TRANSCRIBING, CLEANING, DEIDENTIFYING).
+   */
+  hasProcessingMessages(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<boolean, DBError>>;
 }

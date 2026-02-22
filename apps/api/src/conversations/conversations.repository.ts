@@ -1,4 +1,4 @@
-import { ConversationStatus } from '@acme/shared';
+import { ConversationStatus, MessageProcessingStatus, MessageRole } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
@@ -213,6 +213,27 @@ export class ConversationsRepository implements IConversationsRepository {
     } catch (error) {
       this.logger.error('Failed to list messages', error);
       return err({ code: 'DB_ERROR', message: 'Failed to list messages' });
+    }
+  }
+
+  async hasProcessingMessages(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<boolean, DBError>> {
+    try {
+      const count = await this.messageModel
+        .countDocuments({
+          conversation: conversationId,
+          role: MessageRole.USER,
+          processingStatus: { $lt: MessageProcessingStatus.COMPLETE },
+        })
+        .limit(1)
+        .session(session || null);
+
+      return ok(count > 0);
+    } catch (error) {
+      this.logger.error('Failed to check processing messages', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to check processing messages' });
     }
   }
 }

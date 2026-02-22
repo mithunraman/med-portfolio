@@ -151,9 +151,10 @@ export class ConversationsService {
    *
    * Steps:
    *  1. Validate conversation ownership
-   *  2. Branch on type: start → launch graph, resume → validate pause state + resume
-   *  3. For structured actions (classification, draft) create an audit message
-   *  4. Fire-and-forget the graph invocation
+   *  2. Guard: reject if any user messages are still being processed
+   *  3. Branch on type: start → launch graph, resume → validate pause state + resume
+   *  4. For structured actions (classification, draft) create an audit message
+   *  5. Fire-and-forget the graph invocation
    */
   async handleAnalysis(
     userId: string,
@@ -173,7 +174,19 @@ export class ConversationsService {
     const conversation = conversationResult.value;
     const convIdStr = conversation._id.toString();
 
-    // 2. Branch on action type
+    // 2. Guard: reject if any user messages are still being processed
+    const processingResult = await this.conversationsRepository.hasProcessingMessages(
+      conversation._id
+    );
+    if (isErr(processingResult))
+      throw new InternalServerErrorException(processingResult.error.message);
+    if (processingResult.value) {
+      throw new ConflictException(
+        'Cannot start or resume analysis while messages are still being processed'
+      );
+    }
+
+    // 3. Branch on action type
     if (dto.type === 'start') {
       return this.handleStart(userId, convIdStr, conversation);
     }

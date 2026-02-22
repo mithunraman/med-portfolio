@@ -2,12 +2,12 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 import { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 import { GraphDeps } from './graph-deps';
 import {
-  askFollowupNode,
-  checkCompletenessNode,
+  createAskFollowupNode,
+  createCheckCompletenessNode,
   createClassifyNode,
   createGatherContextNode,
-  createPresentClassificationNode,
   generatePdpNode,
+  presentClassificationNode,
   presentDraftNode,
   qualityCheckNode,
   reflectNode,
@@ -84,9 +84,9 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
     // ── Nodes (factories receive deps, stubs are plain functions) ──
     .addNode('gather_context', createGatherContextNode(deps))
     .addNode('classify', createClassifyNode(deps))
-    .addNode('present_classification', createPresentClassificationNode(deps))
-    .addNode('check_completeness', checkCompletenessNode)
-    .addNode('ask_followup', askFollowupNode)
+    .addNode('present_classification', presentClassificationNode)
+    .addNode('check_completeness', createCheckCompletenessNode(deps))
+    .addNode('ask_followup', createAskFollowupNode(deps))
     .addNode('tag_capabilities', tagCapabilitiesNode)
     .addNode('reflect', reflectNode)
     .addNode('generate_pdp', generatePdpNode)

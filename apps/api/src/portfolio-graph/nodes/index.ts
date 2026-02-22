@@ -1,8 +1,10 @@
 export { createGatherContextNode } from './gather-context.node';
 export { createClassifyNode } from './classify.node';
-export { createPresentClassificationNode } from './present-classification.node';
-export { checkCompletenessNode } from './check-completeness.node';
-export { askFollowupNode } from './ask-followup.node';
+export { presentClassificationNode } from './present-classification.node';
+export type { ClassificationOption } from './present-classification.node';
+export { createCheckCompletenessNode } from './check-completeness.node';
+export { createAskFollowupNode } from './ask-followup.node';
+export type { FollowupQuestion } from './ask-followup.node';
 export { tagCapabilitiesNode } from './tag-capabilities.node';
 export { reflectNode } from './reflect.node';
 export { generatePdpNode } from './generate-pdp.node';

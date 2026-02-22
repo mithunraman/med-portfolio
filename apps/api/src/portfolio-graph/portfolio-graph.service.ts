@@ -1,13 +1,15 @@
+import { MessageProcessingStatus, MessageRole, MessageType } from '@acme/shared';
 import { Command } from '@langchain/langgraph';
 import { MongoDBSaver } from '@langchain/langgraph-checkpoint-mongodb';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
+import { Connection, Types } from 'mongoose';
 import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from '../conversations/conversations.repository.interface';
 import { LLMService } from '../llm';
+import type { ClassificationOption } from './nodes';
 import { buildPortfolioGraph } from './portfolio-graph.builder';
 
 /**
@@ -78,25 +80,19 @@ export class PortfolioGraphService implements OnModuleInit {
 
     this.logger.log(`Starting portfolio graph for conversation ${conversationId}`);
 
-    try {
-      await this.graph.invoke(
-        {
-          conversationId: params.conversationId,
-          artefactId: params.artefactId,
-          userId: params.userId,
-          specialty: params.specialty,
-        },
-        config
-      );
-    } catch (error) {
-      // interrupt() throws a special exception to pause the graph — that's expected.
-      // Real errors will have been caught and logged by the nodes.
-      if (this.isInterruptError(error)) {
-        this.logger.log(`Graph paused (interrupt) for conversation ${conversationId}`);
-        return;
-      }
-      throw error;
-    }
+    await this.graph.invoke(
+      {
+        conversationId: params.conversationId,
+        artefactId: params.artefactId,
+        userId: params.userId,
+        specialty: params.specialty,
+      },
+      config
+    );
+
+    // graph.invoke() returns normally when a node calls interrupt() —
+    // it does NOT throw. Check the checkpoint for a pending interrupt.
+    await this.handleInterruptSideEffectsIfPaused(conversationId);
   }
 
   /**
@@ -117,15 +113,10 @@ export class PortfolioGraphService implements OnModuleInit {
       `Resuming portfolio graph for conversation ${conversationId} at node "${node}"`
     );
 
-    try {
-      await this.graph.invoke(new Command({ resume: resumeValue }), config);
-    } catch (error) {
-      if (this.isInterruptError(error)) {
-        this.logger.log(`Graph paused again (interrupt) for conversation ${conversationId}`);
-        return;
-      }
-      throw error;
-    }
+    await this.graph.invoke(new Command({ resume: resumeValue }), config);
+
+    // The resumed graph may hit another interrupt (e.g. follow-up after classification).
+    await this.handleInterruptSideEffectsIfPaused(conversationId);
   }
 
   /**
@@ -183,12 +174,119 @@ export class PortfolioGraphService implements OnModuleInit {
   }
 
   /**
-   * Check if an error is a LangGraph interrupt (expected when the graph pauses).
+   * Check if the graph is paused at an interrupt node after invoke() returns.
+   * If so, handle side effects (e.g. writing an ASSISTANT message).
+   *
+   * graph.invoke() does NOT throw on interrupt — it returns normally after
+   * saving the checkpoint. We inspect the snapshot to detect the pause.
    */
-  private isInterruptError(error: unknown): boolean {
-    if (error instanceof Error) {
-      return error.name === 'GraphInterrupt' || error.message.includes('interrupt');
+  private async handleInterruptSideEffectsIfPaused(conversationId: string): Promise<void> {
+    const pausedNode = await this.getPausedNode(conversationId);
+    if (!pausedNode) return;
+
+    this.logger.log(`Graph paused at "${pausedNode}" for conversation ${conversationId}`);
+    await this.handleInterruptSideEffects(conversationId);
+  }
+
+  /**
+   * Read the interrupt payload from the checkpoint and perform side effects
+   * (e.g. writing an ASSISTANT message to the conversation).
+   *
+   * This runs once per startGraph()/resumeGraph() call — outside the graph's
+   * replay cycle — so there is no idempotency concern.
+   */
+  private async handleInterruptSideEffects(conversationId: string): Promise<void> {
+    const config = { configurable: { thread_id: conversationId } };
+    const snapshot = await this.graph.getState(config);
+
+    // The interrupt payload is stored in snapshot.tasks[].interrupts[].value
+    const interruptValue = snapshot?.tasks?.[0]?.interrupts?.[0]?.value as
+      | Record<string, unknown>
+      | undefined;
+
+    if (!interruptValue?.type) return;
+
+    const state = snapshot.values as {
+      conversationId: string;
+      userId: string;
+    };
+
+    switch (interruptValue.type) {
+      case 'classification': {
+        const options = interruptValue.options as ClassificationOption[];
+        const optionLines = options
+          .map((o, i) => `${i + 1}. **${o.label}** (${Math.round(o.confidence * 100)}% confidence)`)
+          .join('\n');
+
+        const content =
+          `Based on your input, I think this is most likely:\n\n${optionLines}\n\n` +
+          `Please select the entry type, or choose a different one.`;
+
+        const metadata = {
+          type: 'classification_options' as const,
+          options,
+          suggestedEntryType: interruptValue.suggestedEntryType,
+          reasoning: interruptValue.reasoning,
+        };
+
+        const result = await this.conversationsRepository.createMessage({
+          conversation: new Types.ObjectId(state.conversationId),
+          userId: new Types.ObjectId(state.userId),
+          role: MessageRole.ASSISTANT,
+          messageType: MessageType.TEXT,
+          rawContent: content,
+          content,
+          processingStatus: MessageProcessingStatus.COMPLETE,
+          metadata,
+        });
+
+        if (!result.ok) {
+          this.logger.error(`Failed to send classification options: ${result.error.message}`);
+        }
+        break;
+      }
+
+      case 'followup': {
+        const questions = interruptValue.questions as Array<{
+          sectionId: string;
+          question: string;
+        }>;
+        const followUpRound = interruptValue.followUpRound as number;
+
+        const questionLines = questions.map((q) => `- ${q.question}`).join('\n');
+        const roundLabel = followUpRound === 1 ? 'a couple more' : 'a few final';
+
+        const content =
+          `Thanks for sharing that. I just have ${roundLabel} questions to make sure your portfolio entry is as strong as possible:\n\n` +
+          `${questionLines}\n\n` +
+          `Take your time — you can answer all of these in one go or one at a time.`;
+
+        const followupMetadata = {
+          type: 'followup_questions' as const,
+          questions,
+          missingSections: interruptValue.missingSections,
+          followUpRound,
+          entryType: interruptValue.entryType,
+        };
+
+        const followupResult = await this.conversationsRepository.createMessage({
+          conversation: new Types.ObjectId(state.conversationId),
+          userId: new Types.ObjectId(state.userId),
+          role: MessageRole.ASSISTANT,
+          messageType: MessageType.TEXT,
+          rawContent: content,
+          content,
+          processingStatus: MessageProcessingStatus.COMPLETE,
+          metadata: followupMetadata,
+        });
+
+        if (!followupResult.ok) {
+          this.logger.error(`Failed to send follow-up questions: ${followupResult.error.message}`);
+        }
+        break;
+      }
+
+      // Future interrupt types (review) can be handled here
     }
-    return false;
   }
 }

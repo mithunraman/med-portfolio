@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
+import { z } from 'zod';
 import { LLMService } from '../../llm/llm.service';
 import { CLEANING_PROMPT } from '../prompts/cleaning.prompt';
 import { IProcessingStage, StageContext, StageResult } from './stage.interface';
+
+const cleaningResponseSchema = z.object({
+  cleanedTranscript: z.string().describe('The cleaned transcript text'),
+});
 
 @Injectable()
 export class CleaningStage implements IProcessingStage {
@@ -13,13 +18,15 @@ export class CleaningStage implements IProcessingStage {
    * Clean transcript - fix medical terms, remove fillers, improve formatting
    */
   async execute(input: string, context: StageContext): Promise<StageResult> {
-    const response = await this.llmService.invoke(CLEANING_PROMPT, input, {
+    const messages = await CLEANING_PROMPT.formatMessages({ transcript: input });
+
+    const response = await this.llmService.invokeStructured(messages, cleaningResponseSchema, {
       temperature: 0.1,
       model: 'gpt-4.1',
     });
 
     return {
-      text: response.content,
+      text: response.data.cleanedTranscript,
       metadata: {
         stage: this.name,
         model: response.model,

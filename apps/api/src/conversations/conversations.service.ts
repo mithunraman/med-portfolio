@@ -23,8 +23,8 @@ import { TransactionService } from '../database';
 import { IMediaRepository, MEDIA_REPOSITORY, MediaService } from '../media';
 import { MediaDocument } from '../media/schemas/media.schema';
 import { PortfolioGraphService } from '../portfolio-graph/portfolio-graph.service';
-import { getSpecialtyConfig } from '../specialties/specialty.registry';
 import { ProcessingService } from '../processing/processing.service';
+import { getSpecialtyConfig } from '../specialties/specialty.registry';
 import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
@@ -256,7 +256,7 @@ export class ConversationsService {
         const validCodes = config.entryTypes.map((et) => et.code);
         if (!validCodes.includes(entryType)) {
           throw new BadRequestException(
-            `Invalid entry type "${entryType}". Valid values: ${validCodes.join(', ')}`,
+            `Invalid entry type "${entryType}". Valid values: ${validCodes.join(', ')}`
           );
         }
 

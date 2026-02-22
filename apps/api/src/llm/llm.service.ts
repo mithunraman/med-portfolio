@@ -1,4 +1,4 @@
-import { BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { BaseMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -75,30 +75,6 @@ export class LLMService {
   }
 
   /**
-   * Invoke an LLM with a system prompt and user content.
-   * Returns the raw string response.
-   */
-  async invoke(
-    systemPrompt: string,
-    userContent: string,
-    options: LLMOptions = {}
-  ): Promise<LLMResponse> {
-    const { model = DEFAULT_MODEL, temperature = 0.1, maxTokens = 2000 } = options;
-
-    const chatModel = this.createChatModel({ model, temperature, maxTokens });
-    const messages = [new SystemMessage(systemPrompt), new HumanMessage(userContent)];
-
-    const response = await chatModel.invoke(messages);
-
-    const content =
-      typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
-
-    const tokensUsed = response.usage_metadata?.total_tokens ?? null;
-
-    return { content, model, tokensUsed };
-  }
-
-  /**
    * Invoke an LLM and return a validated, typed object.
    *
    * Uses OpenAI's structured output (function calling) under the hood —
@@ -118,6 +94,10 @@ export class LLMService {
     options: LLMOptions = {}
   ): Promise<StructuredResponse<T>> {
     const { model = DEFAULT_MODEL, temperature = 0.1, maxTokens = 2000 } = options;
+
+    this.logger.debug(
+      `invokeStructured [${model}] messages:\n${messages.map((m) => `[${m.type}] ${m.content}`).join('\n')}`
+    );
 
     const chatModel = this.createChatModel({ model, temperature, maxTokens });
 

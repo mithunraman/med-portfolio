@@ -126,4 +126,13 @@ export interface IConversationsRepository {
     conversationId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<boolean, DBError>>;
+
+  /**
+   * Get the role of the most recent message in a conversation.
+   * Returns null if the conversation has no messages.
+   */
+  getLastMessageRole(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<MessageRole | null, DBError>>;
 }

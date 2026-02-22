@@ -257,4 +257,23 @@ export class ConversationsRepository implements IConversationsRepository {
       return err({ code: 'DB_ERROR', message: 'Failed to check processing messages' });
     }
   }
+
+  async getLastMessageRole(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<MessageRole | null, DBError>> {
+    try {
+      const lastMessage = await this.messageModel
+        .findOne({ conversation: conversationId })
+        .sort({ _id: -1 })
+        .select('role')
+        .session(session || null)
+        .lean();
+
+      return ok(lastMessage?.role ?? null);
+    } catch (error) {
+      this.logger.error('Failed to get last message role', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to get last message role' });
+    }
+  }
 }

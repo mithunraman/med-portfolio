@@ -255,6 +255,14 @@ export class ConversationsService {
 
     switch (node) {
       case 'ask_followup': {
+        // Guard: the last message must be a USER message (i.e. the user actually answered)
+        const lastRoleResult =
+          await this.conversationsRepository.getLastMessageRole(conversationOid);
+        if (isErr(lastRoleResult))
+          throw new InternalServerErrorException(lastRoleResult.error.message);
+        if (lastRoleResult.value !== MessageRole.USER)
+          throw new BadRequestException('Please send at least one message before continuing.');
+
         this.portfolioGraphService.resumeGraph(convIdStr, 'ask_followup').catch((err) => {
           this.logger.error(`Graph resume failed for conversation ${convIdStr}: ${err.message}`);
         });
@@ -337,8 +345,9 @@ export class ConversationsService {
   }
 
   /**
-   * Create a USER message that records a structured action in the chat.
+   * Create a SYSTEM message that records a structured action in the chat.
    * Marked COMPLETE immediately since it doesn't need processing.
+   * Uses SYSTEM role so it's excluded from gather_context (which filters USER only).
    */
   private async createAuditMessage(
     conversationId: Types.ObjectId,
@@ -353,7 +362,7 @@ export class ConversationsService {
     await this.conversationsRepository.createMessage({
       conversation: conversationId,
       userId,
-      role: MessageRole.USER,
+      role: MessageRole.SYSTEM,
       messageType: MessageType.TEXT,
       content,
       processingStatus: MessageProcessingStatus.COMPLETE,

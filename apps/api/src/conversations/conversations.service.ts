@@ -23,6 +23,7 @@ import { TransactionService } from '../database';
 import { IMediaRepository, MEDIA_REPOSITORY, MediaService } from '../media';
 import { MediaDocument } from '../media/schemas/media.schema';
 import { PortfolioGraphService } from '../portfolio-graph/portfolio-graph.service';
+import { getSpecialtyConfig } from '../specialties/specialty.registry';
 import { ProcessingService } from '../processing/processing.service';
 import {
   CONVERSATIONS_REPOSITORY,
@@ -250,6 +251,15 @@ export class ConversationsService {
           throw new BadRequestException('value.entryType is required and must be a string');
         }
 
+        // Validate against specialty config
+        const config = getSpecialtyConfig(Specialty.GP);
+        const validCodes = config.entryTypes.map((et) => et.code);
+        if (!validCodes.includes(entryType)) {
+          throw new BadRequestException(
+            `Invalid entry type "${entryType}". Valid values: ${validCodes.join(', ')}`,
+          );
+        }
+
         await this.createAuditMessage(conversationOid, userOid, {
           type: 'classification_selection',
           entryType,
@@ -293,23 +303,20 @@ export class ConversationsService {
     userId: Types.ObjectId,
     metadata: Record<string, unknown>
   ): Promise<void> {
-    const result = await this.conversationsRepository.createMessage({
+    const content =
+      metadata.type === 'classification_selection'
+        ? `Selected: ${metadata.entryType}`
+        : `Draft ${metadata.approved ? 'approved' : 'rejected'}`;
+
+    await this.conversationsRepository.createMessage({
       conversation: conversationId,
       userId,
       role: MessageRole.USER,
       messageType: MessageType.TEXT,
+      content,
+      processingStatus: MessageProcessingStatus.COMPLETE,
       metadata,
     });
-
-    if (result.ok) {
-      await this.conversationsRepository.updateMessage(result.value._id, {
-        content:
-          metadata.type === 'classification_selection'
-            ? `Selected: ${metadata.entryType}`
-            : `Draft ${metadata.approved ? 'approved' : 'rejected'}`,
-        processingStatus: MessageProcessingStatus.COMPLETE,
-      });
-    }
   }
 
   async listMessages(

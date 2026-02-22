@@ -25,6 +25,8 @@ export interface CreateMessageData {
   role: MessageRole;
   messageType: MessageType;
   rawContent?: string | null;
+  content?: string | null;
+  processingStatus?: MessageProcessingStatus;
   media?: Types.ObjectId | null;
   metadata?: Record<string, unknown> | null;
 }

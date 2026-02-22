@@ -69,7 +69,9 @@ export function createPresentClassificationNode(deps: GraphDeps) {
     // a duplicate ASSISTANT message. However, in the re-classification loop
     // (ask_followup → gather_context → classify → present_classification),
     // we DO want a fresh prompt. The guard checks message ordering: only skip
-    // if the classification message is more recent than the latest user message.
+    // if the classification message is more recent than the latest *content*
+    // user message. Audit messages (metadata.type set) are excluded — they're
+    // system-generated records of structured actions, not real user input.
     const conversationId = new Types.ObjectId(state.conversationId);
     let alreadySent = false;
 
@@ -80,15 +82,17 @@ export function createPresentClassificationNode(deps: GraphDeps) {
 
     if (messagesResult.ok) {
       const messages = messagesResult.value.messages; // newest first
-      const latestUserMsg = messages.find((m) => m.role === MessageRole.USER);
+      const latestContentMsg = messages.find(
+        (m) => m.role === MessageRole.USER && !(m as any).metadata?.type
+      );
       const latestClassification = messages.find(
         (m) =>
           m.role === MessageRole.ASSISTANT && (m as any).metadata?.type === 'classification_options'
       );
 
-      if (latestClassification && latestUserMsg) {
+      if (latestClassification && latestContentMsg) {
         const classIdx = messages.indexOf(latestClassification);
-        const userIdx = messages.indexOf(latestUserMsg);
+        const userIdx = messages.indexOf(latestContentMsg);
         // Lower index = more recent (newest-first ordering)
         alreadySent = classIdx < userIdx;
       }
@@ -117,17 +121,13 @@ export function createPresentClassificationNode(deps: GraphDeps) {
         role: MessageRole.ASSISTANT,
         messageType: MessageType.TEXT,
         rawContent: content,
+        content,
+        processingStatus: MessageProcessingStatus.COMPLETE,
         metadata,
       });
 
       if (!createResult.ok) {
         logger.error(`Failed to send classification options: ${createResult.error.message}`);
-      } else {
-        // Mark ASSISTANT message as complete immediately
-        await deps.conversationsRepository.updateMessage(createResult.value._id, {
-          content,
-          processingStatus: MessageProcessingStatus.COMPLETE,
-        });
       }
     }
 

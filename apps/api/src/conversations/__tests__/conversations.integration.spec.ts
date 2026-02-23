@@ -21,6 +21,8 @@ import {
   someMissingResponse,
   followupQuestionsResponse,
   tagCapabilitiesResponse,
+  reflectResponse,
+  generatePdpResponse,
 } from './helpers/llm-mock';
 import {
   createTestHarness,
@@ -117,58 +119,63 @@ describe('Conversations Integration Tests', () => {
   });
 
   // ════════════════════════════════════════════════════════════════
-  // Debug: LLM call sequence investigation
-  // ════════════════════════════════════════════════════════════════
-
-  it('DEBUG: LLM call sequence after resume from present_classification', async () => {
-    const conv = await createTestConversation();
-    await createCompleteUserMessage(conv._id, 'I saw a diabetic patient.');
-
-    // Correct sequence: classify → completeness(missing) → followup
-    llmMock.enqueue(classifyResponse());                                                         // 0: classify
-    llmMock.enqueue(someMissingResponse(['reflection']));                                         // 1: check_completeness
-    llmMock.enqueue(followupQuestionsResponse([{ sectionId: 'reflection', question: 'Q?' }]));    // 2: ask_followup
-
-    // Start → classify → pause at present_classification
-    await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-    const status1 = await waitForGraphStable(harness, conv._id.toString());
-
-    // Resume from present_classification → should reach ask_followup
-    await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-      type: 'resume',
-      node: 'present_classification',
-      value: { entryType: 'CLINICAL_CASE_REVIEW' },
-    });
-    const status2 = await waitForGraphStable(harness, conv._id.toString(), true);
-
-    expect(status1).toEqual({ status: 'paused', node: 'present_classification' });
-    expect(status2).toEqual({ status: 'paused', node: 'ask_followup' });
-  });
-
-  // ════════════════════════════════════════════════════════════════
   // Group A: Happy Paths
   // ════════════════════════════════════════════════════════════════
 
   describe('Group A: Happy Paths', () => {
-    it('A1. Full flow — send message, start analysis, classify, select entry type', async () => {
+    /**
+     * A1. Complete graph traversal including the follow-up loop.
+     *
+     * Path: start → gather_context → classify → present_classification ⏸️
+     *       → (resume) → check_completeness(missing) → ask_followup ⏸️
+     *       → (user answers + resume) → gather_context → check_completeness(covered)
+     *       → tag_capabilities → present_capabilities ⏸️
+     *       → (resume with subset) → reflect → generate_pdp
+     *       → quality_check → repair → quality_check → present_draft ⏸️
+     *
+     * LLM call sequence (8 calls):
+     *   0: classify
+     *   1: check_completeness (missing reflection)
+     *   2: ask_followup (initial)
+     *   3: ask_followup (replay on resume — LangGraph re-executes the node)
+     *   4: check_completeness (all covered)
+     *   5: tag_capabilities
+     *   6: reflect
+     *   7: generate_pdp
+     */
+    it('A1. Full pipeline — classify → follow-up loop → capabilities → reflect → PDP → present_draft', async () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(
         conv._id,
-        'I saw a 55-year-old patient with poorly controlled type 2 diabetes. HbA1c was 72. I started them on metformin and discussed lifestyle changes.'
+        'I saw a 55-year-old patient with poorly controlled type 2 diabetes. HbA1c was 72.'
       );
 
-      // LLM: classify → completeness (all covered) → tag_capabilities
-      llmMock.enqueue(classifyResponse());
-      llmMock.enqueue(allCoveredResponse());
-      llmMock.enqueue(tagCapabilitiesResponse());
+      // ── Enqueue all 8 LLM responses upfront ──
+      llmMock.enqueue(classifyResponse());                                                          // 0: classify
+      llmMock.enqueue(someMissingResponse(['reflection']));                                         // 1: check_completeness (missing)
+      llmMock.enqueue(                                                                               // 2: ask_followup (initial)
+        followupQuestionsResponse([
+          { sectionId: 'reflection', question: 'What did you learn from this case?' },
+        ])
+      );
+      llmMock.enqueue(                                                                               // 3: ask_followup (replay on resume)
+        followupQuestionsResponse([
+          { sectionId: 'reflection', question: 'What did you learn from this case?' },
+        ])
+      );
+      llmMock.enqueue(allCoveredResponse());                                                        // 4: check_completeness (all covered)
+      llmMock.enqueue(tagCapabilitiesResponse());                                                   // 5: tag_capabilities
+      llmMock.enqueue(reflectResponse());                                                           // 6: reflect
+      llmMock.enqueue(generatePdpResponse());                                                       // 7: generate_pdp
 
-      // Start analysis → graph runs classify → pauses at present_classification
+      // ── Step 1: Start analysis → classify → pause at present_classification ──
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       const status1 = await waitForGraphStable(harness, conv._id.toString());
 
       expect(status1).toEqual({ status: 'paused', node: 'present_classification' });
+      expect(llmMock.callCount).toBe(1); // only classify ran
 
-      // ASSISTANT message with classification options created
+      // Classification options ASSISTANT message created
       const msgs1 = await getMessagesForConversation(conv._id);
       const classificationMsg = msgs1.find(
         (m) => m.role === MessageRole.ASSISTANT && (m.metadata as any)?.type === 'classification_options'
@@ -177,7 +184,7 @@ describe('Conversations Integration Tests', () => {
       expect(classificationMsg!.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
       expect((classificationMsg!.metadata as any).options).toBeInstanceOf(Array);
 
-      // Resume with classification selection
+      // ── Step 2: Resume classification → completeness(missing) → ask_followup ──
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
         type: 'resume',
         node: 'present_classification',
@@ -185,86 +192,129 @@ describe('Conversations Integration Tests', () => {
       });
       const status2 = await waitForGraphStable(harness, conv._id.toString(), true);
 
-      // Graph now pauses at present_capabilities (tag_capabilities ran)
-      expect(status2).toEqual({ status: 'paused', node: 'present_capabilities' });
+      expect(status2).toEqual({ status: 'paused', node: 'ask_followup' });
+      expect(llmMock.callCount).toBe(3); // classify + completeness + followup
 
-      // SYSTEM audit message created
+      // Classification audit message created
       const msgs2 = await getMessagesForConversation(conv._id);
-      const auditMsg = msgs2.find(
+      const classificationAudit = msgs2.find(
         (m) => m.role === MessageRole.SYSTEM && (m.metadata as any)?.type === 'classification_selection'
       );
-      expect(auditMsg).toBeDefined();
-      expect(auditMsg!.content).toBe('Selected: CLINICAL_CASE_REVIEW');
+      expect(classificationAudit).toBeDefined();
+      expect(classificationAudit!.content).toBe('Selected: CLINICAL_CASE_REVIEW');
 
-      // LLM was called for classify + completeness + tag_capabilities
-      expect(llmMock.callCount).toBe(3);
-    });
-
-    it('A2. Follow-up loop — user answers, graph re-assesses', async () => {
-      const conv = await createTestConversation();
-      await createCompleteUserMessage(conv._id, 'I saw a patient with diabetes.');
-
-      // LLM calls: classify → completeness(missing) → followup → followup(replay) → completeness(all covered) → tag_capabilities
-      // Note: when ask_followup is resumed, LangGraph re-executes the node from scratch,
-      // so the LLM call inside ask_followup runs again before interrupt() returns.
-      llmMock.enqueue(classifyResponse());                                                          // 1: classify
-      llmMock.enqueue(someMissingResponse(['clinical_reasoning', 'reflection']));                    // 2: check_completeness
-      llmMock.enqueue(                                                                               // 3: ask_followup (initial)
-        followupQuestionsResponse([
-          { sectionId: 'clinical_reasoning', question: 'What differentials did you consider?' },
-          { sectionId: 'reflection', question: 'What did you learn from this case?' },
-        ])
-      );
-      llmMock.enqueue(                                                                               // 4: ask_followup (replay on resume)
-        followupQuestionsResponse([
-          { sectionId: 'clinical_reasoning', question: 'What differentials did you consider?' },
-          { sectionId: 'reflection', question: 'What did you learn from this case?' },
-        ])
-      );
-      llmMock.enqueue(allCoveredResponse());                                                         // 5: check_completeness
-      llmMock.enqueue(tagCapabilitiesResponse());                                                    // 6: tag_capabilities
-
-      // Start → classify → pause at classification
-      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
-
-      // Select entry type → completeness(missing) → ask_followup
-      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-        type: 'resume',
-        node: 'present_classification',
-        value: { entryType: 'CLINICAL_CASE_REVIEW' },
-      });
-      const status = await waitForGraphStable(harness, conv._id.toString(), true);
-
-      expect(status).toEqual({ status: 'paused', node: 'ask_followup' });
-
-      // ASSISTANT message with follow-up questions
-      const msgs = await getMessagesForConversation(conv._id);
-      const followupMsg = msgs.find(
+      // Follow-up ASSISTANT message with questions
+      const followupMsg = msgs2.find(
         (m) => m.role === MessageRole.ASSISTANT && (m.metadata as any)?.type === 'followup_questions'
       );
       expect(followupMsg).toBeDefined();
-      expect((followupMsg!.metadata as any).questions).toHaveLength(2);
+      expect((followupMsg!.metadata as any).questions).toHaveLength(1);
+      expect((followupMsg!.metadata as any).questions[0].sectionId).toBe('reflection');
+      expect((followupMsg!.metadata as any).followUpRound).toBe(1);
 
-      // User sends follow-up answer
+      // ── Step 3: User answers follow-up → resume → completeness(covered) → tag_capabilities → present_capabilities ──
       await harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, {
-        content: 'I considered type 1 vs type 2. I learned about shared decision making.',
+        content: 'I learned about shared decision making in chronic disease management. I started metformin and discussed lifestyle changes.',
       });
       const msgsAfterSend = await getMessagesForConversation(conv._id);
       const lastUserMsg = msgsAfterSend.filter((m) => m.role === MessageRole.USER).pop()!;
       await markMessageComplete(lastUserMsg._id, lastUserMsg.rawContent!);
 
-      // Resume → ask_followup(replay) → gather_context → completeness(all covered) → proceed
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
         type: 'resume',
         node: 'ask_followup',
       });
+      const status3 = await waitForGraphStable(harness, conv._id.toString(), true);
+
+      expect(status3).toEqual({ status: 'paused', node: 'present_capabilities' });
+      expect(llmMock.callCount).toBe(6); // +followup(replay) + completeness + tag_capabilities
+
+      // Capability options ASSISTANT message created
+      const msgs3 = await getMessagesForConversation(conv._id);
+      const capabilityMsg = msgs3.find(
+        (m) => m.role === MessageRole.ASSISTANT && (m.metadata as any)?.type === 'capability_options'
+      );
+      expect(capabilityMsg).toBeDefined();
+      expect(capabilityMsg!.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
+
+      const capOptions = (capabilityMsg!.metadata as any).options;
+      expect(capOptions).toHaveLength(2);
+      expect(capOptions[0]).toMatchObject({ code: 'C-06', confidence: 0.88 });
+      expect(capOptions[1]).toMatchObject({ code: 'C-08', confidence: 0.75 });
+
+      // tag_capabilities prompt (call index 5) includes transcript and capability codes
+      const tagCall = llmMock.calls[5];
+      const tagSystemContent = tagCall.messages.find((m) => m._getType() === 'system')!.content as string;
+      expect(tagSystemContent).toContain('C-06');
+      expect(tagSystemContent).toContain('C-01');
+
+      const tagHumanContent = tagCall.messages.find((m) => m._getType() === 'human')!.content as string;
+      expect(tagHumanContent).toContain('type 2 diabetes');
+
+      // ── Step 4: Resume capabilities (select only C-06) → reflect → generate_pdp → present_draft ──
+      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
+        type: 'resume',
+        node: 'present_capabilities',
+        value: { selectedCodes: ['C-06'] },
+      });
       const finalStatus = await waitForGraphStable(harness, conv._id.toString(), true);
 
-      // Graph moved past ask_followup → tag_capabilities → paused at present_capabilities
-      expect(finalStatus).toEqual({ status: 'paused', node: 'present_capabilities' });
+      expect(finalStatus).toEqual({ status: 'paused', node: 'present_draft' });
+      expect(llmMock.callCount).toBe(8); // +reflect + generate_pdp
+      llmMock.assertAllConsumed();
 
-      expect(llmMock.callCount).toBe(6);
+      // ── Final assertions: messages ──
+      const allMsgs = await getMessagesForConversation(conv._id);
+
+      // Capability selection audit message
+      const capabilityAudit = allMsgs.find(
+        (m) => m.role === MessageRole.SYSTEM && (m.metadata as any)?.type === 'capability_selection'
+      );
+      expect(capabilityAudit).toBeDefined();
+      expect(capabilityAudit!.content).toBe('Capabilities confirmed: C-06');
+      expect((capabilityAudit!.metadata as any).selectedCodes).toEqual(['C-06']);
+
+      // ── Final assertions: graph state ──
+      const graphState = await harness.graphService.getGraphState(conv._id.toString());
+      const { values } = graphState;
+
+      // Classification
+      expect(values.entryType).toBe('CLINICAL_CASE_REVIEW');
+      expect(values.classificationSource).toBe('USER_CONFIRMED');
+
+      // Completeness — all sections covered after follow-up
+      expect(values.hasEnoughInfo).toBe(true);
+      expect(values.followUpRound).toBe(1);
+
+      // Capabilities — filtered to only the user-selected C-06
+      expect(values.capabilities).toHaveLength(1);
+      expect(values.capabilities[0].code).toBe('C-06');
+
+      // Reflection — generated by reflect node
+      expect(values.reflection).toBeDefined();
+      expect(values.reflection).toContain('Presentation');
+      expect(values.reflection).toContain('Reflection');
+
+      // PDP actions — generated by generate_pdp node
+      expect(values.pdpActions).toHaveLength(1);
+      expect(values.pdpActions[0].action).toContain('diabetes update tutorial');
+      expect(values.pdpActions[0].timeframe).toBe('within 4 weeks');
+
+      // Transcript includes both original message and follow-up answer
+      expect(values.fullTranscript).toContain('type 2 diabetes');
+      expect(values.fullTranscript).toContain('shared decision making');
+      expect(values.messageCount).toBe(2);
+
+      // reflect prompt (call index 6) includes selected capability C-06
+      const reflectCall = llmMock.calls[6];
+      const reflectSystem = reflectCall.messages.find((m) => m._getType() === 'system')!.content as string;
+      expect(reflectSystem).toContain('C-06');
+
+      // generate_pdp prompt (call index 7) receives the reflection
+      const pdpCall = llmMock.calls[7];
+      const pdpHuman = pdpCall.messages.find((m) => m._getType() === 'human')!.content as string;
+      expect(pdpHuman).toContain('Presentation');
+      expect(pdpHuman).toContain('Reflection');
     });
 
     it('A3. Multiple follow-up rounds', async () => {
@@ -649,6 +699,11 @@ describe('Conversations Integration Tests', () => {
       const lastUser = msgs.filter((m) => m.role === MessageRole.USER).pop()!;
       await markMessageComplete(lastUser._id, lastUser.rawContent!);
 
+      // ask_followup replays on resume (LangGraph re-executes the node), then
+      // gather_context → check_completeness → tag_capabilities → present_capabilities
+      llmMock.enqueue(
+        followupQuestionsResponse([{ sectionId: 'reflection', question: 'What did you learn?' }])
+      );
       llmMock.enqueue(allCoveredResponse());
       llmMock.enqueue(tagCapabilitiesResponse());
 
@@ -658,6 +713,9 @@ describe('Conversations Integration Tests', () => {
           node: 'ask_followup',
         })
       ).resolves.toBeUndefined();
+
+      // Wait for graph to settle so the fire-and-forget doesn't leak into the next test
+      await waitForGraphStable(harness, conv._id.toString(), true);
     });
   });
 

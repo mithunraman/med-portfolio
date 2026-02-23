@@ -191,6 +191,39 @@ export function tagCapabilitiesResponse(
   };
 }
 
+/**
+ * Build a canned reflect response.
+ * Default: a short structured reflection with section headings.
+ */
+export function reflectResponse(
+  overrides?: Partial<{ reflection: string }>
+) {
+  return {
+    reflection:
+      overrides?.reflection ??
+      '## Presentation\nI saw a 55-year-old patient with poorly controlled type 2 diabetes.\n\n' +
+        '## Clinical Reasoning\nI considered the HbA1c of 72 and decided to initiate metformin.\n\n' +
+        '## Reflection\nThis case reinforced the importance of shared decision making in chronic disease management.',
+  };
+}
+
+/**
+ * Build a canned generate-pdp response.
+ * Default: one SMART PDP action.
+ */
+export function generatePdpResponse(
+  overrides?: Partial<{ actions: Array<{ action: string; timeframe: string }> }>
+) {
+  return {
+    actions: overrides?.actions ?? [
+      {
+        action: 'Attend a diabetes update tutorial and present a case review to peers',
+        timeframe: 'within 4 weeks',
+      },
+    ],
+  };
+}
+
 /** Completeness response with specified sections missing. */
 export function someMissingResponse(missingSectionIds: string[]) {
   return completenessResponse(

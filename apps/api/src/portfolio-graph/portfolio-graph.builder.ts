@@ -6,14 +6,15 @@ import {
   createCheckCompletenessNode,
   createClassifyNode,
   createGatherContextNode,
-  generatePdpNode,
+  createGeneratePdpNode,
+  createReflectNode,
+  createTagCapabilitiesNode,
+  presentCapabilitiesNode,
   presentClassificationNode,
   presentDraftNode,
   qualityCheckNode,
-  reflectNode,
   repairNode,
   saveNode,
-  tagCapabilitiesNode,
 } from './nodes';
 import { PortfolioState, PortfolioStateType } from './portfolio-graph.state';
 
@@ -65,8 +66,10 @@ function qualityRouter(state: PortfolioStateType): 'present_draft' | 'repair' {
  *               │                                   ↓                        ↓
  *               │                              ask_followup          tag_capabilities
  *               │                                   ↓                        ↓
- *               └───────────────────────────────────┘                      reflect
+ *               └───────────────────────────────────┘              present_capabilities (INTERRUPT)
  *                  (loop back, skip classification)                          ↓
+ *                                                                        reflect
+ *                                                                            ↓
  *                                                                      generate_pdp
  *                                                                            ↓
  *                                                                     quality_check
@@ -81,15 +84,16 @@ function qualityRouter(state: PortfolioStateType): 'present_draft' | 'repair' {
  */
 export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: GraphDeps) {
   const graph = new StateGraph(PortfolioState)
-    // ── Nodes (factories receive deps, stubs are plain functions) ──
+    // ── Nodes ──
     .addNode('gather_context', createGatherContextNode(deps))
     .addNode('classify', createClassifyNode(deps))
     .addNode('present_classification', presentClassificationNode)
     .addNode('check_completeness', createCheckCompletenessNode(deps))
     .addNode('ask_followup', createAskFollowupNode(deps))
-    .addNode('tag_capabilities', tagCapabilitiesNode)
-    .addNode('reflect', reflectNode)
-    .addNode('generate_pdp', generatePdpNode)
+    .addNode('tag_capabilities', createTagCapabilitiesNode(deps))
+    .addNode('present_capabilities', presentCapabilitiesNode)
+    .addNode('reflect', createReflectNode(deps))
+    .addNode('generate_pdp', createGeneratePdpNode(deps))
     .addNode('quality_check', qualityCheckNode)
     .addNode('repair', repairNode)
     .addNode('present_draft', presentDraftNode)
@@ -117,8 +121,9 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
     })
     .addEdge('ask_followup', 'gather_context') // Loop back, re-gather + re-check completeness
 
-    // Linear chain: tag → reflect → PDP → quality check
-    .addEdge('tag_capabilities', 'reflect')
+    // Linear chain: tag → present capabilities → reflect → PDP → quality check
+    .addEdge('tag_capabilities', 'present_capabilities')
+    .addEdge('present_capabilities', 'reflect')
     .addEdge('reflect', 'generate_pdp')
     .addEdge('generate_pdp', 'quality_check')
 

@@ -17,8 +17,8 @@ export class AnalysisActionDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['present_classification', 'present_draft', 'ask_followup'])
-  node?: 'present_classification' | 'present_draft' | 'ask_followup';
+  @IsIn(['present_classification', 'present_capabilities', 'present_draft', 'ask_followup'])
+  node?: 'present_classification' | 'present_capabilities' | 'present_draft' | 'ask_followup';
 
   @IsOptional()
   @IsObject()

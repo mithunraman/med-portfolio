@@ -20,6 +20,7 @@ import {
   allCoveredResponse,
   someMissingResponse,
   followupQuestionsResponse,
+  tagCapabilitiesResponse,
 } from './helpers/llm-mock';
 import {
   createTestHarness,
@@ -156,9 +157,10 @@ describe('Conversations Integration Tests', () => {
         'I saw a 55-year-old patient with poorly controlled type 2 diabetes. HbA1c was 72. I started them on metformin and discussed lifestyle changes.'
       );
 
-      // LLM: classify → completeness (all covered)
+      // LLM: classify → completeness (all covered) → tag_capabilities
       llmMock.enqueue(classifyResponse());
       llmMock.enqueue(allCoveredResponse());
+      llmMock.enqueue(tagCapabilitiesResponse());
 
       // Start analysis → graph runs classify → pauses at present_classification
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
@@ -181,7 +183,10 @@ describe('Conversations Integration Tests', () => {
         node: 'present_classification',
         value: { entryType: 'CLINICAL_CASE_REVIEW' },
       });
-      await waitForGraphStable(harness, conv._id.toString(), true);
+      const status2 = await waitForGraphStable(harness, conv._id.toString(), true);
+
+      // Graph now pauses at present_capabilities (tag_capabilities ran)
+      expect(status2).toEqual({ status: 'paused', node: 'present_capabilities' });
 
       // SYSTEM audit message created
       const msgs2 = await getMessagesForConversation(conv._id);
@@ -191,15 +196,15 @@ describe('Conversations Integration Tests', () => {
       expect(auditMsg).toBeDefined();
       expect(auditMsg!.content).toBe('Selected: CLINICAL_CASE_REVIEW');
 
-      // LLM was called for classify + completeness
-      expect(llmMock.callCount).toBe(2);
+      // LLM was called for classify + completeness + tag_capabilities
+      expect(llmMock.callCount).toBe(3);
     });
 
     it('A2. Follow-up loop — user answers, graph re-assesses', async () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a patient with diabetes.');
 
-      // LLM calls: classify → completeness(missing) → followup → followup(replay) → completeness(all covered)
+      // LLM calls: classify → completeness(missing) → followup → followup(replay) → completeness(all covered) → tag_capabilities
       // Note: when ask_followup is resumed, LangGraph re-executes the node from scratch,
       // so the LLM call inside ask_followup runs again before interrupt() returns.
       llmMock.enqueue(classifyResponse());                                                          // 1: classify
@@ -217,6 +222,7 @@ describe('Conversations Integration Tests', () => {
         ])
       );
       llmMock.enqueue(allCoveredResponse());                                                         // 5: check_completeness
+      llmMock.enqueue(tagCapabilitiesResponse());                                                    // 6: tag_capabilities
 
       // Start → classify → pause at classification
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
@@ -255,12 +261,10 @@ describe('Conversations Integration Tests', () => {
       });
       const finalStatus = await waitForGraphStable(harness, conv._id.toString(), true);
 
-      // Graph moved past ask_followup (should be at present_draft or completed)
-      if (finalStatus.status === 'paused') {
-        expect(finalStatus.node).not.toBe('ask_followup');
-      }
+      // Graph moved past ask_followup → tag_capabilities → paused at present_capabilities
+      expect(finalStatus).toEqual({ status: 'paused', node: 'present_capabilities' });
 
-      expect(llmMock.callCount).toBe(5);
+      expect(llmMock.callCount).toBe(6);
     });
 
     it('A3. Multiple follow-up rounds', async () => {
@@ -297,6 +301,7 @@ describe('Conversations Integration Tests', () => {
         ])
       );
       llmMock.enqueue(allCoveredResponse());                                                         // 8: check_completeness
+      llmMock.enqueue(tagCapabilitiesResponse());                                                    // 9: tag_capabilities
 
       // Start → classify → pause
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
@@ -340,10 +345,8 @@ describe('Conversations Integration Tests', () => {
       });
       const finalStatus = await waitForGraphStable(harness, conv._id.toString(), true);
 
-      // Graph moved past ask_followup
-      if (finalStatus.status === 'paused') {
-        expect(finalStatus.node).not.toBe('ask_followup');
-      }
+      // Graph moved past ask_followup → tag_capabilities → paused at present_capabilities
+      expect(finalStatus).toEqual({ status: 'paused', node: 'present_capabilities' });
 
       // 2 follow-up ASSISTANT messages with different rounds
       const allMsgs = await getMessagesForConversation(conv._id);
@@ -354,7 +357,7 @@ describe('Conversations Integration Tests', () => {
       expect((followupMsgs[0].metadata as any).followUpRound).toBe(1);
       expect((followupMsgs[1].metadata as any).followUpRound).toBe(2);
 
-      expect(llmMock.callCount).toBe(8);
+      expect(llmMock.callCount).toBe(9);
     });
 
     it('A4. Max follow-up rounds reached — graph proceeds anyway', async () => {
@@ -380,6 +383,7 @@ describe('Conversations Integration Tests', () => {
         followupQuestionsResponse([{ sectionId: 'reflection', question: 'Please reflect more.' }])
       );
       llmMock.enqueue(someMissingResponse(['reflection']));                                          // 8: check_completeness (still missing, but max rounds)
+      llmMock.enqueue(tagCapabilitiesResponse());                                                    // 9: tag_capabilities
 
       // Start → classify → pause
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
@@ -417,10 +421,8 @@ describe('Conversations Integration Tests', () => {
       });
       const finalStatus = await waitForGraphStable(harness, conv._id.toString(), true);
 
-      // Graph did NOT pause at ask_followup a third time
-      if (finalStatus.status === 'paused') {
-        expect(finalStatus.node).not.toBe('ask_followup');
-      }
+      // Graph did NOT pause at ask_followup a third time — proceeded to present_capabilities
+      expect(finalStatus).toEqual({ status: 'paused', node: 'present_capabilities' });
     });
   });
 
@@ -484,12 +486,13 @@ describe('Conversations Integration Tests', () => {
       expect(result).toBeDefined();
     });
 
-    it('B5. Send message after analysis complete — rejected', async () => {
+    it('B5. Send message while paused at present_capabilities — rejected', async () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a diabetic patient.');
 
       llmMock.enqueue(classifyResponse());
       llmMock.enqueue(allCoveredResponse());
+      llmMock.enqueue(tagCapabilitiesResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForGraphStable(harness, conv._id.toString());
@@ -501,13 +504,11 @@ describe('Conversations Integration Tests', () => {
       });
       const status = await waitForGraphStable(harness, conv._id.toString(), true);
 
-      // Graph should reach present_draft (stubs pass through) or complete
-      // Either way, can't send messages
-      if (status.status === 'completed' || (status.status === 'paused' && status.node === 'present_draft')) {
-        await expect(
-          harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, { content: 'More info...' })
-        ).rejects.toThrow(ConflictException);
-      }
+      expect(status).toEqual({ status: 'paused', node: 'present_capabilities' });
+
+      await expect(
+        harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, { content: 'More info...' })
+      ).rejects.toThrow(ConflictException);
     });
   });
 
@@ -649,6 +650,7 @@ describe('Conversations Integration Tests', () => {
       await markMessageComplete(lastUser._id, lastUser.rawContent!);
 
       llmMock.enqueue(allCoveredResponse());
+      llmMock.enqueue(tagCapabilitiesResponse());
 
       await expect(
         harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
@@ -688,6 +690,7 @@ describe('Conversations Integration Tests', () => {
 
       llmMock.enqueue(classifyResponse());
       llmMock.enqueue(allCoveredResponse());
+      llmMock.enqueue(tagCapabilitiesResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForGraphStable(harness, conv._id.toString());
@@ -776,6 +779,7 @@ describe('Conversations Integration Tests', () => {
 
       llmMock.enqueue(classifyResponse());
       llmMock.enqueue(allCoveredResponse());
+      llmMock.enqueue(tagCapabilitiesResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForGraphStable(harness, conv._id.toString());

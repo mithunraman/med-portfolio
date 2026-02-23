@@ -94,18 +94,24 @@ export class SequentialLLMMock {
  * Build a canned classify response.
  * Default: CLINICAL_CASE_REVIEW with high confidence.
  */
-export function classifyResponse(overrides: Partial<{
-  entryType: string;
-  confidence: number;
-  reasoning: string;
-  signalsFound: string[];
-  alternatives: Array<{ entryType: string; confidence: number; reasoning: string }>;
-}> = {}) {
+export function classifyResponse(
+  overrides: Partial<{
+    entryType: string;
+    confidence: number;
+    reasoning: string;
+    signalsFound: string[];
+    alternatives: Array<{ entryType: string; confidence: number; reasoning: string }>;
+  }> = {}
+) {
   return {
     entryType: overrides.entryType ?? 'CLINICAL_CASE_REVIEW',
     confidence: overrides.confidence ?? 0.92,
     reasoning: overrides.reasoning ?? 'Patient presentation with clinical details',
-    signalsFound: overrides.signalsFound ?? ['specific patient', 'clinical details', 'management plan'],
+    signalsFound: overrides.signalsFound ?? [
+      'specific patient',
+      'clinical details',
+      'management plan',
+    ],
     alternatives: overrides.alternatives ?? [
       { entryType: 'OUT_OF_HOURS', confidence: 0.3, reasoning: 'Could be OOH' },
     ],
@@ -151,6 +157,38 @@ export function allCoveredResponse() {
   return completenessResponse(
     CCR_ASSESSABLE_SECTIONS.map((id) => ({ sectionId: id, covered: true }))
   );
+}
+
+/**
+ * Build a canned tag-capabilities response.
+ * Default: two capabilities with evidence and confidence.
+ */
+export function tagCapabilitiesResponse(
+  overrides?: Partial<{
+    capabilities: Array<{
+      code: string;
+      name: string;
+      confidence: number;
+      evidence: string[];
+    }>;
+  }>
+) {
+  return {
+    capabilities: overrides?.capabilities ?? [
+      {
+        code: 'C-06',
+        name: 'Managing Medical Complexity',
+        confidence: 0.88,
+        evidence: ['managed the patient with type 2 diabetes'],
+      },
+      {
+        code: 'C-08',
+        name: 'Independent Working',
+        confidence: 0.75,
+        evidence: ['independently decided to start metformin'],
+      },
+    ],
+  };
 }
 
 /** Completeness response with specified sections missing. */

@@ -297,6 +297,31 @@ export class ConversationsService {
         break;
       }
 
+      case 'present_capabilities': {
+        const selectedCodes = value?.selectedCodes;
+        if (
+          !Array.isArray(selectedCodes) ||
+          selectedCodes.length === 0 ||
+          !selectedCodes.every((c: unknown) => typeof c === 'string')
+        ) {
+          throw new BadRequestException(
+            'value.selectedCodes is required and must be a non-empty string array'
+          );
+        }
+
+        await this.createAuditMessage(conversationOid, userOid, {
+          type: 'capability_selection',
+          selectedCodes,
+        });
+
+        this.portfolioGraphService
+          .resumeGraph(convIdStr, 'present_capabilities', { selectedCodes })
+          .catch((err) => {
+            this.logger.error(`Graph resume failed for conversation ${convIdStr}: ${err.message}`);
+          });
+        break;
+      }
+
       case 'present_draft': {
         const approved = value?.approved;
         if (typeof approved !== 'boolean') {
@@ -339,6 +364,8 @@ export class ConversationsService {
         if (graphStatus.node === 'ask_followup') return; // User is answering follow-up questions
         if (graphStatus.node === 'present_classification')
           throw new ConflictException('Please select an entry type to continue.');
+        if (graphStatus.node === 'present_capabilities')
+          throw new ConflictException('Please confirm capabilities to continue.');
         if (graphStatus.node === 'present_draft')
           throw new ConflictException('Please approve or reject the draft to continue.');
     }
@@ -354,10 +381,14 @@ export class ConversationsService {
     userId: Types.ObjectId,
     metadata: Record<string, unknown>
   ): Promise<void> {
-    const content =
-      metadata.type === 'classification_selection'
-        ? `Selected: ${metadata.entryType}`
-        : `Draft ${metadata.approved ? 'approved' : 'rejected'}`;
+    let content: string;
+    if (metadata.type === 'classification_selection') {
+      content = `Selected: ${metadata.entryType}`;
+    } else if (metadata.type === 'capability_selection') {
+      content = `Capabilities confirmed: ${(metadata.selectedCodes as string[]).join(', ')}`;
+    } else {
+      content = `Draft ${metadata.approved ? 'approved' : 'rejected'}`;
+    }
 
     await this.conversationsRepository.createMessage({
       conversation: conversationId,

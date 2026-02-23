@@ -21,7 +21,8 @@ export type SectionCoverage = Record<string, boolean>;
 export interface CapabilityTag {
   code: string;
   name: string;
-  evidence: string;
+  evidence: string[];
+  confidence: number;
 }
 
 /**

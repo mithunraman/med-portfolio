@@ -9,7 +9,7 @@ import {
   IConversationsRepository,
 } from '../conversations/conversations.repository.interface';
 import { LLMService } from '../llm';
-import type { ClassificationOption } from './nodes';
+import type { CapabilityOption, ClassificationOption } from './nodes';
 import { buildPortfolioGraph } from './portfolio-graph.builder';
 
 /**
@@ -19,6 +19,7 @@ import { buildPortfolioGraph } from './portfolio-graph.builder';
 export interface GraphResumeMap {
   present_classification: { entryType: string };
   ask_followup: true;
+  present_capabilities: { selectedCodes: string[] };
   present_draft: { approved: boolean };
 }
 
@@ -161,6 +162,7 @@ export class PortfolioGraphService implements OnModuleInit {
     const interruptNodes = new Set<string>([
       'present_classification',
       'ask_followup',
+      'present_capabilities',
       'present_draft',
     ]);
 
@@ -199,6 +201,7 @@ export class PortfolioGraphService implements OnModuleInit {
     const interruptNodes = new Set<string>([
       'present_classification',
       'ask_followup',
+      'present_capabilities',
       'present_draft',
     ]);
 
@@ -316,6 +319,43 @@ export class PortfolioGraphService implements OnModuleInit {
 
         if (!followupResult.ok) {
           this.logger.error(`Failed to send follow-up questions: ${followupResult.error.message}`);
+        }
+        break;
+      }
+
+      case 'capabilities': {
+        const options = interruptValue.options as CapabilityOption[];
+        const optionLines = options
+          .map(
+            (o, i) =>
+              `${i + 1}. **${o.code} — ${o.name}** (${Math.round(o.confidence * 100)}% confidence)\n` +
+              `   _${o.evidence[0]}_`
+          )
+          .join('\n');
+
+        const capContent =
+          `I've identified the following capabilities in your entry:\n\n${optionLines}\n\n` +
+          `Please confirm which capabilities apply, or deselect any that don't fit.`;
+
+        const capMetadata = {
+          type: 'capability_options' as const,
+          options,
+          entryType: interruptValue.entryType,
+        };
+
+        const capResult = await this.conversationsRepository.createMessage({
+          conversation: new Types.ObjectId(state.conversationId),
+          userId: new Types.ObjectId(state.userId),
+          role: MessageRole.ASSISTANT,
+          messageType: MessageType.TEXT,
+          rawContent: capContent,
+          content: capContent,
+          processingStatus: MessageProcessingStatus.COMPLETE,
+          metadata: capMetadata,
+        });
+
+        if (!capResult.ok) {
+          this.logger.error(`Failed to send capability options: ${capResult.error.message}`);
         }
         break;
       }

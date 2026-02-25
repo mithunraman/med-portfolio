@@ -129,5 +129,5 @@ export async function markMessageComplete(
 export async function getMessagesForConversation(
   conversationId: Types.ObjectId
 ): Promise<MessageDocument[]> {
-  return messageModel.find({ conversation: conversationId }).sort({ _id: 1 }).lean();
+  return messageModel.find({ conversation: conversationId }).sort({ _id: 1 }).exec();
 }

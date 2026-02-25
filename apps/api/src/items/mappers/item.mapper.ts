@@ -1,7 +1,7 @@
 import type { Item } from '@acme/shared';
-import type { ItemDocument } from '../schemas/item.schema';
+import type { Item as ItemSchema } from '../schemas/item.schema';
 
-export function toItemDto(doc: ItemDocument): Item {
+export function toItemDto(doc: ItemSchema): Item {
   return {
     id: doc._id.toString(),
     name: doc.name,

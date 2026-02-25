@@ -29,7 +29,7 @@ import { Types } from 'mongoose';
 import { isErr } from '../common/utils/result.util';
 import { TransactionService } from '../database';
 import { IMediaRepository, MEDIA_REPOSITORY, MediaService } from '../media';
-import { MediaDocument } from '../media/schemas/media.schema';
+import { Media } from '../media/schemas/media.schema';
 import {
   type GraphStatus,
   PortfolioGraphService,
@@ -42,7 +42,7 @@ import {
 } from './conversations.repository.interface';
 import { AnalysisActionDto, ListMessagesDto, SendMessageDto } from './dto';
 import { buildMediaData, toMessageDto } from './mappers/message.mapper';
-import { MessageDocument } from './schemas/message.schema';
+import { Message as MessageSchema } from './schemas/message.schema';
 
 @Injectable()
 export class ConversationsService {
@@ -94,7 +94,7 @@ export class ConversationsService {
       : MessageType.TEXT;
 
     // Phase 2: Transaction (message creation + media attachment)
-    const message = await this.transactionService.withTransaction<MessageDocument>(
+    const message = await this.transactionService.withTransaction<MessageSchema>(
       async (session) => {
         // Create the message
         const messageResult = await this.conversationsRepository.createMessage(
@@ -496,9 +496,9 @@ export class ConversationsService {
    * Generate a presigned download URL for audio messages.
    * Returns null for non-audio messages or if the media is not yet attached.
    */
-  private async resolveAudioUrl(msg: MessageDocument): Promise<string | null> {
+  private async resolveAudioUrl(msg: MessageSchema): Promise<string | null> {
     if (msg.messageType !== MessageType.AUDIO || !msg.media) return null;
-    const mediaDoc = msg.media as unknown as MediaDocument;
+    const mediaDoc = msg.media as unknown as Media;
     try {
       return await this.mediaService.getPresignedUrl(mediaDoc.xid);
     } catch {

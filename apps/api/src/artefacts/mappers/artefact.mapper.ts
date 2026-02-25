@@ -1,9 +1,9 @@
 import type { Artefact, ActiveConversation } from '@acme/shared';
-import type { ArtefactDocument } from '../schemas/artefact.schema';
-import type { ConversationDocument } from '../../conversations/schemas/conversation.schema';
+import type { Artefact as ArtefactSchema } from '../schemas/artefact.schema';
+import type { Conversation } from '../../conversations/schemas/conversation.schema';
 import { extractArtefactClientId } from '../utils/artefact-id.util';
 
-export function toActiveConversationDto(doc: ConversationDocument): ActiveConversation {
+export function toActiveConversationDto(doc: Conversation): ActiveConversation {
   return {
     id: doc.xid,
     title: doc.title,
@@ -14,8 +14,8 @@ export function toActiveConversationDto(doc: ConversationDocument): ActiveConver
 }
 
 export function toArtefactDto(
-  artefact: ArtefactDocument,
-  conversation: ConversationDocument
+  artefact: ArtefactSchema,
+  conversation: Conversation
 ): Artefact {
   return {
     id: artefact.xid,

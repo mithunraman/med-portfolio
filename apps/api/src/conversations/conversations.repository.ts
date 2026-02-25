@@ -29,7 +29,7 @@ export class ConversationsRepository implements IConversationsRepository {
   async createConversation(
     data: CreateConversationData,
     session?: ClientSession
-  ): Promise<Result<ConversationDocument, DBError>> {
+  ): Promise<Result<Conversation, DBError>> {
     try {
       const [conversation] = await this.conversationModel.create(
         [
@@ -51,10 +51,11 @@ export class ConversationsRepository implements IConversationsRepository {
   async findConversationById(
     conversationId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<ConversationDocument | null, DBError>> {
+  ): Promise<Result<Conversation | null, DBError>> {
     try {
       const conversation = await this.conversationModel
         .findById(conversationId)
+        .lean()
         .session(session || null);
       return ok(conversation);
     } catch (error) {
@@ -67,10 +68,11 @@ export class ConversationsRepository implements IConversationsRepository {
     xid: string,
     userId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<ConversationDocument | null, DBError>> {
+  ): Promise<Result<Conversation | null, DBError>> {
     try {
       const conversation = await this.conversationModel
         .findOne({ xid, userId })
+        .lean()
         .session(session || null);
       return ok(conversation);
     } catch (error) {
@@ -82,10 +84,11 @@ export class ConversationsRepository implements IConversationsRepository {
   async findActiveConversationByArtefact(
     artefactId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<ConversationDocument | null, DBError>> {
+  ): Promise<Result<Conversation | null, DBError>> {
     try {
       const conversation = await this.conversationModel
         .findOne({ artefact: artefactId, status: ConversationStatus.ACTIVE })
+        .lean()
         .session(session || null);
       return ok(conversation);
     } catch (error) {
@@ -97,16 +100,17 @@ export class ConversationsRepository implements IConversationsRepository {
   async findActiveConversationsByArtefacts(
     artefactIds: Types.ObjectId[],
     session?: ClientSession
-  ): Promise<Result<Map<string, ConversationDocument>, DBError>> {
+  ): Promise<Result<Map<string, Conversation>, DBError>> {
     try {
       const conversations = await this.conversationModel
         .find({
           artefact: { $in: artefactIds },
           status: ConversationStatus.ACTIVE,
         })
+        .lean()
         .session(session || null);
 
-      const conversationMap = new Map<string, ConversationDocument>();
+      const conversationMap = new Map<string, Conversation>();
       for (const conversation of conversations) {
         conversationMap.set(conversation.artefact.toString(), conversation);
       }
@@ -121,7 +125,7 @@ export class ConversationsRepository implements IConversationsRepository {
   async createMessage(
     data: CreateMessageData,
     session?: ClientSession
-  ): Promise<Result<MessageDocument, DBError>> {
+  ): Promise<Result<Message, DBError>> {
     try {
       const [message] = await this.messageModel.create([data], { session });
 
@@ -142,11 +146,12 @@ export class ConversationsRepository implements IConversationsRepository {
   async findMessageById(
     messageId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<MessageDocument | null, DBError>> {
+  ): Promise<Result<Message | null, DBError>> {
     try {
       const message = await this.messageModel
         .findById(messageId)
         .populate('media')
+        .lean()
         .session(session || null);
       return ok(message);
     } catch (error) {
@@ -159,12 +164,13 @@ export class ConversationsRepository implements IConversationsRepository {
     xids: string[],
     userId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<MessageDocument[], DBError>> {
+  ): Promise<Result<Message[], DBError>> {
     try {
       const messages = await this.messageModel
         .find({ xid: { $in: xids }, userId })
         .populate('media')
         .populate('conversation', 'xid')
+        .lean()
         .session(session || null);
       return ok(messages);
     } catch (error) {
@@ -177,10 +183,11 @@ export class ConversationsRepository implements IConversationsRepository {
     messageId: Types.ObjectId,
     data: UpdateMessageData,
     session?: ClientSession
-  ): Promise<Result<MessageDocument | null, DBError>> {
+  ): Promise<Result<Message | null, DBError>> {
     try {
       const message = await this.messageModel
         .findByIdAndUpdate(messageId, { $set: data }, { new: true })
+        .lean()
         .session(session || null);
       return ok(message);
     } catch (error) {
@@ -207,6 +214,7 @@ export class ConversationsRepository implements IConversationsRepository {
         .populate('media')
         .sort({ _id: -1 })
         .limit(query.limit)
+        .lean()
         .session(session || null);
 
       return ok({ messages });
@@ -267,8 +275,8 @@ export class ConversationsRepository implements IConversationsRepository {
         .findOne({ conversation: conversationId })
         .sort({ _id: -1 })
         .select('role')
-        .session(session || null)
-        .lean();
+        .lean()
+        .session(session || null);
 
       return ok(lastMessage?.role ?? null);
     } catch (error) {

@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { generateXid } from '../common/utils/nanoid.util';
+import { objectIdsEqual } from '../common/utils/objectid.util';
 import { isErr } from '../common/utils/result.util';
 import { StorageService } from '../storage/storage.service';
 import { IMediaRepository, MEDIA_REPOSITORY } from './media.repository.interface';
@@ -110,7 +111,7 @@ export class MediaService {
     if (!media) throw new NotFoundException('Media not found');
 
     // Verify ownership
-    if (!media.userId.equals(userObjectId))
+    if (!objectIdsEqual(media.userId, userObjectId))
       throw new ForbiddenException('Media does not belong to user');
 
     // Verify status is PENDING

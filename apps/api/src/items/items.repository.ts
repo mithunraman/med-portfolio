@@ -21,7 +21,7 @@ export class ItemsRepository implements IItemsRepository {
   async create(
     data: CreateItemData,
     session?: ClientSession,
-  ): Promise<Result<ItemDocument, DBError>> {
+  ): Promise<Result<Item, DBError>> {
     try {
       const [item] = await this.itemModel.create([data], { session });
       return ok(item);
@@ -35,10 +35,11 @@ export class ItemsRepository implements IItemsRepository {
     id: Types.ObjectId,
     userId: Types.ObjectId,
     session?: ClientSession,
-  ): Promise<Result<ItemDocument | null, DBError>> {
+  ): Promise<Result<Item | null, DBError>> {
     try {
       const item = await this.itemModel
         .findOne({ _id: id, userId })
+        .lean()
         .session(session || null);
       return ok(item);
     } catch (error) {
@@ -66,6 +67,7 @@ export class ItemsRepository implements IItemsRepository {
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(query.limit)
+          .lean()
           .session(session || null),
         this.itemModel.countDocuments(filter).session(session || null),
       ]);
@@ -82,14 +84,15 @@ export class ItemsRepository implements IItemsRepository {
     userId: Types.ObjectId,
     data: UpdateItemData,
     session?: ClientSession,
-  ): Promise<Result<ItemDocument | null, DBError>> {
+  ): Promise<Result<Item | null, DBError>> {
     try {
       const item = await this.itemModel
         .findOneAndUpdate(
           { _id: id, userId },
           { $set: data },
           { new: true, session },
-        );
+        )
+        .lean();
       return ok(item);
     } catch (error) {
       this.logger.error('Failed to update item', error);

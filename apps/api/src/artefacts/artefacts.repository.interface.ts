@@ -1,7 +1,7 @@
 import { ArtefactStatus, Specialty } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
 import type { Result } from '../common/utils/result.util';
-import type { ArtefactDocument } from './schemas/artefact.schema';
+import type { Artefact } from './schemas/artefact.schema';
 
 export const ARTEFACTS_REPOSITORY = Symbol('ARTEFACTS_REPOSITORY');
 
@@ -26,14 +26,14 @@ export interface ListArtefactsQuery {
 }
 
 export interface ListArtefactsResult {
-  artefacts: ArtefactDocument[];
+  artefacts: Artefact[];
 }
 
 export interface IArtefactsRepository {
   upsertArtefact(
     data: UpsertArtefactData,
     session?: ClientSession
-  ): Promise<Result<ArtefactDocument, DBError>>;
+  ): Promise<Result<Artefact, DBError>>;
 
   listArtefacts(
     query: ListArtefactsQuery,

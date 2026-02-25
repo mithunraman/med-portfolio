@@ -20,7 +20,7 @@ export class MediaRepository implements IMediaRepository {
     private mediaModel: Model<MediaDocument>
   ) {}
 
-  async create(data: CreateMediaData): Promise<Result<MediaDocument, DBError>> {
+  async create(data: CreateMediaData): Promise<Result<Media, DBError>> {
     try {
       const createData: Record<string, unknown> = {
         xid: data.xid,
@@ -43,9 +43,9 @@ export class MediaRepository implements IMediaRepository {
   async findByXid(
     xid: string,
     userId: Types.ObjectId
-  ): Promise<Result<MediaDocument | null, DBError>> {
+  ): Promise<Result<Media | null, DBError>> {
     try {
-      const media = await this.mediaModel.findOne({ xid, userId });
+      const media = await this.mediaModel.findOne({ xid, userId }).lean();
       return ok(media);
     } catch (error) {
       this.logger.error('Failed to find media by xid', error);
@@ -53,9 +53,9 @@ export class MediaRepository implements IMediaRepository {
     }
   }
 
-  async findByXidInternal(xid: string): Promise<Result<MediaDocument | null, DBError>> {
+  async findByXidInternal(xid: string): Promise<Result<Media | null, DBError>> {
     try {
-      const media = await this.mediaModel.findOne({ xid });
+      const media = await this.mediaModel.findOne({ xid }).lean();
       return ok(media);
     } catch (error) {
       this.logger.error('Failed to find media by xid (internal)', error);
@@ -67,7 +67,7 @@ export class MediaRepository implements IMediaRepository {
     xid: string,
     data: UpdateMediaStatusData,
     session?: ClientSession
-  ): Promise<Result<MediaDocument | null, DBError>> {
+  ): Promise<Result<Media | null, DBError>> {
     try {
       const updateData: Record<string, unknown> = {
         status: data.status,
@@ -87,6 +87,7 @@ export class MediaRepository implements IMediaRepository {
 
       const media = await this.mediaModel
         .findOneAndUpdate({ xid }, { $set: updateData }, { new: true })
+        .lean()
         .session(session || null);
 
       return ok(media);

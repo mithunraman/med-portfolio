@@ -1,8 +1,8 @@
 import { type MessageMetadata, MessageProcessingStatus, MessageRole, MessageType } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
 import type { Result } from '../common/utils/result.util';
-import type { ConversationDocument } from './schemas/conversation.schema';
-import type { MessageDocument, TranscriptionMetadata } from './schemas/message.schema';
+import type { Conversation } from './schemas/conversation.schema';
+import type { Message, TranscriptionMetadata } from './schemas/message.schema';
 
 export const CONVERSATIONS_REPOSITORY = Symbol('CONVERSATIONS_REPOSITORY');
 
@@ -47,7 +47,7 @@ export interface ListMessagesQuery {
 }
 
 export interface ListMessagesResult {
-  messages: MessageDocument[];
+  messages: Message[];
 }
 
 export interface IConversationsRepository {
@@ -55,39 +55,39 @@ export interface IConversationsRepository {
   createConversation(
     data: CreateConversationData,
     session?: ClientSession
-  ): Promise<Result<ConversationDocument, DBError>>;
+  ): Promise<Result<Conversation, DBError>>;
 
   findConversationById(
     conversationId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<ConversationDocument | null, DBError>>;
+  ): Promise<Result<Conversation | null, DBError>>;
 
   findConversationByXid(
     xid: string,
     userId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<ConversationDocument | null, DBError>>;
+  ): Promise<Result<Conversation | null, DBError>>;
 
   findActiveConversationByArtefact(
     artefactId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<ConversationDocument | null, DBError>>;
+  ): Promise<Result<Conversation | null, DBError>>;
 
   findActiveConversationsByArtefacts(
     artefactIds: Types.ObjectId[],
     session?: ClientSession
-  ): Promise<Result<Map<string, ConversationDocument>, DBError>>;
+  ): Promise<Result<Map<string, Conversation>, DBError>>;
 
   // Message methods
   createMessage(
     data: CreateMessageData,
     session?: ClientSession
-  ): Promise<Result<MessageDocument, DBError>>;
+  ): Promise<Result<Message, DBError>>;
 
   findMessageById(
     messageId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<MessageDocument | null, DBError>>;
+  ): Promise<Result<Message | null, DBError>>;
 
   /**
    * Find messages by their xids, scoped to a specific user.
@@ -97,13 +97,13 @@ export interface IConversationsRepository {
     xids: string[],
     userId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<MessageDocument[], DBError>>;
+  ): Promise<Result<Message[], DBError>>;
 
   updateMessage(
     messageId: Types.ObjectId,
     data: UpdateMessageData,
     session?: ClientSession
-  ): Promise<Result<MessageDocument | null, DBError>>;
+  ): Promise<Result<Message | null, DBError>>;
 
   listMessages(
     query: ListMessagesQuery,

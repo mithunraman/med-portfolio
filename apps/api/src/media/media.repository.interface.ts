@@ -1,7 +1,7 @@
 import { MediaRefCollection, MediaStatus, MediaType } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
 import type { Result } from '../common/utils/result.util';
-import type { MediaDocument } from './schemas/media.schema';
+import type { Media } from './schemas/media.schema';
 
 export const MEDIA_REPOSITORY = Symbol('MEDIA_REPOSITORY');
 
@@ -27,15 +27,15 @@ export interface UpdateMediaStatusData {
 }
 
 export interface IMediaRepository {
-  create(data: CreateMediaData): Promise<Result<MediaDocument, DBError>>;
+  create(data: CreateMediaData): Promise<Result<Media, DBError>>;
 
-  findByXid(xid: string, userId: Types.ObjectId): Promise<Result<MediaDocument | null, DBError>>;
+  findByXid(xid: string, userId: Types.ObjectId): Promise<Result<Media | null, DBError>>;
 
-  findByXidInternal(xid: string): Promise<Result<MediaDocument | null, DBError>>;
+  findByXidInternal(xid: string): Promise<Result<Media | null, DBError>>;
 
   updateStatus(
     xid: string,
     data: UpdateMediaStatusData,
     session?: ClientSession
-  ): Promise<Result<MediaDocument | null, DBError>>;
+  ): Promise<Result<Media | null, DBError>>;
 }

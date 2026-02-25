@@ -6,9 +6,9 @@ import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from '../conversations/conversations.repository.interface';
-import { MessageDocument } from '../conversations/schemas/message.schema';
+import { Message } from '../conversations/schemas/message.schema';
 import { MediaService } from '../media/media.service';
-import { MediaDocument } from '../media/schemas/media.schema';
+import { Media } from '../media/schemas/media.schema';
 import { CleaningStage } from './stages/cleaning.stage';
 import { StageContext } from './stages/stage.interface';
 import { TranscriptionStage, TranscriptionStageResult } from './stages/transcription.stage';
@@ -52,7 +52,7 @@ export class ProcessingService {
       messageId: message._id,
       conversationId: message.conversation,
       specialty: Specialty.GP, // Default for now, could get from user
-      mediaType: message.media ? (message.media as unknown as MediaDocument).mediaType : null,
+      mediaType: message.media ? (message.media as unknown as Media).mediaType : null,
     };
 
     try {
@@ -76,11 +76,11 @@ export class ProcessingService {
    * Note: PII redaction is handled by AssemblyAI during transcription
    */
   private async processAudioMessage(
-    message: MessageDocument,
+    message: Message,
     context: StageContext
   ): Promise<void> {
     const messageId = message._id;
-    const media = message.media as unknown as MediaDocument;
+    const media = message.media as unknown as Media;
 
     // Update status to TRANSCRIBING
     await this.updateStatus(messageId, MessageProcessingStatus.TRANSCRIBING);
@@ -121,7 +121,7 @@ export class ProcessingService {
    * Note: Text from user input doesn't need transcription or PII redaction
    * (user is responsible for not including PII in manual text input)
    */
-  private async processTextMessage(message: MessageDocument, context: StageContext): Promise<void> {
+  private async processTextMessage(message: Message, context: StageContext): Promise<void> {
     const messageId = message._id;
 
     // Update status to CLEANING

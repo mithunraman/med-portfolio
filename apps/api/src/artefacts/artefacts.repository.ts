@@ -24,21 +24,23 @@ export class ArtefactsRepository implements IArtefactsRepository {
   async upsertArtefact(
     data: UpsertArtefactData,
     session?: ClientSession
-  ): Promise<Result<ArtefactDocument, DBError>> {
+  ): Promise<Result<Artefact, DBError>> {
     try {
-      const artefact = await this.artefactModel.findOneAndUpdate(
-        { artefactId: data.artefactId },
-        {
-          $setOnInsert: {
-            artefactId: data.artefactId,
-            userId: data.userId,
-            specialty: data.specialty,
-            status: ArtefactStatus.DRAFT,
-            title: data.title,
+      const artefact = await this.artefactModel
+        .findOneAndUpdate(
+          { artefactId: data.artefactId },
+          {
+            $setOnInsert: {
+              artefactId: data.artefactId,
+              userId: data.userId,
+              specialty: data.specialty,
+              status: ArtefactStatus.DRAFT,
+              title: data.title,
+            },
           },
-        },
-        { upsert: true, new: true, session }
-      );
+          { upsert: true, new: true, session }
+        )
+        .lean();
       return ok(artefact);
     } catch (error) {
       this.logger.error('Failed to upsert artefact', error);
@@ -71,6 +73,7 @@ export class ArtefactsRepository implements IArtefactsRepository {
         .find(filter)
         .sort({ _id: -1 })
         .limit(query.limit)
+        .lean()
         .session(session || null);
 
       return ok({ artefacts });

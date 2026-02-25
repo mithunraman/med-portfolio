@@ -1,9 +1,9 @@
 import type { Message, MessageMedia } from '@acme/shared';
-import type { MediaDocument } from '../../media/schemas/media.schema';
-import type { MessageDocument } from '../schemas/message.schema';
+import type { Media } from '../../media/schemas/media.schema';
+import type { Message as MessageSchema } from '../schemas/message.schema';
 
 export function toMessageDto(
-  doc: MessageDocument,
+  doc: MessageSchema,
   conversationXid: string,
   mediaData: MessageMedia | null = null
 ): Message {
@@ -23,12 +23,12 @@ export function toMessageDto(
 }
 
 /**
- * Build the media payload from a populated MessageDocument.
+ * Build the media payload from a populated Message with media.
  * The caller is responsible for providing the presigned audioUrl (or null).
  */
-export function buildMediaData(doc: MessageDocument, audioUrl: string | null): MessageMedia | null {
+export function buildMediaData(doc: MessageSchema, audioUrl: string | null): MessageMedia | null {
   if (!doc.media) return null;
-  const mediaDoc = doc.media as unknown as MediaDocument;
+  const mediaDoc = doc.media as unknown as Media;
   return {
     id: mediaDoc.xid,
     mimeType: mediaDoc.mimeType,

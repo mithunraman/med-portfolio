@@ -1,8 +1,16 @@
-import type { Message, MessageListResponse } from '@acme/shared';
+import type {
+  CapabilitySelectionMetadata,
+  ClassificationSelectionMetadata,
+  DraftReviewMetadata,
+  Message,
+  MessageListResponse,
+} from '@acme/shared';
 import {
+  InteractionType,
   MediaRefCollection,
   MediaStatus,
   MediaType,
+  MessageMetadataType,
   MessageProcessingStatus,
   MessageRole,
   MessageType,
@@ -285,7 +293,8 @@ export class ConversationsService {
         }
 
         await this.createAuditMessage(conversationOid, userOid, {
-          type: 'classification_selection',
+          type: MessageMetadataType.CLASSIFICATION_SELECTION,
+          interactionType: InteractionType.DISPLAY_ONLY,
           entryType,
         });
 
@@ -310,7 +319,8 @@ export class ConversationsService {
         }
 
         await this.createAuditMessage(conversationOid, userOid, {
-          type: 'capability_selection',
+          type: MessageMetadataType.CAPABILITY_SELECTION,
+          interactionType: InteractionType.DISPLAY_ONLY,
           selectedCodes,
         });
 
@@ -329,7 +339,8 @@ export class ConversationsService {
         }
 
         await this.createAuditMessage(conversationOid, userOid, {
-          type: 'draft_review',
+          type: MessageMetadataType.DRAFT_REVIEW,
+          interactionType: InteractionType.DISPLAY_ONLY,
           approved,
         });
 
@@ -379,15 +390,21 @@ export class ConversationsService {
   private async createAuditMessage(
     conversationId: Types.ObjectId,
     userId: Types.ObjectId,
-    metadata: Record<string, unknown>
+    metadata: ClassificationSelectionMetadata | CapabilitySelectionMetadata | DraftReviewMetadata
   ): Promise<void> {
     let content: string;
-    if (metadata.type === 'classification_selection') {
-      content = `Selected: ${metadata.entryType}`;
-    } else if (metadata.type === 'capability_selection') {
-      content = `Capabilities confirmed: ${(metadata.selectedCodes as string[]).join(', ')}`;
-    } else {
-      content = `Draft ${metadata.approved ? 'approved' : 'rejected'}`;
+    switch (metadata.type) {
+      case MessageMetadataType.CLASSIFICATION_SELECTION:
+        content = `Selected: ${metadata.entryType}`;
+        break;
+      case MessageMetadataType.CAPABILITY_SELECTION:
+        content = `Capabilities confirmed: ${metadata.selectedCodes.join(', ')}`;
+        break;
+      case MessageMetadataType.DRAFT_REVIEW:
+        content = `Draft ${metadata.approved ? 'approved' : 'rejected'}`;
+        break;
+      default:
+        content = `Action recorded`;
     }
 
     await this.conversationsRepository.createMessage({

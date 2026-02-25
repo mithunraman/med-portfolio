@@ -1,15 +1,9 @@
+import type { CapabilityOption } from '@acme/shared';
 import { interrupt } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
 import { PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('PresentCapabilitiesNode');
-
-export interface CapabilityOption {
-  code: string;
-  name: string;
-  confidence: number;
-  evidence: string[];
-}
 
 interface CapabilitiesResumeValue {
   selectedCodes: string[];

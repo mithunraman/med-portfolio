@@ -1,5 +1,6 @@
 import {
   ConversationStatus,
+  type MessageMetadata,
   MessageProcessingStatus,
   MessageRole,
   MessageType,
@@ -64,7 +65,7 @@ export async function createTestMessage(
     cleanedContent: string | null;
     content: string | null;
     processingStatus: MessageProcessingStatus;
-    metadata: Record<string, unknown> | null;
+    metadata: MessageMetadata | null;
   }> = {}
 ): Promise<MessageDocument> {
   const [doc] = await messageModel.create([

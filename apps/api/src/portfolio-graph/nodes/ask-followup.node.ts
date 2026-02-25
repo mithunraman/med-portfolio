@@ -1,4 +1,4 @@
-import { Specialty, TemplateSection } from '@acme/shared';
+import { type FollowupQuestion, Specialty, TemplateSection } from '@acme/shared';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { interrupt } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
@@ -69,15 +69,6 @@ function formatMissingSectionBlock(sections: TemplateSection[]): string {
         `Default question: ${s.extractionQuestion}`
     )
     .join('\n\n');
-}
-
-/* ------------------------------------------------------------------ */
-/*  Exported types                                                     */
-/* ------------------------------------------------------------------ */
-
-export interface FollowupQuestion {
-  sectionId: string;
-  question: string;
 }
 
 /* ------------------------------------------------------------------ */

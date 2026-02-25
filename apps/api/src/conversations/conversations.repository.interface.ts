@@ -1,4 +1,4 @@
-import { MessageProcessingStatus, MessageRole, MessageType } from '@acme/shared';
+import { type MessageMetadata, MessageProcessingStatus, MessageRole, MessageType } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
 import type { Result } from '../common/utils/result.util';
 import type { ConversationDocument } from './schemas/conversation.schema';
@@ -28,7 +28,7 @@ export interface CreateMessageData {
   content?: string | null;
   processingStatus?: MessageProcessingStatus;
   media?: Types.ObjectId | null;
-  metadata?: Record<string, unknown> | null;
+  metadata?: MessageMetadata | null;
 }
 
 export interface UpdateMessageData {

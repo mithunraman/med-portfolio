@@ -1,4 +1,4 @@
-import { MessageProcessingStatus, MessageRole, MessageType } from '@acme/shared';
+import { type MessageMetadata, MessageProcessingStatus, MessageRole, MessageType } from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
@@ -64,7 +64,7 @@ export class Message {
 
   // Structured metadata for special message types (e.g. classification options)
   @Prop({ type: Object, default: null })
-  metadata!: Record<string, unknown> | null;
+  metadata!: MessageMetadata | null;
 
   // Transcription metadata (populated after audio transcription)
   @Prop({ type: TranscriptionMetadata, default: null })

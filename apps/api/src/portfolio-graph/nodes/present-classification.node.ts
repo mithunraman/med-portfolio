@@ -1,17 +1,10 @@
-import { Specialty } from '@acme/shared';
+import { type ClassificationOption, Specialty } from '@acme/shared';
 import { interrupt } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import { PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('PresentClassificationNode');
-
-export interface ClassificationOption {
-  code: string;
-  label: string;
-  confidence: number;
-  reasoning: string;
-}
 
 interface ClassificationResumeValue {
   entryType: string;

@@ -1,4 +1,10 @@
 import {
+  type CapabilityOptionsMetadata,
+  type CapabilitySelectionMetadata,
+  type ClassificationOptionsMetadata,
+  type ClassificationSelectionMetadata,
+  type FollowupQuestionsMetadata,
+  MessageMetadataType,
   MessageProcessingStatus,
   MessageRole,
   MessageType,
@@ -6,27 +12,27 @@ import {
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import type { GraphStatus } from '../../portfolio-graph/portfolio-graph.service';
 import {
-  createTestConversation,
   createCompleteUserMessage,
   createPendingUserMessage,
+  createTestConversation,
   createTestMessage,
   getMessagesForConversation,
   markMessageComplete,
   TEST_USER_ID_STR,
 } from './helpers/factories';
 import {
-  SequentialLLMMock,
-  classifyResponse,
   allCoveredResponse,
-  someMissingResponse,
+  classifyResponse,
   followupQuestionsResponse,
-  tagCapabilitiesResponse,
-  reflectResponse,
   generatePdpResponse,
+  reflectResponse,
+  SequentialLLMMock,
+  someMissingResponse,
+  tagCapabilitiesResponse,
 } from './helpers/llm-mock';
 import {
-  createTestHarness,
   cleanupDatabase,
+  createTestHarness,
   destroyTestHarness,
   TestHarness,
 } from './helpers/test-setup';
@@ -55,7 +61,7 @@ async function waitForGraphStable(
   afterResume = false,
   timeoutMs = 10000,
   pollIntervalMs = 100,
-  settleMs = 300,
+  settleMs = 300
 ): Promise<GraphStatus> {
   const deadline = Date.now() + timeoutMs;
 
@@ -151,22 +157,24 @@ describe('Conversations Integration Tests', () => {
       );
 
       // ── Enqueue all 8 LLM responses upfront ──
-      llmMock.enqueue(classifyResponse());                                                          // 0: classify
-      llmMock.enqueue(someMissingResponse(['reflection']));                                         // 1: check_completeness (missing)
-      llmMock.enqueue(                                                                               // 2: ask_followup (initial)
+      llmMock.enqueue(classifyResponse()); // 0: classify
+      llmMock.enqueue(someMissingResponse(['reflection'])); // 1: check_completeness (missing)
+      llmMock.enqueue(
+        // 2: ask_followup (initial)
         followupQuestionsResponse([
           { sectionId: 'reflection', question: 'What did you learn from this case?' },
         ])
       );
-      llmMock.enqueue(                                                                               // 3: ask_followup (replay on resume)
+      llmMock.enqueue(
+        // 3: ask_followup (replay on resume)
         followupQuestionsResponse([
           { sectionId: 'reflection', question: 'What did you learn from this case?' },
         ])
       );
-      llmMock.enqueue(allCoveredResponse());                                                        // 4: check_completeness (all covered)
-      llmMock.enqueue(tagCapabilitiesResponse());                                                   // 5: tag_capabilities
-      llmMock.enqueue(reflectResponse());                                                           // 6: reflect
-      llmMock.enqueue(generatePdpResponse());                                                       // 7: generate_pdp
+      llmMock.enqueue(allCoveredResponse()); // 4: check_completeness (all covered)
+      llmMock.enqueue(tagCapabilitiesResponse()); // 5: tag_capabilities
+      llmMock.enqueue(reflectResponse()); // 6: reflect
+      llmMock.enqueue(generatePdpResponse()); // 7: generate_pdp
 
       // ── Step 1: Start analysis → classify → pause at present_classification ──
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
@@ -178,11 +186,14 @@ describe('Conversations Integration Tests', () => {
       // Classification options ASSISTANT message created
       const msgs1 = await getMessagesForConversation(conv._id);
       const classificationMsg = msgs1.find(
-        (m) => m.role === MessageRole.ASSISTANT && (m.metadata as any)?.type === 'classification_options'
+        (m) =>
+          m.role === MessageRole.ASSISTANT &&
+          m.metadata?.type === MessageMetadataType.CLASSIFICATION_OPTIONS
       );
       expect(classificationMsg).toBeDefined();
       expect(classificationMsg!.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
-      expect((classificationMsg!.metadata as any).options).toBeInstanceOf(Array);
+      const classificationMeta = classificationMsg!.metadata as ClassificationOptionsMetadata;
+      expect(classificationMeta.options).toBeInstanceOf(Array);
 
       // ── Step 2: Resume classification → completeness(missing) → ask_followup ──
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
@@ -198,23 +209,29 @@ describe('Conversations Integration Tests', () => {
       // Classification audit message created
       const msgs2 = await getMessagesForConversation(conv._id);
       const classificationAudit = msgs2.find(
-        (m) => m.role === MessageRole.SYSTEM && (m.metadata as any)?.type === 'classification_selection'
+        (m) =>
+          m.role === MessageRole.SYSTEM &&
+          m.metadata?.type === MessageMetadataType.CLASSIFICATION_SELECTION
       );
       expect(classificationAudit).toBeDefined();
       expect(classificationAudit!.content).toBe('Selected: CLINICAL_CASE_REVIEW');
 
       // Follow-up ASSISTANT message with questions
       const followupMsg = msgs2.find(
-        (m) => m.role === MessageRole.ASSISTANT && (m.metadata as any)?.type === 'followup_questions'
+        (m) =>
+          m.role === MessageRole.ASSISTANT &&
+          m.metadata?.type === MessageMetadataType.FOLLOWUP_QUESTIONS
       );
       expect(followupMsg).toBeDefined();
-      expect((followupMsg!.metadata as any).questions).toHaveLength(1);
-      expect((followupMsg!.metadata as any).questions[0].sectionId).toBe('reflection');
-      expect((followupMsg!.metadata as any).followUpRound).toBe(1);
+      const followupMeta = followupMsg!.metadata as FollowupQuestionsMetadata;
+      expect(followupMeta.questions).toHaveLength(1);
+      expect(followupMeta.questions[0].sectionId).toBe('reflection');
+      expect(followupMeta.followUpRound).toBe(1);
 
       // ── Step 3: User answers follow-up → resume → completeness(covered) → tag_capabilities → present_capabilities ──
       await harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, {
-        content: 'I learned about shared decision making in chronic disease management. I started metformin and discussed lifestyle changes.',
+        content:
+          'I learned about shared decision making in chronic disease management. I started metformin and discussed lifestyle changes.',
       });
       const msgsAfterSend = await getMessagesForConversation(conv._id);
       const lastUserMsg = msgsAfterSend.filter((m) => m.role === MessageRole.USER).pop()!;
@@ -232,23 +249,28 @@ describe('Conversations Integration Tests', () => {
       // Capability options ASSISTANT message created
       const msgs3 = await getMessagesForConversation(conv._id);
       const capabilityMsg = msgs3.find(
-        (m) => m.role === MessageRole.ASSISTANT && (m.metadata as any)?.type === 'capability_options'
+        (m) =>
+          m.role === MessageRole.ASSISTANT &&
+          m.metadata?.type === MessageMetadataType.CAPABILITY_OPTIONS
       );
       expect(capabilityMsg).toBeDefined();
       expect(capabilityMsg!.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
 
-      const capOptions = (capabilityMsg!.metadata as any).options;
+      const capMeta = capabilityMsg!.metadata as CapabilityOptionsMetadata;
+      const capOptions = capMeta.options;
       expect(capOptions).toHaveLength(2);
       expect(capOptions[0]).toMatchObject({ code: 'C-06', confidence: 0.88 });
       expect(capOptions[1]).toMatchObject({ code: 'C-08', confidence: 0.75 });
 
       // tag_capabilities prompt (call index 5) includes transcript and capability codes
       const tagCall = llmMock.calls[5];
-      const tagSystemContent = tagCall.messages.find((m) => m._getType() === 'system')!.content as string;
+      const tagSystemContent = tagCall.messages.find((m) => m._getType() === 'system')!
+        .content as string;
       expect(tagSystemContent).toContain('C-06');
       expect(tagSystemContent).toContain('C-01');
 
-      const tagHumanContent = tagCall.messages.find((m) => m._getType() === 'human')!.content as string;
+      const tagHumanContent = tagCall.messages.find((m) => m._getType() === 'human')!
+        .content as string;
       expect(tagHumanContent).toContain('type 2 diabetes');
 
       // ── Step 4: Resume capabilities (select only C-06) → reflect → generate_pdp → present_draft ──
@@ -268,11 +290,14 @@ describe('Conversations Integration Tests', () => {
 
       // Capability selection audit message
       const capabilityAudit = allMsgs.find(
-        (m) => m.role === MessageRole.SYSTEM && (m.metadata as any)?.type === 'capability_selection'
+        (m) =>
+          m.role === MessageRole.SYSTEM &&
+          m.metadata?.type === MessageMetadataType.CAPABILITY_SELECTION
       );
       expect(capabilityAudit).toBeDefined();
       expect(capabilityAudit!.content).toBe('Capabilities confirmed: C-06');
-      expect((capabilityAudit!.metadata as any).selectedCodes).toEqual(['C-06']);
+      const capAuditMeta = capabilityAudit!.metadata as CapabilitySelectionMetadata;
+      expect(capAuditMeta.selectedCodes).toEqual(['C-06']);
 
       // ── Final assertions: graph state ──
       const graphState = await harness.graphService.getGraphState(conv._id.toString());
@@ -307,7 +332,8 @@ describe('Conversations Integration Tests', () => {
 
       // reflect prompt (call index 6) includes selected capability C-06
       const reflectCall = llmMock.calls[6];
-      const reflectSystem = reflectCall.messages.find((m) => m._getType() === 'system')!.content as string;
+      const reflectSystem = reflectCall.messages.find((m) => m._getType() === 'system')!
+        .content as string;
       expect(reflectSystem).toContain('C-06');
 
       // generate_pdp prompt (call index 7) receives the reflection
@@ -323,35 +349,39 @@ describe('Conversations Integration Tests', () => {
 
       // LLM calls include ask_followup replay on each resume (LangGraph re-executes the full node):
       // classify → completeness(missing 3) → followup → followup(replay) → completeness(missing 1) → followup → followup(replay) → completeness(covered)
-      llmMock.enqueue(classifyResponse());                                                           // 1: classify
-      llmMock.enqueue(someMissingResponse(['clinical_reasoning', 'reflection', 'outcome']));         // 2: check_completeness
-      llmMock.enqueue(                                                                                // 3: ask_followup (initial)
+      llmMock.enqueue(classifyResponse()); // 1: classify
+      llmMock.enqueue(someMissingResponse(['clinical_reasoning', 'reflection', 'outcome'])); // 2: check_completeness
+      llmMock.enqueue(
+        // 3: ask_followup (initial)
         followupQuestionsResponse([
           { sectionId: 'clinical_reasoning', question: 'What was your reasoning?' },
           { sectionId: 'reflection', question: 'What did you learn?' },
           { sectionId: 'outcome', question: 'What was the outcome?' },
         ])
       );
-      llmMock.enqueue(                                                                                // 4: ask_followup (replay on resume)
+      llmMock.enqueue(
+        // 4: ask_followup (replay on resume)
         followupQuestionsResponse([
           { sectionId: 'clinical_reasoning', question: 'What was your reasoning?' },
           { sectionId: 'reflection', question: 'What did you learn?' },
           { sectionId: 'outcome', question: 'What was the outcome?' },
         ])
       );
-      llmMock.enqueue(someMissingResponse(['reflection']));                                          // 5: check_completeness
-      llmMock.enqueue(                                                                                // 6: ask_followup (initial, round 2)
+      llmMock.enqueue(someMissingResponse(['reflection'])); // 5: check_completeness
+      llmMock.enqueue(
+        // 6: ask_followup (initial, round 2)
         followupQuestionsResponse([
           { sectionId: 'reflection', question: 'Can you reflect more on what you learned?' },
         ])
       );
-      llmMock.enqueue(                                                                                // 7: ask_followup (replay on resume, round 2)
+      llmMock.enqueue(
+        // 7: ask_followup (replay on resume, round 2)
         followupQuestionsResponse([
           { sectionId: 'reflection', question: 'Can you reflect more on what you learned?' },
         ])
       );
-      llmMock.enqueue(allCoveredResponse());                                                         // 8: check_completeness
-      llmMock.enqueue(tagCapabilitiesResponse());                                                    // 9: tag_capabilities
+      llmMock.enqueue(allCoveredResponse()); // 8: check_completeness
+      llmMock.enqueue(tagCapabilitiesResponse()); // 9: tag_capabilities
 
       // Start → classify → pause
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
@@ -401,11 +431,13 @@ describe('Conversations Integration Tests', () => {
       // 2 follow-up ASSISTANT messages with different rounds
       const allMsgs = await getMessagesForConversation(conv._id);
       const followupMsgs = allMsgs.filter(
-        (m) => m.role === MessageRole.ASSISTANT && (m.metadata as any)?.type === 'followup_questions'
+        (m) =>
+          m.role === MessageRole.ASSISTANT &&
+          m.metadata?.type === MessageMetadataType.FOLLOWUP_QUESTIONS
       );
       expect(followupMsgs).toHaveLength(2);
-      expect((followupMsgs[0].metadata as any).followUpRound).toBe(1);
-      expect((followupMsgs[1].metadata as any).followUpRound).toBe(2);
+      expect((followupMsgs[0].metadata as FollowupQuestionsMetadata).followUpRound).toBe(1);
+      expect((followupMsgs[1].metadata as FollowupQuestionsMetadata).followUpRound).toBe(2);
 
       expect(llmMock.callCount).toBe(9);
     });
@@ -417,23 +449,27 @@ describe('Conversations Integration Tests', () => {
       // LLM calls include ask_followup replay on each resume:
       // classify → completeness(missing) → followup → followup(replay) → completeness(missing) → followup → followup(replay) → completeness(missing)
       // After MAX_FOLLOWUP_ROUNDS (2), completenessRouter routes to tag_capabilities
-      llmMock.enqueue(classifyResponse());                                                           // 1: classify
-      llmMock.enqueue(someMissingResponse(['reflection']));                                          // 2: check_completeness
-      llmMock.enqueue(                                                                                // 3: ask_followup (initial)
+      llmMock.enqueue(classifyResponse()); // 1: classify
+      llmMock.enqueue(someMissingResponse(['reflection'])); // 2: check_completeness
+      llmMock.enqueue(
+        // 3: ask_followup (initial)
         followupQuestionsResponse([{ sectionId: 'reflection', question: 'What did you learn?' }])
       );
-      llmMock.enqueue(                                                                                // 4: ask_followup (replay on resume)
+      llmMock.enqueue(
+        // 4: ask_followup (replay on resume)
         followupQuestionsResponse([{ sectionId: 'reflection', question: 'What did you learn?' }])
       );
-      llmMock.enqueue(someMissingResponse(['reflection']));                                          // 5: check_completeness
-      llmMock.enqueue(                                                                                // 6: ask_followup (initial, round 2)
+      llmMock.enqueue(someMissingResponse(['reflection'])); // 5: check_completeness
+      llmMock.enqueue(
+        // 6: ask_followup (initial, round 2)
         followupQuestionsResponse([{ sectionId: 'reflection', question: 'Please reflect more.' }])
       );
-      llmMock.enqueue(                                                                                // 7: ask_followup (replay on resume, round 2)
+      llmMock.enqueue(
+        // 7: ask_followup (replay on resume, round 2)
         followupQuestionsResponse([{ sectionId: 'reflection', question: 'Please reflect more.' }])
       );
-      llmMock.enqueue(someMissingResponse(['reflection']));                                          // 8: check_completeness (still missing, but max rounds)
-      llmMock.enqueue(tagCapabilitiesResponse());                                                    // 9: tag_capabilities
+      llmMock.enqueue(someMissingResponse(['reflection'])); // 8: check_completeness (still missing, but max rounds)
+      llmMock.enqueue(tagCapabilitiesResponse()); // 9: tag_capabilities
 
       // Start → classify → pause
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
@@ -765,7 +801,9 @@ describe('Conversations Integration Tests', () => {
 
       const msgs = await getMessagesForConversation(conv._id);
       const auditMsg = msgs.find(
-        (m) => m.role === MessageRole.SYSTEM && (m.metadata as any)?.type === 'classification_selection'
+        (m) =>
+          m.role === MessageRole.SYSTEM &&
+          m.metadata?.type === MessageMetadataType.CLASSIFICATION_SELECTION
       );
       expect(auditMsg).toBeDefined();
       expect(auditMsg!.content).toBe('Selected: CLINICAL_CASE_REVIEW');
@@ -793,9 +831,10 @@ describe('Conversations Integration Tests', () => {
       expect(assistantMsg!.role).toBe(MessageRole.ASSISTANT);
       expect(assistantMsg!.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
       expect(assistantMsg!.messageType).toBe(MessageType.TEXT);
-      expect((assistantMsg!.metadata as any).type).toBe('classification_options');
-      expect((assistantMsg!.metadata as any).options).toBeInstanceOf(Array);
-      expect((assistantMsg!.metadata as any).options.length).toBeGreaterThan(0);
+      expect(assistantMsg!.metadata?.type).toBe(MessageMetadataType.CLASSIFICATION_OPTIONS);
+      const f1Meta = assistantMsg!.metadata as ClassificationOptionsMetadata;
+      expect(f1Meta.options).toBeInstanceOf(Array);
+      expect(f1Meta.options.length).toBeGreaterThan(0);
     });
 
     it('F2. Follow-up ASSISTANT messages have questions array', async () => {
@@ -820,15 +859,18 @@ describe('Conversations Integration Tests', () => {
 
       const msgs = await getMessagesForConversation(conv._id);
       const followupMsg = msgs.find(
-        (m) => m.role === MessageRole.ASSISTANT && (m.metadata as any)?.type === 'followup_questions'
+        (m) =>
+          m.role === MessageRole.ASSISTANT &&
+          m.metadata?.type === MessageMetadataType.FOLLOWUP_QUESTIONS
       );
 
       expect(followupMsg).toBeDefined();
       expect(followupMsg!.role).toBe(MessageRole.ASSISTANT);
-      expect((followupMsg!.metadata as any).questions).toHaveLength(1);
-      expect((followupMsg!.metadata as any).questions[0].sectionId).toBe('reflection');
-      expect((followupMsg!.metadata as any).followUpRound).toBe(1);
-      expect((followupMsg!.metadata as any).entryType).toBe('CLINICAL_CASE_REVIEW');
+      const f2Meta = followupMsg!.metadata as FollowupQuestionsMetadata;
+      expect(f2Meta.questions).toHaveLength(1);
+      expect(f2Meta.questions[0].sectionId).toBe('reflection');
+      expect(f2Meta.followUpRound).toBe(1);
+      expect(f2Meta.entryType).toBe('CLINICAL_CASE_REVIEW');
     });
 
     it('F3. SYSTEM audit messages on classification selection', async () => {
@@ -855,8 +897,9 @@ describe('Conversations Integration Tests', () => {
       expect(systemMsgs).toHaveLength(1);
       expect(systemMsgs[0].content).toBe('Selected: CLINICAL_CASE_REVIEW');
       expect(systemMsgs[0].processingStatus).toBe(MessageProcessingStatus.COMPLETE);
-      expect((systemMsgs[0].metadata as any).type).toBe('classification_selection');
-      expect((systemMsgs[0].metadata as any).entryType).toBe('CLINICAL_CASE_REVIEW');
+      expect(systemMsgs[0].metadata?.type).toBe(MessageMetadataType.CLASSIFICATION_SELECTION);
+      const f3Meta = systemMsgs[0].metadata as ClassificationSelectionMetadata;
+      expect(f3Meta.entryType).toBe('CLINICAL_CASE_REVIEW');
     });
 
     it('F4. gather_context only reads USER COMPLETE messages', async () => {

@@ -1,13 +1,10 @@
 export { createGatherContextNode } from './gather-context.node';
 export { createClassifyNode } from './classify.node';
 export { presentClassificationNode } from './present-classification.node';
-export type { ClassificationOption } from './present-classification.node';
 export { createCheckCompletenessNode } from './check-completeness.node';
 export { createAskFollowupNode } from './ask-followup.node';
-export type { FollowupQuestion } from './ask-followup.node';
 export { createTagCapabilitiesNode } from './tag-capabilities.node';
 export { presentCapabilitiesNode } from './present-capabilities.node';
-export type { CapabilityOption } from './present-capabilities.node';
 export { createReflectNode } from './reflect.node';
 export { createGeneratePdpNode } from './generate-pdp.node';
 export { qualityCheckNode } from './quality-check.node';

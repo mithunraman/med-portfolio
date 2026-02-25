@@ -1,4 +1,15 @@
-import { MessageProcessingStatus, MessageRole, MessageType } from '@acme/shared';
+import {
+  type CapabilityOption,
+  type CapabilityOptionsMetadata,
+  type ClassificationOption,
+  type ClassificationOptionsMetadata,
+  type FollowupQuestionsMetadata,
+  InteractionType,
+  MessageMetadataType,
+  MessageProcessingStatus,
+  MessageRole,
+  MessageType,
+} from '@acme/shared';
 import { Command } from '@langchain/langgraph';
 import { MongoDBSaver } from '@langchain/langgraph-checkpoint-mongodb';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
@@ -9,7 +20,6 @@ import {
   IConversationsRepository,
 } from '../conversations/conversations.repository.interface';
 import { LLMService } from '../llm';
-import type { CapabilityOption, ClassificationOption } from './nodes';
 import { buildPortfolioGraph } from './portfolio-graph.builder';
 
 /**
@@ -259,11 +269,12 @@ export class PortfolioGraphService implements OnModuleInit {
           `Based on your input, I think this is most likely:\n\n${optionLines}\n\n` +
           `Please select the entry type, or choose a different one.`;
 
-        const metadata = {
-          type: 'classification_options' as const,
+        const metadata: ClassificationOptionsMetadata = {
+          type: MessageMetadataType.CLASSIFICATION_OPTIONS,
+          interactionType: InteractionType.SINGLE_SELECT,
           options,
-          suggestedEntryType: interruptValue.suggestedEntryType,
-          reasoning: interruptValue.reasoning,
+          suggestedEntryType: interruptValue.suggestedEntryType as string,
+          reasoning: interruptValue.reasoning as string,
         };
 
         const result = await this.conversationsRepository.createMessage({
@@ -298,12 +309,13 @@ export class PortfolioGraphService implements OnModuleInit {
           `${questionLines}\n\n` +
           `Take your time — you can answer all of these in one go or one at a time.`;
 
-        const followupMetadata = {
-          type: 'followup_questions' as const,
+        const followupMetadata: FollowupQuestionsMetadata = {
+          type: MessageMetadataType.FOLLOWUP_QUESTIONS,
+          interactionType: InteractionType.FREE_TEXT,
           questions,
-          missingSections: interruptValue.missingSections,
+          missingSections: interruptValue.missingSections as string[],
           followUpRound,
-          entryType: interruptValue.entryType,
+          entryType: interruptValue.entryType as string,
         };
 
         const followupResult = await this.conversationsRepository.createMessage({
@@ -337,10 +349,11 @@ export class PortfolioGraphService implements OnModuleInit {
           `I've identified the following capabilities in your entry:\n\n${optionLines}\n\n` +
           `Please confirm which capabilities apply, or deselect any that don't fit.`;
 
-        const capMetadata = {
-          type: 'capability_options' as const,
+        const capMetadata: CapabilityOptionsMetadata = {
+          type: MessageMetadataType.CAPABILITY_OPTIONS,
+          interactionType: InteractionType.MULTI_SELECT,
           options,
-          entryType: interruptValue.entryType,
+          entryType: interruptValue.entryType as string,
         };
 
         const capResult = await this.conversationsRepository.createMessage({

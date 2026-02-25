@@ -12,6 +12,7 @@ import {
 } from '@acme/shared';
 import { Command } from '@langchain/langgraph';
 import { MongoDBSaver } from '@langchain/langgraph-checkpoint-mongodb';
+import type { MongoClient } from 'mongodb';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { Connection, Types } from 'mongoose';
@@ -57,15 +58,16 @@ export class PortfolioGraphService implements OnModuleInit {
 
   async onModuleInit() {
     // Get the native MongoDB client from the Mongoose connection.
-    // Cast needed because Mongoose may bundle a slightly different mongodb driver version
-    // than @langchain/langgraph-checkpoint-mongodb expects.
-    const client = this.connection.getClient() as any;
-    this.checkpointer = new MongoDBSaver({ client, dbName: this.connection.db!.databaseName });
+    // Cast through unknown because Mongoose may bundle a slightly different mongodb
+    // driver version than @langchain/langgraph-checkpoint-mongodb expects.
+    const client = this.connection.getClient() as unknown as MongoClient;
+    const db = this.connection.db;
+    if (!db) throw new Error('MongoDB not connected — cannot initialize checkpointer');
+    this.checkpointer = new MongoDBSaver({ client, dbName: db.databaseName });
 
     // The JS MongoDBSaver doesn't create indexes (unlike the Python version).
     // Add compound indexes matching its query patterns: getTuple() filters by
     // (thread_id, checkpoint_ns) and sorts by checkpoint_id desc.
-    const db = this.connection.db!;
     await Promise.all([
       db
         .collection('checkpoints')

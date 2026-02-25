@@ -140,7 +140,7 @@ function validateAndRank(
 
     validated.push({
       code: cap.code,
-      name: validCodes.get(cap.code)!,
+      name: validCodes.get(cap.code) ?? cap.name,
       evidence: cap.evidence,
       confidence: Math.round(cap.confidence * 100) / 100,
     });

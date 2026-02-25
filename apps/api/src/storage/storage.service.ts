@@ -21,17 +21,23 @@ export class StorageService {
     const accessKeyId = this.configService.get<string>('app.storage.accessKeyId');
     const secretAccessKey = this.configService.get<string>('app.storage.secretAccessKey');
 
+    if (!accessKeyId || !secretAccessKey) {
+      throw new Error('Missing storage credentials: accessKeyId or secretAccessKey');
+    }
+
     this.s3 = new S3Client({
       endpoint,
       region,
       credentials: {
-        accessKeyId: accessKeyId!,
-        secretAccessKey: secretAccessKey!,
+        accessKeyId,
+        secretAccessKey,
       },
       forcePathStyle: true, // Required for R2 and MinIO
     });
 
-    this.mediaBucket = this.configService.get<string>('app.storage.mediaBucket')!;
+    const mediaBucket = this.configService.get<string>('app.storage.mediaBucket');
+    if (!mediaBucket) throw new Error('Missing config: app.storage.mediaBucket');
+    this.mediaBucket = mediaBucket;
   }
 
   /**

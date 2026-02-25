@@ -43,6 +43,11 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Type-narrowing assertion — fails the test if value is nullish. */
+function assertDefined<T>(value: T | null | undefined): asserts value is T {
+  expect(value).toBeDefined();
+}
+
 /**
  * Poll graph status until it reaches a stable state (paused or completed).
  *
@@ -93,7 +98,7 @@ async function waitForGraphStable(
       const confirmed = await harness.graphService.getGraphStatus(conversationId);
       if (
         confirmed.status === status.status &&
-        (confirmed.status !== 'paused' || confirmed.node === (status as any).node)
+        (confirmed.status !== 'paused' || (status.status === 'paused' && confirmed.node === status.node))
       ) {
         return confirmed;
       }
@@ -190,9 +195,9 @@ describe('Conversations Integration Tests', () => {
           m.role === MessageRole.ASSISTANT &&
           m.metadata?.type === MessageMetadataType.CLASSIFICATION_OPTIONS
       );
-      expect(classificationMsg).toBeDefined();
-      expect(classificationMsg!.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
-      const classificationMeta = classificationMsg!.metadata as ClassificationOptionsMetadata;
+      assertDefined(classificationMsg);
+      expect(classificationMsg.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
+      const classificationMeta = classificationMsg.metadata as ClassificationOptionsMetadata;
       expect(classificationMeta.options).toBeInstanceOf(Array);
 
       // ── Step 2: Resume classification → completeness(missing) → ask_followup ──
@@ -213,8 +218,8 @@ describe('Conversations Integration Tests', () => {
           m.role === MessageRole.SYSTEM &&
           m.metadata?.type === MessageMetadataType.CLASSIFICATION_SELECTION
       );
-      expect(classificationAudit).toBeDefined();
-      expect(classificationAudit!.content).toBe('Selected: CLINICAL_CASE_REVIEW');
+      assertDefined(classificationAudit);
+      expect(classificationAudit.content).toBe('Selected: CLINICAL_CASE_REVIEW');
 
       // Follow-up ASSISTANT message with questions
       const followupMsg = msgs2.find(
@@ -222,8 +227,8 @@ describe('Conversations Integration Tests', () => {
           m.role === MessageRole.ASSISTANT &&
           m.metadata?.type === MessageMetadataType.FOLLOWUP_QUESTIONS
       );
-      expect(followupMsg).toBeDefined();
-      const followupMeta = followupMsg!.metadata as FollowupQuestionsMetadata;
+      assertDefined(followupMsg);
+      const followupMeta = followupMsg.metadata as FollowupQuestionsMetadata;
       expect(followupMeta.questions).toHaveLength(1);
       expect(followupMeta.questions[0].sectionId).toBe('reflection');
       expect(followupMeta.followUpRound).toBe(1);
@@ -234,8 +239,10 @@ describe('Conversations Integration Tests', () => {
           'I learned about shared decision making in chronic disease management. I started metformin and discussed lifestyle changes.',
       });
       const msgsAfterSend = await getMessagesForConversation(conv._id);
-      const lastUserMsg = msgsAfterSend.filter((m) => m.role === MessageRole.USER).pop()!;
-      await markMessageComplete(lastUserMsg._id, lastUserMsg.rawContent!);
+      const lastUserMsg = msgsAfterSend.filter((m) => m.role === MessageRole.USER).pop();
+      assertDefined(lastUserMsg);
+      assertDefined(lastUserMsg.rawContent);
+      await markMessageComplete(lastUserMsg._id, lastUserMsg.rawContent);
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
         type: 'resume',
@@ -253,10 +260,10 @@ describe('Conversations Integration Tests', () => {
           m.role === MessageRole.ASSISTANT &&
           m.metadata?.type === MessageMetadataType.CAPABILITY_OPTIONS
       );
-      expect(capabilityMsg).toBeDefined();
-      expect(capabilityMsg!.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
+      assertDefined(capabilityMsg);
+      expect(capabilityMsg.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
 
-      const capMeta = capabilityMsg!.metadata as CapabilityOptionsMetadata;
+      const capMeta = capabilityMsg.metadata as CapabilityOptionsMetadata;
       const capOptions = capMeta.options;
       expect(capOptions).toHaveLength(2);
       expect(capOptions[0]).toMatchObject({ code: 'C-06', confidence: 0.88 });
@@ -264,13 +271,15 @@ describe('Conversations Integration Tests', () => {
 
       // tag_capabilities prompt (call index 5) includes transcript and capability codes
       const tagCall = llmMock.calls[5];
-      const tagSystemContent = tagCall.messages.find((m) => m._getType() === 'system')!
-        .content as string;
+      const tagSystemMsg = tagCall.messages.find((m) => m._getType() === 'system');
+      assertDefined(tagSystemMsg);
+      const tagSystemContent = tagSystemMsg.content as string;
       expect(tagSystemContent).toContain('C-06');
       expect(tagSystemContent).toContain('C-01');
 
-      const tagHumanContent = tagCall.messages.find((m) => m._getType() === 'human')!
-        .content as string;
+      const tagHumanMsg = tagCall.messages.find((m) => m._getType() === 'human');
+      assertDefined(tagHumanMsg);
+      const tagHumanContent = tagHumanMsg.content as string;
       expect(tagHumanContent).toContain('type 2 diabetes');
 
       // ── Step 4: Resume capabilities (select only C-06) → reflect → generate_pdp → present_draft ──
@@ -294,9 +303,9 @@ describe('Conversations Integration Tests', () => {
           m.role === MessageRole.SYSTEM &&
           m.metadata?.type === MessageMetadataType.CAPABILITY_SELECTION
       );
-      expect(capabilityAudit).toBeDefined();
-      expect(capabilityAudit!.content).toBe('Capabilities confirmed: C-06');
-      const capAuditMeta = capabilityAudit!.metadata as CapabilitySelectionMetadata;
+      assertDefined(capabilityAudit);
+      expect(capabilityAudit.content).toBe('Capabilities confirmed: C-06');
+      const capAuditMeta = capabilityAudit.metadata as CapabilitySelectionMetadata;
       expect(capAuditMeta.selectedCodes).toEqual(['C-06']);
 
       // ── Final assertions: graph state ──
@@ -332,13 +341,16 @@ describe('Conversations Integration Tests', () => {
 
       // reflect prompt (call index 6) includes selected capability C-06
       const reflectCall = llmMock.calls[6];
-      const reflectSystem = reflectCall.messages.find((m) => m._getType() === 'system')!
-        .content as string;
+      const reflectSystemMsg = reflectCall.messages.find((m) => m._getType() === 'system');
+      assertDefined(reflectSystemMsg);
+      const reflectSystem = reflectSystemMsg.content as string;
       expect(reflectSystem).toContain('C-06');
 
       // generate_pdp prompt (call index 7) receives the reflection
       const pdpCall = llmMock.calls[7];
-      const pdpHuman = pdpCall.messages.find((m) => m._getType() === 'human')!.content as string;
+      const pdpHumanMsg = pdpCall.messages.find((m) => m._getType() === 'human');
+      assertDefined(pdpHumanMsg);
+      const pdpHuman = pdpHumanMsg.content as string;
       expect(pdpHuman).toContain('Presentation');
       expect(pdpHuman).toContain('Reflection');
     });
@@ -400,8 +412,10 @@ describe('Conversations Integration Tests', () => {
         content: 'I considered type 1 vs type 2. Patient recovered well.',
       });
       const msgs1 = await getMessagesForConversation(conv._id);
-      const lastUser1 = msgs1.filter((m) => m.role === MessageRole.USER).pop()!;
-      await markMessageComplete(lastUser1._id, lastUser1.rawContent!);
+      const lastUser1 = msgs1.filter((m) => m.role === MessageRole.USER).pop();
+      assertDefined(lastUser1);
+      assertDefined(lastUser1.rawContent);
+      await markMessageComplete(lastUser1._id, lastUser1.rawContent);
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
         type: 'resume',
@@ -416,8 +430,10 @@ describe('Conversations Integration Tests', () => {
         content: 'I learned about the importance of early intervention.',
       });
       const msgs2 = await getMessagesForConversation(conv._id);
-      const lastUser2 = msgs2.filter((m) => m.role === MessageRole.USER).pop()!;
-      await markMessageComplete(lastUser2._id, lastUser2.rawContent!);
+      const lastUser2 = msgs2.filter((m) => m.role === MessageRole.USER).pop();
+      assertDefined(lastUser2);
+      assertDefined(lastUser2.rawContent);
+      await markMessageComplete(lastUser2._id, lastUser2.rawContent);
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
         type: 'resume',
@@ -486,8 +502,10 @@ describe('Conversations Integration Tests', () => {
       // Round 1 answer
       await harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, { content: 'Some answer.' });
       const r1 = await getMessagesForConversation(conv._id);
-      const r1last = r1.filter((m) => m.role === MessageRole.USER).pop()!;
-      await markMessageComplete(r1last._id, r1last.rawContent!);
+      const r1last = r1.filter((m) => m.role === MessageRole.USER).pop();
+      assertDefined(r1last);
+      assertDefined(r1last.rawContent);
+      await markMessageComplete(r1last._id, r1last.rawContent);
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
         type: 'resume',
@@ -498,8 +516,10 @@ describe('Conversations Integration Tests', () => {
       // Round 2 answer
       await harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, { content: 'More answers.' });
       const r2 = await getMessagesForConversation(conv._id);
-      const r2last = r2.filter((m) => m.role === MessageRole.USER).pop()!;
-      await markMessageComplete(r2last._id, r2last.rawContent!);
+      const r2last = r2.filter((m) => m.role === MessageRole.USER).pop();
+      assertDefined(r2last);
+      assertDefined(r2last.rawContent);
+      await markMessageComplete(r2last._id, r2last.rawContent);
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
         type: 'resume',
@@ -732,8 +752,10 @@ describe('Conversations Integration Tests', () => {
       });
 
       const msgs = await getMessagesForConversation(conv._id);
-      const lastUser = msgs.filter((m) => m.role === MessageRole.USER).pop()!;
-      await markMessageComplete(lastUser._id, lastUser.rawContent!);
+      const lastUser = msgs.filter((m) => m.role === MessageRole.USER).pop();
+      assertDefined(lastUser);
+      assertDefined(lastUser.rawContent);
+      await markMessageComplete(lastUser._id, lastUser.rawContent);
 
       // ask_followup replays on resume (LangGraph re-executes the node), then
       // gather_context → check_completeness → tag_capabilities → present_capabilities
@@ -805,8 +827,8 @@ describe('Conversations Integration Tests', () => {
           m.role === MessageRole.SYSTEM &&
           m.metadata?.type === MessageMetadataType.CLASSIFICATION_SELECTION
       );
-      expect(auditMsg).toBeDefined();
-      expect(auditMsg!.content).toBe('Selected: CLINICAL_CASE_REVIEW');
+      assertDefined(auditMsg);
+      expect(auditMsg.content).toBe('Selected: CLINICAL_CASE_REVIEW');
     });
   });
 
@@ -827,12 +849,12 @@ describe('Conversations Integration Tests', () => {
       const msgs = await getMessagesForConversation(conv._id);
       const assistantMsg = msgs.find((m) => m.role === MessageRole.ASSISTANT);
 
-      expect(assistantMsg).toBeDefined();
-      expect(assistantMsg!.role).toBe(MessageRole.ASSISTANT);
-      expect(assistantMsg!.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
-      expect(assistantMsg!.messageType).toBe(MessageType.TEXT);
-      expect(assistantMsg!.metadata?.type).toBe(MessageMetadataType.CLASSIFICATION_OPTIONS);
-      const f1Meta = assistantMsg!.metadata as ClassificationOptionsMetadata;
+      assertDefined(assistantMsg);
+      expect(assistantMsg.role).toBe(MessageRole.ASSISTANT);
+      expect(assistantMsg.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
+      expect(assistantMsg.messageType).toBe(MessageType.TEXT);
+      expect(assistantMsg.metadata?.type).toBe(MessageMetadataType.CLASSIFICATION_OPTIONS);
+      const f1Meta = assistantMsg.metadata as ClassificationOptionsMetadata;
       expect(f1Meta.options).toBeInstanceOf(Array);
       expect(f1Meta.options.length).toBeGreaterThan(0);
     });
@@ -864,9 +886,9 @@ describe('Conversations Integration Tests', () => {
           m.metadata?.type === MessageMetadataType.FOLLOWUP_QUESTIONS
       );
 
-      expect(followupMsg).toBeDefined();
-      expect(followupMsg!.role).toBe(MessageRole.ASSISTANT);
-      const f2Meta = followupMsg!.metadata as FollowupQuestionsMetadata;
+      assertDefined(followupMsg);
+      expect(followupMsg.role).toBe(MessageRole.ASSISTANT);
+      const f2Meta = followupMsg.metadata as FollowupQuestionsMetadata;
       expect(f2Meta.questions).toHaveLength(1);
       expect(f2Meta.questions[0].sectionId).toBe('reflection');
       expect(f2Meta.followUpRound).toBe(1);
@@ -926,8 +948,8 @@ describe('Conversations Integration Tests', () => {
       expect(llmMock.calls).toHaveLength(1);
       const classifyCall = llmMock.calls[0];
       const humanMsg = classifyCall.messages.find((m) => m._getType() === 'human');
-      expect(humanMsg).toBeDefined();
-      const transcriptContent = humanMsg!.content as string;
+      assertDefined(humanMsg);
+      const transcriptContent = humanMsg.content as string;
       expect(transcriptContent).toContain('First user message');
       expect(transcriptContent).toContain('Second user message');
       expect(transcriptContent).not.toContain('Assistant response');
@@ -967,7 +989,8 @@ describe('Conversations Integration Tests', () => {
 
       expect(llmMock.calls).toHaveLength(1);
       const humanMsg = llmMock.calls[0].messages.find((m) => m._getType() === 'human');
-      const transcript = humanMsg!.content as string;
+      assertDefined(humanMsg);
+      const transcript = humanMsg.content as string;
       expect(transcript).toContain('Message one');
       expect(transcript).toContain('Message two');
       expect(transcript).toContain('Message three');

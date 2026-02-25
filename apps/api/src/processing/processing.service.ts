@@ -129,7 +129,11 @@ export class ProcessingService {
 
     // Stage 1: Cleaning
     this.logger.log(`Cleaning text for message ${message.xid}`);
-    const cleaningResult = await this.cleaningStage.execute(message.rawContent!, context);
+    if (!message.rawContent) {
+      await this.markFailed(messageId, 'No raw content to clean');
+      return;
+    }
+    const cleaningResult = await this.cleaningStage.execute(message.rawContent, context);
 
     // Update with cleaned content (final)
     await this.conversationsRepository.updateMessage(messageId, {

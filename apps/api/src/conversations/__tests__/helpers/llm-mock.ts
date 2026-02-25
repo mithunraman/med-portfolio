@@ -1,6 +1,6 @@
 import type { BaseMessage } from '@langchain/core/messages';
 import type { z } from 'zod';
-import type { LLMService, StructuredResponse } from '../../../llm/llm.service';
+import { OpenAIModels, type LLMService, type StructuredResponse } from '../../../llm/llm.service';
 
 /**
  * A recorded LLM call for post-test assertions.
@@ -62,24 +62,23 @@ export class SequentialLLMMock {
    * Only invokeStructured() is implemented — transcribeAudio() throws.
    */
   build(): LLMService {
-    const self = this;
     return {
       invokeStructured: async <T>(
         messages: BaseMessage[],
         schema: z.ZodType<T>,
         options: Record<string, unknown> = {}
       ): Promise<StructuredResponse<T>> => {
-        self.calls.push({ messages, schema, options });
+        this.calls.push({ messages, schema, options });
 
-        if (self.callIndex >= self.responses.length) {
+        if (this.callIndex >= this.responses.length) {
           throw new Error(
-            `LLM mock: unexpected call #${self.callIndex + 1}. ` +
-              `Only ${self.responses.length} response(s) were enqueued.`
+            `LLM mock: unexpected call #${this.callIndex + 1}. ` +
+              `Only ${this.responses.length} response(s) were enqueued.`
           );
         }
 
-        const data = self.responses[self.callIndex++] as T;
-        return { data, model: 'gpt-4.1' as any, tokensUsed: null };
+        const data = this.responses[this.callIndex++] as T;
+        return { data, model: OpenAIModels.GPT_4_1, tokensUsed: null };
       },
       transcribeAudio: async () => {
         throw new Error('LLM mock: transcribeAudio() is not implemented');

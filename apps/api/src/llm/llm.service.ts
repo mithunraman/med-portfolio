@@ -66,11 +66,16 @@ export class LLMService {
   private readonly assemblyai: AssemblyAI;
 
   constructor(private readonly configService: ConfigService) {
-    this.openaiApiKey = this.configService.get<string>('app.openai.apiKey')!;
+    const openaiApiKey = this.configService.get<string>('app.openai.apiKey');
+    if (!openaiApiKey) throw new Error('Missing config: app.openai.apiKey');
+    this.openaiApiKey = openaiApiKey;
+
+    const assemblyaiApiKey = this.configService.get<string>('app.assemblyai.apiKey');
+    if (!assemblyaiApiKey) throw new Error('Missing config: app.assemblyai.apiKey');
 
     // AssemblyAI client for transcription with PII redaction
     this.assemblyai = new AssemblyAI({
-      apiKey: this.configService.get<string>('app.assemblyai.apiKey')!,
+      apiKey: assemblyaiApiKey,
     });
   }
 

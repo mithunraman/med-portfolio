@@ -96,11 +96,18 @@ export function createAskFollowupNode(deps: GraphDeps) {
     // ── Load template ──
     const specialty = Number(state.specialty) as Specialty;
     const config = getSpecialtyConfig(specialty);
-    const template = getTemplateForEntryType(config, state.entryType!);
+    if (!state.entryType) {
+      logger.warn('No entry type set — cannot ask follow-up');
+      return { followUpRound: state.followUpRound + 1 };
+    }
+    const template = getTemplateForEntryType(config, state.entryType);
 
     // ── Select top missing sections by weight ──
     const missingSectionDefs = template.sections
-      .filter((s) => state.missingSections.includes(s.id) && s.extractionQuestion !== null)
+      .filter(
+        (s): s is TemplateSection & { extractionQuestion: string } =>
+          state.missingSections.includes(s.id) && s.extractionQuestion !== null
+      )
       .sort((a, b) => b.weight - a.weight)
       .slice(0, MAX_QUESTIONS_PER_ROUND);
 
@@ -135,7 +142,7 @@ export function createAskFollowupNode(deps: GraphDeps) {
         if (!questions.find((q) => q.sectionId === section.id)) {
           questions.push({
             sectionId: section.id,
-            question: section.extractionQuestion!,
+            question: section.extractionQuestion,
           });
         }
       }
@@ -143,7 +150,7 @@ export function createAskFollowupNode(deps: GraphDeps) {
       logger.warn(`LLM contextualisation failed, using default questions: ${error}`);
       questions = missingSectionDefs.map((s) => ({
         sectionId: s.id,
-        question: s.extractionQuestion!,
+        question: s.extractionQuestion,
       }));
     }
 

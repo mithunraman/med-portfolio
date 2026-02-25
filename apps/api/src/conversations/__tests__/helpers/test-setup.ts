@@ -112,7 +112,8 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
   // Warm up the replica set: do a write+read to ensure the oplog and
   // checkpoint collections are fully operational before tests start.
   // Without this, the first graph invocation may see a stale/empty checkpoint.
-  const warmupCollection = connection.db!.collection('_warmup');
+  if (!connection.db) throw new Error('Database not connected');
+  const warmupCollection = connection.db.collection('_warmup');
   await warmupCollection.insertOne({ ts: Date.now() });
   await warmupCollection.findOne({});
   await warmupCollection.drop();
@@ -132,7 +133,8 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
  * Preserves indexes but clears data for isolation.
  */
 export async function cleanupDatabase(connection: Connection): Promise<void> {
-  const collections = connection.db!.collections();
+  if (!connection.db) throw new Error('Database not connected');
+  const collections = connection.db.collections();
   for (const collection of await collections) {
     await collection.deleteMany({});
   }

@@ -50,7 +50,7 @@ export function createGatherContextNode(deps: GraphDeps) {
     // Reverse to chronological order (repo returns newest-first).
     userMessages.reverse();
 
-    const fullTranscript = userMessages.map((msg) => msg.content!.trim()).join('\n\n---\n\n');
+    const fullTranscript = userMessages.map((msg) => (msg.content ?? '').trim()).join('\n\n---\n\n');
 
     const messageCount = userMessages.length;
 

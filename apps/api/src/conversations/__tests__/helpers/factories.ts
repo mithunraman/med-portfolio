@@ -1,11 +1,14 @@
 import {
+  ArtefactStatus,
   ConversationStatus,
   type MessageMetadata,
   MessageProcessingStatus,
   MessageRole,
   MessageType,
+  Specialty,
 } from '@acme/shared';
 import { Model, Types } from 'mongoose';
+import { Artefact, ArtefactDocument } from '../../../artefacts/schemas/artefact.schema';
 import { ConversationDocument } from '../../schemas/conversation.schema';
 import { MessageDocument } from '../../schemas/message.schema';
 
@@ -16,14 +19,17 @@ import { MessageDocument } from '../../schemas/message.schema';
 
 let conversationModel: Model<ConversationDocument>;
 let messageModel: Model<MessageDocument>;
+let artefactModel: Model<ArtefactDocument>;
 
 /** Initialise the factories with Mongoose models from the test module. */
 export function initFactories(
   convModel: Model<ConversationDocument>,
-  msgModel: Model<MessageDocument>
+  msgModel: Model<MessageDocument>,
+  artModel: Model<ArtefactDocument>
 ) {
   conversationModel = convModel;
   messageModel = msgModel;
+  artefactModel = artModel;
 }
 
 // ── Shared test user/artefact IDs ──
@@ -31,6 +37,32 @@ export function initFactories(
 export const TEST_USER_ID = new Types.ObjectId();
 export const TEST_USER_ID_STR = TEST_USER_ID.toString();
 export const TEST_ARTEFACT_ID = new Types.ObjectId();
+
+// ── Artefact factory ──
+
+export async function createTestArtefact(
+  overrides: Partial<{
+    _id: Types.ObjectId;
+    userId: Types.ObjectId;
+    specialty: Specialty;
+    status: ArtefactStatus;
+    title: string;
+  }> = {}
+): Promise<ArtefactDocument> {
+  const userId = overrides.userId ?? TEST_USER_ID;
+  const id = overrides._id ?? TEST_ARTEFACT_ID;
+  const [doc] = await artefactModel.create([
+    {
+      _id: id,
+      artefactId: `${userId.toString()}_test-${id.toString().slice(-6)}`,
+      userId,
+      specialty: overrides.specialty ?? Specialty.GP,
+      status: overrides.status ?? ArtefactStatus.PROCESSING,
+      title: overrides.title ?? 'Test Artefact',
+    },
+  ]);
+  return doc;
+}
 
 // ── Conversation factory ──
 
@@ -123,6 +155,13 @@ export async function markMessageComplete(
       },
     }
   );
+}
+
+/** Fetch the test artefact by ID (returns a plain object, not a Mongoose document). */
+export async function getTestArtefact(
+  id: Types.ObjectId = TEST_ARTEFACT_ID
+): Promise<Artefact | null> {
+  return artefactModel.findById(id).lean();
 }
 
 /** Get all messages for a conversation, sorted chronologically. */

@@ -2,7 +2,6 @@ import type {
   AnalysisActionRequest,
   CapabilitySelectionMetadata,
   ClassificationSelectionMetadata,
-  DraftReviewMetadata,
   Message,
   MessageListResponse,
 } from '@acme/shared';
@@ -42,10 +41,10 @@ import {
   IConversationsRepository,
 } from './conversations.repository.interface';
 import { ListMessagesDto, SendMessageDto } from './dto';
-
-type AnalysisResumeNode = Extract<AnalysisActionRequest, { type: 'resume' }>['node'];
 import { buildMediaData, toMessageDto } from './mappers/message.mapper';
 import { Message as MessageSchema } from './schemas/message.schema';
+
+type AnalysisResumeNode = Extract<AnalysisActionRequest, { type: 'resume' }>['node'];
 
 @Injectable()
 export class ConversationsService {
@@ -212,7 +211,7 @@ export class ConversationsService {
       convIdStr,
       conversation._id,
       dto.node,
-      'value' in dto ? (dto.value as Record<string, unknown>) : undefined,
+      'value' in dto ? (dto.value as Record<string, unknown>) : undefined
     );
   }
 
@@ -338,26 +337,6 @@ export class ConversationsService {
           });
         break;
       }
-
-      case 'present_draft': {
-        const approved = value?.approved;
-        if (typeof approved !== 'boolean') {
-          throw new BadRequestException('value.approved is required and must be a boolean');
-        }
-
-        await this.createAuditMessage(conversationOid, userOid, {
-          type: MessageMetadataType.DRAFT_REVIEW,
-          interactionType: InteractionType.DISPLAY_ONLY,
-          approved,
-        });
-
-        this.portfolioGraphService
-          .resumeGraph(convIdStr, 'present_draft', { approved })
-          .catch((err) => {
-            this.logger.error(`Graph resume failed for conversation ${convIdStr}: ${err.message}`);
-          });
-        break;
-      }
     }
   }
 
@@ -384,8 +363,6 @@ export class ConversationsService {
           throw new ConflictException('Please select an entry type to continue.');
         if (graphStatus.node === 'present_capabilities')
           throw new ConflictException('Please confirm capabilities to continue.');
-        if (graphStatus.node === 'present_draft')
-          throw new ConflictException('Please approve or reject the draft to continue.');
     }
   }
 
@@ -397,7 +374,7 @@ export class ConversationsService {
   private async createAuditMessage(
     conversationId: Types.ObjectId,
     userId: Types.ObjectId,
-    metadata: ClassificationSelectionMetadata | CapabilitySelectionMetadata | DraftReviewMetadata
+    metadata: ClassificationSelectionMetadata | CapabilitySelectionMetadata
   ): Promise<void> {
     let content: string;
     switch (metadata.type) {
@@ -406,9 +383,6 @@ export class ConversationsService {
         break;
       case MessageMetadataType.CAPABILITY_SELECTION:
         content = `Capabilities confirmed: ${metadata.selectedCodes.join(', ')}`;
-        break;
-      case MessageMetadataType.DRAFT_REVIEW:
-        content = `Draft ${metadata.approved ? 'approved' : 'rejected'}`;
         break;
       default:
         content = `Action recorded`;

@@ -1,3 +1,4 @@
+import { IArtefactsRepository } from '../artefacts/artefacts.repository.interface';
 import { IConversationsRepository } from '../conversations/conversations.repository.interface';
 import { LLMService } from '../llm';
 
@@ -10,6 +11,7 @@ import { LLMService } from '../llm';
  * which hands it to each node factory.
  */
 export interface GraphDeps {
+  artefactsRepository: IArtefactsRepository;
   conversationsRepository: IConversationsRepository;
   llmService: LLMService;
 }

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { DatabaseModule } from '../database';
@@ -12,7 +12,7 @@ import { Artefact, ArtefactSchema } from './schemas/artefact.schema';
   imports: [
     DatabaseModule,
     MongooseModule.forFeature([{ name: Artefact.name, schema: ArtefactSchema }]),
-    ConversationsModule,
+    forwardRef(() => ConversationsModule),
   ],
   controllers: [ArtefactsController],
   providers: [
@@ -22,6 +22,6 @@ import { Artefact, ArtefactSchema } from './schemas/artefact.schema';
       useClass: ArtefactsRepository,
     },
   ],
-  exports: [ArtefactsService],
+  exports: [ArtefactsService, ARTEFACTS_REPOSITORY],
 })
 export class ArtefactsModule {}

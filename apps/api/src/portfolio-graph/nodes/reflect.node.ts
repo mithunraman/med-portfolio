@@ -109,9 +109,7 @@ function formatCapabilityBlock(
 ): string {
   if (capabilities.length === 0) return 'None identified.';
 
-  return capabilities
-    .map((c) => `- ${c.code} ${c.name}: ${c.evidence[0]}`)
-    .join('\n');
+  return capabilities.map((c) => `- ${c.code} ${c.name}: ${c.evidence[0]}`).join('\n');
 }
 
 /* ------------------------------------------------------------------ */
@@ -152,9 +150,11 @@ export function createReflectNode(deps: GraphDeps) {
     const template = getTemplateForEntryType(config, state.entryType);
 
     // ── Estimate maxTokens from word count range ──
-    // 1 token ≈ 0.75 words. Use the upper word limit with 40% headroom
-    // for Markdown headings and structural tokens.
-    const maxTokens = Math.ceil((template.wordCountRange.max / 0.75) * 1.4);
+    // 1 token ≈ 0.75 words. Use the upper word limit with 2× headroom
+    // for Markdown headings, structural tokens, and JSON overhead from
+    // structured output. Floor at 1500 to avoid hitting the limit on
+    // shorter templates (e.g. CCR at 300 words).
+    const maxTokens = Math.max(Math.ceil((template.wordCountRange.max / 0.75) * 2), 3000);
 
     // ── Build and send prompt ──
     const messages = await reflectPrompt.formatMessages({

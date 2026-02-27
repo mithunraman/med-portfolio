@@ -8,19 +8,15 @@ import {
   createGatherContextNode,
   createGeneratePdpNode,
   createReflectNode,
+  createSaveNode,
   createTagCapabilitiesNode,
   presentCapabilitiesNode,
   presentClassificationNode,
-  presentDraftNode,
-  qualityCheckNode,
-  repairNode,
-  saveNode,
 } from './nodes';
 import { PortfolioState, PortfolioStateType } from './portfolio-graph.state';
 
 // ── Max loop limits ──
 const MAX_FOLLOWUP_ROUNDS = 2;
-const MAX_REPAIR_ROUNDS = 1;
 
 // ── Router functions ──
 
@@ -44,16 +40,6 @@ function completenessRouter(state: PortfolioStateType): 'ask_followup' | 'tag_ca
 }
 
 /**
- * After quality_check: present draft if passed, or repair if failed.
- */
-function qualityRouter(state: PortfolioStateType): 'present_draft' | 'repair' {
-  if (state.qualityResult?.passed || state.repairRound >= MAX_REPAIR_ROUNDS) {
-    return 'present_draft';
-  }
-  return 'repair';
-}
-
-/**
  * Builds and compiles the portfolio processing graph.
  *
  * Graph structure:
@@ -72,15 +58,9 @@ function qualityRouter(state: PortfolioStateType): 'present_draft' | 'repair' {
  *                                                                            ↓
  *                                                                      generate_pdp
  *                                                                            ↓
- *                                                                     quality_check
+ *                                                                          save
  *                                                                            ↓
- *                                                                  ┌── qualityRouter ──┐
- *                                                                  ↓                    ↓
- *                                                             present_draft           repair
- *                                                                  ↓                    ↓
- *                                                                save           quality_check
- *                                                                  ↓              (loop back)
- *                                                                 END
+ *                                                                           END
  */
 export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: GraphDeps) {
   const graph = new StateGraph(PortfolioState)
@@ -94,10 +74,7 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
     .addNode('present_capabilities', presentCapabilitiesNode)
     .addNode('reflect', createReflectNode(deps))
     .addNode('generate_pdp', createGeneratePdpNode(deps))
-    .addNode('quality_check', qualityCheckNode)
-    .addNode('repair', repairNode)
-    .addNode('present_draft', presentDraftNode)
-    .addNode('save', saveNode)
+    .addNode('save', createSaveNode(deps))
 
     // ── Edges ──
 
@@ -121,21 +98,11 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
     })
     .addEdge('ask_followup', 'gather_context') // Loop back, re-gather + re-check completeness
 
-    // Linear chain: tag → present capabilities → reflect → PDP → quality check
+    // Linear chain: tag → present capabilities → reflect → PDP → save → end
     .addEdge('tag_capabilities', 'present_capabilities')
     .addEdge('present_capabilities', 'reflect')
     .addEdge('reflect', 'generate_pdp')
-    .addEdge('generate_pdp', 'quality_check')
-
-    // Quality routing (loop 2: repair)
-    .addConditionalEdges('quality_check', qualityRouter, {
-      present_draft: 'present_draft',
-      repair: 'repair',
-    })
-    .addEdge('repair', 'quality_check') // Loop back after repair
-
-    // Final: present → save → end
-    .addEdge('present_draft', 'save')
+    .addEdge('generate_pdp', 'save')
     .addEdge('save', END);
 
   return graph.compile({ checkpointer });

@@ -1,4 +1,5 @@
 import {
+  ArtefactStatus,
   type CapabilityOptionsMetadata,
   type CapabilitySelectionMetadata,
   type ClassificationOptionsMetadata,
@@ -14,9 +15,11 @@ import type { GraphStatus } from '../../portfolio-graph/portfolio-graph.service'
 import {
   createCompleteUserMessage,
   createPendingUserMessage,
+  createTestArtefact,
   createTestConversation,
   createTestMessage,
   getMessagesForConversation,
+  getTestArtefact,
   markMessageComplete,
   TEST_USER_ID_STR,
 } from './helpers/factories';
@@ -98,7 +101,8 @@ async function waitForGraphStable(
       const confirmed = await harness.graphService.getGraphStatus(conversationId);
       if (
         confirmed.status === status.status &&
-        (confirmed.status !== 'paused' || (status.status === 'paused' && confirmed.node === status.node))
+        (confirmed.status !== 'paused' ||
+          (status.status === 'paused' && confirmed.node === status.node))
       ) {
         return confirmed;
       }
@@ -127,6 +131,8 @@ describe('Conversations Integration Tests', () => {
   beforeEach(async () => {
     llmMock.reset();
     await cleanupDatabase(harness.connection);
+    // Create a real artefact so the save node can update it
+    await createTestArtefact();
   });
 
   // ════════════════════════════════════════════════════════════════
@@ -141,8 +147,7 @@ describe('Conversations Integration Tests', () => {
      *       → (resume) → check_completeness(missing) → ask_followup ⏸️
      *       → (user answers + resume) → gather_context → check_completeness(covered)
      *       → tag_capabilities → present_capabilities ⏸️
-     *       → (resume with subset) → reflect → generate_pdp
-     *       → quality_check → repair → quality_check → present_draft ⏸️
+     *       → (resume with subset) → reflect → generate_pdp → save → END
      *
      * LLM call sequence (8 calls):
      *   0: classify
@@ -154,7 +159,7 @@ describe('Conversations Integration Tests', () => {
      *   6: reflect
      *   7: generate_pdp
      */
-    it('A1. Full pipeline — classify → follow-up loop → capabilities → reflect → PDP → present_draft', async () => {
+    it('A1. Full pipeline — classify → follow-up loop → capabilities → reflect → PDP → save', async () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(
         conv._id,
@@ -282,7 +287,7 @@ describe('Conversations Integration Tests', () => {
       const tagHumanContent = tagHumanMsg.content as string;
       expect(tagHumanContent).toContain('type 2 diabetes');
 
-      // ── Step 4: Resume capabilities (select only C-06) → reflect → generate_pdp → present_draft ──
+      // ── Step 4: Resume capabilities (select only C-06) → reflect → generate_pdp → save → END ──
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
         type: 'resume',
         node: 'present_capabilities',
@@ -290,7 +295,7 @@ describe('Conversations Integration Tests', () => {
       });
       const finalStatus = await waitForGraphStable(harness, conv._id.toString(), true);
 
-      expect(finalStatus).toEqual({ status: 'paused', node: 'present_draft' });
+      expect(finalStatus).toEqual({ status: 'completed' });
       expect(llmMock.callCount).toBe(8); // +reflect + generate_pdp
       llmMock.assertAllConsumed();
 
@@ -353,6 +358,31 @@ describe('Conversations Integration Tests', () => {
       const pdpHuman = pdpHumanMsg.content as string;
       expect(pdpHuman).toContain('Presentation');
       expect(pdpHuman).toContain('Reflection');
+
+      // ── Final assertions: artefact persisted to DB ──
+      const artefact = await getTestArtefact();
+      assertDefined(artefact);
+
+      expect(artefact.status).toBe(ArtefactStatus.REVIEW);
+      expect(artefact.artefactType).toBe('CLINICAL_CASE_REVIEW');
+      expect(artefact.classificationSource).toBe('MANUAL');
+      expect(artefact.classificationConfidence).toBe(1);
+      expect(artefact.classificationAlternatives).toHaveLength(1);
+      expect(artefact.classificationAlternatives![0].entryType).toBe('OUT_OF_HOURS');
+
+      // Reflection persisted
+      expect(artefact.reflection).toBeDefined();
+      expect(artefact.reflection).toContain('Presentation');
+
+      // Capabilities — only the user-selected C-06
+      expect(artefact.capabilities).toHaveLength(1);
+      expect(artefact.capabilities![0].code).toBe('C-06');
+      expect(artefact.capabilities![0].evidence).toBeDefined();
+
+      // PDP actions
+      expect(artefact.pdpActions).toHaveLength(1);
+      expect(artefact.pdpActions![0].action).toContain('diabetes update tutorial');
+      expect(artefact.pdpActions![0].timeframe).toBe('within 4 weeks');
     });
 
     it('A3. Multiple follow-up rounds', async () => {

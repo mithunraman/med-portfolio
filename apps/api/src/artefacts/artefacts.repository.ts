@@ -8,6 +8,7 @@ import {
   IArtefactsRepository,
   ListArtefactsQuery,
   ListArtefactsResult,
+  UpdateArtefactData,
   UpsertArtefactData,
 } from './artefacts.repository.interface';
 import { Artefact, ArtefactDocument } from './schemas/artefact.schema';
@@ -80,6 +81,27 @@ export class ArtefactsRepository implements IArtefactsRepository {
     } catch (error) {
       this.logger.error('Failed to list artefacts', error);
       return err({ code: 'DB_ERROR', message: 'Failed to list artefacts' });
+    }
+  }
+
+  async updateArtefactById(
+    id: Types.ObjectId,
+    data: UpdateArtefactData,
+    session?: ClientSession
+  ): Promise<Result<Artefact, DBError>> {
+    try {
+      const artefact = await this.artefactModel
+        .findByIdAndUpdate(id, { $set: data }, { new: true, session })
+        .lean();
+
+      if (!artefact) {
+        return err({ code: 'NOT_FOUND', message: `Artefact not found: ${id}` });
+      }
+
+      return ok(artefact);
+    } catch (error) {
+      this.logger.error(`Failed to update artefact ${id}`, error);
+      return err({ code: 'DB_ERROR', message: 'Failed to update artefact' });
     }
   }
 }

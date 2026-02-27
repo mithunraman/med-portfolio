@@ -34,15 +34,6 @@ export interface PdpAction {
 }
 
 /**
- * Quality check result.
- */
-export interface QualityResult {
-  score: number;
-  passed: boolean;
-  failures: string[];
-}
-
-/**
  * The state that flows through the portfolio processing graph.
  *
  * Each node reads what it needs and returns a partial update.
@@ -128,22 +119,6 @@ export const PortfolioState = Annotation.Root({
   pdpActions: Annotation<PdpAction[]>({
     reducer: (_, next) => next,
     default: () => [],
-  }),
-
-  // ── Quality ──
-  qualityResult: Annotation<QualityResult | null>({
-    reducer: (_, next) => next,
-    default: () => null,
-  }),
-  repairRound: Annotation<number>({
-    reducer: (_, next) => next,
-    default: () => 0,
-  }),
-
-  // ── User review ──
-  userApproved: Annotation<boolean>({
-    reducer: (_, next) => next,
-    default: () => false,
   }),
 
   // ── Error tracking ──

@@ -29,6 +29,23 @@ export interface ListArtefactsResult {
   artefacts: Artefact[];
 }
 
+export interface UpdateArtefactData {
+  artefactType?: string | null;
+  classificationConfidence?: number | null;
+  classificationSource?: 'AUTO' | 'MANUAL' | null;
+  classificationAlternatives?: Array<{
+    entryType: string;
+    confidence: number;
+    reasoning: string;
+  }> | null;
+  title?: string | null;
+  reflection?: string | null;
+  pdpActions?: Array<{ action: string; timeframe: string }> | null;
+  capabilities?: Array<{ code: string; name: string; evidence: string }> | null;
+  tags?: Record<string, string[]> | null;
+  status?: ArtefactStatus;
+}
+
 export interface IArtefactsRepository {
   upsertArtefact(
     data: UpsertArtefactData,
@@ -39,4 +56,10 @@ export interface IArtefactsRepository {
     query: ListArtefactsQuery,
     session?: ClientSession
   ): Promise<Result<ListArtefactsResult, DBError>>;
+
+  updateArtefactById(
+    id: Types.ObjectId,
+    data: UpdateArtefactData,
+    session?: ClientSession
+  ): Promise<Result<Artefact, DBError>>;
 }

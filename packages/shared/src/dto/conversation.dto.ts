@@ -86,13 +86,6 @@ export const CapabilitySelectionMetadataSchema = z.object({
 });
 export type CapabilitySelectionMetadata = z.infer<typeof CapabilitySelectionMetadataSchema>;
 
-export const DraftReviewMetadataSchema = z.object({
-  type: z.literal(MessageMetadataType.DRAFT_REVIEW),
-  interactionType: z.literal(InteractionType.DISPLAY_ONLY),
-  approved: z.boolean(),
-});
-export type DraftReviewMetadata = z.infer<typeof DraftReviewMetadataSchema>;
-
 // ── Discriminated union of all metadata variants ──
 
 export const MessageMetadataSchema = z.discriminatedUnion('type', [
@@ -101,7 +94,6 @@ export const MessageMetadataSchema = z.discriminatedUnion('type', [
   CapabilityOptionsMetadataSchema,
   ClassificationSelectionMetadataSchema,
   CapabilitySelectionMetadataSchema,
-  DraftReviewMetadataSchema,
 ]);
 export type MessageMetadata = z.infer<typeof MessageMetadataSchema>;
 
@@ -157,10 +149,6 @@ const AnalysisResumeSchema = z.object({ type: z.literal('resume') }).and(
     z.object({
       node: z.literal('present_capabilities'),
       value: z.object({ selectedCodes: z.array(z.string()).nonempty() }),
-    }),
-    z.object({
-      node: z.literal('present_draft'),
-      value: z.object({ approved: z.boolean() }),
     }),
   ])
 );

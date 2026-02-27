@@ -13,6 +13,9 @@ import {
 import { Conversation, ConversationDocument, ConversationSchema } from '../../schemas/conversation.schema';
 import { Message, MessageDocument, MessageSchema } from '../../schemas/message.schema';
 import { Media, MediaSchema } from '../../../media/schemas/media.schema';
+import { Artefact, ArtefactDocument, ArtefactSchema } from '../../../artefacts/schemas/artefact.schema';
+import { ArtefactsRepository } from '../../../artefacts/artefacts.repository';
+import { ARTEFACTS_REPOSITORY } from '../../../artefacts/artefacts.repository.interface';
 import { TransactionService } from '../../../database/transaction.service';
 import { PortfolioGraphService } from '../../../portfolio-graph/portfolio-graph.service';
 import { LLMService } from '../../../llm/llm.service';
@@ -54,6 +57,7 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
         { name: Message.name, schema: MessageSchema },
         // Media schema needed for .populate('media') in listMessages
         { name: Media.name, schema: MediaSchema },
+        { name: Artefact.name, schema: ArtefactSchema },
       ]),
     ],
     providers: [
@@ -65,6 +69,10 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
       },
       TransactionService,
       PortfolioGraphService,
+      {
+        provide: ARTEFACTS_REPOSITORY,
+        useClass: ArtefactsRepository,
+      },
 
       // Mocked LLMService — replaced by SequentialLLMMock
       {
@@ -105,9 +113,10 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
   const connection = module.get<Connection>(getConnectionToken());
   const conversationModel = module.get<Model<ConversationDocument>>(getModelToken(Conversation.name));
   const messageModel = module.get<Model<MessageDocument>>(getModelToken(Message.name));
+  const artefactModel = module.get<Model<ArtefactDocument>>(getModelToken(Artefact.name));
 
   // Initialise factory helpers with the real models
-  initFactories(conversationModel, messageModel);
+  initFactories(conversationModel, messageModel, artefactModel);
 
   // Warm up the replica set: do a write+read to ensure the oplog and
   // checkpoint collections are fully operational before tests start.

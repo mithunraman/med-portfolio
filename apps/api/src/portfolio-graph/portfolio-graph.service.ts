@@ -16,6 +16,10 @@ import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { Connection, Types } from 'mongoose';
 import {
+  ARTEFACTS_REPOSITORY,
+  IArtefactsRepository,
+} from '../artefacts/artefacts.repository.interface';
+import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from '../conversations/conversations.repository.interface';
@@ -30,7 +34,6 @@ export interface GraphResumeMap {
   present_classification: { entryType: string };
   ask_followup: true;
   present_capabilities: { selectedCodes: string[] };
-  present_draft: { approved: boolean };
 }
 
 export type InterruptNode = keyof GraphResumeMap;
@@ -50,6 +53,8 @@ export class PortfolioGraphService implements OnModuleInit {
 
   constructor(
     @InjectConnection() private readonly connection: Connection,
+    @Inject(ARTEFACTS_REPOSITORY)
+    private readonly artefactsRepository: IArtefactsRepository,
     @Inject(CONVERSATIONS_REPOSITORY)
     private readonly conversationsRepository: IConversationsRepository,
     private readonly llmService: LLMService
@@ -78,6 +83,7 @@ export class PortfolioGraphService implements OnModuleInit {
     ]);
 
     const deps = {
+      artefactsRepository: this.artefactsRepository,
       conversationsRepository: this.conversationsRepository,
       llmService: this.llmService,
     };
@@ -175,7 +181,6 @@ export class PortfolioGraphService implements OnModuleInit {
       'present_classification',
       'ask_followup',
       'present_capabilities',
-      'present_draft',
     ]);
 
     if (interruptNodes.has(nextNode)) {
@@ -214,7 +219,6 @@ export class PortfolioGraphService implements OnModuleInit {
       'present_classification',
       'ask_followup',
       'present_capabilities',
-      'present_draft',
     ]);
 
     if (interruptNodes.has(nextNode)) return { status: 'paused', node: nextNode as InterruptNode };
@@ -374,8 +378,6 @@ export class PortfolioGraphService implements OnModuleInit {
         }
         break;
       }
-
-      // Future interrupt types (review) can be handled here
     }
   }
 }

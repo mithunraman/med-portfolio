@@ -35,7 +35,7 @@ export class ConversationsController {
    * - { type: "start" } — AI Button, first time (starts the graph)
    * - { type: "resume", node: "ask_followup" } — AI Button after sending more content
    * - { type: "resume", node: "present_classification", value } — classification selection
-   * - { type: "resume", node: "present_draft", value } — draft approval/rejection
+   * - { type: "resume", node: "present_capabilities", value } — capability confirmation
    */
   @Post(':conversationId/analysis')
   @HttpCode(HttpStatus.NO_CONTENT)

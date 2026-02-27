@@ -1,15 +1,15 @@
-import { Transform } from 'class-transformer';
-import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsString } from 'class-validator';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
-export class GetPendingMessagesDto {
-  @Transform(({ value }) => {
-    if (Array.isArray(value)) return value;
-    if (typeof value === 'string') return value.split(',').filter(Boolean);
-    return [];
-  })
-  @IsArray()
-  @ArrayNotEmpty()
-  @IsString({ each: true })
-  @ArrayMaxSize(100)
-  ids!: string[];
-}
+const GetPendingMessagesSchema = z.object({
+  ids: z.preprocess(
+    (val) => {
+      if (Array.isArray(val)) return val;
+      if (typeof val === 'string') return val.split(',').filter(Boolean);
+      return [];
+    },
+    z.array(z.string()).nonempty().max(100),
+  ),
+});
+
+export class GetPendingMessagesDto extends createZodDto(GetPendingMessagesSchema) {}

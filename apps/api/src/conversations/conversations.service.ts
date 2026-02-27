@@ -1,4 +1,5 @@
 import type {
+  AnalysisActionRequest,
   CapabilitySelectionMetadata,
   ClassificationSelectionMetadata,
   DraftReviewMetadata,
@@ -40,7 +41,9 @@ import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from './conversations.repository.interface';
-import { AnalysisActionDto, ListMessagesDto, SendMessageDto } from './dto';
+import { ListMessagesDto, SendMessageDto } from './dto';
+
+type AnalysisResumeNode = Extract<AnalysisActionRequest, { type: 'resume' }>['node'];
 import { buildMediaData, toMessageDto } from './mappers/message.mapper';
 import { Message as MessageSchema } from './schemas/message.schema';
 
@@ -173,7 +176,7 @@ export class ConversationsService {
   async handleAnalysis(
     userId: string,
     conversationId: string,
-    dto: AnalysisActionDto
+    dto: AnalysisActionRequest
   ): Promise<void> {
     // 1. Validate conversation ownership
     const conversationResult = await this.conversationsRepository.findConversationByXid(
@@ -203,10 +206,14 @@ export class ConversationsService {
     // 3. Branch on action type
     if (dto.type === 'start') return this.handleStart(userId, convIdStr, conversation);
 
-    // type === 'resume' — validate node is required
-    if (!dto.node) throw new BadRequestException('node is required for resume actions');
-
-    return this.handleResume(userId, convIdStr, conversation._id, dto.node, dto.value);
+    // Zod guarantees resume actions always have a valid node
+    return this.handleResume(
+      userId,
+      convIdStr,
+      conversation._id,
+      dto.node,
+      'value' in dto ? (dto.value as Record<string, unknown>) : undefined,
+    );
   }
 
   /**
@@ -251,7 +258,7 @@ export class ConversationsService {
     userId: string,
     convIdStr: string,
     conversationOid: Types.ObjectId,
-    node: NonNullable<AnalysisActionDto['node']>,
+    node: AnalysisResumeNode,
     value?: Record<string, unknown>
   ): Promise<void> {
     const pausedNode = await this.portfolioGraphService.getPausedNode(convIdStr);

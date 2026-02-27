@@ -1,13 +1,4 @@
-import { IsString, MinLength, MaxLength, IsOptional } from 'class-validator';
+import { createZodDto } from 'nestjs-zod';
+import { CreateItemSchema } from '@acme/shared';
 
-export class CreateItemDto {
-  @IsString()
-  @MinLength(1)
-  @MaxLength(100)
-  name!: string;
-
-  @IsString()
-  @MaxLength(500)
-  @IsOptional()
-  description?: string;
-}
+export class CreateItemDto extends createZodDto(CreateItemSchema) {}

@@ -1,15 +1,9 @@
-import { IsOptional, IsInt, Min, Max, IsString } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
-export class ListMessagesDto {
-  @IsOptional()
-  @IsString()
-  cursor?: string;
+const ListMessagesSchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
 
-  @IsOptional()
-  @Transform(({ value }) => parseInt(value, 10))
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit?: number = 50;
-}
+export class ListMessagesDto extends createZodDto(ListMessagesSchema) {}

@@ -1,20 +1,10 @@
-import { IsOptional, IsInt, Min, Max, IsString } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
-export class ListArtefactsDto {
-  @IsOptional()
-  @IsString()
-  cursor?: string;
+const ListArtefactsSchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.coerce.number().int().optional(),
+});
 
-  @IsOptional()
-  @Transform(({ value }) => parseInt(value, 10))
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit?: number = 20;
-
-  @IsOptional()
-  @Transform(({ value }) => parseInt(value, 10))
-  @IsInt()
-  status?: number;
-}
+export class ListArtefactsDto extends createZodDto(ListArtefactsSchema) {}

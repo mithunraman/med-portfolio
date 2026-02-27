@@ -1,8 +1,8 @@
-import type { Message, MessageListResponse } from '@acme/shared';
+import type { AnalysisActionRequest, Message, MessageListResponse } from '@acme/shared';
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ConversationsService } from './conversations.service';
-import { AnalysisActionDto, GetPendingMessagesDto, ListMessagesDto, SendMessageDto } from './dto';
+import { AnalysisActionPipe, GetPendingMessagesDto, ListMessagesDto, SendMessageDto } from './dto';
 
 @Controller('conversations')
 export class ConversationsController {
@@ -42,7 +42,7 @@ export class ConversationsController {
   async analysis(
     @CurrentUser() user: CurrentUserPayload,
     @Param('conversationId') conversationId: string,
-    @Body() dto: AnalysisActionDto
+    @Body(new AnalysisActionPipe()) dto: AnalysisActionRequest
   ): Promise<void> {
     await this.conversationsService.handleAnalysis(user.userId, conversationId, dto);
   }

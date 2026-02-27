@@ -1,23 +1,11 @@
-import { IsString, MaxLength, IsOptional, IsEnum } from 'class-validator';
-import { ItemStatus } from '@acme/shared';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
+import { UpdateItemSchema, ItemStatus } from '@acme/shared';
 
-export class UpdateItemDto {
-  @IsString()
-  @MaxLength(100)
-  @IsOptional()
-  name?: string;
+export class UpdateItemDto extends createZodDto(UpdateItemSchema) {}
 
-  @IsString()
-  @MaxLength(500)
-  @IsOptional()
-  description?: string;
+const UpdateItemStatusSchema = z.object({
+  status: z.nativeEnum(ItemStatus),
+});
 
-  @IsEnum(ItemStatus)
-  @IsOptional()
-  status?: ItemStatus;
-}
-
-export class UpdateItemStatusDto {
-  @IsEnum(ItemStatus)
-  status!: ItemStatus;
-}
+export class UpdateItemStatusDto extends createZodDto(UpdateItemStatusSchema) {}

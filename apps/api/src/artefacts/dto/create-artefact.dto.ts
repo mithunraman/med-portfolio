@@ -1,8 +1,4 @@
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { createZodDto } from 'nestjs-zod';
+import { CreateArtefactRequestSchema } from '@acme/shared';
 
-export class CreateArtefactDto {
-  @IsString()
-  @MinLength(10)
-  @MaxLength(36)
-  artefactId!: string;
-}
+export class CreateArtefactDto extends createZodDto(CreateArtefactRequestSchema) {}

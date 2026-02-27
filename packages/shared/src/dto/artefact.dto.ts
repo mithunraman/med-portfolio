@@ -64,7 +64,10 @@ export type Artefact = z.infer<typeof ArtefactSchema>;
 
 // Request schemas
 export const CreateArtefactRequestSchema = z.object({
-  artefactId: z.string().min(1, 'Artefact ID is required'),
+  artefactId: z
+    .string()
+    .min(10, 'Artefact ID must be at least 10 characters')
+    .max(36, 'Artefact ID must not exceed 36 characters'),
 });
 
 export type CreateArtefactRequest = z.infer<typeof CreateArtefactRequestSchema>;

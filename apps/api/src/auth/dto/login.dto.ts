@@ -1,10 +1,4 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { createZodDto } from 'nestjs-zod';
+import { LoginRequestSchema } from '@acme/shared';
 
-export class LoginDto {
-  @IsEmail()
-  email!: string;
-
-  @IsString()
-  @MinLength(8)
-  password!: string;
-}
+export class LoginDto extends createZodDto(LoginRequestSchema) {}

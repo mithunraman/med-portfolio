@@ -135,8 +135,8 @@ export type Conversation = z.infer<typeof ConversationSchema>;
 // Request schemas
 export const SendMessageRequestSchema = z
   .object({
-    content: z.string().min(1).optional(),
-    mediaId: z.string().min(1).optional(),
+    content: z.string().min(1).max(10000).optional(),
+    mediaId: z.string().min(1).max(50).optional(),
   })
   .refine((data) => Boolean(data.content) !== Boolean(data.mediaId), {
     message: 'Exactly one of content or mediaId must be provided',
@@ -153,6 +153,10 @@ const AnalysisResumeSchema = z.object({ type: z.literal('resume') }).and(
     z.object({
       node: z.literal('present_classification'),
       value: z.object({ entryType: z.string().min(1) }),
+    }),
+    z.object({
+      node: z.literal('present_capabilities'),
+      value: z.object({ selectedCodes: z.array(z.string()).nonempty() }),
     }),
     z.object({
       node: z.literal('present_draft'),

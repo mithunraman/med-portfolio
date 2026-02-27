@@ -12,7 +12,6 @@ import {
 } from '@acme/shared';
 import { Command } from '@langchain/langgraph';
 import { MongoDBSaver } from '@langchain/langgraph-checkpoint-mongodb';
-import type { MongoClient } from 'mongodb';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { Connection, Types } from 'mongoose';
@@ -60,7 +59,8 @@ export class PortfolioGraphService implements OnModuleInit {
     // Get the native MongoDB client from the Mongoose connection.
     // Cast through unknown because Mongoose may bundle a slightly different mongodb
     // driver version than @langchain/langgraph-checkpoint-mongodb expects.
-    const client = this.connection.getClient() as unknown as MongoClient;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = this.connection.getClient() as any;
     const db = this.connection.db;
     if (!db) throw new Error('MongoDB not connected — cannot initialize checkpointer');
     this.checkpointer = new MongoDBSaver({ client, dbName: db.databaseName });

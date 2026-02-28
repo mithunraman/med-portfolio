@@ -31,17 +31,10 @@ export interface ListArtefactsResult {
 
 export interface UpdateArtefactData {
   artefactType?: string | null;
-  classificationConfidence?: number | null;
-  classificationSource?: 'AUTO' | 'MANUAL' | null;
-  classificationAlternatives?: Array<{
-    entryType: string;
-    confidence: number;
-    reasoning: string;
-  }> | null;
   title?: string | null;
   reflection?: string | null;
   pdpActions?: Array<{ action: string; timeframe: string }> | null;
-  capabilities?: Array<{ code: string; name: string; evidence: string }> | null;
+  capabilities?: Array<{ code: string; evidence: string }> | null;
   tags?: Record<string, string[]> | null;
   status?: ArtefactStatus;
 }

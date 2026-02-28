@@ -1,6 +1,6 @@
-import type { Artefact, ActiveConversation } from '@acme/shared';
-import type { Artefact as ArtefactSchema } from '../schemas/artefact.schema';
+import type { ActiveConversation, Artefact } from '@acme/shared';
 import type { Conversation } from '../../conversations/schemas/conversation.schema';
+import type { Artefact as ArtefactSchema } from '../schemas/artefact.schema';
 import { extractArtefactClientId } from '../utils/artefact-id.util';
 
 export function toActiveConversationDto(doc: Conversation): ActiveConversation {
@@ -13,19 +13,13 @@ export function toActiveConversationDto(doc: Conversation): ActiveConversation {
   };
 }
 
-export function toArtefactDto(
-  artefact: ArtefactSchema,
-  conversation: Conversation
-): Artefact {
+export function toArtefactDto(artefact: ArtefactSchema, conversation: Conversation): Artefact {
   return {
     id: artefact.xid,
     artefactId: extractArtefactClientId(artefact.artefactId),
     specialty: artefact.specialty,
     status: artefact.status,
     artefactType: artefact.artefactType,
-    classificationConfidence: artefact.classificationConfidence ?? null,
-    classificationSource: artefact.classificationSource ?? null,
-    classificationAlternatives: artefact.classificationAlternatives ?? null,
     title: artefact.title,
     reflection: artefact.reflection,
     pdpActions: artefact.pdpActions,

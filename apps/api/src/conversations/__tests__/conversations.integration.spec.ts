@@ -365,11 +365,6 @@ describe('Conversations Integration Tests', () => {
 
       expect(artefact.status).toBe(ArtefactStatus.REVIEW);
       expect(artefact.artefactType).toBe('CLINICAL_CASE_REVIEW');
-      expect(artefact.classificationSource).toBe('MANUAL');
-      expect(artefact.classificationConfidence).toBe(1);
-      expect(artefact.classificationAlternatives).toHaveLength(1);
-      expect(artefact.classificationAlternatives![0].entryType).toBe('OUT_OF_HOURS');
-
       // Reflection persisted
       expect(artefact.reflection).toBeDefined();
       expect(artefact.reflection).toContain('Presentation');

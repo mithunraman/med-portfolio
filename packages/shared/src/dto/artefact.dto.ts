@@ -14,20 +14,10 @@ export type PdpAction = z.infer<typeof PdpActionSchema>;
 // Capability schema
 export const CapabilitySchema = z.object({
   code: z.string(),
-  name: z.string(),
   evidence: z.string(),
 });
 
 export type Capability = z.infer<typeof CapabilitySchema>;
-
-// Classification alternative schema
-export const ClassificationAlternativeSchema = z.object({
-  entryType: z.string(),
-  confidence: z.number(),
-  reasoning: z.string(),
-});
-
-export type ClassificationAlternative = z.infer<typeof ClassificationAlternativeSchema>;
 
 // Active conversation (embedded in artefact response)
 export const ActiveConversationSchema = z.object({
@@ -47,9 +37,6 @@ export const ArtefactSchema = z.object({
   specialty: z.nativeEnum(Specialty),
   status: z.nativeEnum(ArtefactStatus),
   artefactType: z.string().nullable(),
-  classificationConfidence: z.number().nullable(),
-  classificationSource: z.enum(['AUTO', 'MANUAL']).nullable(),
-  classificationAlternatives: z.array(ClassificationAlternativeSchema).nullable(),
   title: z.string().nullable(),
   reflection: z.string().nullable(),
   pdpActions: z.array(PdpActionSchema).nullable(),

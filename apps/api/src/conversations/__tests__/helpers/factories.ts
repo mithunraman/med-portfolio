@@ -9,6 +9,7 @@ import {
 } from '@acme/shared';
 import { Model, Types } from 'mongoose';
 import { Artefact, ArtefactDocument } from '../../../artefacts/schemas/artefact.schema';
+import { PdpAction, PdpActionDocument } from '../../../pdp-actions/schemas/pdp-action.schema';
 import { ConversationDocument } from '../../schemas/conversation.schema';
 import { MessageDocument } from '../../schemas/message.schema';
 
@@ -20,16 +21,19 @@ import { MessageDocument } from '../../schemas/message.schema';
 let conversationModel: Model<ConversationDocument>;
 let messageModel: Model<MessageDocument>;
 let artefactModel: Model<ArtefactDocument>;
+let pdpActionModel: Model<PdpActionDocument>;
 
 /** Initialise the factories with Mongoose models from the test module. */
 export function initFactories(
   convModel: Model<ConversationDocument>,
   msgModel: Model<MessageDocument>,
-  artModel: Model<ArtefactDocument>
+  artModel: Model<ArtefactDocument>,
+  pdpModel: Model<PdpActionDocument>,
 ) {
   conversationModel = convModel;
   messageModel = msgModel;
   artefactModel = artModel;
+  pdpActionModel = pdpModel;
 }
 
 // ── Shared test user/artefact IDs ──
@@ -169,4 +173,11 @@ export async function getMessagesForConversation(
   conversationId: Types.ObjectId
 ): Promise<MessageDocument[]> {
   return messageModel.find({ conversation: conversationId }).sort({ _id: 1 }).exec();
+}
+
+/** Fetch PDP actions for an artefact (returns plain objects). */
+export async function getPdpActionsForArtefact(
+  artefactId: Types.ObjectId = TEST_ARTEFACT_ID
+): Promise<PdpAction[]> {
+  return pdpActionModel.find({ artefactId }).lean();
 }

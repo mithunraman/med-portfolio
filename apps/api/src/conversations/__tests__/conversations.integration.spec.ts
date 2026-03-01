@@ -19,6 +19,7 @@ import {
   createTestConversation,
   createTestMessage,
   getMessagesForConversation,
+  getPdpActionsForArtefact,
   getTestArtefact,
   markMessageComplete,
   TEST_USER_ID_STR,
@@ -376,10 +377,11 @@ describe('Conversations Integration Tests', () => {
       expect(artefact.capabilities![0].code).toBe('C-06');
       expect(artefact.capabilities![0].evidence).toBeDefined();
 
-      // PDP actions
-      expect(artefact.pdpActions).toHaveLength(1);
-      expect(artefact.pdpActions![0].action).toContain('diabetes update tutorial');
-      expect(artefact.pdpActions![0].timeframe).toBe('within 4 weeks');
+      // PDP actions — stored in separate collection
+      const pdpActions = await getPdpActionsForArtefact();
+      expect(pdpActions).toHaveLength(1);
+      expect(pdpActions[0].action).toContain('diabetes update tutorial');
+      expect(pdpActions[0].timeframe).toBe('within 4 weeks');
     });
 
     it('A3. Multiple follow-up rounds', async () => {

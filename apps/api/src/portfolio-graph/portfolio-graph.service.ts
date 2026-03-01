@@ -23,7 +23,12 @@ import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from '../conversations/conversations.repository.interface';
+import { TransactionService } from '../database/transaction.service';
 import { LLMService } from '../llm';
+import {
+  IPdpActionsRepository,
+  PDP_ACTIONS_REPOSITORY,
+} from '../pdp-actions/pdp-actions.repository.interface';
 import { buildPortfolioGraph } from './portfolio-graph.builder';
 
 /**
@@ -57,7 +62,10 @@ export class PortfolioGraphService implements OnModuleInit {
     private readonly artefactsRepository: IArtefactsRepository,
     @Inject(CONVERSATIONS_REPOSITORY)
     private readonly conversationsRepository: IConversationsRepository,
-    private readonly llmService: LLMService
+    @Inject(PDP_ACTIONS_REPOSITORY)
+    private readonly pdpActionsRepository: IPdpActionsRepository,
+    private readonly transactionService: TransactionService,
+    private readonly llmService: LLMService,
   ) {}
 
   async onModuleInit() {
@@ -85,6 +93,8 @@ export class PortfolioGraphService implements OnModuleInit {
     const deps = {
       artefactsRepository: this.artefactsRepository,
       conversationsRepository: this.conversationsRepository,
+      pdpActionsRepository: this.pdpActionsRepository,
+      transactionService: this.transactionService,
       llmService: this.llmService,
     };
     this.graph = buildPortfolioGraph(this.checkpointer, deps);

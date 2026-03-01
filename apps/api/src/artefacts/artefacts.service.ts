@@ -10,6 +10,10 @@ import {
   IConversationsRepository,
 } from '../conversations/conversations.repository.interface';
 import { TransactionService } from '../database';
+import {
+  IPdpActionsRepository,
+  PDP_ACTIONS_REPOSITORY,
+} from '../pdp-actions/pdp-actions.repository.interface';
 import { ARTEFACTS_REPOSITORY, IArtefactsRepository } from './artefacts.repository.interface';
 import { CreateArtefactDto, ListArtefactsDto } from './dto';
 import { toArtefactDto } from './mappers/artefact.mapper';
@@ -26,6 +30,8 @@ export class ArtefactsService {
     private readonly artefactsRepository: IArtefactsRepository,
     @Inject(CONVERSATIONS_REPOSITORY)
     private readonly conversationsRepository: IConversationsRepository,
+    @Inject(PDP_ACTIONS_REPOSITORY)
+    private readonly pdpActionsRepository: IPdpActionsRepository,
     private readonly transactionService: TransactionService
   ) {}
 
@@ -111,16 +117,23 @@ export class ArtefactsService {
       return { artefacts: [], nextCursor, limit };
     }
 
-    // Fetch active conversations for all artefacts in one query
+    // Batch-fetch conversations and PDP actions for all artefacts
     const artefactIds = artefacts.map((a) => a._id);
-    const conversationsResult =
-      await this.conversationsRepository.findActiveConversationsByArtefacts(artefactIds);
+
+    const [conversationsResult, pdpActionsResult] = await Promise.all([
+      this.conversationsRepository.findActiveConversationsByArtefacts(artefactIds),
+      this.pdpActionsRepository.findByArtefactIds(artefactIds),
+    ]);
 
     if (isErr(conversationsResult)) {
       throw new InternalServerErrorException(conversationsResult.error.message);
     }
+    if (isErr(pdpActionsResult)) {
+      throw new InternalServerErrorException(pdpActionsResult.error.message);
+    }
 
     const conversationMap = conversationsResult.value;
+    const pdpActionsMap = pdpActionsResult.value;
 
     const artefactsWithConversations = artefacts
       .map((artefact) => {
@@ -128,7 +141,8 @@ export class ArtefactsService {
         if (!conversation) {
           return null;
         }
-        return toArtefactDto(artefact, conversation);
+        const pdpActions = pdpActionsMap.get(artefact._id.toString()) || [];
+        return toArtefactDto(artefact, conversation, pdpActions);
       })
       .filter(isNotNull);
 

@@ -4,14 +4,6 @@ import { Document, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
 
 // Embedded schemas
-export class PdpAction {
-  @Prop({ required: true })
-  action!: string;
-
-  @Prop({ required: true })
-  timeframe!: string;
-}
-
 export class Capability {
   @Prop({ required: true })
   code!: string;
@@ -58,9 +50,6 @@ export class Artefact {
 
   @Prop({ type: [ReflectionSection], default: null })
   reflection!: ReflectionSection[] | null;
-
-  @Prop({ type: [PdpAction], default: null })
-  pdpActions!: PdpAction[] | null;
 
   @Prop({ type: [Capability], default: null })
   capabilities!: Capability[] | null;

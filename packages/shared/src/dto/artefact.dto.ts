@@ -1,12 +1,15 @@
 import { z } from 'zod';
 import { ArtefactStatus } from '../enums/artefact-status.enum';
 import { ConversationStatus } from '../enums/conversation-status.enum';
+import { PdpActionStatus } from '../enums/pdp-action-status.enum';
 import { Specialty } from '../enums/specialty.enum';
 
 // PDP Action schema
 export const PdpActionSchema = z.object({
+  id: z.string(),
   action: z.string(),
   timeframe: z.string(),
+  status: z.nativeEnum(PdpActionStatus),
 });
 
 export type PdpAction = z.infer<typeof PdpActionSchema>;

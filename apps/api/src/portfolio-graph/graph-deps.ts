@@ -1,6 +1,8 @@
 import { IArtefactsRepository } from '../artefacts/artefacts.repository.interface';
 import { IConversationsRepository } from '../conversations/conversations.repository.interface';
+import { TransactionService } from '../database/transaction.service';
 import { LLMService } from '../llm';
+import { IPdpActionsRepository } from '../pdp-actions/pdp-actions.repository.interface';
 
 /**
  * Dependencies injected into graph nodes via the factory pattern.
@@ -13,5 +15,7 @@ import { LLMService } from '../llm';
 export interface GraphDeps {
   artefactsRepository: IArtefactsRepository;
   conversationsRepository: IConversationsRepository;
+  pdpActionsRepository: IPdpActionsRepository;
+  transactionService: TransactionService;
   llmService: LLMService;
 }

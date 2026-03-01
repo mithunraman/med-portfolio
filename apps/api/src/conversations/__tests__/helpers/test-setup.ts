@@ -17,6 +17,9 @@ import { Artefact, ArtefactDocument, ArtefactSchema } from '../../../artefacts/s
 import { ArtefactsRepository } from '../../../artefacts/artefacts.repository';
 import { ARTEFACTS_REPOSITORY } from '../../../artefacts/artefacts.repository.interface';
 import { TransactionService } from '../../../database/transaction.service';
+import { PdpActionsRepository } from '../../../pdp-actions/pdp-actions.repository';
+import { PDP_ACTIONS_REPOSITORY } from '../../../pdp-actions/pdp-actions.repository.interface';
+import { PdpAction, PdpActionDocument, PdpActionSchema } from '../../../pdp-actions/schemas/pdp-action.schema';
 import { PortfolioGraphService } from '../../../portfolio-graph/portfolio-graph.service';
 import { LLMService } from '../../../llm/llm.service';
 import { ProcessingService } from '../../../processing/processing.service';
@@ -58,6 +61,7 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
         // Media schema needed for .populate('media') in listMessages
         { name: Media.name, schema: MediaSchema },
         { name: Artefact.name, schema: ArtefactSchema },
+        { name: PdpAction.name, schema: PdpActionSchema },
       ]),
     ],
     providers: [
@@ -72,6 +76,10 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
       {
         provide: ARTEFACTS_REPOSITORY,
         useClass: ArtefactsRepository,
+      },
+      {
+        provide: PDP_ACTIONS_REPOSITORY,
+        useClass: PdpActionsRepository,
       },
 
       // Mocked LLMService — replaced by SequentialLLMMock
@@ -114,9 +122,10 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
   const conversationModel = module.get<Model<ConversationDocument>>(getModelToken(Conversation.name));
   const messageModel = module.get<Model<MessageDocument>>(getModelToken(Message.name));
   const artefactModel = module.get<Model<ArtefactDocument>>(getModelToken(Artefact.name));
+  const pdpActionModel = module.get<Model<PdpActionDocument>>(getModelToken(PdpAction.name));
 
   // Initialise factory helpers with the real models
-  initFactories(conversationModel, messageModel, artefactModel);
+  initFactories(conversationModel, messageModel, artefactModel, pdpActionModel);
 
   // Warm up the replica set: do a write+read to ensure the oplog and
   // checkpoint collections are fully operational before tests start.

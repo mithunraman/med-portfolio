@@ -14,3 +14,10 @@
 # LLM
 
 - Make await classificationPrompt.formatMessages typescript safe
+
+# Backend
+
+- Graph Service
+  - If a node fails, how can we retry the node?
+- Transaction Service
+  - When withTransaction is called, lets design a good way to throw errors back to the caller

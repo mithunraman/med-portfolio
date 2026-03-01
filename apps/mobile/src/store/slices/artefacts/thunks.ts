@@ -1,3 +1,4 @@
+import type { ArtefactStatus } from '@acme/shared';
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { api } from '../../../api/client';
 import { logger } from '../../../utils/logger';
@@ -24,6 +25,29 @@ export const createArtefact = createAsyncThunk(
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to create artefact';
       artefactsLogger.error('Failed to create artefact', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
+ * Fetch artefacts list with optional status filter and cursor-based pagination.
+ */
+export const fetchArtefacts = createAsyncThunk(
+  'artefacts/fetchArtefacts',
+  async (
+    params: { cursor?: string; limit?: number; status?: ArtefactStatus } | undefined,
+    { rejectWithValue }
+  ) => {
+    artefactsLogger.info('Fetching artefacts', params);
+
+    try {
+      const response = await api.artefacts.listArtefacts(params);
+      artefactsLogger.info('Fetched artefacts', { count: response.artefacts.length });
+      return response;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch artefacts';
+      artefactsLogger.error('Failed to fetch artefacts', { error: message });
       return rejectWithValue(message);
     }
   }

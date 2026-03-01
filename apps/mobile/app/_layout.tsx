@@ -69,26 +69,19 @@ function RootLayoutNav() {
     if (isLoading) return;
 
     const parsed = Linking.parse(url);
-    // Example: mobile2://dashboard/123 -> navigate to dashboard item
-    // Example: mobile2://settings -> navigate to settings
 
     if (parsed.path) {
-      // Only navigate to protected routes if logged in
       if (isLoggedIn) {
-        if (parsed.path.startsWith('dashboard')) {
-          const itemId = parsed.path.split('/')[1];
-          if (itemId) {
-            router.push(`/(tabs)/dashboard/${itemId}`);
-          } else {
-            router.push('/(tabs)/dashboard');
-          }
-        } else if (parsed.path === 'settings') {
-          router.push('/(tabs)/settings');
+        if (parsed.path === 'entries') {
+          router.push('/(tabs)/entries');
+        } else if (parsed.path === 'pdp') {
+          router.push('/(tabs)/pdp');
+        } else if (parsed.path === 'profile') {
+          router.push('/(tabs)/profile');
         } else if (parsed.path === 'home') {
           router.push('/(tabs)');
         }
       } else {
-        // For unauthenticated users, only allow auth routes
         if (parsed.path === 'login') {
           router.push('/(auth)/login');
         } else if (parsed.path === 'register') {

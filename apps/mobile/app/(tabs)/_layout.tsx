@@ -1,6 +1,6 @@
+import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { useTheme } from '@/theme';
 
 export default function TabLayout() {
   const { colors } = useTheme();
@@ -22,8 +22,17 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="entries"
+        options={{
+          title: 'Entries',
+          tabBarIcon: ({ focused, color, size }) => (
             <Ionicons
-              name={focused ? 'home' : 'home-outline'}
+              name={focused ? 'document-text' : 'document-text-outline'}
               size={size}
               color={color}
             />
@@ -31,28 +40,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="dashboard"
+        name="pdp"
         options={{
-          title: 'Dashboard',
+          title: 'PDP',
           tabBarIcon: ({ focused, color, size }) => (
-            <Ionicons
-              name={focused ? 'grid' : 'grid-outline'}
-              size={size}
-              color={color}
-            />
+            <Ionicons name={focused ? 'checkbox' : 'checkbox-outline'} size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="profile"
         options={{
-          title: 'Settings',
+          title: 'Profile',
           tabBarIcon: ({ focused, color, size }) => (
-            <Ionicons
-              name={focused ? 'settings' : 'settings-outline'}
-              size={size}
-              color={color}
-            />
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
           ),
         }}
       />

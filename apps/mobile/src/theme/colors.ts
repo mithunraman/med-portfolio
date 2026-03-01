@@ -162,7 +162,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
 // 'gmail' | 'linear' | 'spotify' | 'notion' | 'stripe' | 'forest' | 'sunset';
 
 // ✨ Change this line to switch themes
-const ACTIVE_THEME: ThemeName = 'stripe';
+const ACTIVE_THEME: ThemeName = 'forest';
 
 export const colors = themes[ACTIVE_THEME];
 export { themes };

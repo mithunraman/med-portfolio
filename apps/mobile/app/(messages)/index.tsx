@@ -1,6 +1,6 @@
 import { FloatingActionButton } from '@/components/FloatingActionButton';
 import { useAppDispatch, useAppSelector } from '@/hooks';
-import { fetchConversations } from '@/store';
+import { conversationSelectors, fetchConversations } from '@/store';
 import { useTheme } from '@/theme';
 import { Conversation } from '@acme/shared';
 import { Feather } from '@expo/vector-icons';
@@ -22,9 +22,9 @@ export default function ConversationsListScreen() {
   const dispatch = useAppDispatch();
   const { colors } = useTheme();
 
-  const { conversations, loadingConversations, error } = useAppSelector(
-    (state) => state.conversations
-  );
+  const conversationsState = useAppSelector((state) => state.conversations);
+  const conversations = conversationSelectors.selectAll(conversationsState);
+  const { loading, error } = conversationsState;
 
   const loadConversations = useCallback(
     (refresh = false) => {
@@ -98,7 +98,7 @@ export default function ConversationsListScreen() {
     </View>
   );
 
-  if (loadingConversations && conversations.length === 0) {
+  if (loading && conversations.length === 0) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -130,7 +130,7 @@ export default function ConversationsListScreen() {
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
-            refreshing={loadingConversations}
+            refreshing={loading}
             onRefresh={() => loadConversations(true)}
             tintColor={colors.primary}
           />

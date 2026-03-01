@@ -1,9 +1,9 @@
+import { useAuth } from '@/hooks';
+import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '@/hooks';
-import { useTheme } from '@/theme';
 
 interface SettingsItemProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -22,6 +22,8 @@ function SettingsItem({ icon, label, onPress, rightElement, showChevron = true }
       onPress={onPress}
       disabled={!onPress && !rightElement}
       activeOpacity={onPress ? 0.7 : 1}
+      accessibilityRole={onPress ? 'button' : 'text'}
+      accessibilityLabel={label}
     >
       <View style={styles.settingsItemLeft}>
         <Ionicons name={icon} size={22} color={colors.textSecondary} style={styles.settingsIcon} />
@@ -52,7 +54,7 @@ function SettingsSection({ title, children }: SettingsSectionProps) {
   );
 }
 
-export default function SettingsScreen() {
+export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors, isDark, toggleMode } = useTheme();
@@ -86,115 +88,112 @@ export default function SettingsScreen() {
         contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 24 }}
       >
         {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Settings</Text>
-      </View>
-
-      {/* Account Section */}
-      <SettingsSection title="Account">
-        <View style={[styles.accountInfo, { borderBottomColor: colors.border }]}>
-          <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-            <Text style={styles.avatarText}>
-              {user?.name?.charAt(0).toUpperCase() || 'G'}
-            </Text>
-          </View>
-          <View style={styles.accountDetails}>
-            <Text style={[styles.accountName, { color: colors.text }]}>
-              {user?.name || 'Guest User'}
-            </Text>
-            {isGuest ? (
-              <View style={[styles.guestBadge, { backgroundColor: colors.border }]}>
-                <Text style={[styles.guestBadgeText, { color: colors.textSecondary }]}>
-                  Guest Mode
-                </Text>
-              </View>
-            ) : (
-              <Text style={[styles.accountEmail, { color: colors.textSecondary }]}>
-                {user?.email || ''}
-              </Text>
-            )}
-          </View>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: colors.text }]}>Profile</Text>
         </View>
-        {isGuest && (
-          <SettingsItem
-            icon="person-add-outline"
-            label="Create Account"
-            onPress={handleCreateAccount}
-          />
-        )}
-      </SettingsSection>
 
-      {/* Preferences Section */}
-      <SettingsSection title="Preferences">
-        <SettingsItem
-          icon="moon-outline"
-          label="Dark Mode"
-          showChevron={false}
-          rightElement={
-            <Switch
-              value={isDark}
-              onValueChange={toggleMode}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor="#fff"
+        {/* Account Section */}
+        <SettingsSection title="Account">
+          <View style={[styles.accountInfo, { borderBottomColor: colors.border }]}>
+            <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+              <Text style={styles.avatarText}>
+                {user?.name?.charAt(0).toUpperCase() || 'G'}
+              </Text>
+            </View>
+            <View style={styles.accountDetails}>
+              <Text style={[styles.accountName, { color: colors.text }]}>
+                {user?.name || 'Guest User'}
+              </Text>
+              {isGuest ? (
+                <View style={[styles.guestBadge, { backgroundColor: colors.border }]}>
+                  <Text style={[styles.guestBadgeText, { color: colors.textSecondary }]}>
+                    Guest Mode
+                  </Text>
+                </View>
+              ) : (
+                <Text style={[styles.accountEmail, { color: colors.textSecondary }]}>
+                  {user?.email || ''}
+                </Text>
+              )}
+            </View>
+          </View>
+          {isGuest && (
+            <SettingsItem
+              icon="person-add-outline"
+              label="Create Account"
+              onPress={handleCreateAccount}
             />
-          }
-        />
-        <SettingsItem
-          icon="notifications-outline"
-          label="Notifications"
-          onPress={() => Alert.alert('Coming Soon', 'Notification settings will be available soon.')}
-        />
-        <SettingsItem
-          icon="language-outline"
-          label="Language"
-          onPress={() => Alert.alert('Coming Soon', 'Language settings will be available soon.')}
-        />
-      </SettingsSection>
+          )}
+        </SettingsSection>
 
-      {/* Support Section */}
-      <SettingsSection title="Support">
-        <SettingsItem
-          icon="help-circle-outline"
-          label="Help Center"
-          onPress={() => Alert.alert('Help', 'Contact support@example.com for help.')}
-        />
-        <SettingsItem
-          icon="document-text-outline"
-          label="Privacy Policy"
-          onPress={() => Alert.alert('Privacy Policy', 'Privacy policy will be available soon.')}
-        />
-        <SettingsItem
-          icon="information-circle-outline"
-          label="Terms of Service"
-          onPress={() => Alert.alert('Terms of Service', 'Terms will be available soon.')}
-        />
-      </SettingsSection>
+        {/* Preferences */}
+        <SettingsSection title="Preferences">
+          <SettingsItem
+            icon="moon-outline"
+            label="Dark Mode"
+            showChevron={false}
+            rightElement={
+              <Switch
+                value={isDark}
+                onValueChange={toggleMode}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor="#fff"
+              />
+            }
+          />
+        </SettingsSection>
 
-      {/* About Section */}
-      <SettingsSection title="About">
-        <SettingsItem
-          icon="code-slash-outline"
-          label="App Version"
-          showChevron={false}
-          rightElement={
-            <Text style={[styles.versionText, { color: colors.textSecondary }]}>1.0.0</Text>
-          }
-        />
-      </SettingsSection>
+        {/* Privacy & Data */}
+        <SettingsSection title="Privacy & Data">
+          <SettingsItem
+            icon="shield-checkmark-outline"
+            label="How your data is stored"
+            onPress={() =>
+              Alert.alert(
+                'Data Storage',
+                'We store your conversations and entries so you can edit and export them. PDFs are stored on your device. Confidential notes are never included in exports.'
+              )
+            }
+          />
+          <SettingsItem
+            icon="document-text-outline"
+            label="Privacy Policy"
+            onPress={() => Alert.alert('Privacy Policy', 'Privacy policy will be available soon.')}
+          />
+        </SettingsSection>
 
-      {/* Logout Button */}
-      <View style={styles.logoutContainer}>
-        <TouchableOpacity
-          style={[styles.logoutButton, { borderColor: colors.error }]}
-          onPress={handleLogout}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="log-out-outline" size={20} color={colors.error} />
-          <Text style={[styles.logoutButtonText, { color: colors.error }]}>
-            {isGuest ? 'Exit Guest Mode' : 'Sign Out'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+        {/* Support */}
+        <SettingsSection title="Support">
+          <SettingsItem
+            icon="help-circle-outline"
+            label="Help & Feedback"
+            onPress={() => Alert.alert('Help', 'Contact support@example.com for help.')}
+          />
+          <SettingsItem
+            icon="information-circle-outline"
+            label="About"
+            showChevron={false}
+            rightElement={
+              <Text style={[styles.versionText, { color: colors.textSecondary }]}>v1.0.0</Text>
+            }
+          />
+        </SettingsSection>
+
+        {/* Logout */}
+        <View style={styles.logoutContainer}>
+          <TouchableOpacity
+            style={[styles.logoutButton, { borderColor: colors.error }]}
+            onPress={handleLogout}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={isGuest ? 'Exit Guest Mode' : 'Sign Out'}
+          >
+            <Ionicons name="log-out-outline" size={20} color={colors.error} />
+            <Text style={[styles.logoutButtonText, { color: colors.error }]}>
+              {isGuest ? 'Exit Guest Mode' : 'Sign Out'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
@@ -208,11 +207,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingHorizontal: 20,
+    marginBottom: 8,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
   },
   section: {

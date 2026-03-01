@@ -3,7 +3,7 @@ import { useAppDispatch, useAppSelector } from '@/hooks';
 import { initializeAuth, loadNudgeState, loadOnboardingState, store } from '@/store';
 import { ThemeProvider, useTheme } from '@/theme';
 import * as Linking from 'expo-linking';
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -119,7 +119,17 @@ function RootLayoutNav() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Slot />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.background },
+          animation: 'slide_from_right',
+        }}
+      >
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(messages)" options={{ presentation: 'card' }} />
+      </Stack>
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </View>
   );

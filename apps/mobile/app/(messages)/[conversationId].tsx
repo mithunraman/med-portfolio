@@ -9,8 +9,8 @@ import { MediaType, Message, MessageProcessingStatus } from '@acme/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { AppState, Platform, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { shallowEqual } from 'react-redux';
 
@@ -133,9 +133,7 @@ export default function ChatScreen() {
         // For new conversations, create artefact first — same as handleSend
         let targetConversationId = realConversationIdRef.current;
         if (!targetConversationId && isNew === 'true') {
-          const artefact = await dispatch(
-            createArtefact({ artefactId: conversationId })
-          ).unwrap();
+          const artefact = await dispatch(createArtefact({ artefactId: conversationId })).unwrap();
           targetConversationId = artefact.conversation.id;
           realConversationIdRef.current = targetConversationId;
         }
@@ -179,11 +177,7 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={headerHeight}
       >
-        <MessageList
-          messages={messages}
-          currentUserId={user?.id ?? ''}
-          isLoading={isLoading}
-        />
+        <MessageList messages={messages} currentUserId={user?.id ?? ''} isLoading={isLoading} />
 
         <ChatComposer
           onSend={handleSend}

@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Request, Response, NextFunction } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { AppModule } from './app.module';
 
@@ -23,6 +24,11 @@ async function bootstrap() {
 
   // API prefix
   app.setGlobalPrefix('api');
+
+  // Simulate network latency in development
+  if (configService.get('app.nodeEnv') === 'development') {
+    app.use((_req: Request, _res: Response, next: NextFunction) => setTimeout(next, 1000));
+  }
 
   await app.listen(port);
   logger.log(`Application is running on: http://localhost:${port}/api`);

@@ -110,7 +110,11 @@ export const PortfolioState = Annotation.Root({
   }),
 
   // ── Reflection ──
-  reflection: Annotation<string | null>({
+  title: Annotation<string | null>({
+    reducer: (_, next) => next,
+    default: () => null,
+  }),
+  reflection: Annotation<Array<{ title: string; text: string }> | null>({
     reducer: (_, next) => next,
     default: () => null,
   }),

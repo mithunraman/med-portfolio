@@ -13,18 +13,28 @@ const logger = new Logger('ReflectNode');
 /* ------------------------------------------------------------------ */
 
 /**
- * The reflection is returned as a single Markdown string with section
- * headings baked in. This keeps the output portable — downstream nodes,
- * the review UI, and the final export all consume one coherent text
- * rather than assembling fragments.
+ * The reflection is returned as a structured array of sections, each with
+ * a title and text. This allows the frontend to render sections independently
+ * and supports per-section editing.
  */
 const reflectResponseSchema = z.object({
-  reflection: z
+  title: z
     .string()
+    .max(200)
     .describe(
-      'The complete reflection as Markdown text with section headings. ' +
-        'Written in first person, honest and professional.'
+      'A concise title summarising the artefact for list views (max 200 chars). ' +
+        'e.g. "T2DM Management in Elderly Patient"'
     ),
+  sections: z
+    .array(
+      z.object({
+        title: z.string().describe('Section heading, e.g. "Presentation"'),
+        text: z
+          .string()
+          .describe('Section content written in first person, honest and professional'),
+      })
+    )
+    .describe('Reflection sections in order, matching the template sections'),
 });
 
 /* ------------------------------------------------------------------ */
@@ -48,11 +58,11 @@ const reflectPrompt = ChatPromptTemplate.fromMessages([
     'system',
     `You are an educational writing assistant for {specialtyName} portfolio reflections.
 
-Your task: generate a structured {templateName} reflection based on the trainee's transcript. The reflection should read as if written by the trainee — authentic, specific, and professionally honest.
+Your task: generate a structured {templateName} reflection based on the trainee's transcript. The reflection should read as if written by the trainee — authentic, specific, and professionally honest. Also generate a concise title summarising the artefact for list views.
 
 ## Sections
 
-Write the reflection with the following sections, in order. Use each section heading as a Markdown heading (## Section Label).
+Write the reflection as an array of section objects. Each section has a title (the section heading) and text (the content). Follow the sections below, in order.
 
 {sectionBlock}
 
@@ -173,13 +183,14 @@ export function createReflectNode(deps: GraphDeps) {
       { temperature: 0.4, maxTokens }
     );
 
-    const wordCount = response.reflection.split(/\s+/).filter(Boolean).length;
+    const wordCount = response.sections
+      .reduce((sum, s) => sum + s.text.split(/\s+/).filter(Boolean).length, 0);
 
     logger.log(
-      `Reflection generated: ${wordCount} words ` +
+      `Reflection generated: ${response.sections.length} sections, ${wordCount} words ` +
         `(target: ${template.wordCountRange.min}-${template.wordCountRange.max})`
     );
 
-    return { reflection: response.reflection };
+    return { title: response.title, reflection: response.sections };
   };
 }

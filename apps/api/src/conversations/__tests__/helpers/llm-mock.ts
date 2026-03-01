@@ -78,7 +78,7 @@ export class SequentialLLMMock {
         }
 
         const data = this.responses[this.callIndex++] as T;
-        return { data, model: OpenAIModels.GPT_4_1, tokensUsed: null };
+        return { data, model: OpenAIModels.GPT_4_1_MINI, tokensUsed: null };
       },
       transcribeAudio: async () => {
         throw new Error('LLM mock: transcribeAudio() is not implemented');
@@ -195,14 +195,27 @@ export function tagCapabilitiesResponse(
  * Default: a short structured reflection with section headings.
  */
 export function reflectResponse(
-  overrides?: Partial<{ reflection: string }>
+  overrides?: Partial<{
+    title: string;
+    sections: Array<{ title: string; text: string }>;
+  }>
 ) {
   return {
-    reflection:
-      overrides?.reflection ??
-      '## Presentation\nI saw a 55-year-old patient with poorly controlled type 2 diabetes.\n\n' +
-        '## Clinical Reasoning\nI considered the HbA1c of 72 and decided to initiate metformin.\n\n' +
-        '## Reflection\nThis case reinforced the importance of shared decision making in chronic disease management.',
+    title: overrides?.title ?? 'T2DM Management in Elderly Patient',
+    sections: overrides?.sections ?? [
+      {
+        title: 'Presentation',
+        text: 'I saw a 55-year-old patient with poorly controlled type 2 diabetes.',
+      },
+      {
+        title: 'Clinical Reasoning',
+        text: 'I considered the HbA1c of 72 and decided to initiate metformin.',
+      },
+      {
+        title: 'Reflection',
+        text: 'This case reinforced the importance of shared decision making in chronic disease management.',
+      },
+    ],
   };
 }
 

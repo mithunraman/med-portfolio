@@ -8,12 +8,12 @@ import { MEDICAL_KEYTERMS, NHS_NUMBER_PATTERN, TRANSCRIPTION_TIMEOUT_MS } from '
 
 export const OpenAIModels = {
   GPT_4_1: 'gpt-4.1',
-  GPT_4O_MINI: 'gpt-4o-mini',
+  GPT_4_1_MINI: 'gpt-4.1-mini',
 } as const;
 
 export type OpenAIModel = (typeof OpenAIModels)[keyof typeof OpenAIModels];
 
-export const DEFAULT_MODEL: OpenAIModel = OpenAIModels.GPT_4_1;
+export const DEFAULT_MODEL: OpenAIModel = OpenAIModels.GPT_4_1_MINI;
 
 export interface LLMOptions {
   model?: OpenAIModel;

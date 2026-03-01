@@ -32,7 +32,7 @@ export interface ListArtefactsResult {
 export interface UpdateArtefactData {
   artefactType?: string | null;
   title?: string | null;
-  reflection?: string | null;
+  reflection?: Array<{ title: string; text: string }> | null;
   pdpActions?: Array<{ action: string; timeframe: string }> | null;
   capabilities?: Array<{ code: string; evidence: string }> | null;
   tags?: Record<string, string[]> | null;

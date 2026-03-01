@@ -22,7 +22,7 @@ export class CleaningStage implements IProcessingStage {
 
     const response = await this.llmService.invokeStructured(messages, cleaningResponseSchema, {
       temperature: 0.1,
-      model: 'gpt-4.1',
+      model: 'gpt-4.1-mini',
     });
 
     return {

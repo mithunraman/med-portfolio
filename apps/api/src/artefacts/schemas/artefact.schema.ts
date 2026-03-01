@@ -20,6 +20,14 @@ export class Capability {
   evidence!: string;
 }
 
+export class ReflectionSection {
+  @Prop({ required: true })
+  title!: string;
+
+  @Prop({ required: true })
+  text!: string;
+}
+
 @Schema({
   collection: 'artefacts',
   timestamps: true,
@@ -48,8 +56,8 @@ export class Artefact {
   @Prop({ type: String, maxlength: 200, default: null })
   title!: string | null;
 
-  @Prop({ type: String, default: null })
-  reflection!: string | null;
+  @Prop({ type: [ReflectionSection], default: null })
+  reflection!: ReflectionSection[] | null;
 
   @Prop({ type: [PdpAction], default: null })
   pdpActions!: PdpAction[] | null;

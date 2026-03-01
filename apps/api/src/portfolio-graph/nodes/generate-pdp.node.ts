@@ -145,7 +145,7 @@ export function createGeneratePdpNode(deps: GraphDeps) {
     logger.log(`Generating PDP for conversation ${state.conversationId}`);
 
     // ── Guard: no reflection ──
-    if (!state.reflection) {
+    if (!state.reflection || state.reflection.length === 0) {
       logger.warn('No reflection available — skipping PDP generation');
       return { pdpActions: [] };
     }
@@ -153,12 +153,17 @@ export function createGeneratePdpNode(deps: GraphDeps) {
     const specialty = Number(state.specialty) as Specialty;
     const config = getSpecialtyConfig(specialty);
 
+    // ── Format reflection sections into text for the prompt ──
+    const reflectionText = state.reflection
+      .map((s) => `## ${s.title}\n${s.text}`)
+      .join('\n\n');
+
     // ── Build and send prompt ──
     const messages = await generatePdpPrompt.formatMessages({
       specialtyName: config.name,
       entryType: state.entryType ?? 'unknown',
       capabilityBlock: formatCapabilityBlock(state.capabilities),
-      reflection: state.reflection,
+      reflection: reflectionText,
     });
 
     const { data: response } = await deps.llmService.invokeStructured(

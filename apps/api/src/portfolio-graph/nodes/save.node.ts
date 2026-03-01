@@ -18,6 +18,7 @@ export function createSaveNode(deps: GraphDeps) {
       new Types.ObjectId(state.artefactId),
       {
         artefactType: state.entryType,
+        title: state.title,
         reflection: state.reflection,
         capabilities: state.capabilities.map((c) => ({
           code: c.code,

@@ -19,6 +19,14 @@ export const CapabilitySchema = z.object({
 
 export type Capability = z.infer<typeof CapabilitySchema>;
 
+// Reflection section schema
+export const ReflectionSectionSchema = z.object({
+  title: z.string(),
+  text: z.string(),
+});
+
+export type ReflectionSection = z.infer<typeof ReflectionSectionSchema>;
+
 // Active conversation (embedded in artefact response)
 export const ActiveConversationSchema = z.object({
   id: z.string(),
@@ -38,7 +46,7 @@ export const ArtefactSchema = z.object({
   status: z.nativeEnum(ArtefactStatus),
   artefactType: z.string().nullable(),
   title: z.string().nullable(),
-  reflection: z.string().nullable(),
+  reflection: z.array(ReflectionSectionSchema).nullable(),
   pdpActions: z.array(PdpActionSchema).nullable(),
   capabilities: z.array(CapabilitySchema).nullable(),
   tags: z.record(z.array(z.string())).nullable(),

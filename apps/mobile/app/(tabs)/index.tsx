@@ -38,33 +38,22 @@ function formatDate(): string {
 
 // ─── Module A: Start New Entry ────────────────────────────────────────────────
 
-function StartNewEntryCard({ onVoice, onText }: { onVoice: () => void; onText: () => void }) {
+function StartNewEntryCard({ onPress }: { onPress: () => void }) {
   const { colors } = useTheme();
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
-      <Text style={[styles.cardTitle, { color: colors.text }]}>What did you learn today?</Text>
+      <Text style={[styles.cardTitle, { color: colors.text }]}>Capture a moment</Text>
 
       <TouchableOpacity
         style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-        onPress={onVoice}
+        onPress={onPress}
         activeOpacity={0.8}
         accessibilityRole="button"
-        accessibilityLabel="Start voice conversation"
+        accessibilityLabel="Start a new entry"
       >
-        <Ionicons name="mic" size={20} color="#fff" />
-        <Text style={styles.primaryButtonText}>Talk about it</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.secondaryButton, { borderColor: colors.border }]}
-        onPress={onText}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel="Start text conversation"
-      >
-        <Ionicons name="create-outline" size={18} color={colors.text} />
-        <Text style={[styles.secondaryButtonText, { color: colors.text }]}>Write instead</Text>
+        <Ionicons name="add" size={20} color="#fff" />
+        <Text style={styles.primaryButtonText}>Start now</Text>
       </TouchableOpacity>
 
       <Text style={[styles.helperText, { color: colors.textSecondary }]}>
@@ -281,7 +270,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Module A: Start New Entry */}
-        <StartNewEntryCard onVoice={handleStartNew} onText={handleStartNew} />
+        <StartNewEntryCard onPress={handleStartNew} />
 
         {/* Module B: Recent Entries */}
         <RecentEntriesModule
@@ -370,19 +359,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-  },
-  secondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 8,
-  },
-  secondaryButtonText: {
-    fontSize: 15,
-    fontWeight: '500',
   },
   helperText: {
     fontSize: 13,

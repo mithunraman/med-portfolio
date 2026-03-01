@@ -1,5 +1,5 @@
 import { SectionHeader, StatusPill } from '@/components';
-import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
+import { useAppDispatch, useAppSelector } from '@/hooks';
 import { fetchDashboard } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
@@ -216,7 +216,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
-  const { user } = useAuth();
+
   const dispatch = useAppDispatch();
 
   const dashboardData = useAppSelector((state) => state.dashboard.data);
@@ -242,31 +242,19 @@ export default function HomeScreen() {
   }, [router]);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
+          { paddingTop: 16, paddingBottom: insets.bottom + 24 },
         ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={[styles.appTitle, { color: colors.text }]}>Portfolio</Text>
-            <Text style={[styles.dateText, { color: colors.textSecondary }]}>{formatDate()}</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => router.push('/(tabs)/profile')}
-            style={[styles.avatarButton, { backgroundColor: colors.primary }]}
-            accessibilityRole="button"
-            accessibilityLabel="Go to profile"
-          >
-            <Text style={styles.avatarButtonText}>
-              {user?.name?.charAt(0).toUpperCase() || 'U'}
-            </Text>
-          </TouchableOpacity>
+          <Text style={[styles.title, { color: colors.text }]}>Home</Text>
+          <Text style={[styles.dateText, { color: colors.textSecondary }]}>{formatDate()}</Text>
         </View>
 
         {/* Module A: Start New Entry */}
@@ -308,31 +296,16 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
     marginBottom: 8,
   },
-  appTitle: {
+  title: {
     fontSize: 28,
     fontWeight: 'bold',
   },
   dateText: {
     fontSize: 14,
     marginTop: 2,
-  },
-  avatarButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
   },
 
   // Module A: Start New Entry

@@ -1,3 +1,4 @@
+import { PdpActionStatus } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
 import type { DBError } from '../artefacts/artefacts.repository.interface';
 import type { Result } from '../common/utils/result.util';
@@ -10,6 +11,11 @@ export interface CreatePdpActionData {
   artefactId: Types.ObjectId;
   action: string;
   timeframe: string;
+}
+
+export interface FindByUserOptions {
+  limit?: number;
+  sortByDueDate?: boolean;
 }
 
 export interface IPdpActionsRepository {
@@ -27,4 +33,15 @@ export interface IPdpActionsRepository {
     id: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<PdpAction[], DBError>>;
+
+  findByUserId(
+    userId: Types.ObjectId,
+    statuses: PdpActionStatus[],
+    options?: FindByUserOptions
+  ): Promise<Result<PdpAction[], DBError>>;
+
+  countByUserId(
+    userId: Types.ObjectId,
+    statuses: PdpActionStatus[]
+  ): Promise<Result<number, DBError>>;
 }

@@ -28,6 +28,9 @@ export class PdpAction {
   @Prop({ required: true, type: Number, default: PdpActionStatus.PENDING })
   status!: PdpActionStatus;
 
+  @Prop({ type: Date, default: null })
+  dueDate!: Date | null;
+
   createdAt!: Date;
   updatedAt!: Date;
 }

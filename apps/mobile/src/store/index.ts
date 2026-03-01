@@ -3,6 +3,7 @@ import {
   artefactsReducer,
   authReducer,
   conversationsReducer,
+  dashboardReducer,
   messagesReducer,
   nudgeReducer,
   onboardingReducer,
@@ -16,6 +17,7 @@ export const store = configureStore({
     messages: messagesReducer,
     onboarding: onboardingReducer,
     nudge: nudgeReducer,
+    dashboard: dashboardReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

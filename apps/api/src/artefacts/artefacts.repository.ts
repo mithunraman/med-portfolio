@@ -4,6 +4,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import { Result, err, ok } from '../common/utils/result.util';
 import {
+  CountByUserFilter,
   DBError,
   IArtefactsRepository,
   ListArtefactsQuery,
@@ -102,6 +103,28 @@ export class ArtefactsRepository implements IArtefactsRepository {
     } catch (error) {
       this.logger.error(`Failed to update artefact ${id}`, error);
       return err({ code: 'DB_ERROR', message: 'Failed to update artefact' });
+    }
+  }
+
+  async countByUser(
+    userId: Types.ObjectId,
+    filter?: CountByUserFilter
+  ): Promise<Result<number, DBError>> {
+    try {
+      const query: Record<string, unknown> = { userId };
+
+      if (filter?.since) {
+        query.createdAt = { $gte: filter.since };
+      }
+      if (filter?.status !== undefined) {
+        query.status = filter.status;
+      }
+
+      const count = await this.artefactModel.countDocuments(query);
+      return ok(count);
+    } catch (error) {
+      this.logger.error('Failed to count artefacts', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to count artefacts' });
     }
   }
 }

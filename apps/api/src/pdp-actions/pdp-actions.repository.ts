@@ -3,8 +3,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import { Result, err, ok } from '../common/utils/result.util';
 import type { DBError } from '../artefacts/artefacts.repository.interface';
+import { PdpActionStatus } from '@acme/shared';
 import {
   CreatePdpActionData,
+  FindByUserOptions,
   IPdpActionsRepository,
 } from './pdp-actions.repository.interface';
 import { PdpAction, PdpActionDocument } from './schemas/pdp-action.schema';
@@ -75,6 +77,45 @@ export class PdpActionsRepository implements IPdpActionsRepository {
     } catch (error) {
       this.logger.error(`Failed to find PDP actions for artefact ${id}`, error);
       return err({ code: 'DB_ERROR', message: 'Failed to find PDP actions' });
+    }
+  }
+
+  async findByUserId(
+    userId: Types.ObjectId,
+    statuses: PdpActionStatus[],
+    options?: FindByUserOptions,
+  ): Promise<Result<PdpAction[], DBError>> {
+    try {
+      let query = this.pdpActionModel
+        .find({ userId, status: { $in: statuses } })
+        .sort(options?.sortByDueDate ? { dueDate: 1, createdAt: 1 } : { createdAt: -1 })
+        .lean();
+
+      if (options?.limit) {
+        query = query.limit(options.limit);
+      }
+
+      const actions = await query;
+      return ok(actions);
+    } catch (error) {
+      this.logger.error('Failed to find PDP actions by user', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find PDP actions by user' });
+    }
+  }
+
+  async countByUserId(
+    userId: Types.ObjectId,
+    statuses: PdpActionStatus[],
+  ): Promise<Result<number, DBError>> {
+    try {
+      const count = await this.pdpActionModel.countDocuments({
+        userId,
+        status: { $in: statuses },
+      });
+      return ok(count);
+    } catch (error) {
+      this.logger.error('Failed to count PDP actions by user', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to count PDP actions' });
     }
   }
 }

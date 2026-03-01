@@ -32,6 +32,7 @@ export function toArtefactDto(
       action: p.action,
       timeframe: p.timeframe,
       status: p.status as PdpActionStatus,
+      dueDate: p.dueDate?.toISOString() ?? null,
     })),
     capabilities: artefact.capabilities,
     tags: artefact.tags,

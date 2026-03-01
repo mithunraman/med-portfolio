@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { ItemsModule } from './items/items.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { ArtefactsModule } from './artefacts/artefacts.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { StorageModule } from './storage';
 import { LLMModule } from './llm';
 import { MediaModule } from './media';
@@ -24,6 +25,7 @@ import { JwtAuthGuard, RolesGuard } from './common/guards';
     ProcessingModule,
     ConversationsModule,
     ArtefactsModule,
+    DashboardModule,
   ],
   providers: [
     {

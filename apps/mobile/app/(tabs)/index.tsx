@@ -1,9 +1,9 @@
 import { SectionHeader, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
-import { fetchArtefacts, selectAllArtefacts } from '@/store';
+import { fetchDashboard } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
-import type { Artefact } from '@acme/shared';
+import type { Artefact, DashboardStats, PdpAction } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { randomUUID } from 'expo-crypto';
 import { useRouter } from 'expo-router';
@@ -100,15 +100,17 @@ function RecentEntryCard({ item, onPress }: { item: Artefact; onPress: () => voi
 }
 
 function RecentEntriesModule({
-  artefacts,
+  items,
+  total,
   onEntryPress,
   onSeeAll,
 }: {
-  artefacts: Artefact[];
+  items: Artefact[];
+  total: number;
   onEntryPress: (item: Artefact) => void;
   onSeeAll: () => void;
 }) {
-  if (artefacts.length === 0) {
+  if (items.length === 0) {
     return (
       <View style={styles.moduleContainer}>
         <SectionHeader title="Recent entries" />
@@ -123,10 +125,14 @@ function RecentEntriesModule({
 
   return (
     <View style={styles.moduleContainer}>
-      <SectionHeader title="Recent entries" actionLabel="See all" onAction={onSeeAll} />
+      <SectionHeader
+        title="Recent entries"
+        actionLabel={total > items.length ? `See all (${total})` : 'See all'}
+        onAction={onSeeAll}
+      />
       <FlatList
         horizontal
-        data={artefacts.slice(0, 5)}
+        data={items}
         keyExtractor={(item) => item.id}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.recentListContent}
@@ -140,25 +146,52 @@ function RecentEntriesModule({
 
 // ─── Module C: PDP Actions Due Soon ───────────────────────────────────────────
 
-function PdpDueSoonModule() {
+function PdpDueSoonModule({ items, total }: { items: PdpAction[]; total: number }) {
   const { colors } = useTheme();
+
+  if (items.length === 0) {
+    return (
+      <View style={styles.moduleContainer}>
+        <SectionHeader title="PDP actions due soon" />
+        <View style={[styles.emptyModule, { backgroundColor: colors.surface }]}>
+          <Ionicons name="checkbox-outline" size={24} color={colors.textSecondary} />
+          <Text style={[styles.emptyModuleLabel, { color: colors.textSecondary }]}>
+            No actions due right now.
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.moduleContainer}>
-      <SectionHeader title="PDP actions due soon" />
-      <View style={[styles.emptyModule, { backgroundColor: colors.surface }]}>
-        <Ionicons name="checkbox-outline" size={24} color={colors.textSecondary} />
-        <Text style={[styles.emptyModuleLabel, { color: colors.textSecondary }]}>
-          No actions due in the next 14 days.
-        </Text>
-      </View>
+      <SectionHeader
+        title="PDP actions due soon"
+        actionLabel={total > items.length ? `See all (${total})` : undefined}
+      />
+      {items.map((action) => (
+        <View
+          key={action.id}
+          style={[styles.pdpActionCard, { backgroundColor: colors.surface }]}
+        >
+          <Ionicons name="checkbox-outline" size={18} color={colors.primary} />
+          <View style={styles.pdpActionContent}>
+            <Text style={[styles.pdpActionText, { color: colors.text }]} numberOfLines={2}>
+              {action.action}
+            </Text>
+            <Text style={[styles.pdpActionMeta, { color: colors.textSecondary }]}>
+              {action.timeframe}
+            </Text>
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
 
 // ─── Module D: Progress Snapshot ──────────────────────────────────────────────
 
-function ProgressSnapshotModule() {
+function ProgressSnapshotModule({ stats }: { stats: DashboardStats | null }) {
   const { colors } = useTheme();
 
   return (
@@ -166,15 +199,21 @@ function ProgressSnapshotModule() {
       <SectionHeader title="Progress" />
       <View style={styles.statsRow}>
         <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.statNumber, { color: colors.text }]}>--</Text>
+          <Text style={[styles.statNumber, { color: colors.text }]}>
+            {stats?.entriesThisWeek ?? '--'}
+          </Text>
           <Text style={[styles.statLabel, { color: colors.textSecondary }]}>This week</Text>
         </View>
         <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.statNumber, { color: colors.text }]}>--</Text>
+          <Text style={[styles.statNumber, { color: colors.text }]}>
+            {stats?.toReview ?? '--'}
+          </Text>
           <Text style={[styles.statLabel, { color: colors.textSecondary }]}>To review</Text>
         </View>
         <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.statNumber, { color: colors.text }]}>--</Text>
+          <Text style={[styles.statNumber, { color: colors.text }]}>
+            {stats?.capabilitiesCount ?? '--'}
+          </Text>
           <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Capabilities</Text>
         </View>
       </View>
@@ -191,10 +230,10 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
 
-  const artefacts = useAppSelector(selectAllArtefacts);
+  const dashboardData = useAppSelector((state) => state.dashboard.data);
 
   useEffect(() => {
-    dispatch(fetchArtefacts());
+    dispatch(fetchDashboard());
   }, [dispatch]);
 
   const handleStartNew = useCallback(() => {
@@ -246,16 +285,20 @@ export default function HomeScreen() {
 
         {/* Module B: Recent Entries */}
         <RecentEntriesModule
-          artefacts={artefacts}
+          items={dashboardData?.recentEntries.items ?? []}
+          total={dashboardData?.recentEntries.total ?? 0}
           onEntryPress={handleEntryPress}
           onSeeAll={handleSeeAllEntries}
         />
 
         {/* Module C: PDP Actions Due Soon */}
-        <PdpDueSoonModule />
+        <PdpDueSoonModule
+          items={dashboardData?.pdpActionsDue.items ?? []}
+          total={dashboardData?.pdpActionsDue.total ?? 0}
+        />
 
         {/* Module D: Progress Snapshot */}
-        <ProgressSnapshotModule />
+        <ProgressSnapshotModule stats={dashboardData?.stats ?? null} />
       </ScrollView>
     </View>
   );
@@ -380,7 +423,30 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Module C & D: Empty states
+  // Module C: PDP Action cards
+  pdpActionCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginHorizontal: 20,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 12,
+    gap: 10,
+  },
+  pdpActionContent: {
+    flex: 1,
+    gap: 2,
+  },
+  pdpActionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  pdpActionMeta: {
+    fontSize: 12,
+  },
+
+  // Empty states
   emptyModule: {
     flexDirection: 'row',
     alignItems: 'center',

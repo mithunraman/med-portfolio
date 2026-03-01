@@ -10,6 +10,7 @@ export const PdpActionSchema = z.object({
   action: z.string(),
   timeframe: z.string(),
   status: z.nativeEnum(PdpActionStatus),
+  dueDate: z.string().datetime().nullable(),
 });
 
 export type PdpAction = z.infer<typeof PdpActionSchema>;

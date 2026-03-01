@@ -38,6 +38,11 @@ export interface UpdateArtefactData {
   status?: ArtefactStatus;
 }
 
+export interface CountByUserFilter {
+  since?: Date;
+  status?: ArtefactStatus;
+}
+
 export interface IArtefactsRepository {
   upsertArtefact(
     data: UpsertArtefactData,
@@ -54,4 +59,9 @@ export interface IArtefactsRepository {
     data: UpdateArtefactData,
     session?: ClientSession
   ): Promise<Result<Artefact, DBError>>;
+
+  countByUser(
+    userId: Types.ObjectId,
+    filter?: CountByUserFilter
+  ): Promise<Result<number, DBError>>;
 }

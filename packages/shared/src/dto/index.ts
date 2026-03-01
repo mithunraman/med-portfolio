@@ -3,3 +3,4 @@ export * from './item.dto';
 export * from './conversation.dto';
 export * from './artefact.dto';
 export * from './media.dto';
+export * from './dashboard.dto';

@@ -20,9 +20,9 @@ const logger = new Logger('ReflectNode');
 const reflectResponseSchema = z.object({
   title: z
     .string()
-    .max(200)
+    .max(100)
     .describe(
-      'A concise title summarising the artefact for list views (max 200 chars). ' +
+      'A concise title summarising the artefact for list views (max 100 chars). ' +
         'e.g. "T2DM Management in Elderly Patient"'
     ),
   sections: z
@@ -183,8 +183,10 @@ export function createReflectNode(deps: GraphDeps) {
       { temperature: 0.4, maxTokens }
     );
 
-    const wordCount = response.sections
-      .reduce((sum, s) => sum + s.text.split(/\s+/).filter(Boolean).length, 0);
+    const wordCount = response.sections.reduce(
+      (sum, s) => sum + s.text.split(/\s+/).filter(Boolean).length,
+      0
+    );
 
     logger.log(
       `Reflection generated: ${response.sections.length} sections, ${wordCount} words ` +

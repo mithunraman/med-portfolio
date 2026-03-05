@@ -12,3 +12,5 @@ export * from './message-type.enum';
 export * from './message-metadata-type.enum';
 export * from './interaction-type.enum';
 export * from './pdp-action-status.enum';
+export * from './analysis-run-status.enum';
+export * from './outbox-status.enum';

@@ -6,6 +6,7 @@ import type {
   MessageListResponse,
 } from '@acme/shared';
 import {
+  ConversationStatus,
   InteractionType,
   MediaRefCollection,
   MediaStatus,
@@ -26,10 +27,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Types } from 'mongoose';
+import { AnalysisRunsService } from '../analysis-runs/analysis-runs.service';
+import { generateXid } from '../common/utils/nanoid.util';
 import { isErr } from '../common/utils/result.util';
 import { TransactionService } from '../database';
 import { IMediaRepository, MEDIA_REPOSITORY, MediaService } from '../media';
 import { Media } from '../media/schemas/media.schema';
+import { OutboxService } from '../outbox/outbox.service';
 import {
   type GraphStatus,
   PortfolioGraphService,
@@ -58,7 +62,9 @@ export class ConversationsService {
     private readonly mediaService: MediaService,
     private readonly transactionService: TransactionService,
     private readonly processingService: ProcessingService,
-    private readonly portfolioGraphService: PortfolioGraphService
+    private readonly portfolioGraphService: PortfolioGraphService,
+    private readonly analysisRunsService: AnalysisRunsService,
+    private readonly outboxService: OutboxService,
   ) {}
 
   async sendMessage(userId: string, conversationId: string, dto: SendMessageDto): Promise<Message> {
@@ -78,8 +84,8 @@ export class ConversationsService {
 
     const conversation = conversationResult.value;
 
-    // Guard: reject messages when the graph state doesn't accept them
-    await this.assertCanSendMessage(conversation._id.toString());
+    // Guard: reject messages when the conversation or graph state doesn't accept them
+    await this.assertCanSendMessage(conversation._id.toString(), conversation.status);
 
     // Validate media upload if provided (S3 HEAD + content-type check)
     let validatedMedia: Awaited<ReturnType<MediaService['validateMediaUpload']>> | null = null;
@@ -190,7 +196,12 @@ export class ConversationsService {
     const conversation = conversationResult.value;
     const convIdStr = conversation._id.toString();
 
-    // 2. Guard: reject if any user messages are still being processed
+    // 2a. Guard: reject if conversation is closed
+    if (conversation.status === ConversationStatus.CLOSED) {
+      throw new ConflictException('This conversation is closed. Analysis cannot be started or resumed.');
+    }
+
+    // 2b. Guard: reject if any user messages are still being processed
     const processingResult = await this.conversationsRepository.hasProcessingMessages(
       conversation._id
     );
@@ -216,13 +227,17 @@ export class ConversationsService {
   }
 
   /**
-   * Start a new graph. Rejects if a checkpoint already exists (the client
-   * should send { type: "resume" } instead) or if no messages are ready.
+   * Start a new analysis run. Creates an analysis_run + outbox entry in a single
+   * transaction. The outbox consumer picks up the job and invokes LangGraph.
+   *
+   * Rejects if a checkpoint already exists or no messages are ready.
+   * Uses idempotency key (conversationId-scoped) to prevent duplicate runs.
    */
   private async handleStart(
     userId: string,
     convIdStr: string,
-    conversation: { _id: Types.ObjectId; artefact: Types.ObjectId }
+    conversation: { _id: Types.ObjectId; artefact: Types.ObjectId },
+    idempotencyKey?: string,
   ): Promise<void> {
     const hasCheckpoint = await this.portfolioGraphService.hasCheckpoint(convIdStr);
 
@@ -236,22 +251,47 @@ export class ConversationsService {
     if (!completeResult.value)
       throw new BadRequestException('Cannot start analysis without any completed messages.');
 
-    this.portfolioGraphService
-      .startGraph({
-        conversationId: convIdStr,
-        artefactId: conversation.artefact.toString(),
-        userId,
-        specialty: Specialty.GP.toString(),
-      })
-      .catch((err) => {
-        this.logger.error(`Graph start failed for conversation ${convIdStr}: ${err.message}`);
-      });
+    // Check for existing active run (e.g. user already triggered analysis)
+    const existingRun = await this.analysisRunsService.findActiveRun(conversation._id);
+    if (existingRun) {
+      throw new ConflictException('An analysis run is already in progress for this conversation.');
+    }
+
+    const effectiveIdempotencyKey = idempotencyKey || generateXid();
+    const langGraphThreadId = convIdStr; // Thread ID = conversation _id (matches existing behavior)
+
+    // Transactional: create analysis_run + outbox entry atomically
+    await this.transactionService.withTransaction(
+      async (session) => {
+        const { run } = await this.analysisRunsService.createRun(
+          conversation._id,
+          effectiveIdempotencyKey,
+          langGraphThreadId,
+          session,
+        );
+
+        await this.outboxService.enqueue(
+          {
+            type: 'analysis.start',
+            payload: {
+              analysisRunId: run._id.toString(),
+              conversationId: convIdStr,
+              artefactId: conversation.artefact.toString(),
+              userId,
+              specialty: Specialty.GP.toString(),
+            },
+          },
+          session,
+        );
+      },
+      { context: `handleStart:${convIdStr}` },
+    );
   }
 
   /**
    * Resume a paused graph at the specified node.
    * Validates that the graph is actually paused at the expected node (409 if mismatch).
-   * Creates audit messages for structured actions (classification, draft).
+   * Creates audit messages + outbox entry in a single transaction.
    */
   private async handleResume(
     userId: string,
@@ -265,7 +305,14 @@ export class ConversationsService {
     if (pausedNode !== node)
       throw new ConflictException(`Analysis is paused at "${pausedNode}", not "${node}"`);
 
+    // Find the active analysis run to include in the outbox payload
+    const activeRun = await this.analysisRunsService.findActiveRun(conversationOid);
+    if (!activeRun) {
+      throw new ConflictException('No active analysis run found for this conversation.');
+    }
+
     const userOid = new Types.ObjectId(userId);
+    let resumeValue: Record<string, unknown> | true = true;
 
     switch (node) {
       case 'ask_followup': {
@@ -276,10 +323,6 @@ export class ConversationsService {
           throw new InternalServerErrorException(lastRoleResult.error.message);
         if (lastRoleResult.value !== MessageRole.USER)
           throw new BadRequestException('Please send at least one message before continuing.');
-
-        this.portfolioGraphService.resumeGraph(convIdStr, 'ask_followup').catch((err) => {
-          this.logger.error(`Graph resume failed for conversation ${convIdStr}: ${err.message}`);
-        });
         break;
       }
 
@@ -298,17 +341,7 @@ export class ConversationsService {
           );
         }
 
-        await this.createAuditMessage(conversationOid, userOid, {
-          type: MessageMetadataType.CLASSIFICATION_SELECTION,
-          interactionType: InteractionType.DISPLAY_ONLY,
-          entryType,
-        });
-
-        this.portfolioGraphService
-          .resumeGraph(convIdStr, 'present_classification', { entryType })
-          .catch((err) => {
-            this.logger.error(`Graph resume failed for conversation ${convIdStr}: ${err.message}`);
-          });
+        resumeValue = { entryType };
         break;
       }
 
@@ -324,30 +357,64 @@ export class ConversationsService {
           );
         }
 
-        await this.createAuditMessage(conversationOid, userOid, {
-          type: MessageMetadataType.CAPABILITY_SELECTION,
-          interactionType: InteractionType.DISPLAY_ONLY,
-          selectedCodes,
-        });
-
-        this.portfolioGraphService
-          .resumeGraph(convIdStr, 'present_capabilities', { selectedCodes })
-          .catch((err) => {
-            this.logger.error(`Graph resume failed for conversation ${convIdStr}: ${err.message}`);
-          });
+        resumeValue = { selectedCodes };
         break;
       }
     }
+
+    // Transactional: audit message + outbox entry
+    await this.transactionService.withTransaction(
+      async (session) => {
+        // Create audit messages for structured actions
+        if (node === 'present_classification' && typeof resumeValue !== 'boolean') {
+          await this.createAuditMessage(conversationOid, userOid, {
+            type: MessageMetadataType.CLASSIFICATION_SELECTION,
+            interactionType: InteractionType.DISPLAY_ONLY,
+            entryType: (resumeValue as { entryType: string }).entryType,
+          }, session);
+        }
+
+        if (node === 'present_capabilities' && typeof resumeValue !== 'boolean') {
+          await this.createAuditMessage(conversationOid, userOid, {
+            type: MessageMetadataType.CAPABILITY_SELECTION,
+            interactionType: InteractionType.DISPLAY_ONLY,
+            selectedCodes: (resumeValue as { selectedCodes: string[] }).selectedCodes,
+          }, session);
+        }
+
+        await this.outboxService.enqueue(
+          {
+            type: 'analysis.resume',
+            payload: {
+              analysisRunId: activeRun._id.toString(),
+              conversationId: convIdStr,
+              node,
+              resumeValue,
+            },
+          },
+          session,
+        );
+      },
+      { context: `handleResume:${convIdStr}:${node}` },
+    );
   }
 
   /**
-   * Reject sendMessage() calls when the graph is in a state that doesn't accept new messages.
+   * Reject sendMessage() calls when the conversation or graph state doesn't accept new messages.
    *
-   * Allowed: not_started (user composing first messages), paused at ask_followup (answering questions).
-   * Rejected: running (transcript already gathered), paused at classification/draft (wrong action),
-   *           completed (analysis finished).
+   * Conversation-level: CLOSED conversations reject all messages.
+   * Graph-level:
+   *   Allowed: not_started (composing), paused at ask_followup (answering questions).
+   *   Rejected: running, paused at classification/capabilities, completed.
    */
-  private async assertCanSendMessage(convIdStr: string): Promise<void> {
+  private async assertCanSendMessage(
+    convIdStr: string,
+    conversationStatus: ConversationStatus,
+  ): Promise<void> {
+    if (conversationStatus === ConversationStatus.CLOSED) {
+      throw new ConflictException('This conversation is closed. No further messages can be sent.');
+    }
+
     const graphStatus: GraphStatus = await this.portfolioGraphService.getGraphStatus(convIdStr);
 
     switch (graphStatus.status) {
@@ -374,7 +441,8 @@ export class ConversationsService {
   private async createAuditMessage(
     conversationId: Types.ObjectId,
     userId: Types.ObjectId,
-    metadata: ClassificationSelectionMetadata | CapabilitySelectionMetadata
+    metadata: ClassificationSelectionMetadata | CapabilitySelectionMetadata,
+    session?: import('mongoose').ClientSession,
   ): Promise<void> {
     let content: string;
     switch (metadata.type) {
@@ -388,15 +456,18 @@ export class ConversationsService {
         content = `Action recorded`;
     }
 
-    await this.conversationsRepository.createMessage({
-      conversation: conversationId,
-      userId,
-      role: MessageRole.SYSTEM,
-      messageType: MessageType.TEXT,
-      content,
-      processingStatus: MessageProcessingStatus.COMPLETE,
-      metadata,
-    });
+    await this.conversationsRepository.createMessage(
+      {
+        conversation: conversationId,
+        userId,
+        role: MessageRole.SYSTEM,
+        messageType: MessageType.TEXT,
+        content,
+        processingStatus: MessageProcessingStatus.COMPLETE,
+        metadata,
+      },
+      session,
+    );
   }
 
   async listMessages(

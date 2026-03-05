@@ -29,6 +29,8 @@ export interface CreateMessageData {
   processingStatus?: MessageProcessingStatus;
   media?: Types.ObjectId | null;
   metadata?: MessageMetadata | null;
+  questionMeta?: Record<string, unknown> | null;
+  analysisRunId?: Types.ObjectId | null;
 }
 
 export interface UpdateMessageData {

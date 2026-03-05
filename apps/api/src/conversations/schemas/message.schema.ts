@@ -68,8 +68,18 @@ export class Message {
   processingError!: string | null;
 
   // Structured metadata for special message types (e.g. classification options)
+  // Legacy field — kept for backward compatibility during migration
   @Prop({ type: Object, default: null })
   metadata!: MessageMetadata | null;
+
+  // Embedded question metadata for structured Q&A (always-together reads)
+  // New format replacing the discriminated-union metadata field
+  @Prop({ type: Object, default: null })
+  questionMeta!: Record<string, unknown> | null;
+
+  // Links message to a specific analysis run (null for pre-analysis chat)
+  @Prop({ type: Types.ObjectId, ref: 'AnalysisRun', default: null })
+  analysisRunId!: Types.ObjectId | null;
 
   // Transcription metadata (populated after audio transcription)
   @Prop({ type: TranscriptionMetadata, default: null })

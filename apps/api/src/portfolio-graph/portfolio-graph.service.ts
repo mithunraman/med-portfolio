@@ -293,6 +293,14 @@ export class PortfolioGraphService implements OnModuleInit {
           reasoning: interruptValue.reasoning as string,
         };
 
+        const classificationQuestionMeta = {
+          type: 'classification',
+          interactionType: InteractionType.SINGLE_SELECT,
+          options,
+          suggestedEntryType: interruptValue.suggestedEntryType as string,
+          reasoning: interruptValue.reasoning as string,
+        };
+
         const result = await this.conversationsRepository.createMessage({
           conversation: new Types.ObjectId(state.conversationId),
           userId: new Types.ObjectId(state.userId),
@@ -302,6 +310,7 @@ export class PortfolioGraphService implements OnModuleInit {
           content,
           processingStatus: MessageProcessingStatus.COMPLETE,
           metadata,
+          questionMeta: classificationQuestionMeta,
         });
 
         if (!result.ok) {
@@ -334,6 +343,15 @@ export class PortfolioGraphService implements OnModuleInit {
           entryType: interruptValue.entryType as string,
         };
 
+        const followupQuestionMeta = {
+          type: 'followup',
+          interactionType: InteractionType.FREE_TEXT,
+          questions,
+          missingSections: interruptValue.missingSections as string[],
+          followUpRound,
+          entryType: interruptValue.entryType as string,
+        };
+
         const followupResult = await this.conversationsRepository.createMessage({
           conversation: new Types.ObjectId(state.conversationId),
           userId: new Types.ObjectId(state.userId),
@@ -343,6 +361,7 @@ export class PortfolioGraphService implements OnModuleInit {
           content,
           processingStatus: MessageProcessingStatus.COMPLETE,
           metadata: followupMetadata,
+          questionMeta: followupQuestionMeta,
         });
 
         if (!followupResult.ok) {
@@ -372,6 +391,13 @@ export class PortfolioGraphService implements OnModuleInit {
           entryType: interruptValue.entryType as string,
         };
 
+        const capQuestionMeta = {
+          type: 'capabilities',
+          interactionType: InteractionType.MULTI_SELECT,
+          options,
+          entryType: interruptValue.entryType as string,
+        };
+
         const capResult = await this.conversationsRepository.createMessage({
           conversation: new Types.ObjectId(state.conversationId),
           userId: new Types.ObjectId(state.userId),
@@ -381,6 +407,7 @@ export class PortfolioGraphService implements OnModuleInit {
           content: capContent,
           processingStatus: MessageProcessingStatus.COMPLETE,
           metadata: capMetadata,
+          questionMeta: capQuestionMeta,
         });
 
         if (!capResult.ok) {

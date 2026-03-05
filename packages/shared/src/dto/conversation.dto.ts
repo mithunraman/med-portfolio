@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AnalysisRunStatus } from '../enums/analysis-run-status.enum';
 import { ConversationStatus } from '../enums/conversation-status.enum';
 import { InteractionType } from '../enums/interaction-type.enum';
 import { MessageMetadataType } from '../enums/message-metadata-type.enum';
@@ -107,6 +108,8 @@ export const MessageSchema = z.object({
   content: z.string().nullable(),
   media: MessageMediaSchema.nullable(),
   metadata: MessageMetadataSchema.nullable().optional(),
+  questionMeta: z.record(z.unknown()).nullable().optional(),
+  analysisRunId: z.string().nullable().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -176,3 +179,41 @@ export const MessageListResponseSchema = z.object({
 });
 
 export type MessageListResponse = z.infer<typeof MessageListResponseSchema>;
+
+// ── Analysis Run schemas ──
+
+export const SnapshotRangeSchema = z.object({
+  fromMessageId: z.string().nullable(),
+  toMessageId: z.string().nullable(),
+});
+
+export const AnalysisRunErrorSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+});
+
+export const AnalysisRunSchema = z.object({
+  id: z.string(),
+  conversationId: z.string(),
+  runNumber: z.number(),
+  status: z.nativeEnum(AnalysisRunStatus),
+  snapshotRange: SnapshotRangeSchema,
+  currentQuestion: z
+    .object({
+      messageId: z.string(),
+      node: z.string(),
+    })
+    .nullable(),
+  artefactId: z.string().nullable(),
+  error: AnalysisRunErrorSchema.nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export type AnalysisRun = z.infer<typeof AnalysisRunSchema>;
+
+export const AnalysisRunListResponseSchema = z.object({
+  runs: z.array(AnalysisRunSchema),
+});
+
+export type AnalysisRunListResponse = z.infer<typeof AnalysisRunListResponseSchema>;

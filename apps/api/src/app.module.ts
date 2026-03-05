@@ -11,6 +11,8 @@ import { StorageModule } from './storage';
 import { LLMModule } from './llm';
 import { MediaModule } from './media';
 import { ProcessingModule } from './processing';
+import { AnalysisRunsModule } from './analysis-runs';
+import { OutboxModule } from './outbox';
 import { JwtAuthGuard, RolesGuard } from './common/guards';
 
 @Module({
@@ -26,6 +28,8 @@ import { JwtAuthGuard, RolesGuard } from './common/guards';
     ConversationsModule,
     ArtefactsModule,
     DashboardModule,
+    AnalysisRunsModule,
+    OutboxModule,
   ],
   providers: [
     {

@@ -25,6 +25,17 @@ import { LLMService } from '../../../llm/llm.service';
 import { ProcessingService } from '../../../processing/processing.service';
 import { MediaService } from '../../../media/media.service';
 import { MEDIA_REPOSITORY } from '../../../media/media.repository.interface';
+import { AnalysisRunsService } from '../../../analysis-runs/analysis-runs.service';
+import { AnalysisRunsRepository } from '../../../analysis-runs/analysis-runs.repository';
+import { ANALYSIS_RUNS_REPOSITORY } from '../../../analysis-runs/analysis-runs.repository.interface';
+import { AnalysisRun, AnalysisRunSchema as AnalysisRunMongooseSchema } from '../../../analysis-runs/schemas/analysis-run.schema';
+import { OutboxService } from '../../../outbox/outbox.service';
+import { OutboxRepository } from '../../../outbox/outbox.repository';
+import { OUTBOX_REPOSITORY } from '../../../outbox/outbox.repository.interface';
+import { OutboxEntry, OutboxEntrySchema } from '../../../outbox/schemas/outbox.schema';
+import { OutboxConsumer, OUTBOX_HANDLERS } from '../../../outbox/outbox.consumer';
+import { AnalysisStartHandler } from '../../../outbox/handlers/analysis-start.handler';
+import { AnalysisResumeHandler } from '../../../outbox/handlers/analysis-resume.handler';
 import { initFactories } from './factories';
 import type { SequentialLLMMock } from './llm-mock';
 
@@ -62,6 +73,8 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
         { name: Media.name, schema: MediaSchema },
         { name: Artefact.name, schema: ArtefactSchema },
         { name: PdpAction.name, schema: PdpActionSchema },
+        { name: AnalysisRun.name, schema: AnalysisRunMongooseSchema },
+        { name: OutboxEntry.name, schema: OutboxEntrySchema },
       ]),
     ],
     providers: [
@@ -81,6 +94,28 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
         provide: PDP_ACTIONS_REPOSITORY,
         useClass: PdpActionsRepository,
       },
+
+      // Analysis runs — real service + repository
+      AnalysisRunsService,
+      {
+        provide: ANALYSIS_RUNS_REPOSITORY,
+        useClass: AnalysisRunsRepository,
+      },
+
+      // Outbox — real service + repository + consumer + handlers
+      OutboxService,
+      {
+        provide: OUTBOX_REPOSITORY,
+        useClass: OutboxRepository,
+      },
+      AnalysisStartHandler,
+      AnalysisResumeHandler,
+      {
+        provide: OUTBOX_HANDLERS,
+        useFactory: (start: AnalysisStartHandler, resume: AnalysisResumeHandler) => [start, resume],
+        inject: [AnalysisStartHandler, AnalysisResumeHandler],
+      },
+      OutboxConsumer,
 
       // Mocked LLMService — replaced by SequentialLLMMock
       {

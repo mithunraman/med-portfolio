@@ -1,9 +1,12 @@
 import { logger } from '@/utils/logger';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import type { ConversationPhase } from '@acme/shared';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   StyleSheet,
+  Text,
   TextInput,
   View,
   type StyleProp,
@@ -49,6 +52,15 @@ interface ChatComposerProps {
   /** Bottom safe area inset for voice recorder */
   safeAreaBottomInset?: number;
   style?: StyleProp<ViewStyle>;
+  // Phase-aware props
+  canSendMessage?: boolean;
+  canSendAudio?: boolean;
+  canStartAnalysis?: boolean;
+  canResumeAnalysis?: boolean;
+  phase?: ConversationPhase;
+  onStartAnalysis?: () => void;
+  onResumeAnalysis?: () => void;
+  isAnalysisLoading?: boolean;
 }
 
 // ============================================================================
@@ -64,6 +76,14 @@ export function ChatComposer({
   isSending = false,
   safeAreaBottomInset = 0,
   style,
+  canSendMessage = true,
+  canSendAudio = true,
+  canStartAnalysis = false,
+  canResumeAnalysis = false,
+  phase,
+  onStartAnalysis,
+  onResumeAnalysis,
+  isAnalysisLoading = false,
 }: ChatComposerProps) {
   const { colors, isDark } = useTheme();
   const [text, setText] = useState('');
@@ -106,6 +126,27 @@ export function ChatComposer({
   }, []);
 
   const hasText = useMemo(() => text.trim().length > 0, [text]);
+
+  // Phase-aware derived state
+  const isInputDisabled = !canSendMessage;
+  const showMic = canSendAudio && !hasText;
+  const showAnalyseButton = canStartAnalysis && !hasText;
+  const showContinueButton = canResumeAnalysis && !hasText;
+
+  const placeholder = useMemo(() => {
+    switch (phase) {
+      case 'analysing':
+        return 'Analysis in progress...';
+      case 'completed':
+        return 'Analysis complete';
+      case 'closed':
+        return 'Conversation closed';
+      case 'awaiting_input':
+        return canSendMessage ? 'Message' : 'Select an option above';
+      default:
+        return 'Message';
+    }
+  }, [phase, canSendMessage]);
 
   // Memoized icons with theme colors
   const attachIcon = useMemo(
@@ -202,13 +243,14 @@ export function ChatComposer({
             style={textInputStyle}
             value={text}
             onChangeText={setText}
-            placeholder="Message"
+            placeholder={placeholder}
             placeholderTextColor={colors.textSecondary}
             onFocus={handleFocus}
             onBlur={handleBlur}
             multiline={true}
             numberOfLines={5}
             textAlignVertical="center"
+            editable={!isInputDisabled}
             accessibilityLabel="Message input"
             accessibilityHint="Type your message here"
           />
@@ -222,25 +264,54 @@ export function ChatComposer({
           />
         </View>
 
-        {/* Camera or Send button */}
+        {/* Right-side action area */}
         {hasText ? (
           <IconButton
             icon={sendButtonIcon}
             onPress={handleSend}
             accessibilityLabel="Send message"
             style={styles.sendButton}
-            disabled={isSending}
+            disabled={isSending || isInputDisabled}
           />
         ) : (
           <>
-            <IconButton icon={cameraIcon} onPress={onOpenCamera} accessibilityLabel="Open camera" />
+            {showMic && (
+              <IconButton
+                icon={micIcon}
+                onPress={handleMicPress}
+                accessibilityLabel="Record voice message"
+              />
+            )}
 
-            {/* Microphone button */}
-            <IconButton
-              icon={micIcon}
-              onPress={handleMicPress}
-              accessibilityLabel="Record voice message"
-            />
+            {showAnalyseButton ? (
+              <Pressable
+                style={[styles.actionButton, { backgroundColor: ACCENT_COLOR }]}
+                onPress={onStartAnalysis}
+                disabled={isAnalysisLoading}
+                accessibilityLabel="Start analysis"
+              >
+                {isAnalysisLoading ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.actionButtonText}>Analyse</Text>
+                )}
+              </Pressable>
+            ) : showContinueButton ? (
+              <Pressable
+                style={[styles.actionButton, { backgroundColor: ACCENT_COLOR }]}
+                onPress={onResumeAnalysis}
+                disabled={isAnalysisLoading}
+                accessibilityLabel="Continue analysis"
+              >
+                {isAnalysisLoading ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.actionButtonText}>Continue</Text>
+                )}
+              </Pressable>
+            ) : (
+              <IconButton icon={cameraIcon} onPress={onOpenCamera} accessibilityLabel="Open camera" />
+            )}
           </>
         )}
       </View>
@@ -287,6 +358,18 @@ const styles = StyleSheet.create({
   },
   sendButton: {
     backgroundColor: ACCENT_COLOR,
+  },
+  actionButton: {
+    height: SPACING.iconButtonSize,
+    paddingHorizontal: 16,
+    borderRadius: SPACING.iconButtonSize / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
 

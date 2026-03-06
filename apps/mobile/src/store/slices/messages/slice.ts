@@ -1,6 +1,12 @@
-import type { Message } from '@acme/shared';
+import type { ConversationContext, Message } from '@acme/shared';
 import { createEntityAdapter, createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { fetchMessages, pollMessages, sendMessage } from './thunks';
+import {
+  fetchMessages,
+  pollConversation,
+  resumeAnalysis,
+  sendMessage,
+  startAnalysis,
+} from './thunks';
 
 const messagesAdapter = createEntityAdapter<Message>({
   // RTK uses the 'id' field automatically — no selectId needed
@@ -11,22 +17,45 @@ const messagesAdapter = createEntityAdapter<Message>({
 interface MessagesExtraState {
   // Ordered message IDs per conversation — the index for O(1) per-conversation lookups
   idsByConversation: Record<string, string[]>;
-  // Per-conversation pagination cursors
-  cursors: Record<string, string | null>;
+  // Server-driven conversation context per conversation
+  contextByConversation: Record<string, ConversationContext>;
   loading: boolean;
   sending: boolean;
+  analysisLoading: boolean;
+  analysisError: string | null;
   error: string | null;
 }
 
 const initialState = messagesAdapter.getInitialState<MessagesExtraState>({
   idsByConversation: {},
-  cursors: {},
+  contextByConversation: {},
   loading: false,
   sending: false,
+  analysisLoading: false,
+  analysisError: null,
   error: null,
 });
 
 export type MessagesState = typeof initialState;
+
+/**
+ * Full-replace messages + context for a conversation.
+ * Used by both fetchMessages and pollConversation.
+ */
+function replaceConversationMessages(
+  state: MessagesState,
+  conversationId: string,
+  messages: Message[],
+  context: ConversationContext,
+) {
+  const staleIds = state.ids.filter(
+    (id) => state.entities[id]?.conversationId === conversationId,
+  );
+  messagesAdapter.removeMany(state, staleIds);
+  messagesAdapter.setMany(state, messages);
+  state.idsByConversation[conversationId] = messages.map((m) => m.id);
+  state.contextByConversation[conversationId] = context;
+}
 
 const messagesSlice = createSlice({
   name: 'messages',
@@ -35,10 +64,13 @@ const messagesSlice = createSlice({
     clearMessagesError(state) {
       state.error = null;
     },
+    clearAnalysisError(state) {
+      state.analysisError = null;
+    },
     clearMessages(state) {
       messagesAdapter.removeAll(state);
       state.idsByConversation = {};
-      state.cursors = {};
+      state.contextByConversation = {};
     },
     // Upsert a single message — used for real-time processingStatus updates.
     // If the message is new (not yet in the index), it is prepended as the newest.
@@ -63,28 +95,8 @@ const messagesSlice = createSlice({
       })
       .addCase(fetchMessages.fulfilled, (state, action) => {
         state.loading = false;
-        const { conversationId, messages, nextCursor } = action.payload;
-        const incomingIds = messages.map((m) => m.id);
-
-        if (!action.meta.arg.cursor) {
-          // Initial load — replace all messages and the index for this conversation
-          const staleIds = state.ids.filter(
-            (id) => state.entities[id]?.conversationId === conversationId
-          );
-          messagesAdapter.removeMany(state, staleIds);
-          messagesAdapter.setMany(state, messages);
-          // API returns newest-first; preserve that order in the index
-          state.idsByConversation[conversationId] = incomingIds;
-        } else {
-          // Paginated load — incoming messages are older, append them to the end
-          messagesAdapter.upsertMany(state, messages);
-          state.idsByConversation[conversationId] = [
-            ...(state.idsByConversation[conversationId] ?? []),
-            ...incomingIds,
-          ];
-        }
-
-        state.cursors[conversationId] = nextCursor;
+        const { conversationId, messages, context } = action.payload;
+        replaceConversationMessages(state, conversationId, messages, context);
       })
       .addCase(fetchMessages.rejected, (state, action) => {
         state.loading = false;
@@ -109,14 +121,42 @@ const messagesSlice = createSlice({
         state.error = action.payload as string;
       })
 
-      // Poll messages — silently upsert updated messages (no loading state)
-      .addCase(pollMessages.fulfilled, (state, action) => {
-        messagesAdapter.upsertMany(state, action.payload);
+      // Poll conversation — silently replace messages + context (no loading state)
+      .addCase(pollConversation.fulfilled, (state, action) => {
+        const { conversationId, messages, context } = action.payload;
+        replaceConversationMessages(state, conversationId, messages, context);
+      })
+
+      // Start analysis
+      .addCase(startAnalysis.pending, (state) => {
+        state.analysisLoading = true;
+        state.analysisError = null;
+      })
+      .addCase(startAnalysis.fulfilled, (state) => {
+        state.analysisLoading = false;
+      })
+      .addCase(startAnalysis.rejected, (state, action) => {
+        state.analysisLoading = false;
+        state.analysisError = action.payload as string;
+      })
+
+      // Resume analysis
+      .addCase(resumeAnalysis.pending, (state) => {
+        state.analysisLoading = true;
+        state.analysisError = null;
+      })
+      .addCase(resumeAnalysis.fulfilled, (state) => {
+        state.analysisLoading = false;
+      })
+      .addCase(resumeAnalysis.rejected, (state, action) => {
+        state.analysisLoading = false;
+        state.analysisError = action.payload as string;
       });
   },
 });
 
-export const { clearMessagesError, clearMessages, upsertMessage } = messagesSlice.actions;
+export const { clearMessagesError, clearAnalysisError, clearMessages, upsertMessage } =
+  messagesSlice.actions;
 
 // Unbound selectors — pass the messages slice state directly.
 // Avoids circular deps with RootState.

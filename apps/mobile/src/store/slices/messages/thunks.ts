@@ -5,21 +5,15 @@ import { logger } from '../../../utils/logger';
 const messagesLogger = logger.createScope('MessagesThunks');
 
 /**
- * Fetch messages for a conversation with cursor-based pagination.
+ * Fetch all messages + conversation context for a conversation.
  */
 export const fetchMessages = createAsyncThunk(
   'messages/fetchMessages',
-  async (
-    params: { conversationId: string; cursor?: string; limit?: number },
-    { rejectWithValue }
-  ) => {
+  async (params: { conversationId: string }, { rejectWithValue }) => {
     messagesLogger.info('Fetching messages', { conversationId: params.conversationId });
 
     try {
-      const response = await api.conversations.listMessages(params.conversationId, {
-        cursor: params.cursor,
-        limit: params.limit,
-      });
+      const response = await api.conversations.listMessages(params.conversationId);
       messagesLogger.info('Fetched messages', {
         conversationId: params.conversationId,
         count: response.messages.length,
@@ -61,17 +55,61 @@ export const sendMessage = createAsyncThunk(
 );
 
 /**
- * Poll a batch of pending messages by XID and return their latest state.
- * Called on a polling interval while any messages have non-terminal processing status.
+ * Unified poll: re-fetch the full message list + context for a conversation.
+ * Runs silently — no loading state changes.
  */
-export const pollMessages = createAsyncThunk(
-  'messages/pollMessages',
-  async (ids: string[], { rejectWithValue }) => {
+export const pollConversation = createAsyncThunk(
+  'messages/pollConversation',
+  async (conversationId: string, { rejectWithValue }) => {
     try {
-      return await api.conversations.pollPendingMessages(ids);
+      const response = await api.conversations.listMessages(conversationId);
+      return { conversationId, ...response };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to poll messages';
-      messagesLogger.error('Failed to poll messages', { error: message });
+      const message = error instanceof Error ? error.message : 'Failed to poll conversation';
+      messagesLogger.error('Failed to poll conversation', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
+ * Start analysis for a conversation. Fire-and-forget — backend returns 204.
+ */
+export const startAnalysis = createAsyncThunk(
+  'messages/startAnalysis',
+  async (conversationId: string, { rejectWithValue }) => {
+    messagesLogger.info('Starting analysis', { conversationId });
+    try {
+      await api.conversations.analysis(conversationId, { type: 'start' });
+      return { conversationId };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start analysis';
+      messagesLogger.error('Failed to start analysis', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
+ * Resume analysis with a user response. Fire-and-forget — backend returns 204.
+ */
+export const resumeAnalysis = createAsyncThunk(
+  'messages/resumeAnalysis',
+  async (
+    params: { conversationId: string; messageId: string; value?: Record<string, unknown> },
+    { rejectWithValue }
+  ) => {
+    messagesLogger.info('Resuming analysis', params);
+    try {
+      await api.conversations.analysis(params.conversationId, {
+        type: 'resume',
+        messageId: params.messageId,
+        value: params.value,
+      });
+      return { conversationId: params.conversationId };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to resume analysis';
+      messagesLogger.error('Failed to resume analysis', { error: message });
       return rejectWithValue(message);
     }
   }

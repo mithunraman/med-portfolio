@@ -2,13 +2,13 @@ import { api } from '@/api/client';
 import { ChatComposer, MessageList } from '@/components';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
-import { createArtefact, fetchMessages, pollMessages, sendMessage } from '@/store';
+import { createArtefact, fetchMessages, pollConversation, sendMessage } from '@/store';
 import { useTheme } from '@/theme';
 import { logger } from '@/utils/logger';
-import { MediaType, Message, MessageProcessingStatus } from '@acme/shared';
+import { MediaType, Message } from '@acme/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,11 +16,6 @@ import { shallowEqual } from 'react-redux';
 
 // Stable empty array — prevents a new reference on every render for unseen conversations
 const EMPTY_IDS: string[] = [];
-
-const TERMINAL_STATUSES = new Set<MessageProcessingStatus>([
-  MessageProcessingStatus.COMPLETE,
-  MessageProcessingStatus.FAILED,
-]);
 
 const POLL_INTERVAL_MS = __DEV__ ? 2000 : 5000;
 
@@ -46,16 +41,21 @@ export default function ChatScreen() {
   const loadingMessages = useAppSelector((state) => state.messages.loading);
   const sendingMessage = useAppSelector((state) => state.messages.sending);
 
+  // Conversation context — server-driven action state
+  const context = useAppSelector(
+    (state) => state.messages.contextByConversation[effectiveConversationId],
+  );
+
   // Step 1: stable ID list — only changes when this conversation's message list changes
   const messageIds = useAppSelector(
-    (state) => state.messages.idsByConversation[effectiveConversationId] ?? EMPTY_IDS
+    (state) => state.messages.idsByConversation[effectiveConversationId] ?? EMPTY_IDS,
   );
 
   // Step 2: map IDs → entities — shallowEqual means re-render only when a message
   // object in THIS conversation changes, not when any other conversation is updated
   const messages = useAppSelector(
     (state) => messageIds.map((id) => state.messages.entities[id]).filter(Boolean) as Message[],
-    shallowEqual
+    shallowEqual,
   );
 
   // Fetch messages for existing conversations (not newly created ones)
@@ -65,29 +65,17 @@ export default function ChatScreen() {
     }
   }, [conversationId, isNew, dispatch]);
 
-  // Derive pending message IDs — stable boolean to control interval lifecycle
-  const pendingMessageIds = useMemo(
-    () => messages.filter((m) => !TERMINAL_STATUSES.has(m.processingStatus)).map((m) => m.id),
-    [messages]
-  );
-  const hasPendingMessages = pendingMessageIds.length > 0;
-
-  // Always-fresh ref so the interval closure never captures stale IDs
-  const pendingIdsRef = useRef<string[]>(pendingMessageIds);
-  pendingIdsRef.current = pendingMessageIds;
-
-  // Polling: start when there are pending messages, pause when app is backgrounded
+  // Unified polling: re-fetch messages + context on interval
+  // Polls while the screen is active and conversation exists. Pauses when backgrounded.
   useEffect(() => {
-    if (!hasPendingMessages) return;
+    if (!effectiveConversationId || isPendingConversation) return;
 
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const startPolling = () => {
       if (intervalId !== null) return;
       intervalId = setInterval(() => {
-        if (pendingIdsRef.current.length > 0) {
-          dispatch(pollMessages(pendingIdsRef.current));
-        }
+        dispatch(pollConversation(effectiveConversationId));
       }, POLL_INTERVAL_MS);
     };
 
@@ -101,15 +89,20 @@ export default function ChatScreen() {
     startPolling();
 
     const appStateSub = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') startPolling();
-      else stopPolling();
+      if (nextState === 'active') {
+        // On foreground, immediately poll then resume interval
+        dispatch(pollConversation(effectiveConversationId));
+        startPolling();
+      } else {
+        stopPolling();
+      }
     });
 
     return () => {
       stopPolling();
       appStateSub.remove();
     };
-  }, [hasPendingMessages, dispatch]);
+  }, [effectiveConversationId, isPendingConversation, dispatch]);
 
   const handleSendVoiceNote = useCallback(
     async (recording: AudioRecordingResult) => {
@@ -143,7 +136,7 @@ export default function ChatScreen() {
         chatLogger.error('Failed to send voice note', { error });
       }
     },
-    [conversationId, isNew, dispatch]
+    [conversationId, isNew, dispatch],
   );
 
   const handleSend = useCallback(
@@ -164,7 +157,7 @@ export default function ChatScreen() {
         dispatch(sendMessage({ conversationId: effectiveConversationId, content: text }));
       }
     },
-    [conversationId, effectiveConversationId, isPendingConversation, dispatch]
+    [conversationId, effectiveConversationId, isPendingConversation, dispatch],
   );
 
   const isLoading = loadingMessages && messages.length === 0 && isNew !== 'true';

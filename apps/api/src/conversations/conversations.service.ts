@@ -2,9 +2,9 @@ import type {
   AnalysisActionRequest,
   Message,
   MessageListResponse,
-  MultiSelectQuestionMeta,
-  QuestionMeta,
-  SingleSelectQuestionMeta,
+  MultiSelectQuestion,
+  Question,
+  SingleSelectQuestion,
 } from '@acme/shared';
 import {
   ConversationStatus,
@@ -302,7 +302,7 @@ export class ConversationsService {
     if (isErr(msgResult)) throw new InternalServerErrorException(msgResult.error.message);
     const message = msgResult.value[0];
     if (!message) throw new NotFoundException('Question message not found');
-    if (message.role !== MessageRole.ASSISTANT || !message.questionMeta)
+    if (message.role !== MessageRole.ASSISTANT || !message.question)
       throw new BadRequestException('Message is not a question');
 
     // 2. Get node from analysis run (source of truth — scales to multiple nodes per questionType)
@@ -319,10 +319,10 @@ export class ConversationsService {
       throw new ConflictException(`Analysis is paused at "${pausedNode}", not "${node}"`);
 
     // 4. Read questionType for SHAPE validation, node for DOMAIN mapping
-    const questionType = (message.questionMeta as QuestionMeta).questionType;
+    const questionType = (message.question as Question).questionType;
 
     // 5a. Validate value SHAPE based on questionType (generic — works for any question)
-    //     Validate selected keys against questionMeta.options (not specialty config)
+    //     Validate selected keys against question.options (not specialty config)
     let selectedKey: string | undefined;
     let selectedKeys: string[] | undefined;
     switch (questionType) {
@@ -340,7 +340,7 @@ export class ConversationsService {
         selectedKey = value?.selectedKey as string;
         if (!selectedKey || typeof selectedKey !== 'string')
           throw new BadRequestException('value.selectedKey is required');
-        const qm = message.questionMeta as SingleSelectQuestionMeta;
+        const qm = message.question as SingleSelectQuestion;
         const validKeys = new Set(qm.options.map((o) => o.key));
         if (!validKeys.has(selectedKey))
           throw new BadRequestException(`Invalid selection "${selectedKey}"`);
@@ -350,7 +350,7 @@ export class ConversationsService {
         selectedKeys = value?.selectedKeys as string[];
         if (!Array.isArray(selectedKeys) || selectedKeys.length === 0)
           throw new BadRequestException('value.selectedKeys is required');
-        const qm = message.questionMeta as MultiSelectQuestionMeta;
+        const qm = message.question as MultiSelectQuestion;
         const validKeys = new Set(qm.options.map((o) => o.key));
         const invalid = selectedKeys.filter((k) => !validKeys.has(k));
         if (invalid.length > 0)
@@ -377,9 +377,9 @@ export class ConversationsService {
     await this.transactionService.withTransaction(
       async (session) => {
         // Record user selection as plain USER text message
-        // Use option labels from questionMeta for human-readable content
+        // Use option labels from question for human-readable content
         if (questionType === 'single_select' && selectedKey) {
-          const qm = message.questionMeta as SingleSelectQuestionMeta;
+          const qm = message.question as SingleSelectQuestion;
           const label = qm.options.find((o) => o.key === selectedKey)?.label ?? selectedKey;
           await this.conversationsRepository.createMessage(
             {
@@ -394,7 +394,7 @@ export class ConversationsService {
           );
         }
         if (questionType === 'multi_select' && selectedKeys) {
-          const qm = message.questionMeta as MultiSelectQuestionMeta;
+          const qm = message.question as MultiSelectQuestion;
           const labels = selectedKeys.map(
             (k) => qm.options.find((o) => o.key === k)?.label ?? k,
           );

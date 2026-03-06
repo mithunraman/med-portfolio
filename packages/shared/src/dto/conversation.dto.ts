@@ -40,7 +40,7 @@ export const FollowupQuestionSchema = z.object({
 });
 export type FollowupQuestion = z.infer<typeof FollowupQuestionSchema>;
 
-// ── QuestionMeta sub-schemas ──
+// ── Question sub-schemas ──
 
 export const QuestionOptionSchema = z.object({
   key: z.string(),
@@ -57,36 +57,36 @@ export const FreeTextPromptSchema = z.object({
 });
 export type FreeTextPrompt = z.infer<typeof FreeTextPromptSchema>;
 
-// ── QuestionMeta variants (discriminated on questionType) ──
+// ── Question variants (discriminated on questionType) ──
 
-export const SingleSelectQuestionMetaSchema = z.object({
+export const SingleSelectQuestionSchema = z.object({
   questionType: z.literal('single_select'),
   options: z.array(QuestionOptionSchema),
   suggestedKey: z.string().optional(),
 });
-export type SingleSelectQuestionMeta = z.infer<typeof SingleSelectQuestionMetaSchema>;
+export type SingleSelectQuestion = z.infer<typeof SingleSelectQuestionSchema>;
 
-export const MultiSelectQuestionMetaSchema = z.object({
+export const MultiSelectQuestionSchema = z.object({
   questionType: z.literal('multi_select'),
   options: z.array(QuestionOptionSchema),
 });
-export type MultiSelectQuestionMeta = z.infer<typeof MultiSelectQuestionMetaSchema>;
+export type MultiSelectQuestion = z.infer<typeof MultiSelectQuestionSchema>;
 
-export const FreeTextQuestionMetaSchema = z.object({
+export const FreeTextQuestionSchema = z.object({
   questionType: z.literal('free_text'),
   prompts: z.array(FreeTextPromptSchema),
   missingSections: z.array(z.string()).optional(),
   followUpRound: z.number().optional(),
   entryType: z.string().optional(),
 });
-export type FreeTextQuestionMeta = z.infer<typeof FreeTextQuestionMetaSchema>;
+export type FreeTextQuestion = z.infer<typeof FreeTextQuestionSchema>;
 
-export const QuestionMetaSchema = z.discriminatedUnion('questionType', [
-  SingleSelectQuestionMetaSchema,
-  MultiSelectQuestionMetaSchema,
-  FreeTextQuestionMetaSchema,
+export const QuestionSchema = z.discriminatedUnion('questionType', [
+  SingleSelectQuestionSchema,
+  MultiSelectQuestionSchema,
+  FreeTextQuestionSchema,
 ]);
-export type QuestionMeta = z.infer<typeof QuestionMetaSchema>;
+export type Question = z.infer<typeof QuestionSchema>;
 
 // Message schemas
 export const MessageSchema = z.object({
@@ -97,7 +97,7 @@ export const MessageSchema = z.object({
   processingStatus: z.nativeEnum(MessageProcessingStatus),
   content: z.string().nullable(),
   media: MessageMediaSchema.nullable(),
-  questionMeta: QuestionMetaSchema.nullable().optional(),
+  question: QuestionSchema.nullable().optional(),
   analysisRunId: z.string().nullable().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -130,7 +130,7 @@ export type SendMessageRequest = z.infer<typeof SendMessageRequestSchema>;
 
 // Analysis action request (unified start + resume)
 // Resume sends messageId (the ASSISTANT question message xid) instead of graph node names.
-// Value is loosely typed here — backend validates shape against questionMeta.questionType.
+// Value is loosely typed here — backend validates shape against question.questionType.
 const AnalysisResumeSchema = z.object({
   type: z.literal('resume'),
   messageId: z.string().min(1),

@@ -1,9 +1,9 @@
 import {
   type CapabilityOption,
   type ClassificationOption,
-  type FreeTextQuestionMeta,
-  type MultiSelectQuestionMeta,
-  type SingleSelectQuestionMeta,
+  type FreeTextQuestion,
+  type MultiSelectQuestion,
+  type SingleSelectQuestion,
   MessageProcessingStatus,
   MessageRole,
   MessageType,
@@ -300,7 +300,7 @@ export class PortfolioGraphService implements OnModuleInit {
           `Based on your input, I think this is most likely:\n\n${optionLines}\n\n` +
           `Please select the entry type, or choose a different one.`;
 
-        const questionMeta: SingleSelectQuestionMeta = {
+        const question: SingleSelectQuestion = {
           questionType: 'single_select',
           options: options.map((o) => ({
             key: o.code,
@@ -319,7 +319,7 @@ export class PortfolioGraphService implements OnModuleInit {
           rawContent: content,
           content,
           processingStatus: MessageProcessingStatus.COMPLETE,
-          questionMeta,
+          question,
         });
 
         if (!result.ok) {
@@ -344,7 +344,7 @@ export class PortfolioGraphService implements OnModuleInit {
           `${questionLines}\n\n` +
           `Take your time — you can answer all of these in one go or one at a time.`;
 
-        const questionMeta: FreeTextQuestionMeta = {
+        const question: FreeTextQuestion = {
           questionType: 'free_text',
           prompts: questions.map((q) => ({ key: q.sectionId, text: q.question })),
           missingSections: interruptValue.missingSections as string[],
@@ -360,7 +360,7 @@ export class PortfolioGraphService implements OnModuleInit {
           rawContent: content,
           content,
           processingStatus: MessageProcessingStatus.COMPLETE,
-          questionMeta,
+          question,
         });
 
         if (!followupResult.ok) {
@@ -384,7 +384,7 @@ export class PortfolioGraphService implements OnModuleInit {
           `I've identified the following capabilities in your entry:\n\n${optionLines}\n\n` +
           `Please confirm which capabilities apply, or deselect any that don't fit.`;
 
-        const questionMeta: MultiSelectQuestionMeta = {
+        const question: MultiSelectQuestion = {
           questionType: 'multi_select',
           options: options.map((o) => ({
             key: o.code,
@@ -402,7 +402,7 @@ export class PortfolioGraphService implements OnModuleInit {
           rawContent: capContent,
           content: capContent,
           processingStatus: MessageProcessingStatus.COMPLETE,
-          questionMeta,
+          question,
         });
 
         if (!capResult.ok) {

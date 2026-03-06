@@ -16,7 +16,7 @@ export function toMessageDto(
     // Resolve best available content across pipeline stages
     content: doc.content ?? doc.cleanedContent ?? doc.rawContent ?? null,
     media: mediaData,
-    questionMeta: doc.questionMeta ?? null,
+    question: doc.question ?? null,
     analysisRunId: doc.analysisRunId?.toString() ?? null,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),

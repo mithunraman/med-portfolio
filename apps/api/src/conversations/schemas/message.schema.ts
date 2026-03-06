@@ -1,5 +1,5 @@
 import {
-  type QuestionMeta,
+  type Question,
   MessageProcessingStatus,
   MessageRole,
   MessageType,
@@ -67,9 +67,9 @@ export class Message {
   @Prop({ type: String, default: null })
   processingError!: string | null;
 
-  // Embedded question metadata for structured Q&A (always-together reads)
+  // Embedded question for structured Q&A (always-together reads)
   @Prop({ type: Object, default: null })
-  questionMeta!: QuestionMeta | null;
+  question!: Question | null;
 
   // Links message to a specific analysis run (null for pre-analysis chat)
   @Prop({ type: Types.ObjectId, ref: 'AnalysisRun', default: null })

@@ -1,8 +1,8 @@
 import {
   ArtefactStatus,
-  type FreeTextQuestionMeta,
-  type MultiSelectQuestionMeta,
-  type SingleSelectQuestionMeta,
+  type FreeTextQuestion,
+  type MultiSelectQuestion,
+  type SingleSelectQuestion,
   MessageProcessingStatus,
   MessageRole,
   MessageType,
@@ -196,11 +196,11 @@ describe('Conversations Integration Tests', () => {
       const classificationMsg = msgs1.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'single_select'
+          (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
       expect(classificationMsg.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
-      const classificationMeta = classificationMsg.questionMeta as SingleSelectQuestionMeta;
+      const classificationMeta = classificationMsg.question as SingleSelectQuestion;
       expect(classificationMeta.options).toBeInstanceOf(Array);
 
       // ── Step 2: Resume classification → completeness(missing) → ask_followup ──
@@ -229,10 +229,10 @@ describe('Conversations Integration Tests', () => {
       const followupMsg = msgs2.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'free_text'
+          (m.question as any)?.questionType === 'free_text'
       );
       assertDefined(followupMsg);
-      const followupMeta = followupMsg.questionMeta as FreeTextQuestionMeta;
+      const followupMeta = followupMsg.question as FreeTextQuestion;
       expect(followupMeta.prompts).toHaveLength(1);
       expect(followupMeta.prompts[0].key).toBe('reflection');
       expect(followupMeta.followUpRound).toBe(1);
@@ -262,12 +262,12 @@ describe('Conversations Integration Tests', () => {
       const capabilityMsg = msgs3.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'multi_select'
+          (m.question as any)?.questionType === 'multi_select'
       );
       assertDefined(capabilityMsg);
       expect(capabilityMsg.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
 
-      const capMeta = capabilityMsg.questionMeta as MultiSelectQuestionMeta;
+      const capMeta = capabilityMsg.question as MultiSelectQuestion;
       const capOptions = capMeta.options;
       expect(capOptions).toHaveLength(2);
       expect(capOptions[0]).toMatchObject({ key: 'C-06', confidence: 0.88 });
@@ -432,7 +432,7 @@ describe('Conversations Integration Tests', () => {
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'single_select'
+          (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -449,7 +449,7 @@ describe('Conversations Integration Tests', () => {
       const followupMsg1 = msgsAfterFollowup1.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'free_text'
+          (m.question as any)?.questionType === 'free_text'
       );
       assertDefined(followupMsg1);
 
@@ -476,7 +476,7 @@ describe('Conversations Integration Tests', () => {
       const followupMsgs = msgsAfterFollowup2.filter(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'free_text'
+          (m.question as any)?.questionType === 'free_text'
       );
       const followupMsg2 = followupMsgs[followupMsgs.length - 1];
       assertDefined(followupMsg2);
@@ -505,11 +505,11 @@ describe('Conversations Integration Tests', () => {
       const allFollowupMsgs = allMsgs.filter(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'free_text'
+          (m.question as any)?.questionType === 'free_text'
       );
       expect(allFollowupMsgs).toHaveLength(2);
-      expect((allFollowupMsgs[0].questionMeta as FreeTextQuestionMeta).followUpRound).toBe(1);
-      expect((allFollowupMsgs[1].questionMeta as FreeTextQuestionMeta).followUpRound).toBe(2);
+      expect((allFollowupMsgs[0].question as FreeTextQuestion).followUpRound).toBe(1);
+      expect((allFollowupMsgs[1].question as FreeTextQuestion).followUpRound).toBe(2);
 
       expect(llmMock.callCount).toBe(9);
     });
@@ -552,7 +552,7 @@ describe('Conversations Integration Tests', () => {
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'single_select'
+          (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -569,7 +569,7 @@ describe('Conversations Integration Tests', () => {
       const followupMsgR1 = msgsR1.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'free_text'
+          (m.question as any)?.questionType === 'free_text'
       );
       assertDefined(followupMsgR1);
 
@@ -592,7 +592,7 @@ describe('Conversations Integration Tests', () => {
       const followupMsgsAll = msgsR2.filter(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'free_text'
+          (m.question as any)?.questionType === 'free_text'
       );
       const followupMsgR2 = followupMsgsAll[followupMsgsAll.length - 1];
       assertDefined(followupMsgR2);
@@ -666,7 +666,7 @@ describe('Conversations Integration Tests', () => {
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'single_select'
+          (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -701,7 +701,7 @@ describe('Conversations Integration Tests', () => {
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'single_select'
+          (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -774,7 +774,7 @@ describe('Conversations Integration Tests', () => {
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'single_select'
+          (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -790,7 +790,7 @@ describe('Conversations Integration Tests', () => {
       const followupMsg = msgsAfterFollowup.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'free_text'
+          (m.question as any)?.questionType === 'free_text'
       );
       assertDefined(followupMsg);
 
@@ -830,7 +830,7 @@ describe('Conversations Integration Tests', () => {
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'single_select'
+          (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -848,7 +848,7 @@ describe('Conversations Integration Tests', () => {
       const followupMsg = msgsAfterFollowup.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'free_text'
+          (m.question as any)?.questionType === 'free_text'
       );
       assertDefined(followupMsg);
 
@@ -935,7 +935,7 @@ describe('Conversations Integration Tests', () => {
       const classificationMsg = msgs.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'single_select'
+          (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -964,7 +964,7 @@ describe('Conversations Integration Tests', () => {
       const classificationMsg = msgs.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'single_select'
+          (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -1011,8 +1011,8 @@ describe('Conversations Integration Tests', () => {
       expect(assistantMsg.role).toBe(MessageRole.ASSISTANT);
       expect(assistantMsg.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
       expect(assistantMsg.messageType).toBe(MessageType.TEXT);
-      expect((assistantMsg.questionMeta as any)?.questionType).toBe('single_select');
-      const f1Meta = assistantMsg.questionMeta as SingleSelectQuestionMeta;
+      expect((assistantMsg.question as any)?.questionType).toBe('single_select');
+      const f1Meta = assistantMsg.question as SingleSelectQuestion;
       expect(f1Meta.options).toBeInstanceOf(Array);
       expect(f1Meta.options.length).toBeGreaterThan(0);
     });
@@ -1035,7 +1035,7 @@ describe('Conversations Integration Tests', () => {
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'single_select'
+          (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -1050,12 +1050,12 @@ describe('Conversations Integration Tests', () => {
       const followupMsg = msgs.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'free_text'
+          (m.question as any)?.questionType === 'free_text'
       );
 
       assertDefined(followupMsg);
       expect(followupMsg.role).toBe(MessageRole.ASSISTANT);
-      const f2Meta = followupMsg.questionMeta as FreeTextQuestionMeta;
+      const f2Meta = followupMsg.question as FreeTextQuestion;
       expect(f2Meta.prompts).toHaveLength(1);
       expect(f2Meta.prompts[0].key).toBe('reflection');
       expect(f2Meta.followUpRound).toBe(1);
@@ -1078,7 +1078,7 @@ describe('Conversations Integration Tests', () => {
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
           m.role === MessageRole.ASSISTANT &&
-          (m.questionMeta as any)?.questionType === 'single_select'
+          (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -1180,12 +1180,12 @@ describe('Conversations Integration Tests', () => {
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForGraphStable(harness, conv._id.toString());
 
-      // Create a different ASSISTANT message with questionMeta to use as the "wrong" question
+      // Create a different ASSISTANT message with question to use as the "wrong" question
       const wrongMsg = await createTestMessage(conv._id, {
         role: MessageRole.ASSISTANT,
         content: 'Wrong question',
         processingStatus: MessageProcessingStatus.COMPLETE,
-        questionMeta: {
+        question: {
           questionType: 'free_text',
           prompts: [{ key: 'test', text: 'test question' }],
         },
@@ -1207,7 +1207,7 @@ describe('Conversations Integration Tests', () => {
         role: MessageRole.ASSISTANT,
         content: 'A question',
         processingStatus: MessageProcessingStatus.COMPLETE,
-        questionMeta: {
+        question: {
           questionType: 'single_select',
           options: [{ key: 'CLINICAL_CASE_REVIEW', label: 'Clinical Case Review' }],
         },

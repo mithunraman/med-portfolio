@@ -12,7 +12,7 @@ import type { AnalysisRun } from './schemas/analysis-run.schema';
 export class AnalysisRunsService {
   constructor(
     @Inject(ANALYSIS_RUNS_REPOSITORY)
-    private readonly repository: IAnalysisRunsRepository,
+    private readonly repository: IAnalysisRunsRepository
   ) {}
 
   /**
@@ -23,13 +23,13 @@ export class AnalysisRunsService {
     conversationId: Types.ObjectId,
     idempotencyKey: string,
     langGraphThreadId: string,
-    session?: ClientSession,
+    session?: ClientSession
   ): Promise<{ run: AnalysisRun; created: boolean }> {
     // Check for existing run with same idempotency key
     const existingResult = await this.repository.findRunByIdempotencyKey(
       conversationId,
       idempotencyKey,
-      session,
+      session
     );
     if (!existingResult.ok) {
       throw new Error(existingResult.error.message);
@@ -52,7 +52,7 @@ export class AnalysisRunsService {
         idempotencyKey,
         langGraphThreadId,
       },
-      session,
+      session
     );
     if (!createResult.ok) {
       throw new Error(createResult.error.message);
@@ -70,13 +70,13 @@ export class AnalysisRunsService {
     expectedStatus: AnalysisRunStatus,
     newStatus: AnalysisRunStatus,
     additionalUpdates?: Omit<UpdateAnalysisRunData, 'status'>,
-    session?: ClientSession,
+    session?: ClientSession
   ): Promise<AnalysisRun> {
     const result = await this.repository.updateRunStatus(
       runId,
       expectedStatus,
       { ...additionalUpdates, status: newStatus },
-      session,
+      session
     );
     if (!result.ok) {
       throw new Error(result.error.message);
@@ -84,7 +84,7 @@ export class AnalysisRunsService {
     if (!result.value) {
       throw new Error(
         `Failed to transition analysis run ${runId} from ${expectedStatus} to ${newStatus}: ` +
-        'run not found or status mismatch (optimistic lock failure)',
+          'run not found or status mismatch (optimistic lock failure)'
       );
     }
     return result.value;
@@ -92,7 +92,7 @@ export class AnalysisRunsService {
 
   async findActiveRun(
     conversationId: Types.ObjectId,
-    session?: ClientSession,
+    session?: ClientSession
   ): Promise<AnalysisRun | null> {
     const result = await this.repository.findActiveRun(conversationId, session);
     if (!result.ok) {
@@ -109,10 +109,7 @@ export class AnalysisRunsService {
     return result.value;
   }
 
-  async findRunById(
-    runId: Types.ObjectId,
-    session?: ClientSession,
-  ): Promise<AnalysisRun | null> {
+  async findRunById(runId: Types.ObjectId, session?: ClientSession): Promise<AnalysisRun | null> {
     const result = await this.repository.findRunById(runId, session);
     if (!result.ok) {
       throw new Error(result.error.message);

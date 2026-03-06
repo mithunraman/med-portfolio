@@ -1,4 +1,11 @@
-import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+} from '@nestjs/common';
 import { OutboxService } from './outbox.service';
 import type { OutboxEntry } from './schemas/outbox.schema';
 
@@ -10,7 +17,7 @@ export interface OutboxHandler {
 export const OUTBOX_HANDLERS = Symbol('OUTBOX_HANDLERS');
 
 /** Default polling interval: 2 seconds */
-const DEFAULT_POLL_INTERVAL_MS = 2000;
+const DEFAULT_POLL_INTERVAL_MS = 1000;
 
 /** Default batch size per poll */
 const DEFAULT_BATCH_SIZE = 5;
@@ -24,7 +31,7 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly outboxService: OutboxService,
-    @Optional() @Inject(OUTBOX_HANDLERS) handlers?: OutboxHandler[],
+    @Optional() @Inject(OUTBOX_HANDLERS) handlers?: OutboxHandler[]
   ) {
     if (handlers) {
       for (const handler of handlers) {
@@ -47,7 +54,7 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
   onModuleInit(): void {
     this.logger.log(
       `Outbox consumer starting with ${this.handlers.size} handler(s): ` +
-      `[${[...this.handlers.keys()].join(', ')}]`,
+        `[${[...this.handlers.keys()].join(', ')}]`
     );
     this.startPolling();
   }
@@ -58,7 +65,7 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
 
   private startPolling(): void {
     this.logger.log(
-      `Polling outbox every ${DEFAULT_POLL_INTERVAL_MS}ms (batch size: ${DEFAULT_BATCH_SIZE})`,
+      `Polling outbox every ${DEFAULT_POLL_INTERVAL_MS}ms (batch size: ${DEFAULT_BATCH_SIZE})`
     );
     this.pollTimer = setInterval(() => this.poll(), DEFAULT_POLL_INTERVAL_MS);
   }
@@ -86,16 +93,14 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
       this.logger.debug(`Claimed ${entries.length} outbox entries`);
 
       // Process all claimed jobs in parallel
-      const results = await Promise.allSettled(
-        entries.map((entry) => this.processEntry(entry)),
-      );
+      const results = await Promise.allSettled(entries.map((entry) => this.processEntry(entry)));
 
       // Log any unexpected errors
       for (let i = 0; i < results.length; i++) {
         if (results[i].status === 'rejected') {
           this.logger.error(
             `Unexpected error processing outbox entry ${entries[i]._id}`,
-            (results[i] as PromiseRejectedResult).reason,
+            (results[i] as PromiseRejectedResult).reason
           );
         }
       }
@@ -112,7 +117,7 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
       this.logger.error(`No handler registered for outbox type: ${entry.type}`);
       await this.outboxService.markFailed(
         entry._id,
-        `No handler registered for type: ${entry.type}`,
+        `No handler registered for type: ${entry.type}`
       );
       return;
     }
@@ -123,12 +128,9 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.error(
-        `Handler failed for outbox entry ${entry._id} (type: ${entry.type}): ${errorMessage}`,
+        `Handler failed for outbox entry ${entry._id} (type: ${entry.type}): ${errorMessage}`
       );
-      await this.outboxService.markFailed(
-        entry._id,
-        errorMessage,
-      );
+      await this.outboxService.markFailed(entry._id, errorMessage);
     }
   }
 }

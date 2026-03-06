@@ -61,7 +61,7 @@ export class ConversationsService {
     private readonly processingService: ProcessingService,
     private readonly portfolioGraphService: PortfolioGraphService,
     private readonly analysisRunsService: AnalysisRunsService,
-    private readonly outboxService: OutboxService,
+    private readonly outboxService: OutboxService
   ) {}
 
   async sendMessage(userId: string, conversationId: string, dto: SendMessageDto): Promise<Message> {
@@ -193,7 +193,9 @@ export class ConversationsService {
 
     // 2a. Guard: reject if conversation is closed
     if (conversation.status === ConversationStatus.CLOSED) {
-      throw new ConflictException('This conversation is closed. Analysis cannot be started or resumed.');
+      throw new ConflictException(
+        'This conversation is closed. Analysis cannot be started or resumed.'
+      );
     }
 
     // 2b. Guard: reject if any user messages are still being processed
@@ -231,7 +233,7 @@ export class ConversationsService {
     userId: string,
     convIdStr: string,
     conversation: { _id: Types.ObjectId; artefact: Types.ObjectId },
-    idempotencyKey?: string,
+    idempotencyKey?: string
   ): Promise<void> {
     const hasCheckpoint = await this.portfolioGraphService.hasCheckpoint(convIdStr);
 
@@ -261,7 +263,7 @@ export class ConversationsService {
           conversation._id,
           effectiveIdempotencyKey,
           langGraphThreadId,
-          session,
+          session
         );
 
         await this.outboxService.enqueue(
@@ -275,10 +277,10 @@ export class ConversationsService {
               specialty: Specialty.GP.toString(),
             },
           },
-          session,
+          session
         );
       },
-      { context: `handleStart:${convIdStr}` },
+      { context: `handleStart:${convIdStr}` }
     );
   }
 
@@ -390,14 +392,12 @@ export class ConversationsService {
               content: `Selected: ${label}`,
               processingStatus: MessageProcessingStatus.COMPLETE,
             },
-            session,
+            session
           );
         }
         if (questionType === 'multi_select' && selectedKeys) {
           const qm = message.question as MultiSelectQuestion;
-          const labels = selectedKeys.map(
-            (k) => qm.options.find((o) => o.key === k)?.label ?? k,
-          );
+          const labels = selectedKeys.map((k) => qm.options.find((o) => o.key === k)?.label ?? k);
           await this.conversationsRepository.createMessage(
             {
               conversation: conversationOid,
@@ -407,7 +407,7 @@ export class ConversationsService {
               content: `Selected: ${labels.join(', ')}`,
               processingStatus: MessageProcessingStatus.COMPLETE,
             },
-            session,
+            session
           );
         }
 
@@ -421,10 +421,10 @@ export class ConversationsService {
               resumeValue,
             },
           },
-          session,
+          session
         );
       },
-      { context: `handleResume:${convIdStr}:${node}` },
+      { context: `handleResume:${convIdStr}:${node}` }
     );
   }
 
@@ -438,7 +438,7 @@ export class ConversationsService {
    */
   private async assertCanSendMessage(
     convIdStr: string,
-    conversationStatus: ConversationStatus,
+    conversationStatus: ConversationStatus
   ): Promise<void> {
     if (conversationStatus === ConversationStatus.CLOSED) {
       throw new ConflictException('This conversation is closed. No further messages can be sent.');

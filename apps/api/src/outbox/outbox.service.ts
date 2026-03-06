@@ -19,7 +19,7 @@ export class OutboxService {
 
   constructor(
     @Inject(OUTBOX_REPOSITORY)
-    private readonly repository: IOutboxRepository,
+    private readonly repository: IOutboxRepository
   ) {}
 
   /**
@@ -27,10 +27,7 @@ export class OutboxService {
    * Should be called within a transaction alongside the business write
    * to guarantee atomic enqueue.
    */
-  async enqueue(
-    data: CreateOutboxEntryData,
-    session?: ClientSession,
-  ): Promise<OutboxEntry> {
+  async enqueue(data: CreateOutboxEntryData, session?: ClientSession): Promise<OutboxEntry> {
     const result = await this.repository.create(data, session);
     if (!result.ok) {
       throw new Error(result.error.message);
@@ -44,7 +41,7 @@ export class OutboxService {
    */
   async claimBatch(
     batchSize: number = DEFAULT_BATCH_SIZE,
-    lockDurationMs: number = DEFAULT_LOCK_DURATION_MS,
+    lockDurationMs: number = DEFAULT_LOCK_DURATION_MS
   ): Promise<OutboxEntry[]> {
     const result = await this.repository.claimBatch(batchSize, lockDurationMs);
     if (!result.ok) {

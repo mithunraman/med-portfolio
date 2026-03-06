@@ -23,7 +23,7 @@ export interface IOutboxRepository {
    */
   create(
     data: CreateOutboxEntryData,
-    session?: ClientSession,
+    session?: ClientSession
   ): Promise<Result<OutboxEntry, DBError>>;
 
   /**
@@ -31,26 +31,18 @@ export interface IOutboxRepository {
    * Uses optimistic locking via lockedUntil.
    * Returns the claimed entries with status set to PROCESSING.
    */
-  claimBatch(
-    batchSize: number,
-    lockDurationMs: number,
-  ): Promise<Result<OutboxEntry[], DBError>>;
+  claimBatch(batchSize: number, lockDurationMs: number): Promise<Result<OutboxEntry[], DBError>>;
 
   /**
    * Mark a job as completed.
    */
-  markCompleted(
-    entryId: Types.ObjectId,
-  ): Promise<Result<OutboxEntry | null, DBError>>;
+  markCompleted(entryId: Types.ObjectId): Promise<Result<OutboxEntry | null, DBError>>;
 
   /**
    * Mark a job as failed. If attempts < maxAttempts, reschedules with backoff.
    * Otherwise marks as permanently failed.
    */
-  markFailed(
-    entryId: Types.ObjectId,
-    error: string,
-  ): Promise<Result<OutboxEntry | null, DBError>>;
+  markFailed(entryId: Types.ObjectId, error: string): Promise<Result<OutboxEntry | null, DBError>>;
 
   /**
    * Reset stale processing entries whose locks have expired.
@@ -62,8 +54,5 @@ export interface IOutboxRepository {
    * Delete completed/failed entries older than the given date.
    * Returns the count of entries deleted.
    */
-  cleanupOldEntries(
-    olderThan: Date,
-    statuses: OutboxStatus[],
-  ): Promise<Result<number, DBError>>;
+  cleanupOldEntries(olderThan: Date, statuses: OutboxStatus[]): Promise<Result<number, DBError>>;
 }

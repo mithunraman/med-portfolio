@@ -98,7 +98,6 @@ export const MessageSchema = z.object({
   content: z.string().nullable(),
   media: MessageMediaSchema.nullable(),
   question: QuestionSchema.nullable().optional(),
-  analysisRunId: z.string().nullable().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

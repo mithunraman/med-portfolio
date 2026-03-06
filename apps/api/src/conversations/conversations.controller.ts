@@ -29,14 +29,6 @@ export class ConversationsController {
     return this.conversationsService.sendMessage(user.userId, conversationId, dto);
   }
 
-  /**
-   * Unified analysis endpoint.
-   *
-   * - { type: "start" } — AI Button, first time (starts the graph)
-   * - { type: "resume", node: "ask_followup" } — AI Button after sending more content
-   * - { type: "resume", node: "present_classification", value } — classification selection
-   * - { type: "resume", node: "present_capabilities", value } — capability confirmation
-   */
   @Post(':conversationId/analysis')
   @HttpCode(HttpStatus.NO_CONTENT)
   async analysis(

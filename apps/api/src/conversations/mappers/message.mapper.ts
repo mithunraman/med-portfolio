@@ -17,7 +17,6 @@ export function toMessageDto(
     content: doc.content ?? doc.cleanedContent ?? doc.rawContent ?? null,
     media: mediaData,
     question: doc.question ?? null,
-    analysisRunId: doc.analysisRunId?.toString() ?? null,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   };

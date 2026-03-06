@@ -71,10 +71,6 @@ export class Message {
   @Prop({ type: Object, default: null })
   question!: Question | null;
 
-  // Links message to a specific analysis run (null for pre-analysis chat)
-  @Prop({ type: Types.ObjectId, ref: 'AnalysisRun', default: null })
-  analysisRunId!: Types.ObjectId | null;
-
   // Transcription metadata (populated after audio transcription)
   @Prop({ type: TranscriptionMetadata, default: null })
   transcription!: TranscriptionMetadata | null;

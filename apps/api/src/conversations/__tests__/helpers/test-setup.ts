@@ -1,41 +1,56 @@
+import { MongooseModule, getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
-import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { Connection, Model } from 'mongoose';
-import { getConnectionToken } from '@nestjs/mongoose';
 
-import { ConversationsService } from '../../conversations.service';
+import { AnalysisRunsRepository } from '../../../analysis-runs/analysis-runs.repository';
+import { ANALYSIS_RUNS_REPOSITORY } from '../../../analysis-runs/analysis-runs.repository.interface';
+import { AnalysisRunsService } from '../../../analysis-runs/analysis-runs.service';
+import {
+  AnalysisRun,
+  AnalysisRunSchema as AnalysisRunMongooseSchema,
+} from '../../../analysis-runs/schemas/analysis-run.schema';
+import { ArtefactsRepository } from '../../../artefacts/artefacts.repository';
+import { ARTEFACTS_REPOSITORY } from '../../../artefacts/artefacts.repository.interface';
+import {
+  Artefact,
+  ArtefactDocument,
+  ArtefactSchema,
+} from '../../../artefacts/schemas/artefact.schema';
+import { TransactionService } from '../../../database/transaction.service';
+import { LLMService } from '../../../llm/llm.service';
+import { MEDIA_REPOSITORY } from '../../../media/media.repository.interface';
+import { MediaService } from '../../../media/media.service';
+import { Media, MediaSchema } from '../../../media/schemas/media.schema';
+import { AnalysisResumeHandler } from '../../../outbox/handlers/analysis-resume.handler';
+import { AnalysisStartHandler } from '../../../outbox/handlers/analysis-start.handler';
+import { OUTBOX_HANDLERS, OutboxConsumer } from '../../../outbox/outbox.consumer';
+import { OutboxRepository } from '../../../outbox/outbox.repository';
+import { OUTBOX_REPOSITORY } from '../../../outbox/outbox.repository.interface';
+import { OutboxService } from '../../../outbox/outbox.service';
+import { OutboxEntry, OutboxEntrySchema } from '../../../outbox/schemas/outbox.schema';
+import { PdpActionsRepository } from '../../../pdp-actions/pdp-actions.repository';
+import { PDP_ACTIONS_REPOSITORY } from '../../../pdp-actions/pdp-actions.repository.interface';
+import {
+  PdpAction,
+  PdpActionDocument,
+  PdpActionSchema,
+} from '../../../pdp-actions/schemas/pdp-action.schema';
+import { PortfolioGraphService } from '../../../portfolio-graph/portfolio-graph.service';
+import { ProcessingService } from '../../../processing/processing.service';
+import { ConversationContextService } from '../../conversation-context.service';
 import { ConversationsRepository } from '../../conversations.repository';
 import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from '../../conversations.repository.interface';
-import { Conversation, ConversationDocument, ConversationSchema } from '../../schemas/conversation.schema';
+import { ConversationsService } from '../../conversations.service';
+import {
+  Conversation,
+  ConversationDocument,
+  ConversationSchema,
+} from '../../schemas/conversation.schema';
 import { Message, MessageDocument, MessageSchema } from '../../schemas/message.schema';
-import { Media, MediaSchema } from '../../../media/schemas/media.schema';
-import { Artefact, ArtefactDocument, ArtefactSchema } from '../../../artefacts/schemas/artefact.schema';
-import { ArtefactsRepository } from '../../../artefacts/artefacts.repository';
-import { ARTEFACTS_REPOSITORY } from '../../../artefacts/artefacts.repository.interface';
-import { TransactionService } from '../../../database/transaction.service';
-import { PdpActionsRepository } from '../../../pdp-actions/pdp-actions.repository';
-import { PDP_ACTIONS_REPOSITORY } from '../../../pdp-actions/pdp-actions.repository.interface';
-import { PdpAction, PdpActionDocument, PdpActionSchema } from '../../../pdp-actions/schemas/pdp-action.schema';
-import { PortfolioGraphService } from '../../../portfolio-graph/portfolio-graph.service';
-import { LLMService } from '../../../llm/llm.service';
-import { ProcessingService } from '../../../processing/processing.service';
-import { MediaService } from '../../../media/media.service';
-import { MEDIA_REPOSITORY } from '../../../media/media.repository.interface';
-import { AnalysisRunsService } from '../../../analysis-runs/analysis-runs.service';
-import { AnalysisRunsRepository } from '../../../analysis-runs/analysis-runs.repository';
-import { ANALYSIS_RUNS_REPOSITORY } from '../../../analysis-runs/analysis-runs.repository.interface';
-import { AnalysisRun, AnalysisRunSchema as AnalysisRunMongooseSchema } from '../../../analysis-runs/schemas/analysis-run.schema';
-import { OutboxService } from '../../../outbox/outbox.service';
-import { OutboxRepository } from '../../../outbox/outbox.repository';
-import { OUTBOX_REPOSITORY } from '../../../outbox/outbox.repository.interface';
-import { OutboxEntry, OutboxEntrySchema } from '../../../outbox/schemas/outbox.schema';
-import { OutboxConsumer, OUTBOX_HANDLERS } from '../../../outbox/outbox.consumer';
-import { AnalysisStartHandler } from '../../../outbox/handlers/analysis-start.handler';
-import { AnalysisResumeHandler } from '../../../outbox/handlers/analysis-resume.handler';
 import { initFactories } from './factories';
 import type { SequentialLLMMock } from './llm-mock';
 
@@ -51,7 +66,7 @@ export interface TestHarness {
   module: TestingModule;
   mongod: MongoMemoryReplSet;
   service: ConversationsService;
-  graphService: PortfolioGraphService;
+  analysisRunsService: AnalysisRunsService;
   repo: IConversationsRepository;
   connection: Connection;
 }
@@ -80,6 +95,7 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
     providers: [
       // Real services
       ConversationsService,
+      ConversationContextService,
       {
         provide: CONVERSATIONS_REPOSITORY,
         useClass: ConversationsRepository,
@@ -154,7 +170,9 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
   await module.init();
 
   const connection = module.get<Connection>(getConnectionToken());
-  const conversationModel = module.get<Model<ConversationDocument>>(getModelToken(Conversation.name));
+  const conversationModel = module.get<Model<ConversationDocument>>(
+    getModelToken(Conversation.name)
+  );
   const messageModel = module.get<Model<MessageDocument>>(getModelToken(Message.name));
   const artefactModel = module.get<Model<ArtefactDocument>>(getModelToken(Artefact.name));
   const pdpActionModel = module.get<Model<PdpActionDocument>>(getModelToken(PdpAction.name));
@@ -175,7 +193,7 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
     module,
     mongod,
     service: module.get(ConversationsService),
-    graphService: module.get(PortfolioGraphService),
+    analysisRunsService: module.get(AnalysisRunsService),
     repo: module.get(CONVERSATIONS_REPOSITORY),
     connection,
   };

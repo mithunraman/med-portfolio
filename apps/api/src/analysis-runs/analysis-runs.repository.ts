@@ -115,6 +115,23 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
     }
   }
 
+  async findLatestRun(
+    conversationId: Types.ObjectId,
+    session?: ClientSession,
+  ): Promise<Result<AnalysisRun | null, DBError>> {
+    try {
+      const run = await this.analysisRunModel
+        .findOne({ conversationId })
+        .sort({ createdAt: -1 })
+        .lean()
+        .session(session || null);
+      return ok(run);
+    } catch (error) {
+      this.logger.error('Failed to find latest analysis run', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find latest analysis run' });
+    }
+  }
+
   async updateRunStatus(
     runId: Types.ObjectId,
     expectedStatus: AnalysisRunStatus,

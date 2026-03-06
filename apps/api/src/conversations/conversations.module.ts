@@ -9,6 +9,7 @@ import { ProcessingModule } from '../processing';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsRepository } from './conversations.repository';
 import { CONVERSATIONS_REPOSITORY } from './conversations.repository.interface';
+import { ConversationContextService } from './conversation-context.service';
 import { ConversationsService } from './conversations.service';
 import { Conversation, ConversationSchema } from './schemas/conversation.schema';
 import { Message, MessageSchema } from './schemas/message.schema';
@@ -29,11 +30,12 @@ import { Message, MessageSchema } from './schemas/message.schema';
   controllers: [ConversationsController],
   providers: [
     ConversationsService,
+    ConversationContextService,
     {
       provide: CONVERSATIONS_REPOSITORY,
       useClass: ConversationsRepository,
     },
   ],
-  exports: [ConversationsService, CONVERSATIONS_REPOSITORY],
+  exports: [ConversationsService, ConversationContextService, CONVERSATIONS_REPOSITORY],
 })
 export class ConversationsModule {}

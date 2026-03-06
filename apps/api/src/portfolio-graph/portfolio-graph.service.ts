@@ -45,14 +45,8 @@ export type InterruptNode = keyof GraphResumeMap;
 export interface GraphPauseResult {
   questionMessageId: Types.ObjectId;
   pausedNode: InterruptNode;
+  questionType: 'single_select' | 'multi_select' | 'free_text';
 }
-
-/** Discriminated union representing the current state of the graph for a conversation. */
-export type GraphStatus =
-  | { status: 'not_started' }
-  | { status: 'running' }
-  | { status: 'paused'; node: InterruptNode }
-  | { status: 'completed' };
 
 @Injectable()
 export class PortfolioGraphService implements OnModuleInit {
@@ -206,42 +200,6 @@ export class PortfolioGraphService implements OnModuleInit {
   }
 
   /**
-   * Get the current state of a graph execution.
-   * Useful for debugging and for the API to report graph status.
-   */
-  async getGraphState(conversationId: string) {
-    const config = { configurable: { thread_id: conversationId } };
-    return this.graph.getState(config);
-  }
-
-  /**
-   * Determine the high-level status of the graph for a conversation.
-   *
-   * - not_started: no checkpoint exists (conversationId not set)
-   * - paused: graph is waiting at an interrupt node for user input
-   * - running: checkpoint exists with pending nodes that aren't interrupt points
-   * - completed: checkpoint exists but no pending nodes remain
-   */
-  async getGraphStatus(conversationId: string): Promise<GraphStatus> {
-    const config = { configurable: { thread_id: conversationId } };
-    const state = await this.graph.getState(config);
-
-    if (!state?.values?.conversationId) return { status: 'not_started' };
-    if (!state.next?.length) return { status: 'completed' };
-
-    const nextNode = state.next[0];
-    const interruptNodes = new Set<string>([
-      'present_classification',
-      'ask_followup',
-      'present_capabilities',
-    ]);
-
-    if (interruptNodes.has(nextNode)) return { status: 'paused', node: nextNode as InterruptNode };
-
-    return { status: 'running' };
-  }
-
-  /**
    * Check if the graph is paused at an interrupt node after invoke() returns.
    * If so, handle side effects (e.g. writing an ASSISTANT message) and return
    * the pause result bundling the question message ID and paused node.
@@ -256,10 +214,14 @@ export class PortfolioGraphService implements OnModuleInit {
     if (!pausedNode) return null;
 
     this.logger.log(`Graph paused at "${pausedNode}" for conversation ${conversationId}`);
-    const questionMessageId = await this.handleInterruptSideEffects(conversationId);
-    if (!questionMessageId) return null;
+    const sideEffectResult = await this.handleInterruptSideEffects(conversationId);
+    if (!sideEffectResult) return null;
 
-    return { questionMessageId, pausedNode };
+    return {
+      questionMessageId: sideEffectResult.messageId,
+      pausedNode,
+      questionType: sideEffectResult.questionType,
+    };
   }
 
   /**
@@ -273,7 +235,7 @@ export class PortfolioGraphService implements OnModuleInit {
    */
   private async handleInterruptSideEffects(
     conversationId: string,
-  ): Promise<Types.ObjectId | null> {
+  ): Promise<{ messageId: Types.ObjectId; questionType: 'single_select' | 'multi_select' | 'free_text' } | null> {
     const config = { configurable: { thread_id: conversationId } };
     const snapshot = await this.graph.getState(config);
 
@@ -326,7 +288,7 @@ export class PortfolioGraphService implements OnModuleInit {
           this.logger.error(`Failed to send classification options: ${result.error.message}`);
           return null;
         }
-        return result.value._id;
+        return { messageId: result.value._id, questionType: 'single_select' };
       }
 
       case 'followup': {
@@ -367,7 +329,7 @@ export class PortfolioGraphService implements OnModuleInit {
           this.logger.error(`Failed to send follow-up questions: ${followupResult.error.message}`);
           return null;
         }
-        return followupResult.value._id;
+        return { messageId: followupResult.value._id, questionType: 'free_text' };
       }
 
       case 'capabilities': {
@@ -409,7 +371,7 @@ export class PortfolioGraphService implements OnModuleInit {
           this.logger.error(`Failed to send capability options: ${capResult.error.message}`);
           return null;
         }
-        return capResult.value._id;
+        return { messageId: capResult.value._id, questionType: 'multi_select' };
       }
     }
 

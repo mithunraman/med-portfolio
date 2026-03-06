@@ -78,6 +78,7 @@ export class AnalysisResumeHandler implements OutboxHandler {
             currentQuestion: {
               messageId: pauseResult.questionMessageId,
               node: pauseResult.pausedNode,
+              questionType: pauseResult.questionType,
             },
           },
         );

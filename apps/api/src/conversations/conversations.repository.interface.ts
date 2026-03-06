@@ -42,8 +42,6 @@ export interface UpdateMessageData {
 
 export interface ListMessagesQuery {
   conversation: Types.ObjectId;
-  cursor?: Types.ObjectId;
-  limit: number;
 }
 
 export interface ListMessagesResult {

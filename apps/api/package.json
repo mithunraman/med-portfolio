@@ -10,8 +10,9 @@
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "test": "jest",
-    "test:integration": "jest --testRegex '.*\\.integration\\.spec\\.ts$' --runInBand"
+    "test": "jest --config jest.unit.config.ts && jest --config jest.config.ts --runInBand",
+    "test:unit": "jest --config jest.unit.config.ts",
+    "test:integration": "jest --config jest.config.ts --runInBand"
   },
   "dependencies": {
     "@acme/shared": "workspace:*",

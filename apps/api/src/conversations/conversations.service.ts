@@ -34,16 +34,16 @@ import { IMediaRepository, MEDIA_REPOSITORY, MediaService } from '../media';
 import { Media } from '../media/schemas/media.schema';
 import { OutboxService } from '../outbox/outbox.service';
 import {
-  type GraphStatus,
   type InterruptNode,
   PortfolioGraphService,
 } from '../portfolio-graph/portfolio-graph.service';
 import { ProcessingService } from '../processing/processing.service';
+import { ConversationContextService } from './conversation-context.service';
 import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from './conversations.repository.interface';
-import { ListMessagesDto, SendMessageDto } from './dto';
+import { SendMessageDto } from './dto';
 import { buildMediaData, toMessageDto } from './mappers/message.mapper';
 import { Message as MessageSchema } from './schemas/message.schema';
 
@@ -61,7 +61,8 @@ export class ConversationsService {
     private readonly processingService: ProcessingService,
     private readonly portfolioGraphService: PortfolioGraphService,
     private readonly analysisRunsService: AnalysisRunsService,
-    private readonly outboxService: OutboxService
+    private readonly outboxService: OutboxService,
+    private readonly contextService: ConversationContextService,
   ) {}
 
   async sendMessage(userId: string, conversationId: string, dto: SendMessageDto): Promise<Message> {
@@ -81,8 +82,8 @@ export class ConversationsService {
 
     const conversation = conversationResult.value;
 
-    // Guard: reject messages when the conversation or graph state doesn't accept them
-    await this.assertCanSendMessage(conversation._id.toString(), conversation.status);
+    // Guard: reject messages when the conversation or analysis state doesn't accept them
+    await this.assertCanSendMessage(conversation._id, conversation.status);
 
     // Validate media upload if provided (S3 HEAD + content-type check)
     let validatedMedia: Awaited<ReturnType<MediaService['validateMediaUpload']>> | null = null;
@@ -429,47 +430,25 @@ export class ConversationsService {
   }
 
   /**
-   * Reject sendMessage() calls when the conversation or graph state doesn't accept new messages.
-   *
-   * Conversation-level: CLOSED conversations reject all messages.
-   * Graph-level:
-   *   Allowed: not_started (composing), paused at ask_followup (answering questions).
-   *   Rejected: running, paused at classification/capabilities, completed.
+   * Reject sendMessage() calls when the conversation or analysis state doesn't accept new messages.
+   * Derives permissions from AnalysisRun state via ConversationContextService.
    */
   private async assertCanSendMessage(
-    convIdStr: string,
-    conversationStatus: ConversationStatus
+    conversationOid: Types.ObjectId,
+    conversationStatus: ConversationStatus,
   ): Promise<void> {
-    if (conversationStatus === ConversationStatus.CLOSED) {
-      throw new ConflictException('This conversation is closed. No further messages can be sent.');
-    }
-
-    const graphStatus: GraphStatus = await this.portfolioGraphService.getGraphStatus(convIdStr);
-
-    switch (graphStatus.status) {
-      case 'not_started':
-        return; // User is composing initial messages
-      case 'running':
-        throw new ConflictException('Analysis is in progress. Please wait for it to complete.');
-      case 'completed':
-        throw new ConflictException('Analysis is complete. No further messages can be sent.');
-      case 'paused':
-        if (graphStatus.node === 'ask_followup') return; // User is answering follow-up questions
-        if (graphStatus.node === 'present_classification')
-          throw new ConflictException('Please select an entry type to continue.');
-        if (graphStatus.node === 'present_capabilities')
-          throw new ConflictException('Please confirm capabilities to continue.');
+    const context = await this.contextService.computeContext(conversationOid, conversationStatus);
+    if (!context.actions.sendMessage.allowed) {
+      throw new ConflictException(
+        context.actions.sendMessage.reason || 'Cannot send messages at this time.',
+      );
     }
   }
 
   async listMessages(
     userId: string,
     conversationId: string,
-    query: ListMessagesDto
   ): Promise<MessageListResponse> {
-    const limit = query.limit || 50;
-    const cursor = query.cursor ? new Types.ObjectId(query.cursor) : undefined;
-
     // Find conversation by xid
     const conversationResult = await this.conversationsRepository.findConversationByXid(
       conversationId,
@@ -486,11 +465,9 @@ export class ConversationsService {
 
     const conversation = conversationResult.value;
 
-    // Get messages (media is populated by the repository)
+    // Get all messages (no pagination — conversations are <50 messages)
     const messagesResult = await this.conversationsRepository.listMessages({
       conversation: conversation._id,
-      cursor,
-      limit,
     });
 
     if (isErr(messagesResult)) {
@@ -498,8 +475,6 @@ export class ConversationsService {
     }
 
     const messages = messagesResult.value.messages;
-    const hasMore = messages.length === limit;
-    const nextCursor = hasMore ? messages[messages.length - 1]._id.toString() : null;
 
     // Enrich audio messages with presigned download URLs in parallel
     const enriched = await Promise.all(
@@ -509,31 +484,10 @@ export class ConversationsService {
       })
     );
 
-    return { messages: enriched, nextCursor, limit };
-  }
+    // Compute context (server-driven action state)
+    const context = await this.contextService.computeContext(conversation._id, conversation.status);
 
-  async pollMessages(userId: string, xids: string[]): Promise<Message[]> {
-    if (xids.length === 0) return [];
-
-    const result = await this.conversationsRepository.findMessagesByXids(
-      xids,
-      new Types.ObjectId(userId)
-    );
-
-    if (isErr(result)) {
-      throw new InternalServerErrorException(result.error.message);
-    }
-
-    const messages = result.value;
-
-    // Enrich audio messages with presigned download URLs in parallel
-    return Promise.all(
-      messages.map(async (msg) => {
-        const conversationDoc = msg.conversation as unknown as { xid: string };
-        const audioUrl = await this.resolveAudioUrl(msg);
-        return toMessageDto(msg, conversationDoc.xid, buildMediaData(msg, audioUrl));
-      })
-    );
+    return { messages: enriched, context };
   }
 
   /**

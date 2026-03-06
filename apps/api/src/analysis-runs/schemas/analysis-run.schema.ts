@@ -18,6 +18,9 @@ export class CurrentQuestion {
 
   @Prop({ required: true, type: String })
   node!: string;
+
+  @Prop({ required: true, type: String })
+  questionType!: 'single_select' | 'multi_select' | 'free_text';
 }
 
 export class AnalysisRunError {

@@ -152,10 +152,53 @@ export const ConversationListResponseSchema = z.object({
 
 export type ConversationListResponse = z.infer<typeof ConversationListResponseSchema>;
 
+// ── ConversationContext schemas ──
+
+export const QuestionTypeSchema = z.enum(['single_select', 'multi_select', 'free_text']);
+export type QuestionType = z.infer<typeof QuestionTypeSchema>;
+
+export const ConversationPhaseSchema = z.enum([
+  'composing',
+  'analysing',
+  'awaiting_input',
+  'completed',
+  'closed',
+]);
+export type ConversationPhase = z.infer<typeof ConversationPhaseSchema>;
+
+export const ActionStateSchema = z.object({
+  allowed: z.boolean(),
+  code: z.string().optional(),
+  reason: z.string().optional(),
+});
+export type ActionState = z.infer<typeof ActionStateSchema>;
+
+export const ConversationContextSchema = z.object({
+  actions: z.object({
+    sendMessage: ActionStateSchema,
+    sendAudio: ActionStateSchema,
+    startAnalysis: ActionStateSchema,
+    resumeAnalysis: ActionStateSchema,
+  }),
+  phase: ConversationPhaseSchema,
+  activeQuestion: z
+    .object({
+      messageId: z.string(),
+      questionType: QuestionTypeSchema,
+    })
+    .optional(),
+  analysisRun: z
+    .object({
+      id: z.string(),
+      status: z.nativeEnum(AnalysisRunStatus),
+    })
+    .optional(),
+});
+export type ConversationContext = z.infer<typeof ConversationContextSchema>;
+
 export const MessageListResponseSchema = z.object({
   messages: z.array(MessageSchema),
-  nextCursor: z.string().nullable(),
-  limit: z.number(),
+  context: ConversationContextSchema,
 });
 
 export type MessageListResponse = z.infer<typeof MessageListResponseSchema>;
@@ -182,6 +225,7 @@ export const AnalysisRunSchema = z.object({
     .object({
       messageId: z.string(),
       node: z.string(),
+      questionType: QuestionTypeSchema,
     })
     .nullable(),
   artefactId: z.string().nullable(),

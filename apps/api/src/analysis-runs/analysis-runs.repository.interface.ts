@@ -27,7 +27,7 @@ export interface UpdateAnalysisRunData {
     fromMessageId: Types.ObjectId | null;
     toMessageId: Types.ObjectId | null;
   };
-  currentQuestion?: { messageId: Types.ObjectId; node: string } | null;
+  currentQuestion?: { messageId: Types.ObjectId; node: string; questionType: string } | null;
   artefactId?: Types.ObjectId | null;
   error?: { code: string; message: string } | null;
 }
@@ -63,6 +63,15 @@ export interface IAnalysisRunsRepository {
    * Terminal statuses: COMPLETED, FAILED.
    */
   findActiveRun(
+    conversationId: Types.ObjectId,
+    session?: ClientSession,
+  ): Promise<Result<AnalysisRun | null, DBError>>;
+
+  /**
+   * Find the most recent run for a conversation, regardless of status.
+   * Used by ConversationContextService to derive conversation phase.
+   */
+  findLatestRun(
     conversationId: Types.ObjectId,
     session?: ClientSession,
   ): Promise<Result<AnalysisRun | null, DBError>>;

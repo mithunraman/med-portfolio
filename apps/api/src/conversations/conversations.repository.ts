@@ -201,19 +201,10 @@ export class ConversationsRepository implements IConversationsRepository {
     session?: ClientSession
   ): Promise<Result<ListMessagesResult, DBError>> {
     try {
-      const filter: { conversation: Types.ObjectId; _id?: { $lt: Types.ObjectId } } = {
-        conversation: query.conversation,
-      };
-
-      if (query.cursor) {
-        filter._id = { $lt: query.cursor };
-      }
-
       const messages = await this.messageModel
-        .find(filter)
+        .find({ conversation: query.conversation })
         .populate('media')
         .sort({ _id: -1 })
-        .limit(query.limit)
         .lean()
         .session(session || null);
 

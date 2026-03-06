@@ -1,14 +1,15 @@
 import {
+  AnalysisRunStatus,
   ArtefactStatus,
-  type FreeTextQuestion,
-  type MultiSelectQuestion,
-  type SingleSelectQuestion,
   MessageProcessingStatus,
   MessageRole,
   MessageType,
+  type FreeTextQuestion,
+  type MultiSelectQuestion,
+  type SingleSelectQuestion,
 } from '@acme/shared';
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import type { GraphStatus } from '../../portfolio-graph/portfolio-graph.service';
+import { Types } from 'mongoose';
 import {
   createCompleteUserMessage,
   createPendingUserMessage,
@@ -50,67 +51,96 @@ function assertDefined<T>(value: T | null | undefined): asserts value is T {
 }
 
 /**
- * Poll graph status until it reaches a stable state (paused or completed).
- *
- * When `afterResume` is true, the function first waits until the graph leaves
- * the current paused state (enters `running` or a different paused node),
- * then waits until it stabilizes again. This handles the fire-and-forget pattern
- * where the graph may still show the old paused state momentarily after resume.
- *
- * After finding a stable state, waits an additional `settleMs` and then confirms
- * the state hasn't changed. This guards against transient checkpoint states that
- * can briefly appear as "completed" while the graph is still executing between nodes.
+ * Stable state returned by waitForRunStable.
+ * Maps to AnalysisRun status: AWAITING_INPUT (with node) or COMPLETED.
  */
-async function waitForGraphStable(
+type StableRunState =
+  | { status: 'awaiting_input'; node: string }
+  | { status: 'completed' };
+
+/**
+ * Poll AnalysisRun status until it reaches a stable state (AWAITING_INPUT or COMPLETED).
+ *
+ * When `afterResume` is true, the function first waits until the run leaves
+ * the current AWAITING_INPUT state (handler transitions it to RUNNING),
+ * then waits until it stabilizes again. This handles the fire-and-forget pattern
+ * where the run may still show the old AWAITING_INPUT state momentarily after resume.
+ *
+ * After finding a stable state, waits an additional `settleMs` and re-checks
+ * to guard against transient states during outbox handler execution.
+ */
+async function waitForRunStable(
   harness: TestHarness,
-  conversationId: string,
+  conversationOid: Types.ObjectId,
   afterResume = false,
   timeoutMs = 10000,
   pollIntervalMs = 100,
   settleMs = 300
-): Promise<GraphStatus> {
+): Promise<StableRunState> {
   const deadline = Date.now() + timeoutMs;
 
   if (afterResume) {
-    // Capture the current state so we know what to wait past
-    const initialStatus = await harness.graphService.getGraphStatus(conversationId);
-    const initialNode = initialStatus.status === 'paused' ? initialStatus.node : null;
+    // Capture the current run state so we know what to wait past
+    const initialRun = await harness.analysisRunsService.findLatestRun(conversationOid);
+    const initialNode =
+      initialRun?.status === AnalysisRunStatus.AWAITING_INPUT
+        ? initialRun.currentQuestion?.node
+        : null;
 
-    // Phase 1: Wait until graph is no longer at the initial paused node
-    // (it should transition to 'running' or 'not_started' or a different node)
+    // Phase 1: Wait until run leaves the initial AWAITING_INPUT state
     if (initialNode) {
       while (Date.now() < deadline) {
-        const status = await harness.graphService.getGraphStatus(conversationId);
-        // If it moved away from the initial node, break
-        if (status.status !== 'paused' || status.node !== initialNode) break;
+        const run = await harness.analysisRunsService.findLatestRun(conversationOid);
+        if (!run) break;
+        if (
+          run.status !== AnalysisRunStatus.AWAITING_INPUT ||
+          run.currentQuestion?.node !== initialNode
+        )
+          break;
         await sleep(pollIntervalMs);
       }
     }
   }
 
-  // Phase 2: Wait for stable state (paused or completed), then confirm
+  // Phase 2: Wait for stable state (AWAITING_INPUT or COMPLETED), then confirm
   while (Date.now() < deadline) {
-    const status = await harness.graphService.getGraphStatus(conversationId);
-    if (status.status === 'completed' || status.status === 'paused') {
-      // Wait for side effects and confirm the state is truly stable.
-      // During graph execution, checkpoints can briefly show next=[] (completed)
-      // between nodes. Re-checking after settle catches these transient states.
-      await sleep(settleMs);
-      const confirmed = await harness.graphService.getGraphStatus(conversationId);
-      if (
-        confirmed.status === status.status &&
-        (confirmed.status !== 'paused' ||
-          (status.status === 'paused' && confirmed.node === status.node))
-      ) {
-        return confirmed;
-      }
-      // State changed during settle — it was transient, keep polling
+    const run = await harness.analysisRunsService.findLatestRun(conversationOid);
+    if (!run) {
+      await sleep(pollIntervalMs);
       continue;
     }
+
+    if (
+      run.status === AnalysisRunStatus.AWAITING_INPUT ||
+      run.status === AnalysisRunStatus.COMPLETED
+    ) {
+      await sleep(settleMs);
+      const confirmed = await harness.analysisRunsService.findLatestRun(conversationOid);
+      if (confirmed && confirmed.status === run.status) {
+        if (confirmed.status === AnalysisRunStatus.COMPLETED) {
+          return { status: 'completed' };
+        }
+        if (
+          confirmed.status === AnalysisRunStatus.AWAITING_INPUT &&
+          confirmed.currentQuestion?.node
+        ) {
+          return { status: 'awaiting_input', node: confirmed.currentQuestion.node };
+        }
+      }
+      // State changed during settle — keep polling
+      continue;
+    }
+
     await sleep(pollIntervalMs);
   }
-  // Return whatever state we're in
-  return harness.graphService.getGraphStatus(conversationId);
+
+  // Timeout — return whatever we have
+  const run = await harness.analysisRunsService.findLatestRun(conversationOid);
+  if (run?.status === AnalysisRunStatus.COMPLETED) return { status: 'completed' };
+  if (run?.status === AnalysisRunStatus.AWAITING_INPUT && run.currentQuestion?.node) {
+    return { status: 'awaiting_input', node: run.currentQuestion.node };
+  }
+  throw new Error(`Timed out waiting for stable run state. Last status: ${run?.status ?? 'no run'}`);
 }
 
 describe('Conversations Integration Tests', () => {
@@ -186,17 +216,16 @@ describe('Conversations Integration Tests', () => {
 
       // ── Step 1: Start analysis → classify → pause at present_classification ──
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      const status1 = await waitForGraphStable(harness, conv._id.toString());
+      const status1 = await waitForRunStable(harness, conv._id);
 
-      expect(status1).toEqual({ status: 'paused', node: 'present_classification' });
+      expect(status1).toEqual({ status: 'awaiting_input', node: 'present_classification' });
       expect(llmMock.callCount).toBe(1); // only classify ran
 
       // Classification options ASSISTANT message created
       const msgs1 = await getMessagesForConversation(conv._id);
       const classificationMsg = msgs1.find(
         (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'single_select'
+          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
       expect(classificationMsg.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
@@ -209,9 +238,9 @@ describe('Conversations Integration Tests', () => {
         messageId: classificationMsg.xid,
         value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
       });
-      const status2 = await waitForGraphStable(harness, conv._id.toString(), true);
+      const status2 = await waitForRunStable(harness, conv._id, true);
 
-      expect(status2).toEqual({ status: 'paused', node: 'ask_followup' });
+      expect(status2).toEqual({ status: 'awaiting_input', node: 'ask_followup' });
       expect(llmMock.callCount).toBe(3); // classify + completeness + followup
 
       // Classification audit message created (now USER text message)
@@ -227,9 +256,7 @@ describe('Conversations Integration Tests', () => {
 
       // Follow-up ASSISTANT message with questions
       const followupMsg = msgs2.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'free_text'
+        (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'free_text'
       );
       assertDefined(followupMsg);
       const followupMeta = followupMsg.question as FreeTextQuestion;
@@ -252,17 +279,16 @@ describe('Conversations Integration Tests', () => {
         type: 'resume',
         messageId: followupMsg.xid,
       });
-      const status3 = await waitForGraphStable(harness, conv._id.toString(), true);
+      const status3 = await waitForRunStable(harness, conv._id, true);
 
-      expect(status3).toEqual({ status: 'paused', node: 'present_capabilities' });
+      expect(status3).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
       expect(llmMock.callCount).toBe(6); // +followup(replay) + completeness + tag_capabilities
 
       // Capability options ASSISTANT message created
       const msgs3 = await getMessagesForConversation(conv._id);
       const capabilityMsg = msgs3.find(
         (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'multi_select'
+          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'multi_select'
       );
       assertDefined(capabilityMsg);
       expect(capabilityMsg.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
@@ -292,7 +318,7 @@ describe('Conversations Integration Tests', () => {
         messageId: capabilityMsg.xid,
         value: { selectedKeys: ['C-06'] },
       });
-      const finalStatus = await waitForGraphStable(harness, conv._id.toString(), true);
+      const finalStatus = await waitForRunStable(harness, conv._id, true);
 
       expect(finalStatus).toEqual({ status: 'completed' });
       expect(llmMock.callCount).toBe(8); // +reflect + generate_pdp
@@ -311,39 +337,6 @@ describe('Conversations Integration Tests', () => {
       );
       assertDefined(capabilityAudit);
       expect(capabilityAudit.content).toBe('Selected: Decision-making and diagnosis');
-
-      // ── Final assertions: graph state ──
-      const graphState = await harness.graphService.getGraphState(conv._id.toString());
-      const { values } = graphState;
-
-      // Classification
-      expect(values.entryType).toBe('CLINICAL_CASE_REVIEW');
-      expect(values.classificationSource).toBe('USER_CONFIRMED');
-
-      // Completeness — all sections covered after follow-up
-      expect(values.hasEnoughInfo).toBe(true);
-      expect(values.followUpRound).toBe(1);
-
-      // Capabilities — filtered to only the user-selected C-06
-      expect(values.capabilities).toHaveLength(1);
-      expect(values.capabilities[0].code).toBe('C-06');
-
-      // Reflection — generated by reflect node
-      expect(values.reflection).toBeDefined();
-      expect(values.reflection).toHaveLength(3);
-      expect(values.reflection[0].title).toBe('Presentation');
-      expect(values.reflection[2].title).toBe('Reflection');
-
-      // PDP actions — generated by generate_pdp node
-      expect(values.pdpActions).toHaveLength(1);
-      expect(values.pdpActions[0].action).toContain('diabetes update tutorial');
-      expect(values.pdpActions[0].timeframe).toBe('within 4 weeks');
-
-      // Transcript includes original message, selection confirmation, and follow-up answer
-      // messageCount is 3: original + "Selected: Clinical Case Review" (now USER) + follow-up answer
-      expect(values.fullTranscript).toContain('type 2 diabetes');
-      expect(values.fullTranscript).toContain('shared decision making');
-      expect(values.messageCount).toBe(3);
 
       // reflect prompt (call index 6) includes selected capability C-06
       const reflectCall = llmMock.calls[6];
@@ -425,14 +418,13 @@ describe('Conversations Integration Tests', () => {
 
       // Start → classify → pause
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       // Find classification question message
       const msgsAfterClassify = await getMessagesForConversation(conv._id);
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'single_select'
+          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -442,14 +434,12 @@ describe('Conversations Integration Tests', () => {
         messageId: classificationMsg.xid,
         value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
       });
-      await waitForGraphStable(harness, conv._id.toString(), true);
+      await waitForRunStable(harness, conv._id, true);
 
       // Find the first followup question message
       const msgsAfterFollowup1 = await getMessagesForConversation(conv._id);
       const followupMsg1 = msgsAfterFollowup1.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'free_text'
+        (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'free_text'
       );
       assertDefined(followupMsg1);
 
@@ -467,16 +457,14 @@ describe('Conversations Integration Tests', () => {
         type: 'resume',
         messageId: followupMsg1.xid,
       });
-      const status2 = await waitForGraphStable(harness, conv._id.toString(), true);
+      const status2 = await waitForRunStable(harness, conv._id, true);
 
-      expect(status2).toEqual({ status: 'paused', node: 'ask_followup' });
+      expect(status2).toEqual({ status: 'awaiting_input', node: 'ask_followup' });
 
       // Find the second followup question message
       const msgsAfterFollowup2 = await getMessagesForConversation(conv._id);
       const followupMsgs = msgsAfterFollowup2.filter(
-        (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'free_text'
+        (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'free_text'
       );
       const followupMsg2 = followupMsgs[followupMsgs.length - 1];
       assertDefined(followupMsg2);
@@ -495,17 +483,15 @@ describe('Conversations Integration Tests', () => {
         type: 'resume',
         messageId: followupMsg2.xid,
       });
-      const finalStatus = await waitForGraphStable(harness, conv._id.toString(), true);
+      const finalStatus = await waitForRunStable(harness, conv._id, true);
 
       // Graph moved past ask_followup → tag_capabilities → paused at present_capabilities
-      expect(finalStatus).toEqual({ status: 'paused', node: 'present_capabilities' });
+      expect(finalStatus).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
 
       // 2 follow-up ASSISTANT messages with different rounds
       const allMsgs = await getMessagesForConversation(conv._id);
       const allFollowupMsgs = allMsgs.filter(
-        (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'free_text'
+        (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'free_text'
       );
       expect(allFollowupMsgs).toHaveLength(2);
       expect((allFollowupMsgs[0].question as FreeTextQuestion).followUpRound).toBe(1);
@@ -545,14 +531,13 @@ describe('Conversations Integration Tests', () => {
 
       // Start → classify → pause
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       // Find classification question message
       const msgsAfterClassify = await getMessagesForConversation(conv._id);
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'single_select'
+          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -562,14 +547,12 @@ describe('Conversations Integration Tests', () => {
         messageId: classificationMsg.xid,
         value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
       });
-      await waitForGraphStable(harness, conv._id.toString(), true);
+      await waitForRunStable(harness, conv._id, true);
 
       // Find round 1 followup question message
       const msgsR1 = await getMessagesForConversation(conv._id);
       const followupMsgR1 = msgsR1.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'free_text'
+        (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'free_text'
       );
       assertDefined(followupMsgR1);
 
@@ -585,14 +568,12 @@ describe('Conversations Integration Tests', () => {
         type: 'resume',
         messageId: followupMsgR1.xid,
       });
-      await waitForGraphStable(harness, conv._id.toString(), true);
+      await waitForRunStable(harness, conv._id, true);
 
       // Find round 2 followup question message
       const msgsR2 = await getMessagesForConversation(conv._id);
       const followupMsgsAll = msgsR2.filter(
-        (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'free_text'
+        (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'free_text'
       );
       const followupMsgR2 = followupMsgsAll[followupMsgsAll.length - 1];
       assertDefined(followupMsgR2);
@@ -609,10 +590,10 @@ describe('Conversations Integration Tests', () => {
         type: 'resume',
         messageId: followupMsgR2.xid,
       });
-      const finalStatus = await waitForGraphStable(harness, conv._id.toString(), true);
+      const finalStatus = await waitForRunStable(harness, conv._id, true);
 
       // Graph did NOT pause at ask_followup a third time — proceeded to present_capabilities
-      expect(finalStatus).toEqual({ status: 'paused', node: 'present_capabilities' });
+      expect(finalStatus).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
     });
   });
 
@@ -639,9 +620,9 @@ describe('Conversations Integration Tests', () => {
       llmMock.enqueue(classifyResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      const status = await waitForGraphStable(harness, conv._id.toString());
+      const status = await waitForRunStable(harness, conv._id);
 
-      expect(status).toEqual({ status: 'paused', node: 'present_classification' });
+      expect(status).toEqual({ status: 'awaiting_input', node: 'present_classification' });
 
       await expect(
         harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, { content: 'More info...' })
@@ -659,14 +640,13 @@ describe('Conversations Integration Tests', () => {
       );
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       // Find classification question message
       const msgsAfterClassify = await getMessagesForConversation(conv._id);
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'single_select'
+          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -675,9 +655,9 @@ describe('Conversations Integration Tests', () => {
         messageId: classificationMsg.xid,
         value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
       });
-      const status = await waitForGraphStable(harness, conv._id.toString(), true);
+      const status = await waitForRunStable(harness, conv._id, true);
 
-      expect(status).toEqual({ status: 'paused', node: 'ask_followup' });
+      expect(status).toEqual({ status: 'awaiting_input', node: 'ask_followup' });
 
       const result = await harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, {
         content: 'I learned about shared decision making.',
@@ -694,14 +674,13 @@ describe('Conversations Integration Tests', () => {
       llmMock.enqueue(tagCapabilitiesResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       // Find classification question message
       const msgsAfterClassify = await getMessagesForConversation(conv._id);
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'single_select'
+          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -710,9 +689,9 @@ describe('Conversations Integration Tests', () => {
         messageId: classificationMsg.xid,
         value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
       });
-      const status = await waitForGraphStable(harness, conv._id.toString(), true);
+      const status = await waitForRunStable(harness, conv._id, true);
 
-      expect(status).toEqual({ status: 'paused', node: 'present_capabilities' });
+      expect(status).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
 
       await expect(
         harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, { content: 'More info...' })
@@ -749,7 +728,7 @@ describe('Conversations Integration Tests', () => {
       llmMock.enqueue(classifyResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       await expect(
         harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' })
@@ -767,14 +746,13 @@ describe('Conversations Integration Tests', () => {
       );
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       // Find classification question message
       const msgsAfterClassify = await getMessagesForConversation(conv._id);
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'single_select'
+          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -783,14 +761,12 @@ describe('Conversations Integration Tests', () => {
         messageId: classificationMsg.xid,
         value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
       });
-      await waitForGraphStable(harness, conv._id.toString(), true);
+      await waitForRunStable(harness, conv._id, true);
 
       // Find followup question message
       const msgsAfterFollowup = await getMessagesForConversation(conv._id);
       const followupMsg = msgsAfterFollowup.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'free_text'
+        (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'free_text'
       );
       assertDefined(followupMsg);
 
@@ -823,14 +799,13 @@ describe('Conversations Integration Tests', () => {
       );
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       // Find classification question message
       const msgsAfterClassify = await getMessagesForConversation(conv._id);
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'single_select'
+          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -839,16 +814,14 @@ describe('Conversations Integration Tests', () => {
         messageId: classificationMsg.xid,
         value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
       });
-      const status = await waitForGraphStable(harness, conv._id.toString(), true);
+      const status = await waitForRunStable(harness, conv._id, true);
 
-      expect(status).toEqual({ status: 'paused', node: 'ask_followup' });
+      expect(status).toEqual({ status: 'awaiting_input', node: 'ask_followup' });
 
       // Find the followup question message
       const msgsAfterFollowup = await getMessagesForConversation(conv._id);
       const followupMsg = msgsAfterFollowup.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'free_text'
+        (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'free_text'
       );
       assertDefined(followupMsg);
 
@@ -912,7 +885,7 @@ describe('Conversations Integration Tests', () => {
       ).resolves.toBeUndefined();
 
       // Wait for graph to settle so the fire-and-forget doesn't leak into the next test
-      await waitForGraphStable(harness, conv._id.toString(), true);
+      await waitForRunStable(harness, conv._id, true);
     });
   });
 
@@ -928,14 +901,13 @@ describe('Conversations Integration Tests', () => {
       llmMock.enqueue(classifyResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       // Find classification question message
       const msgs = await getMessagesForConversation(conv._id);
       const classificationMsg = msgs.find(
         (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'single_select'
+          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -957,14 +929,13 @@ describe('Conversations Integration Tests', () => {
       llmMock.enqueue(tagCapabilitiesResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       // Find classification question message
       const msgs = await getMessagesForConversation(conv._id);
       const classificationMsg = msgs.find(
         (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'single_select'
+          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -976,7 +947,7 @@ describe('Conversations Integration Tests', () => {
         })
       ).resolves.toBeUndefined();
 
-      await waitForGraphStable(harness, conv._id.toString(), true);
+      await waitForRunStable(harness, conv._id, true);
 
       const msgsAfter = await getMessagesForConversation(conv._id);
       const auditMsg = msgsAfter.find(
@@ -1002,7 +973,7 @@ describe('Conversations Integration Tests', () => {
       llmMock.enqueue(classifyResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       const msgs = await getMessagesForConversation(conv._id);
       const assistantMsg = msgs.find((m) => m.role === MessageRole.ASSISTANT);
@@ -1028,14 +999,13 @@ describe('Conversations Integration Tests', () => {
       );
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       // Find classification question message
       const msgsAfterClassify = await getMessagesForConversation(conv._id);
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'single_select'
+          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -1044,13 +1014,11 @@ describe('Conversations Integration Tests', () => {
         messageId: classificationMsg.xid,
         value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
       });
-      await waitForGraphStable(harness, conv._id.toString(), true);
+      await waitForRunStable(harness, conv._id, true);
 
       const msgs = await getMessagesForConversation(conv._id);
       const followupMsg = msgs.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'free_text'
+        (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'free_text'
       );
 
       assertDefined(followupMsg);
@@ -1071,14 +1039,13 @@ describe('Conversations Integration Tests', () => {
       llmMock.enqueue(tagCapabilitiesResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       // Find classification question message
       const msgsAfterClassify = await getMessagesForConversation(conv._id);
       const classificationMsg = msgsAfterClassify.find(
         (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as any)?.questionType === 'single_select'
+          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
 
@@ -1087,7 +1054,7 @@ describe('Conversations Integration Tests', () => {
         messageId: classificationMsg.xid,
         value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
       });
-      await waitForGraphStable(harness, conv._id.toString(), true);
+      await waitForRunStable(harness, conv._id, true);
 
       const msgs = await getMessagesForConversation(conv._id);
       const selectionMsgs = msgs.filter(
@@ -1118,7 +1085,7 @@ describe('Conversations Integration Tests', () => {
       llmMock.enqueue(classifyResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       expect(llmMock.calls).toHaveLength(1);
       const classifyCall = llmMock.calls[0];
@@ -1144,7 +1111,7 @@ describe('Conversations Integration Tests', () => {
       llmMock.enqueue(classifyResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       await expect(
         harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' })
@@ -1160,7 +1127,7 @@ describe('Conversations Integration Tests', () => {
       llmMock.enqueue(classifyResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       expect(llmMock.calls).toHaveLength(1);
       const humanMsg = llmMock.calls[0].messages.find((m) => m._getType() === 'human');
@@ -1178,7 +1145,7 @@ describe('Conversations Integration Tests', () => {
       llmMock.enqueue(classifyResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForGraphStable(harness, conv._id.toString());
+      await waitForRunStable(harness, conv._id);
 
       // Create a different ASSISTANT message with question to use as the "wrong" question
       const wrongMsg = await createTestMessage(conv._id, {

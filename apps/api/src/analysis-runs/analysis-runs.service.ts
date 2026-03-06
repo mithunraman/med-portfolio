@@ -90,6 +90,17 @@ export class AnalysisRunsService {
     return result.value;
   }
 
+  async findLatestRun(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<AnalysisRun | null> {
+    const result = await this.repository.findLatestRun(conversationId, session);
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+    return result.value;
+  }
+
   async findActiveRun(
     conversationId: Types.ObjectId,
     session?: ClientSession

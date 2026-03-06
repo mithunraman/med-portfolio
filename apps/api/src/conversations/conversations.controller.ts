@@ -1,24 +1,12 @@
 import type { AnalysisActionRequest, Message, MessageListResponse } from '@acme/shared';
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ConversationsService } from './conversations.service';
-import { AnalysisActionPipe, GetPendingMessagesDto, ListMessagesDto, SendMessageDto } from './dto';
+import { AnalysisActionPipe, SendMessageDto } from './dto';
 
 @Controller('conversations')
 export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
-
-  /**
-   * Poll a batch of messages by XID for processing-status updates.
-   * Route must be declared before :conversationId routes to avoid param capture.
-   */
-  @Get('messages/pending')
-  async pollMessages(
-    @CurrentUser() user: CurrentUserPayload,
-    @Query() query: GetPendingMessagesDto
-  ): Promise<Message[]> {
-    return this.conversationsService.pollMessages(user.userId, query.ids);
-  }
 
   @Post(':conversationId/messages')
   async sendMessage(
@@ -43,8 +31,7 @@ export class ConversationsController {
   async listMessages(
     @CurrentUser() user: CurrentUserPayload,
     @Param('conversationId') conversationId: string,
-    @Query() query: ListMessagesDto
   ): Promise<MessageListResponse> {
-    return this.conversationsService.listMessages(user.userId, conversationId, query);
+    return this.conversationsService.listMessages(user.userId, conversationId);
   }
 }

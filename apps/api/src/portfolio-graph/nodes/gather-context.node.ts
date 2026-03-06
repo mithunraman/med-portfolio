@@ -25,11 +25,9 @@ export function createGatherContextNode(deps: GraphDeps) {
 
     const conversationId = new Types.ObjectId(state.conversationId);
 
-    // Fetch messages — listMessages returns newest-first, limited to 200
-    // (a single conversation won't realistically exceed this).
+    // Fetch all messages — conversations are <50 messages
     const result = await deps.conversationsRepository.listMessages({
       conversation: conversationId,
-      limit: 200,
     });
 
     if (!result.ok) {

@@ -42,21 +42,26 @@ export class AnalysisResumeHandler implements OutboxHandler {
     );
 
     try {
-      // Resume the graph using the existing service
-      // Type-safe dispatch based on node type
+      // Resume the graph using the existing service.
+      // Type-safe dispatch based on node type.
+      // Returns GraphPauseResult if the graph pauses again, null if completed.
+      let pauseResult;
       switch (data.node) {
         case 'ask_followup':
-          await this.portfolioGraphService.resumeGraph(data.conversationId, 'ask_followup');
+          pauseResult = await this.portfolioGraphService.resumeGraph(
+            data.conversationId,
+            'ask_followup',
+          );
           break;
         case 'present_classification':
-          await this.portfolioGraphService.resumeGraph(
+          pauseResult = await this.portfolioGraphService.resumeGraph(
             data.conversationId,
             'present_classification',
             data.resumeValue as { entryType: string },
           );
           break;
         case 'present_capabilities':
-          await this.portfolioGraphService.resumeGraph(
+          pauseResult = await this.portfolioGraphService.resumeGraph(
             data.conversationId,
             'present_capabilities',
             data.resumeValue as { selectedCodes: string[] },
@@ -64,15 +69,17 @@ export class AnalysisResumeHandler implements OutboxHandler {
           break;
       }
 
-      // Check if graph paused again at another interrupt
-      const pausedNode = await this.portfolioGraphService.getPausedNode(data.conversationId);
-
-      if (pausedNode) {
+      if (pauseResult) {
         await this.analysisRunsService.transitionStatus(
           runId,
           AnalysisRunStatus.RUNNING,
           AnalysisRunStatus.AWAITING_INPUT,
-          { currentQuestion: { messageId: runId, node: pausedNode } },
+          {
+            currentQuestion: {
+              messageId: pauseResult.questionMessageId,
+              node: pauseResult.pausedNode,
+            },
+          },
         );
       } else {
         await this.analysisRunsService.transitionStatus(

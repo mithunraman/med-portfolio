@@ -37,24 +37,27 @@ export class AnalysisStartHandler implements OutboxHandler {
     this.logger.log(`Starting graph for analysis run ${data.analysisRunId}`);
 
     try {
-      // Use the existing graph service to invoke LangGraph
-      await this.portfolioGraphService.startGraph({
+      // Use the existing graph service to invoke LangGraph.
+      // Returns GraphPauseResult if paused, null if completed.
+      const pauseResult = await this.portfolioGraphService.startGraph({
         conversationId: data.conversationId,
         artefactId: data.artefactId,
         userId: data.userId,
         specialty: data.specialty,
       });
 
-      // After graph invoke returns, check if it paused at an interrupt
-      const pausedNode = await this.portfolioGraphService.getPausedNode(data.conversationId);
-
-      if (pausedNode) {
+      if (pauseResult) {
         // Graph is waiting for user input
         await this.analysisRunsService.transitionStatus(
           runId,
           AnalysisRunStatus.RUNNING,
           AnalysisRunStatus.AWAITING_INPUT,
-          { currentQuestion: { messageId: runId, node: pausedNode } },
+          {
+            currentQuestion: {
+              messageId: pauseResult.questionMessageId,
+              node: pauseResult.pausedNode,
+            },
+          },
         );
       } else {
         // Graph completed (no interrupt hit)

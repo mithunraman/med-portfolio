@@ -9,8 +9,6 @@ export * from './media-type.enum';
 export * from './media-ref-collection.enum';
 export * from './message-processing-status.enum';
 export * from './message-type.enum';
-export * from './message-metadata-type.enum';
-export * from './interaction-type.enum';
 export * from './pdp-action-status.enum';
 export * from './analysis-run-status.enum';
 export * from './outbox-status.enum';

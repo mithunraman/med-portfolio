@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import { AnalysisRunStatus } from '../enums/analysis-run-status.enum';
 import { ConversationStatus } from '../enums/conversation-status.enum';
-import { InteractionType } from '../enums/interaction-type.enum';
-import { MessageMetadataType } from '../enums/message-metadata-type.enum';
 import { MessageProcessingStatus } from '../enums/message-processing-status.enum';
 import { MessageRole } from '../enums/message-role.enum';
 import { MessageType } from '../enums/message-type.enum';
@@ -18,7 +16,7 @@ export const MessageMediaSchema = z.object({
 
 export type MessageMedia = z.infer<typeof MessageMediaSchema>;
 
-// ── Message metadata sub-schemas ──
+// ── Graph interrupt sub-schemas (used to cast LangGraph interrupt payloads) ──
 
 export const ClassificationOptionSchema = z.object({
   code: z.string(),
@@ -42,61 +40,53 @@ export const FollowupQuestionSchema = z.object({
 });
 export type FollowupQuestion = z.infer<typeof FollowupQuestionSchema>;
 
-// ── Presentation metadata (ASSISTANT messages) ──
+// ── QuestionMeta sub-schemas ──
 
-export const ClassificationOptionsMetadataSchema = z.object({
-  type: z.literal(MessageMetadataType.CLASSIFICATION_OPTIONS),
-  interactionType: z.literal(InteractionType.SINGLE_SELECT),
-  options: z.array(ClassificationOptionSchema),
-  suggestedEntryType: z.string(),
-  reasoning: z.string(),
+export const QuestionOptionSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  confidence: z.number().optional(),
+  reasoning: z.string().optional(),
+  evidence: z.array(z.string()).optional(),
 });
-export type ClassificationOptionsMetadata = z.infer<typeof ClassificationOptionsMetadataSchema>;
+export type QuestionOption = z.infer<typeof QuestionOptionSchema>;
 
-export const FollowupQuestionsMetadataSchema = z.object({
-  type: z.literal(MessageMetadataType.FOLLOWUP_QUESTIONS),
-  interactionType: z.literal(InteractionType.FREE_TEXT),
-  questions: z.array(FollowupQuestionSchema),
-  missingSections: z.array(z.string()),
-  followUpRound: z.number(),
-  entryType: z.string(),
+export const FreeTextPromptSchema = z.object({
+  key: z.string(),
+  text: z.string(),
 });
-export type FollowupQuestionsMetadata = z.infer<typeof FollowupQuestionsMetadataSchema>;
+export type FreeTextPrompt = z.infer<typeof FreeTextPromptSchema>;
 
-export const CapabilityOptionsMetadataSchema = z.object({
-  type: z.literal(MessageMetadataType.CAPABILITY_OPTIONS),
-  interactionType: z.literal(InteractionType.MULTI_SELECT),
-  options: z.array(CapabilityOptionSchema),
-  entryType: z.string(),
+// ── QuestionMeta variants (discriminated on questionType) ──
+
+export const SingleSelectQuestionMetaSchema = z.object({
+  questionType: z.literal('single_select'),
+  options: z.array(QuestionOptionSchema),
+  suggestedKey: z.string().optional(),
 });
-export type CapabilityOptionsMetadata = z.infer<typeof CapabilityOptionsMetadataSchema>;
+export type SingleSelectQuestionMeta = z.infer<typeof SingleSelectQuestionMetaSchema>;
 
-// ── Audit metadata (SYSTEM messages) ──
-
-export const ClassificationSelectionMetadataSchema = z.object({
-  type: z.literal(MessageMetadataType.CLASSIFICATION_SELECTION),
-  interactionType: z.literal(InteractionType.DISPLAY_ONLY),
-  entryType: z.string(),
+export const MultiSelectQuestionMetaSchema = z.object({
+  questionType: z.literal('multi_select'),
+  options: z.array(QuestionOptionSchema),
 });
-export type ClassificationSelectionMetadata = z.infer<typeof ClassificationSelectionMetadataSchema>;
+export type MultiSelectQuestionMeta = z.infer<typeof MultiSelectQuestionMetaSchema>;
 
-export const CapabilitySelectionMetadataSchema = z.object({
-  type: z.literal(MessageMetadataType.CAPABILITY_SELECTION),
-  interactionType: z.literal(InteractionType.DISPLAY_ONLY),
-  selectedCodes: z.array(z.string()),
+export const FreeTextQuestionMetaSchema = z.object({
+  questionType: z.literal('free_text'),
+  prompts: z.array(FreeTextPromptSchema),
+  missingSections: z.array(z.string()).optional(),
+  followUpRound: z.number().optional(),
+  entryType: z.string().optional(),
 });
-export type CapabilitySelectionMetadata = z.infer<typeof CapabilitySelectionMetadataSchema>;
+export type FreeTextQuestionMeta = z.infer<typeof FreeTextQuestionMetaSchema>;
 
-// ── Discriminated union of all metadata variants ──
-
-export const MessageMetadataSchema = z.discriminatedUnion('type', [
-  ClassificationOptionsMetadataSchema,
-  FollowupQuestionsMetadataSchema,
-  CapabilityOptionsMetadataSchema,
-  ClassificationSelectionMetadataSchema,
-  CapabilitySelectionMetadataSchema,
+export const QuestionMetaSchema = z.discriminatedUnion('questionType', [
+  SingleSelectQuestionMetaSchema,
+  MultiSelectQuestionMetaSchema,
+  FreeTextQuestionMetaSchema,
 ]);
-export type MessageMetadata = z.infer<typeof MessageMetadataSchema>;
+export type QuestionMeta = z.infer<typeof QuestionMetaSchema>;
 
 // Message schemas
 export const MessageSchema = z.object({
@@ -107,8 +97,7 @@ export const MessageSchema = z.object({
   processingStatus: z.nativeEnum(MessageProcessingStatus),
   content: z.string().nullable(),
   media: MessageMediaSchema.nullable(),
-  metadata: MessageMetadataSchema.nullable().optional(),
-  questionMeta: z.record(z.unknown()).nullable().optional(),
+  questionMeta: QuestionMetaSchema.nullable().optional(),
   analysisRunId: z.string().nullable().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -140,21 +129,13 @@ export const SendMessageRequestSchema = z
 export type SendMessageRequest = z.infer<typeof SendMessageRequestSchema>;
 
 // Analysis action request (unified start + resume)
-// Uses z.union because z.discriminatedUnion requires unique discriminator values
-// and we have multiple variants with type: "resume" (differentiated by node).
-const AnalysisResumeSchema = z.object({ type: z.literal('resume') }).and(
-  z.discriminatedUnion('node', [
-    z.object({ node: z.literal('ask_followup') }),
-    z.object({
-      node: z.literal('present_classification'),
-      value: z.object({ entryType: z.string().min(1) }),
-    }),
-    z.object({
-      node: z.literal('present_capabilities'),
-      value: z.object({ selectedCodes: z.array(z.string()).nonempty() }),
-    }),
-  ])
-);
+// Resume sends messageId (the ASSISTANT question message xid) instead of graph node names.
+// Value is loosely typed here — backend validates shape against questionMeta.questionType.
+const AnalysisResumeSchema = z.object({
+  type: z.literal('resume'),
+  messageId: z.string().min(1),
+  value: z.record(z.unknown()).optional(),
+});
 
 export const AnalysisActionRequestSchema = z.union([
   z.object({ type: z.literal('start') }),

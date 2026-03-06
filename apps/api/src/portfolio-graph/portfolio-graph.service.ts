@@ -1,11 +1,9 @@
 import {
   type CapabilityOption,
-  type CapabilityOptionsMetadata,
   type ClassificationOption,
-  type ClassificationOptionsMetadata,
-  type FollowupQuestionsMetadata,
-  InteractionType,
-  MessageMetadataType,
+  type FreeTextQuestionMeta,
+  type MultiSelectQuestionMeta,
+  type SingleSelectQuestionMeta,
   MessageProcessingStatus,
   MessageRole,
   MessageType,
@@ -42,6 +40,12 @@ export interface GraphResumeMap {
 }
 
 export type InterruptNode = keyof GraphResumeMap;
+
+/** Returned when graph pauses at an interrupt. null when graph completes. */
+export interface GraphPauseResult {
+  questionMessageId: Types.ObjectId;
+  pausedNode: InterruptNode;
+}
 
 /** Discriminated union representing the current state of the graph for a conversation. */
 export type GraphStatus =
@@ -103,14 +107,14 @@ export class PortfolioGraphService implements OnModuleInit {
 
   /**
    * Start a new graph execution for a conversation.
-   * Called after the first message in a conversation completes cleaning.
+   * Returns GraphPauseResult if the graph paused at an interrupt, null if it completed.
    */
   async startGraph(params: {
     conversationId: string;
     artefactId: string;
     userId: string;
     specialty: string;
-  }): Promise<void> {
+  }): Promise<GraphPauseResult | null> {
     const { conversationId } = params;
     const config = { configurable: { thread_id: conversationId } };
 
@@ -128,11 +132,12 @@ export class PortfolioGraphService implements OnModuleInit {
 
     // graph.invoke() returns normally when a node calls interrupt() —
     // it does NOT throw. Check the checkpoint for a pending interrupt.
-    await this.handleInterruptSideEffectsIfPaused(conversationId);
+    return this.handleInterruptSideEffectsIfPaused(conversationId);
   }
 
   /**
    * Resume a paused graph after the user responds (to classification, follow-up, or review).
+   * Returns GraphPauseResult if the graph paused at another interrupt, null if it completed.
    *
    * Type-safe: each interrupt node declares its resume value shape in GraphResumeMap.
    * Nodes that resume with just a signal (e.g. ask_followup) take no resumeValue arg.
@@ -141,7 +146,7 @@ export class PortfolioGraphService implements OnModuleInit {
     conversationId: string,
     node: N,
     ...args: GraphResumeMap[N] extends true ? [] : [resumeValue: GraphResumeMap[N]]
-  ): Promise<void> {
+  ): Promise<GraphPauseResult | null> {
     const config = { configurable: { thread_id: conversationId } };
     const resumeValue = args.length > 0 ? args[0] : true;
 
@@ -152,7 +157,7 @@ export class PortfolioGraphService implements OnModuleInit {
     await this.graph.invoke(new Command({ resume: resumeValue }), config);
 
     // The resumed graph may hit another interrupt (e.g. follow-up after classification).
-    await this.handleInterruptSideEffectsIfPaused(conversationId);
+    return this.handleInterruptSideEffectsIfPaused(conversationId);
   }
 
   /**
@@ -238,27 +243,37 @@ export class PortfolioGraphService implements OnModuleInit {
 
   /**
    * Check if the graph is paused at an interrupt node after invoke() returns.
-   * If so, handle side effects (e.g. writing an ASSISTANT message).
+   * If so, handle side effects (e.g. writing an ASSISTANT message) and return
+   * the pause result bundling the question message ID and paused node.
    *
    * graph.invoke() does NOT throw on interrupt — it returns normally after
    * saving the checkpoint. We inspect the snapshot to detect the pause.
    */
-  private async handleInterruptSideEffectsIfPaused(conversationId: string): Promise<void> {
+  private async handleInterruptSideEffectsIfPaused(
+    conversationId: string,
+  ): Promise<GraphPauseResult | null> {
     const pausedNode = await this.getPausedNode(conversationId);
-    if (!pausedNode) return;
+    if (!pausedNode) return null;
 
     this.logger.log(`Graph paused at "${pausedNode}" for conversation ${conversationId}`);
-    await this.handleInterruptSideEffects(conversationId);
+    const questionMessageId = await this.handleInterruptSideEffects(conversationId);
+    if (!questionMessageId) return null;
+
+    return { questionMessageId, pausedNode };
   }
 
   /**
    * Read the interrupt payload from the checkpoint and perform side effects
    * (e.g. writing an ASSISTANT message to the conversation).
    *
+   * Returns the created message's ObjectId, or null if no message was created.
+   *
    * This runs once per startGraph()/resumeGraph() call — outside the graph's
    * replay cycle — so there is no idempotency concern.
    */
-  private async handleInterruptSideEffects(conversationId: string): Promise<void> {
+  private async handleInterruptSideEffects(
+    conversationId: string,
+  ): Promise<Types.ObjectId | null> {
     const config = { configurable: { thread_id: conversationId } };
     const snapshot = await this.graph.getState(config);
 
@@ -267,7 +282,7 @@ export class PortfolioGraphService implements OnModuleInit {
       | Record<string, unknown>
       | undefined;
 
-    if (!interruptValue?.type) return;
+    if (!interruptValue?.type) return null;
 
     const state = snapshot.values as {
       conversationId: string;
@@ -285,20 +300,15 @@ export class PortfolioGraphService implements OnModuleInit {
           `Based on your input, I think this is most likely:\n\n${optionLines}\n\n` +
           `Please select the entry type, or choose a different one.`;
 
-        const metadata: ClassificationOptionsMetadata = {
-          type: MessageMetadataType.CLASSIFICATION_OPTIONS,
-          interactionType: InteractionType.SINGLE_SELECT,
-          options,
-          suggestedEntryType: interruptValue.suggestedEntryType as string,
-          reasoning: interruptValue.reasoning as string,
-        };
-
-        const classificationQuestionMeta = {
-          type: 'classification',
-          interactionType: InteractionType.SINGLE_SELECT,
-          options,
-          suggestedEntryType: interruptValue.suggestedEntryType as string,
-          reasoning: interruptValue.reasoning as string,
+        const questionMeta: SingleSelectQuestionMeta = {
+          questionType: 'single_select',
+          options: options.map((o) => ({
+            key: o.code,
+            label: o.label,
+            confidence: o.confidence,
+            reasoning: o.reasoning,
+          })),
+          suggestedKey: interruptValue.suggestedEntryType as string,
         };
 
         const result = await this.conversationsRepository.createMessage({
@@ -309,14 +319,14 @@ export class PortfolioGraphService implements OnModuleInit {
           rawContent: content,
           content,
           processingStatus: MessageProcessingStatus.COMPLETE,
-          metadata,
-          questionMeta: classificationQuestionMeta,
+          questionMeta,
         });
 
         if (!result.ok) {
           this.logger.error(`Failed to send classification options: ${result.error.message}`);
+          return null;
         }
-        break;
+        return result.value._id;
       }
 
       case 'followup': {
@@ -334,19 +344,9 @@ export class PortfolioGraphService implements OnModuleInit {
           `${questionLines}\n\n` +
           `Take your time — you can answer all of these in one go or one at a time.`;
 
-        const followupMetadata: FollowupQuestionsMetadata = {
-          type: MessageMetadataType.FOLLOWUP_QUESTIONS,
-          interactionType: InteractionType.FREE_TEXT,
-          questions,
-          missingSections: interruptValue.missingSections as string[],
-          followUpRound,
-          entryType: interruptValue.entryType as string,
-        };
-
-        const followupQuestionMeta = {
-          type: 'followup',
-          interactionType: InteractionType.FREE_TEXT,
-          questions,
+        const questionMeta: FreeTextQuestionMeta = {
+          questionType: 'free_text',
+          prompts: questions.map((q) => ({ key: q.sectionId, text: q.question })),
           missingSections: interruptValue.missingSections as string[],
           followUpRound,
           entryType: interruptValue.entryType as string,
@@ -360,14 +360,14 @@ export class PortfolioGraphService implements OnModuleInit {
           rawContent: content,
           content,
           processingStatus: MessageProcessingStatus.COMPLETE,
-          metadata: followupMetadata,
-          questionMeta: followupQuestionMeta,
+          questionMeta,
         });
 
         if (!followupResult.ok) {
           this.logger.error(`Failed to send follow-up questions: ${followupResult.error.message}`);
+          return null;
         }
-        break;
+        return followupResult.value._id;
       }
 
       case 'capabilities': {
@@ -384,18 +384,14 @@ export class PortfolioGraphService implements OnModuleInit {
           `I've identified the following capabilities in your entry:\n\n${optionLines}\n\n` +
           `Please confirm which capabilities apply, or deselect any that don't fit.`;
 
-        const capMetadata: CapabilityOptionsMetadata = {
-          type: MessageMetadataType.CAPABILITY_OPTIONS,
-          interactionType: InteractionType.MULTI_SELECT,
-          options,
-          entryType: interruptValue.entryType as string,
-        };
-
-        const capQuestionMeta = {
-          type: 'capabilities',
-          interactionType: InteractionType.MULTI_SELECT,
-          options,
-          entryType: interruptValue.entryType as string,
+        const questionMeta: MultiSelectQuestionMeta = {
+          questionType: 'multi_select',
+          options: options.map((o) => ({
+            key: o.code,
+            label: o.name,
+            confidence: o.confidence,
+            evidence: o.evidence,
+          })),
         };
 
         const capResult = await this.conversationsRepository.createMessage({
@@ -406,15 +402,17 @@ export class PortfolioGraphService implements OnModuleInit {
           rawContent: capContent,
           content: capContent,
           processingStatus: MessageProcessingStatus.COMPLETE,
-          metadata: capMetadata,
-          questionMeta: capQuestionMeta,
+          questionMeta,
         });
 
         if (!capResult.ok) {
           this.logger.error(`Failed to send capability options: ${capResult.error.message}`);
+          return null;
         }
-        break;
+        return capResult.value._id;
       }
     }
+
+    return null;
   }
 }

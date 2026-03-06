@@ -1,17 +1,16 @@
 import type {
   AnalysisActionRequest,
-  CapabilitySelectionMetadata,
-  ClassificationSelectionMetadata,
   Message,
   MessageListResponse,
+  MultiSelectQuestionMeta,
+  QuestionMeta,
+  SingleSelectQuestionMeta,
 } from '@acme/shared';
 import {
   ConversationStatus,
-  InteractionType,
   MediaRefCollection,
   MediaStatus,
   MediaType,
-  MessageMetadataType,
   MessageProcessingStatus,
   MessageRole,
   MessageType,
@@ -36,10 +35,10 @@ import { Media } from '../media/schemas/media.schema';
 import { OutboxService } from '../outbox/outbox.service';
 import {
   type GraphStatus,
+  type InterruptNode,
   PortfolioGraphService,
 } from '../portfolio-graph/portfolio-graph.service';
 import { ProcessingService } from '../processing/processing.service';
-import { getSpecialtyConfig } from '../specialties/specialty.registry';
 import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
@@ -47,8 +46,6 @@ import {
 import { ListMessagesDto, SendMessageDto } from './dto';
 import { buildMediaData, toMessageDto } from './mappers/message.mapper';
 import { Message as MessageSchema } from './schemas/message.schema';
-
-type AnalysisResumeNode = Extract<AnalysisActionRequest, { type: 'resume' }>['node'];
 
 @Injectable()
 export class ConversationsService {
@@ -169,14 +166,12 @@ export class ConversationsService {
    *
    * Discriminated on dto.type:
    *  - "start": First AI button tap. Starts a new graph.
-   *  - "resume": Doctor responds to an AI prompt (classification, follow-up, draft).
+   *  - "resume": Doctor responds to an AI prompt. Sends messageId + generic value.
    *
    * Steps:
    *  1. Validate conversation ownership
    *  2. Guard: reject if any user messages are still being processed
    *  3. Branch on type: start → launch graph, resume → validate pause state + resume
-   *  4. For structured actions (classification, draft) create an audit message
-   *  5. Fire-and-forget the graph invocation
    */
   async handleAnalysis(
     userId: string,
@@ -216,12 +211,11 @@ export class ConversationsService {
     // 3. Branch on action type
     if (dto.type === 'start') return this.handleStart(userId, convIdStr, conversation);
 
-    // Zod guarantees resume actions always have a valid node
     return this.handleResume(
       userId,
       convIdStr,
       conversation._id,
-      dto.node,
+      dto.messageId,
       'value' in dto ? (dto.value as Record<string, unknown>) : undefined
     );
   }
@@ -289,34 +283,51 @@ export class ConversationsService {
   }
 
   /**
-   * Resume a paused graph at the specified node.
-   * Validates that the graph is actually paused at the expected node (409 if mismatch).
-   * Creates audit messages + outbox entry in a single transaction.
+   * Resume a paused graph at the node identified by the ASSISTANT question message.
+   *
+   * The client sends messageId (the question message xid) + a generic response value.
+   * The backend resolves the graph node from analysisRun.currentQuestion (source of truth),
+   * validates the response shape using questionType, and maps generic → domain values.
    */
   private async handleResume(
     userId: string,
     convIdStr: string,
     conversationOid: Types.ObjectId,
-    node: AnalysisResumeNode,
+    messageId: string,
     value?: Record<string, unknown>
   ): Promise<void> {
+    // 1. Look up the ASSISTANT question message by xid
+    const userOid = new Types.ObjectId(userId);
+    const msgResult = await this.conversationsRepository.findMessagesByXids([messageId], userOid);
+    if (isErr(msgResult)) throw new InternalServerErrorException(msgResult.error.message);
+    const message = msgResult.value[0];
+    if (!message) throw new NotFoundException('Question message not found');
+    if (message.role !== MessageRole.ASSISTANT || !message.questionMeta)
+      throw new BadRequestException('Message is not a question');
+
+    // 2. Get node from analysis run (source of truth — scales to multiple nodes per questionType)
+    const activeRun = await this.analysisRunsService.findActiveRun(conversationOid);
+    if (!activeRun?.currentQuestion) throw new ConflictException('No active question');
+    if (activeRun.currentQuestion.messageId.toString() !== message._id.toString())
+      throw new ConflictException('This question is no longer the current question');
+    const node = activeRun.currentQuestion.node as InterruptNode;
+
+    // 3. Verify graph is actually paused at this node
     const pausedNode = await this.portfolioGraphService.getPausedNode(convIdStr);
     if (!pausedNode) throw new ConflictException('Analysis is not paused at any node');
     if (pausedNode !== node)
       throw new ConflictException(`Analysis is paused at "${pausedNode}", not "${node}"`);
 
-    // Find the active analysis run to include in the outbox payload
-    const activeRun = await this.analysisRunsService.findActiveRun(conversationOid);
-    if (!activeRun) {
-      throw new ConflictException('No active analysis run found for this conversation.');
-    }
+    // 4. Read questionType for SHAPE validation, node for DOMAIN mapping
+    const questionType = (message.questionMeta as QuestionMeta).questionType;
 
-    const userOid = new Types.ObjectId(userId);
-    let resumeValue: Record<string, unknown> | true = true;
-
-    switch (node) {
-      case 'ask_followup': {
-        // Guard: the last message must be a USER message (i.e. the user actually answered)
+    // 5a. Validate value SHAPE based on questionType (generic — works for any question)
+    //     Validate selected keys against questionMeta.options (not specialty config)
+    let selectedKey: string | undefined;
+    let selectedKeys: string[] | undefined;
+    switch (questionType) {
+      case 'free_text': {
+        // Guard: last message must be USER (they answered the follow-up)
         const lastRoleResult =
           await this.conversationsRepository.getLastMessageRole(conversationOid);
         if (isErr(lastRoleResult))
@@ -325,61 +336,79 @@ export class ConversationsService {
           throw new BadRequestException('Please send at least one message before continuing.');
         break;
       }
-
-      case 'present_classification': {
-        const entryType = value?.entryType;
-        if (!entryType || typeof entryType !== 'string') {
-          throw new BadRequestException('value.entryType is required and must be a string');
-        }
-
-        // Validate against specialty config
-        const config = getSpecialtyConfig(Specialty.GP);
-        const validCodes = config.entryTypes.map((et) => et.code);
-        if (!validCodes.includes(entryType)) {
-          throw new BadRequestException(
-            `Invalid entry type "${entryType}". Valid values: ${validCodes.join(', ')}`
-          );
-        }
-
-        resumeValue = { entryType };
+      case 'single_select': {
+        selectedKey = value?.selectedKey as string;
+        if (!selectedKey || typeof selectedKey !== 'string')
+          throw new BadRequestException('value.selectedKey is required');
+        const qm = message.questionMeta as SingleSelectQuestionMeta;
+        const validKeys = new Set(qm.options.map((o) => o.key));
+        if (!validKeys.has(selectedKey))
+          throw new BadRequestException(`Invalid selection "${selectedKey}"`);
         break;
       }
-
-      case 'present_capabilities': {
-        const selectedCodes = value?.selectedCodes;
-        if (
-          !Array.isArray(selectedCodes) ||
-          selectedCodes.length === 0 ||
-          !selectedCodes.every((c: unknown) => typeof c === 'string')
-        ) {
-          throw new BadRequestException(
-            'value.selectedCodes is required and must be a non-empty string array'
-          );
-        }
-
-        resumeValue = { selectedCodes };
+      case 'multi_select': {
+        selectedKeys = value?.selectedKeys as string[];
+        if (!Array.isArray(selectedKeys) || selectedKeys.length === 0)
+          throw new BadRequestException('value.selectedKeys is required');
+        const qm = message.questionMeta as MultiSelectQuestionMeta;
+        const validKeys = new Set(qm.options.map((o) => o.key));
+        const invalid = selectedKeys.filter((k) => !validKeys.has(k));
+        if (invalid.length > 0)
+          throw new BadRequestException(`Invalid selections: ${invalid.join(', ')}`);
         break;
       }
     }
 
-    // Transactional: audit message + outbox entry
+    // 5b. Build graph resume value based on NODE (domain-specific)
+    let resumeValue: Record<string, unknown> | true = true;
+    switch (node) {
+      case 'present_classification':
+        resumeValue = { entryType: selectedKey };
+        break;
+      case 'present_capabilities':
+        resumeValue = { selectedCodes: selectedKeys };
+        break;
+      case 'ask_followup':
+        resumeValue = true;
+        break;
+    }
+
+    // 6. Transaction: USER text message (for selections) + outbox entry
     await this.transactionService.withTransaction(
       async (session) => {
-        // Create audit messages for structured actions
-        if (node === 'present_classification' && typeof resumeValue !== 'boolean') {
-          await this.createAuditMessage(conversationOid, userOid, {
-            type: MessageMetadataType.CLASSIFICATION_SELECTION,
-            interactionType: InteractionType.DISPLAY_ONLY,
-            entryType: (resumeValue as { entryType: string }).entryType,
-          }, session);
+        // Record user selection as plain USER text message
+        // Use option labels from questionMeta for human-readable content
+        if (questionType === 'single_select' && selectedKey) {
+          const qm = message.questionMeta as SingleSelectQuestionMeta;
+          const label = qm.options.find((o) => o.key === selectedKey)?.label ?? selectedKey;
+          await this.conversationsRepository.createMessage(
+            {
+              conversation: conversationOid,
+              userId: userOid,
+              role: MessageRole.USER,
+              messageType: MessageType.TEXT,
+              content: `Selected: ${label}`,
+              processingStatus: MessageProcessingStatus.COMPLETE,
+            },
+            session,
+          );
         }
-
-        if (node === 'present_capabilities' && typeof resumeValue !== 'boolean') {
-          await this.createAuditMessage(conversationOid, userOid, {
-            type: MessageMetadataType.CAPABILITY_SELECTION,
-            interactionType: InteractionType.DISPLAY_ONLY,
-            selectedCodes: (resumeValue as { selectedCodes: string[] }).selectedCodes,
-          }, session);
+        if (questionType === 'multi_select' && selectedKeys) {
+          const qm = message.questionMeta as MultiSelectQuestionMeta;
+          const labels = selectedKeys.map(
+            (k) => qm.options.find((o) => o.key === k)?.label ?? k,
+          );
+          await this.conversationsRepository.createMessage(
+            {
+              conversation: conversationOid,
+              userId: userOid,
+              role: MessageRole.USER,
+              messageType: MessageType.TEXT,
+              content: `Selected: ${labels.join(', ')}`,
+              processingStatus: MessageProcessingStatus.COMPLETE,
+            },
+            session,
+          );
         }
 
         await this.outboxService.enqueue(
@@ -431,43 +460,6 @@ export class ConversationsService {
         if (graphStatus.node === 'present_capabilities')
           throw new ConflictException('Please confirm capabilities to continue.');
     }
-  }
-
-  /**
-   * Create a SYSTEM message that records a structured action in the chat.
-   * Marked COMPLETE immediately since it doesn't need processing.
-   * Uses SYSTEM role so it's excluded from gather_context (which filters USER only).
-   */
-  private async createAuditMessage(
-    conversationId: Types.ObjectId,
-    userId: Types.ObjectId,
-    metadata: ClassificationSelectionMetadata | CapabilitySelectionMetadata,
-    session?: import('mongoose').ClientSession,
-  ): Promise<void> {
-    let content: string;
-    switch (metadata.type) {
-      case MessageMetadataType.CLASSIFICATION_SELECTION:
-        content = `Selected: ${metadata.entryType}`;
-        break;
-      case MessageMetadataType.CAPABILITY_SELECTION:
-        content = `Capabilities confirmed: ${metadata.selectedCodes.join(', ')}`;
-        break;
-      default:
-        content = `Action recorded`;
-    }
-
-    await this.conversationsRepository.createMessage(
-      {
-        conversation: conversationId,
-        userId,
-        role: MessageRole.SYSTEM,
-        messageType: MessageType.TEXT,
-        content,
-        processingStatus: MessageProcessingStatus.COMPLETE,
-        metadata,
-      },
-      session,
-    );
   }
 
   async listMessages(

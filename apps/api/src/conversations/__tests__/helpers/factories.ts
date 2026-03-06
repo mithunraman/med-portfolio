@@ -1,7 +1,7 @@
 import {
   ArtefactStatus,
   ConversationStatus,
-  type MessageMetadata,
+  type QuestionMeta,
   MessageProcessingStatus,
   MessageRole,
   MessageType,
@@ -101,7 +101,7 @@ export async function createTestMessage(
     cleanedContent: string | null;
     content: string | null;
     processingStatus: MessageProcessingStatus;
-    metadata: MessageMetadata | null;
+    questionMeta: QuestionMeta | null;
   }> = {}
 ): Promise<MessageDocument> {
   const [doc] = await messageModel.create([
@@ -114,7 +114,7 @@ export async function createTestMessage(
       cleanedContent: overrides.cleanedContent ?? null,
       content: overrides.content ?? 'I saw a patient today with type 2 diabetes.',
       processingStatus: overrides.processingStatus ?? MessageProcessingStatus.COMPLETE,
-      metadata: overrides.metadata ?? null,
+      questionMeta: overrides.questionMeta ?? null,
     },
   ]);
   return doc;

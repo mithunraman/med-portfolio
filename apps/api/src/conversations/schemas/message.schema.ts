@@ -1,5 +1,5 @@
 import {
-  type MessageMetadata,
+  type QuestionMeta,
   MessageProcessingStatus,
   MessageRole,
   MessageType,
@@ -67,15 +67,9 @@ export class Message {
   @Prop({ type: String, default: null })
   processingError!: string | null;
 
-  // Structured metadata for special message types (e.g. classification options)
-  // Legacy field — kept for backward compatibility during migration
-  @Prop({ type: Object, default: null })
-  metadata!: MessageMetadata | null;
-
   // Embedded question metadata for structured Q&A (always-together reads)
-  // New format replacing the discriminated-union metadata field
   @Prop({ type: Object, default: null })
-  questionMeta!: Record<string, unknown> | null;
+  questionMeta!: QuestionMeta | null;
 
   // Links message to a specific analysis run (null for pre-analysis chat)
   @Prop({ type: Types.ObjectId, ref: 'AnalysisRun', default: null })

@@ -31,7 +31,7 @@ export async function presentCapabilitiesNode(
     code: cap.code,
     name: cap.name,
     confidence: cap.confidence,
-    evidence: cap.evidence,
+    reasoning: cap.reasoning,
   }));
 
   // Pause the graph — the interrupt payload is read by PortfolioGraphService

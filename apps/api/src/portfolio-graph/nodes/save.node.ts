@@ -28,7 +28,7 @@ export function createSaveNode(deps: GraphDeps) {
               reflection: state.reflection,
               capabilities: state.capabilities.map((c) => ({
                 code: c.code,
-                evidence: c.evidence.join('; '),
+                evidence: c.reasoning,
               })),
               status: ArtefactStatus.REVIEW,
             },

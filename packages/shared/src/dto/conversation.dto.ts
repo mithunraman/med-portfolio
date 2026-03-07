@@ -30,7 +30,7 @@ export const CapabilityOptionSchema = z.object({
   code: z.string(),
   name: z.string(),
   confidence: z.number(),
-  evidence: z.array(z.string()),
+  reasoning: z.string(),
 });
 export type CapabilityOption = z.infer<typeof CapabilityOptionSchema>;
 
@@ -47,7 +47,6 @@ export const QuestionOptionSchema = z.object({
   label: z.string(),
   confidence: z.number().optional(),
   reasoning: z.string().optional(),
-  evidence: z.array(z.string()).optional(),
 });
 export type QuestionOption = z.infer<typeof QuestionOptionSchema>;
 

@@ -367,7 +367,7 @@ describe('Conversations Integration Tests', () => {
       // Capabilities — only the user-selected C-06
       expect(artefact.capabilities).toHaveLength(1);
       expect(artefact.capabilities![0].code).toBe('C-06');
-      expect(artefact.capabilities![0].evidence).toBeDefined();
+      expect(artefact.capabilities![0].evidence).toBeDefined(); // reasoning mapped to evidence field on artefact
 
       // PDP actions — stored in separate collection
       const pdpActions = await getPdpActionsForArtefact();

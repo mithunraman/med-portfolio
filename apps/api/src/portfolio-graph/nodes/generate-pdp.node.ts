@@ -94,16 +94,16 @@ Each action must be:
 
 /**
  * Build a concise capability summary for the PDP prompt.
- * Includes capability name and first evidence quote so the LLM
+ * Includes capability name and reasoning so the LLM
  * can connect PDP actions to demonstrated (or lacking) capabilities.
  */
 function formatCapabilityBlock(
-  capabilities: { code: string; name: string; evidence: string[] }[]
+  capabilities: { code: string; name: string; reasoning: string }[]
 ): string {
   if (capabilities.length === 0) return 'None identified.';
 
   return capabilities
-    .map((c) => `- ${c.code} ${c.name}: ${c.evidence[0]}`)
+    .map((c) => `- ${c.code} ${c.name}: ${c.reasoning}`)
     .join('\n');
 }
 

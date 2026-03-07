@@ -21,11 +21,11 @@ const capabilityTagSchema = z.object({
     .number()
     .min(0)
     .max(1)
-    .describe('Confidence that this capability is evidenced, 0-1'),
-  evidence: z
-    .array(z.string())
+    .describe('Confidence that this capability is demonstrated, 0-1'),
+  reasoning: z
+    .string()
     .describe(
-      'Direct quotes or close paraphrases from the transcript that support this tag. Each element is one distinct piece of evidence.'
+      '1-2 sentence explanation of why this capability is demonstrated, referencing specific details from the transcript.'
     ),
 });
 
@@ -37,7 +37,7 @@ const capabilityTagSchema = z.object({
 const tagCapabilitiesResponseSchema = z.object({
   capabilities: z
     .array(capabilityTagSchema)
-    .describe('Capabilities evidenced in the transcript'),
+    .describe('Capabilities demonstrated in the transcript'),
 });
 
 type TagCapabilitiesResponse = z.infer<typeof tagCapabilitiesResponseSchema>;
@@ -64,7 +64,7 @@ const tagCapabilitiesPrompt = ChatPromptTemplate.fromMessages([
     'system',
     `You are a UK medical portfolio capability mapper for {specialtyName} trainees.
 
-Your task: given a trainee's transcript for a {entryType} entry, identify which curriculum capabilities are evidenced by the content.
+Your task: given a trainee's transcript for a {entryType} entry, identify which curriculum capabilities are demonstrated by the content.
 
 ## Curriculum Capabilities
 
@@ -73,15 +73,15 @@ Your task: given a trainee's transcript for a {entryType} entry, identify which 
 ## Instructions
 
 1. Read the full transcript carefully.
-2. Identify capabilities that are CLEARLY evidenced — the trainee must have described actions, reasoning, or behaviours that demonstrate the capability.
-3. For each capability, provide one or more direct quotes or close paraphrases from the transcript as evidence. Each quote should be a distinct piece of evidence — not the same point rephrased.
-4. For each capability, provide a confidence score (0-1) reflecting how strongly the transcript evidences it. Use these guidelines:
-   - 0.9-1.0: Explicit, detailed evidence directly demonstrating the capability.
-   - 0.7-0.89: Clear evidence but could be more detailed or specific.
-   - 0.5-0.69: Some evidence present but indirect or partial.
-   - Below 0.5: Do not include — evidence is too weak.
-5. Return up to ${MAX_CAPABILITIES} capabilities. Do NOT tag a capability unless there is clear, specific evidence in the transcript.
-6. Prefer fewer, well-evidenced capabilities over many weakly-evidenced ones.
+2. Identify capabilities that are CLEARLY demonstrated — the trainee must have described actions, reasoning, or behaviours that demonstrate the capability.
+3. For each capability, provide a 1-2 sentence reasoning explaining why it is demonstrated, referencing specific details from the transcript.
+4. For each capability, provide a confidence score (0-1) reflecting how strongly the transcript demonstrates it. Use these guidelines:
+   - 0.9-1.0: Explicit, detailed demonstration of the capability.
+   - 0.7-0.89: Clear demonstration but could be more detailed or specific.
+   - 0.5-0.69: Some demonstration present but indirect or partial.
+   - Below 0.5: Do not include — too weak.
+5. Return up to ${MAX_CAPABILITIES} capabilities. Do NOT tag a capability unless there is clear, specific demonstration in the transcript.
+6. Prefer fewer, well-reasoned capabilities over many weakly-supported ones.
 7. The entry type ({entryType}) gives context but should not override what the transcript actually contains.`,
   ],
   ['human', '{transcript}'],
@@ -120,7 +120,7 @@ function formatCapabilityBlock(specialty: Specialty): string {
  * Steps:
  *  1. Reject unknown capability codes
  *  2. Deduplicate by code (LLMs occasionally return the same capability twice)
- *  3. Drop entries with empty evidence arrays
+ *  3. Drop entries with empty reasoning
  *  4. Sort by confidence descending (we own the ranking, not the LLM)
  *  5. Enforce max count
  *  6. Use canonical name from config, not the LLM's rephrasing
@@ -135,13 +135,13 @@ function validateAndRank(
   for (const cap of response.capabilities) {
     if (!validCodes.has(cap.code)) continue;
     if (seen.has(cap.code)) continue;
-    if (cap.evidence.length === 0) continue;
+    if (!cap.reasoning) continue;
     seen.add(cap.code);
 
     validated.push({
       code: cap.code,
       name: validCodes.get(cap.code) ?? cap.name,
-      evidence: cap.evidence,
+      reasoning: cap.reasoning,
       confidence: Math.round(cap.confidence * 100) / 100,
     });
   }
@@ -166,7 +166,7 @@ function validateAndRank(
  * and sorts by confidence score rather than relying on LLM ordering.
  *
  * Entry type is included as context to help the LLM focus on relevant
- * capabilities, but the transcript evidence is what ultimately determines
+ * capabilities, but the transcript content is what ultimately determines
  * whether a capability is tagged.
  */
 export function createTagCapabilitiesNode(deps: GraphDeps) {

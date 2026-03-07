@@ -338,7 +338,7 @@ export class PortfolioGraphService implements OnModuleInit {
           .map(
             (o, i) =>
               `${i + 1}. **${o.code} — ${o.name}** (${Math.round(o.confidence * 100)}% confidence)\n` +
-              `   _${o.evidence[0]}_`
+              `   _${o.reasoning}_`
           )
           .join('\n');
 
@@ -352,7 +352,7 @@ export class PortfolioGraphService implements OnModuleInit {
             key: o.code,
             label: o.name,
             confidence: o.confidence,
-            evidence: o.evidence,
+            reasoning: o.reasoning,
           })),
         };
 

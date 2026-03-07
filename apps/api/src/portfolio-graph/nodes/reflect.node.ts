@@ -115,11 +115,11 @@ function formatSectionBlock(
  * Keeps it short so it doesn't dominate the context window.
  */
 function formatCapabilityBlock(
-  capabilities: { code: string; name: string; evidence: string[] }[]
+  capabilities: { code: string; name: string; reasoning: string }[]
 ): string {
   if (capabilities.length === 0) return 'None identified.';
 
-  return capabilities.map((c) => `- ${c.code} ${c.name}: ${c.evidence[0]}`).join('\n');
+  return capabilities.map((c) => `- ${c.code} ${c.name}: ${c.reasoning}`).join('\n');
 }
 
 /* ------------------------------------------------------------------ */

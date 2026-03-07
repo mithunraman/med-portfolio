@@ -160,7 +160,7 @@ export function allCoveredResponse() {
 
 /**
  * Build a canned tag-capabilities response.
- * Default: two capabilities with evidence and confidence.
+ * Default: two capabilities with reasoning and confidence.
  */
 export function tagCapabilitiesResponse(
   overrides?: Partial<{
@@ -168,7 +168,7 @@ export function tagCapabilitiesResponse(
       code: string;
       name: string;
       confidence: number;
-      evidence: string[];
+      reasoning: string;
     }>;
   }>
 ) {
@@ -178,13 +178,13 @@ export function tagCapabilitiesResponse(
         code: 'C-06',
         name: 'Managing Medical Complexity',
         confidence: 0.88,
-        evidence: ['managed the patient with type 2 diabetes'],
+        reasoning: 'Managed the patient with type 2 diabetes, demonstrating ability to handle complex medical cases.',
       },
       {
         code: 'C-08',
         name: 'Independent Working',
         confidence: 0.75,
-        evidence: ['independently decided to start metformin'],
+        reasoning: 'Independently decided to start metformin, showing autonomous clinical decision-making.',
       },
     ],
   };

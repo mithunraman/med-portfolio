@@ -29,9 +29,7 @@ export const MultiSelectCard = memo(function MultiSelectCard({
   const handleToggle = useCallback(
     (key: string) => {
       if (isAnswered || !isActive) return;
-      setLocalKeys((prev) =>
-        prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-      );
+      setLocalKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
     },
     [isAnswered, isActive]
   );
@@ -46,10 +44,10 @@ export const MultiSelectCard = memo(function MultiSelectCard({
   const options: MultiSelectOption[] = question.options.map((o) => ({
     key: o.key,
     label: o.label,
-    sublabel: [
-      o.confidence != null ? `${Math.round(o.confidence * 100)}% confidence` : null,
-      o.reasoning,
-    ].filter(Boolean).join('\n') || undefined,
+    sublabel:
+      [o.confidence != null ? `${Math.round(o.confidence * 100)}% confidence` : null, o.reasoning]
+        .filter(Boolean)
+        .join(' - ') || undefined,
   }));
 
   return (

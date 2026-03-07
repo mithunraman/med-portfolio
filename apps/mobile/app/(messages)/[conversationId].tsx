@@ -16,7 +16,7 @@ import { logger } from '@/utils/logger';
 import { MediaType, Message, MessageProcessingStatus } from '@acme/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -200,8 +200,22 @@ export default function ChatScreen() {
   const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
 
+  // Optimistic flag — bridges the gap between thunk resolve and poll update
+  const [optimisticAnalysing, setOptimisticAnalysing] = useState(false);
+
+  // Clear optimistic flag once backend confirms phase change
+  useEffect(() => {
+    if (phase && phase !== 'composing') {
+      setOptimisticAnalysing(false);
+    }
+  }, [phase]);
+
   const handleStartAnalysis = useCallback(async () => {
-    await dispatch(startAnalysis(effectiveConversationId));
+    setOptimisticAnalysing(true);
+    const result = await dispatch(startAnalysis(effectiveConversationId));
+    if (startAnalysis.rejected.match(result)) {
+      setOptimisticAnalysing(false);
+    }
     dispatch(pollConversation(effectiveConversationId));
   }, [effectiveConversationId, dispatch]);
 
@@ -248,15 +262,15 @@ export default function ChatScreen() {
           onAnswerQuestion={handleAnswerQuestion}
         />
 
-        {canStartAnalysis && (
+        {(canStartAnalysis || optimisticAnalysing || phase === 'analysing') && (
           <ActionBanner
             variant="analyse"
             onPress={handleStartAnalysis}
-            isLoading={analysisLoading}
+            isLoading={analysisLoading || optimisticAnalysing || phase === 'analysing'}
           />
         )}
 
-        {canResumeAnalysis && (
+        {canResumeAnalysis && context?.activeQuestion?.questionType === 'free_text' && (
           <ActionBanner
             variant="continue"
             onPress={() => handleResumeAnalysis()}

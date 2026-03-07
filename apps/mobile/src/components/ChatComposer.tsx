@@ -4,9 +4,7 @@ import type { ConversationPhase } from '@acme/shared';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   StyleSheet,
-  Text,
   TextInput,
   View,
   type StyleProp,
@@ -55,12 +53,7 @@ interface ChatComposerProps {
   // Phase-aware props
   canSendMessage?: boolean;
   canSendAudio?: boolean;
-  canStartAnalysis?: boolean;
-  canResumeAnalysis?: boolean;
   phase?: ConversationPhase;
-  onStartAnalysis?: () => void;
-  onResumeAnalysis?: () => void;
-  isAnalysisLoading?: boolean;
 }
 
 // ============================================================================
@@ -78,12 +71,7 @@ export function ChatComposer({
   style,
   canSendMessage = true,
   canSendAudio = true,
-  canStartAnalysis = false,
-  canResumeAnalysis = false,
   phase,
-  onStartAnalysis,
-  onResumeAnalysis,
-  isAnalysisLoading = false,
 }: ChatComposerProps) {
   const { colors, isDark } = useTheme();
   const [text, setText] = useState('');
@@ -130,8 +118,6 @@ export function ChatComposer({
   // Phase-aware derived state
   const isInputDisabled = !canSendMessage;
   const showMic = canSendAudio && !hasText;
-  const showAnalyseButton = canStartAnalysis && !hasText;
-  const showContinueButton = canResumeAnalysis && !hasText;
 
   const placeholder = useMemo(() => {
     switch (phase) {
@@ -282,36 +268,7 @@ export function ChatComposer({
                 accessibilityLabel="Record voice message"
               />
             )}
-
-            {showAnalyseButton ? (
-              <Pressable
-                style={[styles.actionButton, { backgroundColor: ACCENT_COLOR }]}
-                onPress={onStartAnalysis}
-                disabled={isAnalysisLoading}
-                accessibilityLabel="Start analysis"
-              >
-                {isAnalysisLoading ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={styles.actionButtonText}>Analyse</Text>
-                )}
-              </Pressable>
-            ) : showContinueButton ? (
-              <Pressable
-                style={[styles.actionButton, { backgroundColor: ACCENT_COLOR }]}
-                onPress={onResumeAnalysis}
-                disabled={isAnalysisLoading}
-                accessibilityLabel="Continue analysis"
-              >
-                {isAnalysisLoading ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={styles.actionButtonText}>Continue</Text>
-                )}
-              </Pressable>
-            ) : (
-              <IconButton icon={cameraIcon} onPress={onOpenCamera} accessibilityLabel="Open camera" />
-            )}
+            <IconButton icon={cameraIcon} onPress={onOpenCamera} accessibilityLabel="Open camera" />
           </>
         )}
       </View>
@@ -358,18 +315,6 @@ const styles = StyleSheet.create({
   },
   sendButton: {
     backgroundColor: ACCENT_COLOR,
-  },
-  actionButton: {
-    height: SPACING.iconButtonSize,
-    paddingHorizontal: 16,
-    borderRadius: SPACING.iconButtonSize / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '600',
   },
 });
 

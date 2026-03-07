@@ -1,4 +1,5 @@
 import { api } from '@/api/client';
+import { ActionBanner } from '@/components/ActionBanner';
 import { ChatComposer, MessageList } from '@/components';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
@@ -247,6 +248,22 @@ export default function ChatScreen() {
           onAnswerQuestion={handleAnswerQuestion}
         />
 
+        {canStartAnalysis && (
+          <ActionBanner
+            variant="analyse"
+            onPress={handleStartAnalysis}
+            isLoading={analysisLoading}
+          />
+        )}
+
+        {canResumeAnalysis && (
+          <ActionBanner
+            variant="continue"
+            onPress={() => handleResumeAnalysis()}
+            isLoading={analysisLoading}
+          />
+        )}
+
         <ChatComposer
           onSend={handleSend}
           onSendVoiceNote={handleSendVoiceNote}
@@ -256,12 +273,7 @@ export default function ChatScreen() {
           onToggleStickers={() => {}}
           canSendMessage={canSendMessage}
           canSendAudio={canSendAudio}
-          canStartAnalysis={canStartAnalysis}
-          canResumeAnalysis={canResumeAnalysis}
           phase={phase}
-          onStartAnalysis={handleStartAnalysis}
-          onResumeAnalysis={handleResumeAnalysis}
-          isAnalysisLoading={analysisLoading}
         />
       </KeyboardAvoidingView>
 

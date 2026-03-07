@@ -44,7 +44,10 @@ export const SingleSelectCard = memo(function SingleSelectCard({
   const options: SingleSelectOption[] = question.options.map((o) => ({
     key: o.key,
     label: o.label,
-    sublabel: o.confidence != null ? `${Math.round(o.confidence * 100)}% confidence` : undefined,
+    sublabel:
+      [o.confidence != null ? `${Math.round(o.confidence * 100)}% confidence` : null, o.reasoning]
+        .filter(Boolean)
+        .join(' - ') || undefined,
   }));
 
   return (
@@ -70,10 +73,7 @@ export const SingleSelectCard = memo(function SingleSelectCard({
           accessibilityLabel="Confirm selection"
         >
           <Text
-            style={[
-              styles.confirmText,
-              { color: localKey ? '#ffffff' : colors.textSecondary },
-            ]}
+            style={[styles.confirmText, { color: localKey ? '#ffffff' : colors.textSecondary }]}
           >
             Confirm
           </Text>

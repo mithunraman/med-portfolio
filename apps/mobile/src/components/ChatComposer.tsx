@@ -215,12 +215,14 @@ export function ChatComposer({
     <View style={containerStyle}>
       <View style={styles.toolbar}>
         {/* Attachment button */}
-        <IconButton
-          icon={attachIcon}
-          onPress={onOpenAttachments}
-          accessibilityLabel="Open attachments"
-          style={attachButtonStyle}
-        />
+        {onOpenAttachments && (
+          <IconButton
+            icon={attachIcon}
+            onPress={onOpenAttachments}
+            accessibilityLabel="Open attachments"
+            style={attachButtonStyle}
+          />
+        )}
 
         {/* Input pill */}
         <View style={inputContainerStyle}>
@@ -242,12 +244,14 @@ export function ChatComposer({
           />
 
           {/* Sticker/emoji button inside input */}
-          <IconButton
-            icon={stickerIcon}
-            onPress={onToggleStickers}
-            accessibilityLabel="Open stickers and emoji"
-            style={styles.stickerButton}
-          />
+          {onToggleStickers && (
+            <IconButton
+              icon={stickerIcon}
+              onPress={onToggleStickers}
+              accessibilityLabel="Open stickers and emoji"
+              style={styles.stickerButton}
+            />
+          )}
         </View>
 
         {/* Right-side action area */}
@@ -268,7 +272,9 @@ export function ChatComposer({
                 accessibilityLabel="Record voice message"
               />
             )}
-            <IconButton icon={cameraIcon} onPress={onOpenCamera} accessibilityLabel="Open camera" />
+            {onOpenCamera && (
+              <IconButton icon={cameraIcon} onPress={onOpenCamera} accessibilityLabel="Open camera" />
+            )}
           </>
         )}
       </View>

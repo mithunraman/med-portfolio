@@ -20,10 +20,11 @@ export const MultiSelectCard = memo(function MultiSelectCard({
   onAnswer,
 }: Props) {
   const { colors } = useTheme();
-  const isAnswered = answer !== null;
   const [localKeys, setLocalKeys] = useState<string[]>([]);
+  const [confirmed, setConfirmed] = useState(false);
+  const isAnswered = answer !== null || confirmed;
 
-  const displayKeys = isAnswered ? answer.selectedKeys : localKeys;
+  const displayKeys = answer?.selectedKeys ?? localKeys;
 
   const handleToggle = useCallback(
     (key: string) => {
@@ -37,6 +38,7 @@ export const MultiSelectCard = memo(function MultiSelectCard({
 
   const handleConfirm = useCallback(() => {
     if (localKeys.length > 0) {
+      setConfirmed(true);
       onAnswer({ selectedKeys: localKeys });
     }
   }, [localKeys, onAnswer]);

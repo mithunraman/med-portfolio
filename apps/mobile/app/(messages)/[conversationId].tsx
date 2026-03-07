@@ -220,16 +220,20 @@ export default function ChatScreen() {
   }, [effectiveConversationId, dispatch]);
 
   const handleResumeAnalysis = useCallback(
-    (messageId?: string, value?: Record<string, unknown>) => {
+    async (messageId?: string, value?: Record<string, unknown>) => {
       const msgId = messageId ?? context?.activeQuestion?.messageId;
       if (!msgId) return;
-      dispatch(
+      setOptimisticAnalysing(true);
+      const result = await dispatch(
         resumeAnalysis({
           conversationId: effectiveConversationId,
           messageId: msgId,
           value,
         })
       );
+      if (resumeAnalysis.rejected.match(result)) {
+        setOptimisticAnalysing(false);
+      }
       dispatch(pollConversation(effectiveConversationId));
     },
     [effectiveConversationId, context?.activeQuestion?.messageId, dispatch]
@@ -270,7 +274,7 @@ export default function ChatScreen() {
           />
         )}
 
-        {canResumeAnalysis && context?.activeQuestion?.questionType === 'free_text' && (
+        {canResumeAnalysis && !optimisticAnalysing && context?.activeQuestion?.questionType === 'free_text' && (
           <ActionBanner
             variant="continue"
             onPress={() => handleResumeAnalysis()}
@@ -282,9 +286,6 @@ export default function ChatScreen() {
           onSend={handleSend}
           onSendVoiceNote={handleSendVoiceNote}
           isSending={sendingMessage}
-          onOpenAttachments={() => {}}
-          onOpenCamera={() => {}}
-          onToggleStickers={() => {}}
           canSendMessage={canSendMessage}
           canSendAudio={canSendAudio}
           phase={phase}

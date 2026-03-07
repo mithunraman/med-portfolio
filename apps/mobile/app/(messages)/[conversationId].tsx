@@ -193,15 +193,15 @@ export default function ChatScreen() {
     [conversationId, effectiveConversationId, isPendingConversation, dispatch]
   );
 
+  // Optimistic flag — bridges the gap between thunk resolve and poll update
+  const [optimisticAnalysing, setOptimisticAnalysing] = useState(false);
+
   // Phase-aware flags derived from server context
-  const canSendMessage = context?.actions.sendMessage.allowed ?? true;
-  const canSendAudio = context?.actions.sendAudio.allowed ?? true;
+  const canSendMessage = (context?.actions.sendMessage.allowed ?? true) && !optimisticAnalysing;
+  const canSendAudio = (context?.actions.sendAudio.allowed ?? true) && !optimisticAnalysing;
   const canStartAnalysis = context?.actions.startAnalysis.allowed ?? false;
   const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
-
-  // Optimistic flag — bridges the gap between thunk resolve and poll update
-  const [optimisticAnalysing, setOptimisticAnalysing] = useState(false);
 
   // Clear optimistic flag once backend confirms phase change
   useEffect(() => {
@@ -288,7 +288,7 @@ export default function ChatScreen() {
           isSending={sendingMessage}
           canSendMessage={canSendMessage}
           canSendAudio={canSendAudio}
-          phase={phase}
+          phase={optimisticAnalysing ? 'analysing' : phase}
         />
       </KeyboardAvoidingView>
 

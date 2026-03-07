@@ -4,13 +4,15 @@
 
 # Chat screen
 
+- When any message is sent, there seems to be a delay before the message is displayed. What may be causing this ?
+
 - When messages are being processed, we do not show any analysis feedback to the user. The analysis button should be shown as busy.
 
-- In multi select, after user confirms, i don't see anything happening for some time, and then i suddenly see new messages, spinner, etc.
+- [Fixed] In multi select, after user confirms, i don't see anything happening for some time, and then i suddenly see new messages, spinner, etc.
 
-- When user submits an answer using single select / multi select, the analysis button should be shown as busy, as the chat is currently being analysed.
+- [Fixed] When user submits an answer using single select / multi select, the analysis button should be shown as busy, as the chat is currently being analysed.
 
-- I just saw a glitch where i saw two analysis buttons loading at the same time.
+- [Fixed] I just saw a glitch where i saw two analysis buttons loading at the same time.
 
 - [Fixed] When AI bot asks for a selection, we need to hide the continue Analysis button.
 

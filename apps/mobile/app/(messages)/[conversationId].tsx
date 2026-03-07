@@ -199,8 +199,8 @@ export default function ChatScreen() {
   const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
 
-  const handleStartAnalysis = useCallback(() => {
-    dispatch(startAnalysis(effectiveConversationId));
+  const handleStartAnalysis = useCallback(async () => {
+    await dispatch(startAnalysis(effectiveConversationId));
     dispatch(pollConversation(effectiveConversationId));
   }, [effectiveConversationId, dispatch]);
 

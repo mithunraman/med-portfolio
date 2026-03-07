@@ -1,6 +1,7 @@
 import {
   AnalysisRunStatus,
   ConversationStatus,
+  MessageRole,
   type ActionState,
   type ConversationContext,
   type ConversationPhase,
@@ -50,9 +51,14 @@ export class ConversationContextService {
     const latestRun = await this.analysisRunsService.findLatestRun(conversationOid);
     const phase = this.derivePhase(latestRun);
 
-    // Only query message state when needed for startAnalysis action
+    // Query message state when needed for action gating
     let hasProcessing = false;
     let hasComplete = false;
+    let lastMessageIsUser = false;
+
+    const isFreeTextAwait =
+      phase === 'awaiting_input' && latestRun?.currentQuestion?.questionType === 'free_text';
+
     if (phase === 'composing') {
       const [processingResult, completeResult] = await Promise.all([
         this.conversationsRepository.hasProcessingMessages(conversationOid),
@@ -60,9 +66,22 @@ export class ConversationContextService {
       ]);
       hasProcessing = !isErr(processingResult) && processingResult.value;
       hasComplete = !isErr(completeResult) && completeResult.value;
+    } else if (isFreeTextAwait) {
+      const [processingResult, lastRoleResult] = await Promise.all([
+        this.conversationsRepository.hasProcessingMessages(conversationOid),
+        this.conversationsRepository.getLastMessageRole(conversationOid),
+      ]);
+      hasProcessing = !isErr(processingResult) && processingResult.value;
+      lastMessageIsUser = !isErr(lastRoleResult) && lastRoleResult.value === MessageRole.USER;
     }
 
-    const actions = this.buildActions(phase, latestRun, hasProcessing, hasComplete);
+    const actions = this.buildActions(
+      phase,
+      latestRun,
+      hasProcessing,
+      hasComplete,
+      lastMessageIsUser
+    );
     const activeQuestion = this.buildActiveQuestion(latestRun);
     const analysisRun = latestRun ? { id: latestRun.xid, status: latestRun.status } : undefined;
 
@@ -91,7 +110,8 @@ export class ConversationContextService {
     phase: ConversationPhase,
     latestRun: AnalysisRun | null,
     hasProcessing: boolean,
-    hasComplete: boolean
+    hasComplete: boolean,
+    lastMessageIsUser: boolean
   ) {
     switch (phase) {
       case 'composing':
@@ -127,7 +147,13 @@ export class ConversationContextService {
             ? allowed()
             : denied('STRUCTURED_INPUT_REQUIRED', 'Please respond using the provided options.'),
           startAnalysis: denied('ANALYSIS_RUNNING', 'Analysis is already in progress.'),
-          resumeAnalysis: allowed(),
+          resumeAnalysis: isFreeText
+            ? hasProcessing
+              ? denied('MESSAGES_PROCESSING', 'Messages are still being processed.')
+              : !lastMessageIsUser
+                ? denied('NO_USER_RESPONSE', 'Send a message before continuing.')
+                : allowed()
+            : allowed(),
         };
       }
 

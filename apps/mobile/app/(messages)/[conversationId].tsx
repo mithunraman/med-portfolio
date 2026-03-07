@@ -24,7 +24,10 @@ import { shallowEqual } from 'react-redux';
 // Stable empty array — prevents a new reference on every render for unseen conversations
 const EMPTY_IDS: string[] = [];
 
-const TERMINAL_STATUSES = new Set([MessageProcessingStatus.COMPLETE, MessageProcessingStatus.FAILED]);
+const TERMINAL_STATUSES = new Set([
+  MessageProcessingStatus.COMPLETE,
+  MessageProcessingStatus.FAILED,
+]);
 
 // Phase-aware polling intervals (ms). null = no polling.
 function getPollInterval(phase: string | undefined, hasProcessingMessages: boolean): number | null {
@@ -94,9 +97,7 @@ export default function ChatScreen() {
   }, [conversationId, isNew, dispatch]);
 
   // Poll fast while any message is still being processed (transcription, cleaning, etc.)
-  const hasProcessingMessages = messages.some(
-    (m) => !TERMINAL_STATUSES.has(m.processingStatus)
-  );
+  const hasProcessingMessages = messages.some((m) => !TERMINAL_STATUSES.has(m.processingStatus));
   const pollIntervalMs = getPollInterval(context?.phase, hasProcessingMessages);
 
   useEffect(() => {
@@ -197,8 +198,6 @@ export default function ChatScreen() {
   const canStartAnalysis = context?.actions.startAnalysis.allowed ?? false;
   const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
-
-  console.log(context?.actions);
 
   const handleStartAnalysis = useCallback(() => {
     dispatch(startAnalysis(effectiveConversationId));

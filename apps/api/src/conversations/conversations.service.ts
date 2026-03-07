@@ -412,6 +412,21 @@ export class ConversationsService {
           );
         }
 
+        // Persist answer on the ASSISTANT question message for read-only rendering
+        if (questionType === 'single_select' && selectedKey) {
+          await this.conversationsRepository.updateMessage(
+            message._id,
+            { answer: { selectedKey } },
+            session
+          );
+        } else if (questionType === 'multi_select' && selectedKeys) {
+          await this.conversationsRepository.updateMessage(
+            message._id,
+            { answer: { selectedKeys } },
+            session
+          );
+        }
+
         await this.outboxService.enqueue(
           {
             type: 'analysis.resume',

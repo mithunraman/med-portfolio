@@ -82,7 +82,7 @@ export class ConversationContextService {
       hasComplete,
       lastMessageIsUser
     );
-    const activeQuestion = this.buildActiveQuestion(latestRun);
+    const activeQuestion = await this.buildActiveQuestion(latestRun);
     const analysisRun = latestRun ? { id: latestRun.xid, status: latestRun.status } : undefined;
 
     return { phase, actions, activeQuestion, analysisRun };
@@ -175,15 +175,21 @@ export class ConversationContextService {
     }
   }
 
-  private buildActiveQuestion(
+  private async buildActiveQuestion(
     latestRun: AnalysisRun | null
-  ): { messageId: string; questionType: QuestionType } | undefined {
+  ): Promise<{ messageId: string; questionType: QuestionType } | undefined> {
     if (!latestRun?.currentQuestion) return undefined;
     if (latestRun.status !== AnalysisRunStatus.AWAITING_INPUT) return undefined;
     if (!latestRun.currentQuestion.questionType) return undefined;
 
+    // Resolve xid — the mobile client uses xid as message id
+    const msgResult = await this.conversationsRepository.findMessageById(
+      latestRun.currentQuestion.messageId
+    );
+    if (isErr(msgResult) || !msgResult.value) return undefined;
+
     return {
-      messageId: latestRun.currentQuestion.messageId.toString(),
+      messageId: msgResult.value.xid,
       questionType: latestRun.currentQuestion.questionType as QuestionType,
     };
   }

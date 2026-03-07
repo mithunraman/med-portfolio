@@ -71,6 +71,10 @@ export class Message {
   @Prop({ type: Object, default: null })
   question!: Question | null;
 
+  // Answer stored after user responds to a question (single_select / multi_select)
+  @Prop({ type: Object, default: null })
+  answer!: Record<string, unknown> | null;
+
   // Transcription metadata (populated after audio transcription)
   @Prop({ type: TranscriptionMetadata, default: null })
   transcription!: TranscriptionMetadata | null;

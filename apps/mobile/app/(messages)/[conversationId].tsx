@@ -204,16 +204,30 @@ export default function ChatScreen() {
     dispatch(pollConversation(effectiveConversationId));
   }, [effectiveConversationId, dispatch]);
 
-  const handleResumeAnalysis = useCallback(() => {
-    if (!context?.activeQuestion?.messageId) return;
-    dispatch(
-      resumeAnalysis({
-        conversationId: effectiveConversationId,
-        messageId: context.activeQuestion.messageId,
-      })
-    );
-    dispatch(pollConversation(effectiveConversationId));
-  }, [effectiveConversationId, context?.activeQuestion?.messageId, dispatch]);
+  const handleResumeAnalysis = useCallback(
+    (messageId?: string, value?: Record<string, unknown>) => {
+      const msgId = messageId ?? context?.activeQuestion?.messageId;
+      if (!msgId) return;
+      dispatch(
+        resumeAnalysis({
+          conversationId: effectiveConversationId,
+          messageId: msgId,
+          value,
+        })
+      );
+      dispatch(pollConversation(effectiveConversationId));
+    },
+    [effectiveConversationId, context?.activeQuestion?.messageId, dispatch]
+  );
+
+  const handleAnswerQuestion = useCallback(
+    (messageId: string, value: Record<string, unknown>) => {
+      handleResumeAnalysis(messageId, value);
+    },
+    [handleResumeAnalysis]
+  );
+
+  const activeQuestionMessageId = context?.activeQuestion?.messageId;
 
   const isLoading = loadingMessages && messages.length === 0 && isNew !== 'true';
   const composerBg = isDark ? colors.surface : colors.background;
@@ -225,7 +239,13 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={headerHeight}
       >
-        <MessageList messages={messages} currentUserId={user?.id ?? ''} isLoading={isLoading} />
+        <MessageList
+          messages={messages}
+          currentUserId={user?.id ?? ''}
+          isLoading={isLoading}
+          activeQuestionMessageId={activeQuestionMessageId}
+          onAnswerQuestion={handleAnswerQuestion}
+        />
 
         <ChatComposer
           onSend={handleSend}

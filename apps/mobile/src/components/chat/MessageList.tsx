@@ -30,6 +30,8 @@ export interface MessageListProps {
   isTyping?: boolean;
   unreadCount?: number;
   isLoading?: boolean;
+  activeQuestionMessageId?: string;
+  onAnswerQuestion?: (messageId: string, value: Record<string, unknown>) => void;
   onReply?: (message: Message) => void;
   onCopy?: (message: Message) => void;
   onStar?: (message: Message) => void;
@@ -55,6 +57,8 @@ export const MessageList = memo(function MessageList({
   isTyping,
   unreadCount = 0,
   isLoading = false,
+  activeQuestionMessageId,
+  onAnswerQuestion,
   onReply,
   onCopy,
   onStar,
@@ -114,6 +118,8 @@ export const MessageList = memo(function MessageList({
               message={item.data}
               isLastInGroup={item.isLastInGroup}
               isFirstInGroup={item.isFirstInGroup}
+              isActiveQuestion={item.data.id === activeQuestionMessageId}
+              onAnswerQuestion={onAnswerQuestion}
               onLongPress={handleLongPress}
             />
           );
@@ -125,7 +131,7 @@ export const MessageList = memo(function MessageList({
           return <NoticeItem text={item.text} />;
       }
     },
-    [handleLongPress]
+    [handleLongPress, activeQuestionMessageId, onAnswerQuestion]
   );
 
   const content = isLoading ? (

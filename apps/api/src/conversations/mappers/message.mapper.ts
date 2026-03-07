@@ -1,4 +1,4 @@
-import type { Message, MessageMedia } from '@acme/shared';
+import type { Answer, Message, MessageMedia } from '@acme/shared';
 import type { Media } from '../../media/schemas/media.schema';
 import type { Message as MessageSchema } from '../schemas/message.schema';
 
@@ -17,6 +17,7 @@ export function toMessageDto(
     content: doc.content ?? doc.cleanedContent ?? doc.rawContent ?? null,
     media: mediaData,
     question: doc.question ?? null,
+    answer: (doc.answer as Answer) ?? null,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   };

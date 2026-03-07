@@ -4,7 +4,10 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { AudioContent } from './bubble/AudioContent';
 import { BubbleShell } from './bubble/BubbleShell';
 import { DeletedContent } from './bubble/DeletedContent';
+import { QuestionContent } from './bubble/QuestionContent';
 import { TextContent } from './bubble/TextContent';
+
+const noop = () => {};
 
 function isDeleted(message: Message): boolean {
   return (
@@ -18,6 +21,8 @@ interface Props {
   message: Message;
   isLastInGroup: boolean;
   isFirstInGroup: boolean;
+  isActiveQuestion?: boolean;
+  onAnswerQuestion?: (messageId: string, value: Record<string, unknown>) => void;
   onLongPress?: (message: Message, pageY: number) => void;
 }
 
@@ -25,6 +30,8 @@ export const MessageRow = memo(function MessageRow({
   message,
   isLastInGroup,
   isFirstInGroup,
+  isActiveQuestion = false,
+  onAnswerQuestion,
   onLongPress,
 }: Props) {
   const isUser = message.role === MessageRole.USER;
@@ -39,6 +46,12 @@ export const MessageRow = memo(function MessageRow({
 
   const content = isDeleted(message) ? (
     <DeletedContent />
+  ) : message.question ? (
+    <QuestionContent
+      message={message}
+      isActiveQuestion={isActiveQuestion}
+      onAnswer={onAnswerQuestion ?? noop}
+    />
   ) : message.messageType === MessageType.AUDIO ? (
     <AudioContent message={message} />
   ) : (

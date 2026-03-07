@@ -88,6 +88,17 @@ export const QuestionSchema = z.discriminatedUnion('questionType', [
 ]);
 export type Question = z.infer<typeof QuestionSchema>;
 
+// ── Answer sub-schemas (persisted on ASSISTANT question messages) ──
+
+export const SingleSelectAnswerSchema = z.object({ selectedKey: z.string() });
+export type SingleSelectAnswer = z.infer<typeof SingleSelectAnswerSchema>;
+
+export const MultiSelectAnswerSchema = z.object({ selectedKeys: z.array(z.string()) });
+export type MultiSelectAnswer = z.infer<typeof MultiSelectAnswerSchema>;
+
+export const AnswerSchema = z.union([SingleSelectAnswerSchema, MultiSelectAnswerSchema]);
+export type Answer = z.infer<typeof AnswerSchema>;
+
 // Message schemas
 export const MessageSchema = z.object({
   id: z.string(),
@@ -98,6 +109,7 @@ export const MessageSchema = z.object({
   content: z.string().nullable(),
   media: MessageMediaSchema.nullable(),
   question: QuestionSchema.nullable().optional(),
+  answer: AnswerSchema.nullable().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

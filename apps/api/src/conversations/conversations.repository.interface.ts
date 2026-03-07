@@ -38,6 +38,7 @@ export interface UpdateMessageData {
   processingStatus?: MessageProcessingStatus;
   processingError?: string | null;
   transcription?: TranscriptionMetadata | null;
+  answer?: Record<string, unknown> | null;
 }
 
 export interface ListMessagesQuery {

@@ -221,16 +221,19 @@ export function reflectResponse(
 
 /**
  * Build a canned generate-pdp response.
- * Default: one SMART PDP action.
+ * Default: one PDP goal with one SMART action.
  */
-export function generatePdpResponse(
-  overrides?: Partial<{ actions: Array<{ action: string; timeframe: string }> }>
-) {
+export function generatePdpResponse() {
   return {
-    actions: overrides?.actions ?? [
+    goals: [
       {
-        action: 'Attend a diabetes update tutorial and present a case review to peers',
-        timeframe: 'within 4 weeks',
+        goal: 'Improve confidence managing type 2 diabetes in primary care',
+        actions: [
+          {
+            action: 'Attend a diabetes update tutorial and present a case review to peers',
+            intendedEvidence: 'Reflective log entry submitted to portfolio',
+          },
+        ],
       },
     ],
   };

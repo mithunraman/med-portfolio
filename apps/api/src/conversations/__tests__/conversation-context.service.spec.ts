@@ -1,4 +1,4 @@
-import { AnalysisRunStatus, ConversationStatus } from '@acme/shared';
+import { AnalysisRunStatus, ConversationStatus, MessageRole } from '@acme/shared';
 import { Types } from 'mongoose';
 import type { AnalysisRun } from '../../analysis-runs/schemas/analysis-run.schema';
 import { err, ok } from '../../common/utils/result.util';
@@ -39,6 +39,8 @@ function makeCurrentQuestion(
 const mockRepo = {
   hasProcessingMessages: jest.fn(),
   hasCompleteMessages: jest.fn(),
+  findMessageById: jest.fn(),
+  getLastMessageRole: jest.fn(),
 };
 
 const mockAnalysisRunsService = {
@@ -56,6 +58,8 @@ describe('ConversationContextService', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    mockRepo.findMessageById.mockResolvedValue(ok({ xid: 'msg_xid_123' }));
+    mockRepo.getLastMessageRole.mockResolvedValue(ok(null));
     service = createService();
   });
 
@@ -267,6 +271,7 @@ describe('ConversationContextService', () => {
             currentQuestion: makeCurrentQuestion('free_text'),
           })
         );
+        mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       });
 
       it('returns phase "awaiting_input"', async () => {
@@ -281,6 +286,7 @@ describe('ConversationContextService', () => {
       });
 
       it('allows resumeAnalysis', async () => {
+        mockRepo.getLastMessageRole.mockResolvedValue(ok(MessageRole.USER));
         const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
         expect(ctx.actions.resumeAnalysis).toEqual({ allowed: true });
       });

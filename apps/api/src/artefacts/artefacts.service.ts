@@ -11,9 +11,9 @@ import {
 } from '../conversations/conversations.repository.interface';
 import { TransactionService } from '../database';
 import {
-  IPdpActionsRepository,
-  PDP_ACTIONS_REPOSITORY,
-} from '../pdp-actions/pdp-actions.repository.interface';
+  IPdpGoalsRepository,
+  PDP_GOALS_REPOSITORY,
+} from '../pdp-goals/pdp-goals.repository.interface';
 import { ARTEFACTS_REPOSITORY, IArtefactsRepository } from './artefacts.repository.interface';
 import { CreateArtefactDto, ListArtefactsDto } from './dto';
 import { toArtefactDto } from './mappers/artefact.mapper';
@@ -30,8 +30,8 @@ export class ArtefactsService {
     private readonly artefactsRepository: IArtefactsRepository,
     @Inject(CONVERSATIONS_REPOSITORY)
     private readonly conversationsRepository: IConversationsRepository,
-    @Inject(PDP_ACTIONS_REPOSITORY)
-    private readonly pdpActionsRepository: IPdpActionsRepository,
+    @Inject(PDP_GOALS_REPOSITORY)
+    private readonly pdpGoalsRepository: IPdpGoalsRepository,
     private readonly transactionService: TransactionService
   ) {}
 
@@ -110,9 +110,9 @@ export class ArtefactsService {
 
     const artefact = artefactResult.value;
 
-    const [conversationResult, pdpActionsResult] = await Promise.all([
+    const [conversationResult, pdpGoalsResult] = await Promise.all([
       this.conversationsRepository.findActiveConversationByArtefact(artefact._id),
-      this.pdpActionsRepository.findByArtefactId(artefact._id),
+      this.pdpGoalsRepository.findByArtefactId(artefact._id),
     ]);
 
     if (isErr(conversationResult)) {
@@ -121,11 +121,11 @@ export class ArtefactsService {
     if (!conversationResult.value) {
       throw new NotFoundException('Conversation not found for artefact');
     }
-    if (isErr(pdpActionsResult)) {
-      throw new InternalServerErrorException(pdpActionsResult.error.message);
+    if (isErr(pdpGoalsResult)) {
+      throw new InternalServerErrorException(pdpGoalsResult.error.message);
     }
 
-    return toArtefactDto(artefact, conversationResult.value, pdpActionsResult.value);
+    return toArtefactDto(artefact, conversationResult.value, pdpGoalsResult.value);
   }
 
   async updateArtefactStatus(userId: string, xid: string, status: ArtefactStatus): Promise<Artefact> {
@@ -150,19 +150,19 @@ export class ArtefactsService {
       throw new InternalServerErrorException(updateResult.error.message);
     }
 
-    const [conversationResult, pdpActionsResult] = await Promise.all([
+    const [conversationResult, pdpGoalsResult] = await Promise.all([
       this.conversationsRepository.findActiveConversationByArtefact(updateResult.value._id),
-      this.pdpActionsRepository.findByArtefactId(updateResult.value._id),
+      this.pdpGoalsRepository.findByArtefactId(updateResult.value._id),
     ]);
 
     if (isErr(conversationResult) || !conversationResult.value) {
       throw new InternalServerErrorException('Conversation not found');
     }
-    if (isErr(pdpActionsResult)) {
-      throw new InternalServerErrorException(pdpActionsResult.error.message);
+    if (isErr(pdpGoalsResult)) {
+      throw new InternalServerErrorException(pdpGoalsResult.error.message);
     }
 
-    return toArtefactDto(updateResult.value, conversationResult.value, pdpActionsResult.value);
+    return toArtefactDto(updateResult.value, conversationResult.value, pdpGoalsResult.value);
   }
 
   async listArtefacts(userId: string, query: ListArtefactsDto): Promise<ArtefactListResponse> {
@@ -191,20 +191,20 @@ export class ArtefactsService {
     // Batch-fetch conversations and PDP actions for all artefacts
     const artefactIds = artefacts.map((a) => a._id);
 
-    const [conversationsResult, pdpActionsResult] = await Promise.all([
+    const [conversationsResult, pdpGoalsResult] = await Promise.all([
       this.conversationsRepository.findActiveConversationsByArtefacts(artefactIds),
-      this.pdpActionsRepository.findByArtefactIds(artefactIds),
+      this.pdpGoalsRepository.findByArtefactIds(artefactIds),
     ]);
 
     if (isErr(conversationsResult)) {
       throw new InternalServerErrorException(conversationsResult.error.message);
     }
-    if (isErr(pdpActionsResult)) {
-      throw new InternalServerErrorException(pdpActionsResult.error.message);
+    if (isErr(pdpGoalsResult)) {
+      throw new InternalServerErrorException(pdpGoalsResult.error.message);
     }
 
     const conversationMap = conversationsResult.value;
-    const pdpActionsMap = pdpActionsResult.value;
+    const pdpGoalsMap = pdpGoalsResult.value;
 
     const artefactsWithConversations = artefacts
       .map((artefact) => {
@@ -212,8 +212,8 @@ export class ArtefactsService {
         if (!conversation) {
           return null;
         }
-        const pdpActions = pdpActionsMap.get(artefact._id.toString()) || [];
-        return toArtefactDto(artefact, conversation, pdpActions);
+        const pdpGoals = pdpGoalsMap.get(artefact._id.toString()) || [];
+        return toArtefactDto(artefact, conversation, pdpGoals);
       })
       .filter(isNotNull);
 

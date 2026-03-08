@@ -13,7 +13,7 @@ export const fetchDashboard = createAsyncThunk(
       const response = await api.dashboard.getDashboard();
       dashboardLogger.info('Dashboard fetched', {
         recentEntries: response.recentEntries.items.length,
-        pdpActions: response.pdpActionsDue.items.length,
+        pdpGoals: response.pdpGoalsDue.items.length,
       });
       return response;
     } catch (error) {

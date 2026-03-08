@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ArtefactSchema, PdpActionSchema } from './artefact.dto';
+import { ArtefactSchema, PdpGoalSchema } from './artefact.dto';
 
 export const DashboardStatsSchema = z.object({
   entriesThisWeek: z.number(),
@@ -14,9 +14,9 @@ export const DashboardResponseSchema = z.object({
     total: z.number(),
     items: z.array(ArtefactSchema),
   }),
-  pdpActionsDue: z.object({
+  pdpGoalsDue: z.object({
     total: z.number(),
-    items: z.array(PdpActionSchema),
+    items: z.array(PdpGoalSchema),
   }),
   stats: DashboardStatsSchema,
 });

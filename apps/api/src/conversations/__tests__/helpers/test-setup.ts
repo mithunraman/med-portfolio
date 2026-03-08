@@ -29,13 +29,13 @@ import { OutboxRepository } from '../../../outbox/outbox.repository';
 import { OUTBOX_REPOSITORY } from '../../../outbox/outbox.repository.interface';
 import { OutboxService } from '../../../outbox/outbox.service';
 import { OutboxEntry, OutboxEntrySchema } from '../../../outbox/schemas/outbox.schema';
-import { PdpActionsRepository } from '../../../pdp-actions/pdp-actions.repository';
-import { PDP_ACTIONS_REPOSITORY } from '../../../pdp-actions/pdp-actions.repository.interface';
+import { PdpGoalsRepository } from '../../../pdp-goals/pdp-goals.repository';
+import { PDP_GOALS_REPOSITORY } from '../../../pdp-goals/pdp-goals.repository.interface';
 import {
-  PdpAction,
-  PdpActionDocument,
-  PdpActionSchema,
-} from '../../../pdp-actions/schemas/pdp-action.schema';
+  PdpGoal,
+  PdpGoalDocument,
+  PdpGoalSchema as PdpGoalMongooseSchema,
+} from '../../../pdp-goals/schemas/pdp-goal.schema';
 import { PortfolioGraphService } from '../../../portfolio-graph/portfolio-graph.service';
 import { ProcessingService } from '../../../processing/processing.service';
 import { ConversationContextService } from '../../conversation-context.service';
@@ -87,7 +87,7 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
         // Media schema needed for .populate('media') in listMessages
         { name: Media.name, schema: MediaSchema },
         { name: Artefact.name, schema: ArtefactSchema },
-        { name: PdpAction.name, schema: PdpActionSchema },
+        { name: PdpGoal.name, schema: PdpGoalMongooseSchema },
         { name: AnalysisRun.name, schema: AnalysisRunMongooseSchema },
         { name: OutboxEntry.name, schema: OutboxEntrySchema },
       ]),
@@ -107,8 +107,8 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
         useClass: ArtefactsRepository,
       },
       {
-        provide: PDP_ACTIONS_REPOSITORY,
-        useClass: PdpActionsRepository,
+        provide: PDP_GOALS_REPOSITORY,
+        useClass: PdpGoalsRepository,
       },
 
       // Analysis runs — real service + repository
@@ -175,10 +175,10 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
   );
   const messageModel = module.get<Model<MessageDocument>>(getModelToken(Message.name));
   const artefactModel = module.get<Model<ArtefactDocument>>(getModelToken(Artefact.name));
-  const pdpActionModel = module.get<Model<PdpActionDocument>>(getModelToken(PdpAction.name));
+  const pdpGoalModel = module.get<Model<PdpGoalDocument>>(getModelToken(PdpGoal.name));
 
   // Initialise factory helpers with the real models
-  initFactories(conversationModel, messageModel, artefactModel, pdpActionModel);
+  initFactories(conversationModel, messageModel, artefactModel, pdpGoalModel);
 
   // Warm up the replica set: do a write+read to ensure the oplog and
   // checkpoint collections are fully operational before tests start.

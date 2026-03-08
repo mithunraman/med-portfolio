@@ -17,7 +17,7 @@ import {
   createTestConversation,
   createTestMessage,
   getMessagesForConversation,
-  getPdpActionsForArtefact,
+  getPdpGoalsForArtefact,
   getTestArtefact,
   markMessageComplete,
   TEST_USER_ID_STR,
@@ -369,11 +369,13 @@ describe('Conversations Integration Tests', () => {
       expect(artefact.capabilities![0].code).toBe('C-06');
       expect(artefact.capabilities![0].evidence).toBeDefined(); // reasoning mapped to evidence field on artefact
 
-      // PDP actions — stored in separate collection
-      const pdpActions = await getPdpActionsForArtefact();
-      expect(pdpActions).toHaveLength(1);
-      expect(pdpActions[0].action).toContain('diabetes update tutorial');
-      expect(pdpActions[0].timeframe).toBe('within 4 weeks');
+      // PDP goals — stored in pdp_goals collection with embedded actions
+      const pdpGoals = await getPdpGoalsForArtefact();
+      expect(pdpGoals).toHaveLength(1);
+      expect(pdpGoals[0].goal).toContain('diabetes');
+      expect(pdpGoals[0].actions).toHaveLength(1);
+      expect(pdpGoals[0].actions[0].action).toContain('diabetes update tutorial');
+      expect(pdpGoals[0].actions[0].intendedEvidence).toContain('portfolio');
     });
 
     it('A3. Multiple follow-up rounds', async () => {

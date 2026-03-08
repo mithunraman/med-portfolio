@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ArtefactsModule } from '../artefacts/artefacts.module';
-import { PdpActionsModule } from '../pdp-actions/pdp-actions.module';
+import { PdpGoalsModule } from '../pdp-goals/pdp-goals.module';
 import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
 
 @Module({
-  imports: [ArtefactsModule, PdpActionsModule],
+  imports: [ArtefactsModule, PdpGoalsModule],
   controllers: [DashboardController],
   providers: [DashboardService],
 })

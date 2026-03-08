@@ -9,7 +9,7 @@ import {
 } from '@acme/shared';
 import { Model, Types } from 'mongoose';
 import { Artefact, ArtefactDocument } from '../../../artefacts/schemas/artefact.schema';
-import { PdpAction, PdpActionDocument } from '../../../pdp-actions/schemas/pdp-action.schema';
+import { PdpGoal, PdpGoalDocument } from '../../../pdp-goals/schemas/pdp-goal.schema';
 import { ConversationDocument } from '../../schemas/conversation.schema';
 import { MessageDocument } from '../../schemas/message.schema';
 
@@ -21,19 +21,19 @@ import { MessageDocument } from '../../schemas/message.schema';
 let conversationModel: Model<ConversationDocument>;
 let messageModel: Model<MessageDocument>;
 let artefactModel: Model<ArtefactDocument>;
-let pdpActionModel: Model<PdpActionDocument>;
+let pdpGoalModel: Model<PdpGoalDocument>;
 
 /** Initialise the factories with Mongoose models from the test module. */
 export function initFactories(
   convModel: Model<ConversationDocument>,
   msgModel: Model<MessageDocument>,
   artModel: Model<ArtefactDocument>,
-  pdpModel: Model<PdpActionDocument>,
+  pdpModel: Model<PdpGoalDocument>,
 ) {
   conversationModel = convModel;
   messageModel = msgModel;
   artefactModel = artModel;
-  pdpActionModel = pdpModel;
+  pdpGoalModel = pdpModel;
 }
 
 // ── Shared test user/artefact IDs ──
@@ -175,9 +175,9 @@ export async function getMessagesForConversation(
   return messageModel.find({ conversation: conversationId }).sort({ _id: 1 }).exec();
 }
 
-/** Fetch PDP actions for an artefact (returns plain objects). */
-export async function getPdpActionsForArtefact(
+/** Fetch PDP goals for an artefact (returns plain objects). */
+export async function getPdpGoalsForArtefact(
   artefactId: Types.ObjectId = TEST_ARTEFACT_ID
-): Promise<PdpAction[]> {
-  return pdpActionModel.find({ artefactId }).lean();
+): Promise<PdpGoal[]> {
+  return pdpGoalModel.find({ artefactId }).lean();
 }

@@ -1,6 +1,6 @@
-import type { ActiveConversation, Artefact, PdpActionStatus } from '@acme/shared';
+import type { ActiveConversation, Artefact, PdpGoalStatus } from '@acme/shared';
 import type { Conversation } from '../../conversations/schemas/conversation.schema';
-import type { PdpAction } from '../../pdp-actions/schemas/pdp-action.schema';
+import type { PdpGoal } from '../../pdp-goals/schemas/pdp-goal.schema';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import type { Artefact as ArtefactSchema } from '../schemas/artefact.schema';
 import { extractArtefactClientId } from '../utils/artefact-id.util';
@@ -18,7 +18,7 @@ export function toActiveConversationDto(doc: Conversation): ActiveConversation {
 export function toArtefactDto(
   artefact: ArtefactSchema,
   conversation: Conversation,
-  pdpActions: PdpAction[] = []
+  pdpGoals: PdpGoal[] = []
 ): Artefact {
   const config = getSpecialtyConfig(artefact.specialty);
 
@@ -39,12 +39,20 @@ export function toArtefactDto(
     artefactTypeLabel: entryTypeDef?.label ?? artefact.artefactType,
     title: artefact.title,
     reflection: artefact.reflection,
-    pdpActions: pdpActions.map((p) => ({
-      id: p.xid,
-      action: p.action,
-      timeframe: p.timeframe,
-      status: p.status as PdpActionStatus,
-      dueDate: p.dueDate?.toISOString() ?? null,
+    pdpGoals: pdpGoals.map((g) => ({
+      id: g.xid,
+      goal: g.goal,
+      status: g.status as PdpGoalStatus,
+      reviewDate: g.reviewDate?.toISOString() ?? null,
+      completionReview: g.completionReview,
+      actions: g.actions.map((a) => ({
+        id: a.xid,
+        action: a.action,
+        intendedEvidence: a.intendedEvidence,
+        status: a.status as PdpGoalStatus,
+        dueDate: a.dueDate?.toISOString() ?? null,
+        completionReview: a.completionReview,
+      })),
     })),
     capabilities: artefact.capabilities?.map((cap) => ({
       code: cap.code,

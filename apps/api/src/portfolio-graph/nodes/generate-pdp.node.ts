@@ -4,27 +4,39 @@ import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import { GraphDeps } from '../graph-deps';
-import { PdpAction, PortfolioStateType } from '../portfolio-graph.state';
+import { PdpGoal, PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('GeneratePdpNode');
 
-const MAX_PDP_ACTIONS = 2;
+const MAX_GOALS = 2;
+const MAX_ACTIONS_PER_GOAL = 3;
 
 /* ------------------------------------------------------------------ */
 /*  Zod schema — single source of truth for the LLM response shape    */
 /* ------------------------------------------------------------------ */
 
-const pdpActionSchema = z.object({
+const pdpGoalActionSchema = z.object({
   action: z
     .string()
     .describe(
       'A specific, actionable learning objective. Should be concrete enough to verify completion.'
     ),
-  timeframe: z
+  intendedEvidence: z
     .string()
     .describe(
-      'When this action should be completed (e.g. "within 4 weeks", "by end of current placement", "next 2 months")'
+      'What evidence the trainee will produce to demonstrate completion (e.g. "CBD submitted to portfolio", "reflective log entry")'
     ),
+});
+
+const pdpGoalSchema = z.object({
+  goal: z
+    .string()
+    .describe(
+      'The learning need or development objective this goal addresses (e.g. "Improve confidence managing acute upper GI bleeding")'
+    ),
+  actions: z
+    .array(pdpGoalActionSchema)
+    .describe('SMART actions to achieve this goal'),
 });
 
 /**
@@ -33,9 +45,9 @@ const pdpActionSchema = z.object({
  * matching this shape — no markdown fences, no parsing needed.
  */
 const generatePdpResponseSchema = z.object({
-  actions: z
-    .array(pdpActionSchema)
-    .describe('SMART PDP actions derived from the reflection and capabilities'),
+  goals: z
+    .array(pdpGoalSchema)
+    .describe('PDP goals with SMART actions derived from the reflection and capabilities'),
 });
 
 /* ------------------------------------------------------------------ */
@@ -52,7 +64,7 @@ const generatePdpResponseSchema = z.object({
  *  - reflection: the generated reflection text
  *
  * Unlike the extraction nodes, the human message here is the reflection
- * (not the raw transcript) because PDP actions should flow directly
+ * (not the raw transcript) because PDP goals should flow directly
  * from what was reflected upon, not the raw dictation.
  */
 const generatePdpPrompt = ChatPromptTemplate.fromMessages([
@@ -60,30 +72,37 @@ const generatePdpPrompt = ChatPromptTemplate.fromMessages([
     'system',
     `You are a UK {specialtyName} training PDP (Personal Development Plan) generator.
 
-Your task: given a trainee's reflection for a {entryType} entry and the capabilities it demonstrates, generate 1-${MAX_PDP_ACTIONS} SMART PDP actions.
+Your task: given a trainee's reflection for a {entryType} entry and the capabilities it demonstrates, generate 1-${MAX_GOALS} PDP goals, each with 1-${MAX_ACTIONS_PER_GOAL} SMART actions.
 
 ## Tagged Capabilities
 
 {capabilityBlock}
 
-## SMART Criteria
+## Structure
+
+Each PDP goal has:
+- **Goal**: A clear learning need or development objective.
+- **Actions**: 1-${MAX_ACTIONS_PER_GOAL} specific steps to achieve the goal.
+
+## SMART Criteria (for each action)
 
 Each action must be:
 - **Specific**: Clearly state what the trainee will do.
-- **Measurable**: Include how completion will be evidenced.
+- **Measurable**: Include intended evidence — what the trainee will produce to demonstrate completion.
 - **Achievable**: Realistic within a training placement.
 - **Relevant**: Directly linked to learning gaps identified in the reflection.
-- **Time-bound**: Include a concrete timeframe.
+- **Time-bound**: The trainee will set their own deadlines — do NOT include timeframes.
 
 ## Instructions
 
 1. Read the reflection carefully. Identify the key learning gaps or development needs.
-2. Generate 1-${MAX_PDP_ACTIONS} PDP actions that directly address those gaps.
-3. Each action should be a single, focused objective — not a list of sub-tasks.
-4. Actions should be achievable during normal clinical training (tutorials, clinics, self-directed learning).
-5. Timeframes should be realistic — typically 2-8 weeks.
-6. Do NOT generate generic actions like "read more about X". Be specific about what to do and how to evidence it.
-7. If the reflection already shows strong learning with no clear gaps, generate ONE action that builds on the strength demonstrated.`,
+2. Group related gaps into 1-${MAX_GOALS} goals.
+3. For each goal, generate 1-${MAX_ACTIONS_PER_GOAL} SMART actions that directly address the learning need.
+4. Each action should be a single, focused objective — not a list of sub-tasks.
+5. For each action, specify the intended evidence (e.g. "CBD submitted to portfolio", "reflective log entry", "completed audit report").
+6. Actions should be achievable during normal clinical training (tutorials, clinics, self-directed learning).
+7. Do NOT generate generic actions like "read more about X". Be specific about what to do and how to evidence it.
+8. If the reflection already shows strong learning with no clear gaps, generate ONE goal with ONE action that builds on the strength demonstrated.`,
   ],
   ['human', '{reflection}'],
 ]);
@@ -95,7 +114,7 @@ Each action must be:
 /**
  * Build a concise capability summary for the PDP prompt.
  * Includes capability name and reasoning so the LLM
- * can connect PDP actions to demonstrated (or lacking) capabilities.
+ * can connect PDP goals to demonstrated (or lacking) capabilities.
  */
 function formatCapabilityBlock(
   capabilities: { code: string; name: string; reasoning: string }[]
@@ -112,14 +131,20 @@ function formatCapabilityBlock(
 /* ------------------------------------------------------------------ */
 
 /**
- * Enforce the max action count and filter out empty actions.
+ * Enforce the max goal/action counts and filter out empty entries.
  * Structured output guarantees the shape, but the LLM may return
- * more actions than requested or actions with empty strings.
+ * more items than requested or items with empty strings.
  */
-function validateActions(actions: PdpAction[]): PdpAction[] {
-  return actions
-    .filter((a) => a.action.trim().length > 0 && a.timeframe.trim().length > 0)
-    .slice(0, MAX_PDP_ACTIONS);
+function validateGoals(goals: PdpGoal[]): PdpGoal[] {
+  return goals
+    .map((g) => ({
+      ...g,
+      actions: g.actions
+        .filter((a) => a.action.trim().length > 0)
+        .slice(0, MAX_ACTIONS_PER_GOAL),
+    }))
+    .filter((g) => g.goal.trim().length > 0 && g.actions.length > 0)
+    .slice(0, MAX_GOALS);
 }
 
 /* ------------------------------------------------------------------ */
@@ -129,13 +154,13 @@ function validateActions(actions: PdpAction[]): PdpAction[] {
 /**
  * Factory that creates the generate-pdp node with injected dependencies.
  *
- * Generates SMART PDP actions from the reflection and tagged capabilities.
+ * Generates SMART PDP goals from the reflection and tagged capabilities.
  * Uses low temperature (0.2) — PDP actions should be grounded and
  * deterministic, not creative. Higher than extraction (0.1) because
  * the LLM needs some latitude in phrasing actionable objectives.
  *
  * The reflection is used as the human message (not the transcript)
- * because PDP actions should flow from the synthesised learning,
+ * because PDP goals should flow from the synthesised learning,
  * not the raw dictation.
  */
 export function createGeneratePdpNode(deps: GraphDeps) {
@@ -147,7 +172,7 @@ export function createGeneratePdpNode(deps: GraphDeps) {
     // ── Guard: no reflection ──
     if (!state.reflection || state.reflection.length === 0) {
       logger.warn('No reflection available — skipping PDP generation');
-      return { pdpActions: [] };
+      return { pdpGoals: [] };
     }
 
     const specialty = Number(state.specialty) as Specialty;
@@ -169,16 +194,21 @@ export function createGeneratePdpNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       generatePdpResponseSchema,
-      { temperature: 0.2, maxTokens: 600 }
+      { temperature: 0.2, maxTokens: 1000 }
     );
 
-    const pdpActions = validateActions(response.actions);
+    const pdpGoals = validateGoals(response.goals);
 
     logger.log(
-      `Generated ${pdpActions.length} PDP actions: ` +
-        pdpActions.map((a) => `"${a.action.slice(0, 60)}..." (${a.timeframe})`).join(', ')
+      `Generated ${pdpGoals.length} PDP goals: ` +
+        pdpGoals
+          .map(
+            (g) =>
+              `"${g.goal.slice(0, 50)}..." (${g.actions.length} actions)`
+          )
+          .join(', ')
     );
 
-    return { pdpActions };
+    return { pdpGoals };
   };
 }

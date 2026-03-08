@@ -1,19 +1,32 @@
 import { z } from 'zod';
 import { ArtefactStatus } from '../enums/artefact-status.enum';
 import { ConversationStatus } from '../enums/conversation-status.enum';
-import { PdpActionStatus } from '../enums/pdp-action-status.enum';
+import { PdpGoalStatus } from '../enums/pdp-goal-status.enum';
 import { Specialty } from '../enums/specialty.enum';
 
-// PDP Action schema
-export const PdpActionSchema = z.object({
+// PDP Goal Action schema (embedded action within a goal)
+export const PdpGoalActionSchema = z.object({
   id: z.string(),
   action: z.string(),
-  timeframe: z.string(),
-  status: z.nativeEnum(PdpActionStatus),
+  intendedEvidence: z.string(),
+  status: z.nativeEnum(PdpGoalStatus),
   dueDate: z.string().datetime().nullable(),
+  completionReview: z.string().nullable(),
 });
 
-export type PdpAction = z.infer<typeof PdpActionSchema>;
+export type PdpGoalAction = z.infer<typeof PdpGoalActionSchema>;
+
+// PDP Goal schema
+export const PdpGoalSchema = z.object({
+  id: z.string(),
+  goal: z.string(),
+  status: z.nativeEnum(PdpGoalStatus),
+  reviewDate: z.string().datetime().nullable(),
+  completionReview: z.string().nullable(),
+  actions: z.array(PdpGoalActionSchema),
+});
+
+export type PdpGoal = z.infer<typeof PdpGoalSchema>;
 
 // Capability schema
 export const CapabilitySchema = z.object({
@@ -53,7 +66,7 @@ export const ArtefactSchema = z.object({
   artefactTypeLabel: z.string().nullable(),
   title: z.string().nullable(),
   reflection: z.array(ReflectionSectionSchema).nullable(),
-  pdpActions: z.array(PdpActionSchema).nullable(),
+  pdpGoals: z.array(PdpGoalSchema).nullable(),
   capabilities: z.array(CapabilitySchema).nullable(),
   tags: z.record(z.array(z.string())).nullable(),
   conversation: ActiveConversationSchema,

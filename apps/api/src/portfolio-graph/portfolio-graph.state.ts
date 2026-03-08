@@ -26,11 +26,19 @@ export interface CapabilityTag {
 }
 
 /**
- * PDP action generated from the reflection.
+ * PDP goal action generated from the reflection.
  */
-export interface PdpAction {
+export interface PdpGoalAction {
   action: string;
-  timeframe: string;
+  intendedEvidence: string;
+}
+
+/**
+ * PDP goal generated from the reflection.
+ */
+export interface PdpGoal {
+  goal: string;
+  actions: PdpGoalAction[];
 }
 
 /**
@@ -120,7 +128,7 @@ export const PortfolioState = Annotation.Root({
   }),
 
   // ── PDP ──
-  pdpActions: Annotation<PdpAction[]>({
+  pdpGoals: Annotation<PdpGoal[]>({
     reducer: (_, next) => next,
     default: () => [],
   }),

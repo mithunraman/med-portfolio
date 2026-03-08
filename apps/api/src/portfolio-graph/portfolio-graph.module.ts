@@ -3,7 +3,7 @@ import { ArtefactsModule } from '../artefacts/artefacts.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { DatabaseModule } from '../database';
 import { LLMModule } from '../llm';
-import { PdpActionsModule } from '../pdp-actions/pdp-actions.module';
+import { PdpGoalsModule } from '../pdp-goals/pdp-goals.module';
 import { PortfolioGraphService } from './portfolio-graph.service';
 
 @Module({
@@ -11,7 +11,7 @@ import { PortfolioGraphService } from './portfolio-graph.service';
     ArtefactsModule,
     DatabaseModule,
     LLMModule,
-    PdpActionsModule,
+    PdpGoalsModule,
     forwardRef(() => ConversationsModule),
   ],
   providers: [PortfolioGraphService],

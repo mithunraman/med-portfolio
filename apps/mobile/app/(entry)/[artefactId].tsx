@@ -3,7 +3,7 @@ import { useAppDispatch, useAppSelector } from '@/hooks';
 import { fetchArtefact, selectArtefactById, updateArtefactStatus } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
-import { ArtefactStatus, PdpActionStatus } from '@acme/shared';
+import { ArtefactStatus, PdpGoalStatus } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -138,37 +138,44 @@ export default function EntryDetailScreen() {
         </View>
       )}
 
-      {/* PDP Actions (read-only) */}
-      {artefact.pdpActions && artefact.pdpActions.length > 0 && (
+      {/* PDP Goals (read-only) */}
+      {artefact.pdpGoals && artefact.pdpGoals.length > 0 && (
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>PDP Actions</Text>
-          {artefact.pdpActions.map((action) => (
-            <View key={action.id} style={[styles.pdpRow, { backgroundColor: colors.surface }]}>
-              <Ionicons
-                name={
-                  action.status === PdpActionStatus.COMPLETED ? 'checkbox' : 'square-outline'
-                }
-                size={22}
-                color={
-                  action.status === PdpActionStatus.COMPLETED
-                    ? colors.primary
-                    : colors.textSecondary
-                }
-              />
-              <View style={styles.pdpContent}>
-                <Text
-                  style={[
-                    styles.pdpText,
-                    { color: colors.text },
-                    action.status === PdpActionStatus.COMPLETED && styles.pdpCompleted,
-                  ]}
-                >
-                  {action.action}
-                </Text>
-                <Text style={[styles.pdpTimeframe, { color: colors.textSecondary }]}>
-                  {action.timeframe}
-                </Text>
-              </View>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>PDP Goals</Text>
+          {artefact.pdpGoals.map((goal) => (
+            <View key={goal.id} style={[styles.card, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>{goal.goal}</Text>
+              {goal.actions.map((action) => (
+                <View key={action.id} style={styles.pdpRow}>
+                  <Ionicons
+                    name={
+                      action.status === PdpGoalStatus.COMPLETED ? 'checkbox' : 'square-outline'
+                    }
+                    size={20}
+                    color={
+                      action.status === PdpGoalStatus.COMPLETED
+                        ? colors.primary
+                        : colors.textSecondary
+                    }
+                  />
+                  <View style={styles.pdpContent}>
+                    <Text
+                      style={[
+                        styles.pdpText,
+                        { color: colors.text },
+                        action.status === PdpGoalStatus.COMPLETED && styles.pdpCompleted,
+                      ]}
+                    >
+                      {action.action}
+                    </Text>
+                    {action.intendedEvidence ? (
+                      <Text style={[styles.pdpTimeframe, { color: colors.textSecondary }]}>
+                        Evidence: {action.intendedEvidence}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              ))}
             </View>
           ))}
         </View>

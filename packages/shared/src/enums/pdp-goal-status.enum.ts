@@ -1,4 +1,4 @@
-export enum PdpActionStatus {
+export enum PdpGoalStatus {
   PENDING = 100,
   ACTIVE = 200,
   COMPLETED = 300,

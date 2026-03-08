@@ -1,5 +1,5 @@
 import type { DashboardResponse } from '@acme/shared';
-import { ArtefactStatus, PdpActionStatus } from '@acme/shared';
+import { ArtefactStatus, PdpGoalStatus } from '@acme/shared';
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import {
@@ -9,9 +9,9 @@ import {
 import { ArtefactsService } from '../artefacts/artefacts.service';
 import { isErr } from '../common/utils/result.util';
 import {
-  IPdpActionsRepository,
-  PDP_ACTIONS_REPOSITORY,
-} from '../pdp-actions/pdp-actions.repository.interface';
+  IPdpGoalsRepository,
+  PDP_GOALS_REPOSITORY,
+} from '../pdp-goals/pdp-goals.repository.interface';
 
 @Injectable()
 export class DashboardService {
@@ -19,8 +19,8 @@ export class DashboardService {
     private readonly artefactsService: ArtefactsService,
     @Inject(ARTEFACTS_REPOSITORY)
     private readonly artefactsRepository: IArtefactsRepository,
-    @Inject(PDP_ACTIONS_REPOSITORY)
-    private readonly pdpActionsRepository: IPdpActionsRepository
+    @Inject(PDP_GOALS_REPOSITORY)
+    private readonly pdpGoalsRepository: IPdpGoalsRepository
   ) {}
 
   async getDashboard(userId: string): Promise<DashboardResponse> {
@@ -29,23 +29,23 @@ export class DashboardService {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-    const activeStatuses = [PdpActionStatus.PENDING, PdpActionStatus.ACTIVE];
+    const activeStatuses = [PdpGoalStatus.PENDING, PdpGoalStatus.ACTIVE];
 
     const [
       recentEntriesResult,
       recentEntriesTotalResult,
-      pdpActionsResult,
-      pdpActionsTotalResult,
+      pdpGoalsResult,
+      pdpGoalsTotalResult,
       entriesThisWeekResult,
       toReviewResult,
     ] = await Promise.all([
       this.artefactsService.listArtefacts(userId, { limit: 5 }),
       this.artefactsRepository.countByUser(userObjectId, { since: fourteenDaysAgo }),
-      this.pdpActionsRepository.findByUserId(userObjectId, activeStatuses, {
+      this.pdpGoalsRepository.findByUserId(userObjectId, activeStatuses, {
         limit: 5,
-        sortByDueDate: true,
+        sortByNextDueDate: true,
       }),
-      this.pdpActionsRepository.countByUserId(userObjectId, activeStatuses),
+      this.pdpGoalsRepository.countByUserId(userObjectId, activeStatuses),
       this.artefactsRepository.countByUser(userObjectId, { since: sevenDaysAgo }),
       this.artefactsRepository.countByUser(userObjectId, { status: ArtefactStatus.REVIEW }),
     ]);
@@ -53,11 +53,11 @@ export class DashboardService {
     if (isErr(recentEntriesTotalResult)) {
       throw new InternalServerErrorException(recentEntriesTotalResult.error.message);
     }
-    if (isErr(pdpActionsResult)) {
-      throw new InternalServerErrorException(pdpActionsResult.error.message);
+    if (isErr(pdpGoalsResult)) {
+      throw new InternalServerErrorException(pdpGoalsResult.error.message);
     }
-    if (isErr(pdpActionsTotalResult)) {
-      throw new InternalServerErrorException(pdpActionsTotalResult.error.message);
+    if (isErr(pdpGoalsTotalResult)) {
+      throw new InternalServerErrorException(pdpGoalsTotalResult.error.message);
     }
     if (isErr(entriesThisWeekResult)) {
       throw new InternalServerErrorException(entriesThisWeekResult.error.message);
@@ -81,14 +81,22 @@ export class DashboardService {
         total: recentEntriesTotalResult.value,
         items: recentEntriesResult.artefacts,
       },
-      pdpActionsDue: {
-        total: pdpActionsTotalResult.value,
-        items: pdpActionsResult.value.map((p) => ({
-          id: p.xid,
-          action: p.action,
-          timeframe: p.timeframe,
-          status: p.status as PdpActionStatus,
-          dueDate: p.dueDate?.toISOString() ?? null,
+      pdpGoalsDue: {
+        total: pdpGoalsTotalResult.value,
+        items: pdpGoalsResult.value.map((g) => ({
+          id: g.xid,
+          goal: g.goal,
+          status: g.status as PdpGoalStatus,
+          reviewDate: g.reviewDate?.toISOString() ?? null,
+          completionReview: g.completionReview,
+          actions: g.actions.map((a) => ({
+            id: a.xid,
+            action: a.action,
+            intendedEvidence: a.intendedEvidence,
+            status: a.status as PdpGoalStatus,
+            dueDate: a.dueDate?.toISOString() ?? null,
+            completionReview: a.completionReview,
+          })),
         })),
       },
       stats: {

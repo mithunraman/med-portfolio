@@ -3,7 +3,7 @@ import { useAppDispatch, useAppSelector } from '@/hooks';
 import { fetchDashboard } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
-import { ArtefactStatus, type Artefact, type DashboardStats, type PdpAction } from '@acme/shared';
+import { ArtefactStatus, type Artefact, type DashboardStats, type PdpGoal } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { randomUUID } from 'expo-crypto';
 import { useRouter } from 'expo-router';
@@ -133,19 +133,19 @@ function RecentEntriesModule({
   );
 }
 
-// ─── Module C: PDP Actions Due Soon ───────────────────────────────────────────
+// ─── Module C: PDP Goals Due Soon ─────────────────────────────────────────────
 
-function PdpDueSoonModule({ items, total }: { items: PdpAction[]; total: number }) {
+function PdpDueSoonModule({ items, total }: { items: PdpGoal[]; total: number }) {
   const { colors } = useTheme();
 
   if (items.length === 0) {
     return (
       <View style={styles.moduleContainer}>
-        <SectionHeader title="PDP actions due soon" />
+        <SectionHeader title="PDP goals due soon" />
         <View style={[styles.emptyModule, { backgroundColor: colors.surface }]}>
           <Ionicons name="checkbox-outline" size={24} color={colors.textSecondary} />
           <Text style={[styles.emptyModuleLabel, { color: colors.textSecondary }]}>
-            No actions due right now.
+            No goals due right now.
           </Text>
         </View>
       </View>
@@ -155,21 +155,21 @@ function PdpDueSoonModule({ items, total }: { items: PdpAction[]; total: number 
   return (
     <View style={styles.moduleContainer}>
       <SectionHeader
-        title="PDP actions due soon"
+        title="PDP goals due soon"
         actionLabel={total > items.length ? `See all (${total})` : undefined}
       />
-      {items.map((action) => (
+      {items.map((goal) => (
         <View
-          key={action.id}
+          key={goal.id}
           style={[styles.pdpActionCard, { backgroundColor: colors.surface }]}
         >
-          <Ionicons name="checkbox-outline" size={18} color={colors.primary} />
+          <Ionicons name="flag-outline" size={18} color={colors.primary} />
           <View style={styles.pdpActionContent}>
             <Text style={[styles.pdpActionText, { color: colors.text }]} numberOfLines={2}>
-              {action.action}
+              {goal.goal}
             </Text>
             <Text style={[styles.pdpActionMeta, { color: colors.textSecondary }]}>
-              {action.timeframe}
+              {goal.actions.length} action{goal.actions.length !== 1 ? 's' : ''}
             </Text>
           </View>
         </View>
@@ -272,10 +272,10 @@ export default function HomeScreen() {
           onSeeAll={handleSeeAllEntries}
         />
 
-        {/* Module C: PDP Actions Due Soon */}
+        {/* Module C: PDP Goals Due Soon */}
         <PdpDueSoonModule
-          items={dashboardData?.pdpActionsDue.items ?? []}
-          total={dashboardData?.pdpActionsDue.total ?? 0}
+          items={dashboardData?.pdpGoalsDue.items ?? []}
+          total={dashboardData?.pdpGoalsDue.total ?? 0}
         />
 
         {/* Module D: Progress Snapshot */}

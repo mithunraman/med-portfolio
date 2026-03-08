@@ -5,7 +5,7 @@ import { GraphDeps } from '../graph-deps';
 import { PortfolioStateType } from '../portfolio-graph.state';
 
 /**
- * Saves the completed entry to the artefact and creates PDP actions.
+ * Saves the completed entry to the artefact and creates PDP goals.
  * Both writes are wrapped in a transaction so they succeed or fail together.
  */
 export function createSaveNode(deps: GraphDeps) {
@@ -37,13 +37,16 @@ export function createSaveNode(deps: GraphDeps) {
 
           if (!artefactResult.ok) throw new Error(artefactResult.error.message);
 
-          if (state.pdpActions.length > 0) {
-            const pdpResult = await deps.pdpActionsRepository.create(
-              state.pdpActions.map((p) => ({
+          if (state.pdpGoals.length > 0) {
+            const pdpResult = await deps.pdpGoalsRepository.create(
+              state.pdpGoals.map((g) => ({
                 userId: userObjectId,
                 artefactId: artefactObjectId,
-                action: p.action,
-                timeframe: p.timeframe,
+                goal: g.goal,
+                actions: g.actions.map((a) => ({
+                  action: a.action,
+                  intendedEvidence: a.intendedEvidence,
+                })),
               })),
               session
             );

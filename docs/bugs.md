@@ -8,6 +8,8 @@
 
 - When messages are being processed, we do not show any analysis feedback to the user. The analysis button should be shown as busy.
 
+- Do not include reasoning in the select questions. Include a small "see why" button / icon / link, which when clicked, shows the reasoning in a popover.
+
 - [Fixed] In multi select, after user confirms, i don't see anything happening for some time, and then i suddenly see new messages, spinner, etc.
 
 - [Fixed] When user submits an answer using single select / multi select, the analysis button should be shown as busy, as the chat is currently being analysed.
@@ -19,3 +21,7 @@
 - [Fixed] Single select should have a confirm button.
 
 - [Fixed] When the AI bot is analysing in the backend, the analyse button should always show as busy. At the moment, after Analyse is clicked, the button shows as busy when the request is in progress. However, if the state of the chat is Analysing, we need to show busy state in the button.
+
+# Performance Improvements
+
+- Since the MVP will be a single nodejs server, can we use any inmemory cache to speed up the responses ? The client will be doing a lot of Polling when the chat is active.

@@ -1,6 +1,8 @@
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '@/api/client';
 import { ActionBanner } from '@/components/ActionBanner';
 import { ChatComposer, MessageList } from '@/components';
+import { CompletionCard } from '@/components/CompletionCard';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
 import {
@@ -8,6 +10,7 @@ import {
   fetchMessages,
   pollConversation,
   resumeAnalysis,
+  selectAllArtefacts,
   sendMessage,
   startAnalysis,
 } from '@/store';
@@ -15,7 +18,7 @@ import { useTheme } from '@/theme';
 import { logger } from '@/utils/logger';
 import { MediaType, Message, MessageProcessingStatus } from '@acme/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -58,6 +61,7 @@ export default function ChatScreen() {
     isNew?: string;
   }>();
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -76,6 +80,11 @@ export default function ChatScreen() {
   // Conversation context — server-driven action state
   const context = useAppSelector(
     (state) => state.messages.contextByConversation[effectiveConversationId]
+  );
+
+  // Find the artefact linked to this conversation (for completion card)
+  const artefact = useAppSelector((state) =>
+    selectAllArtefacts(state).find((a) => a.conversation.id === effectiveConversationId)
   );
 
   // Step 1: stable ID list — only changes when this conversation's message list changes
@@ -258,38 +267,57 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={headerHeight}
       >
-        <MessageList
-          messages={messages}
-          currentUserId={user?.id ?? ''}
-          isLoading={isLoading}
-          activeQuestionMessageId={activeQuestionMessageId}
-          onAnswerQuestion={handleAnswerQuestion}
-        />
-
-        {(canStartAnalysis || optimisticAnalysing || phase === 'analysing') && (
-          <ActionBanner
-            variant="analyse"
-            onPress={handleStartAnalysis}
-            isLoading={analysisLoading || optimisticAnalysing || phase === 'analysing'}
+        <View style={phase === 'completed' ? styles.dimmed : styles.flex}>
+          <MessageList
+            messages={messages}
+            currentUserId={user?.id ?? ''}
+            isLoading={isLoading}
+            activeQuestionMessageId={activeQuestionMessageId}
+            onAnswerQuestion={handleAnswerQuestion}
           />
-        )}
+        </View>
 
-        {canResumeAnalysis && !optimisticAnalysing && context?.activeQuestion?.questionType === 'free_text' && (
-          <ActionBanner
-            variant="continue"
-            onPress={() => handleResumeAnalysis()}
-            isLoading={analysisLoading}
+        {phase === 'completed' ? (
+          <CompletionCard
+            icon={<MaterialCommunityIcons name="party-popper" size={20} color="#ffffff" />}
+            heading="All Done!"
+            supportText="Your portfolio entry is ready for review"
+            subtitle={artefact?.title}
+            buttonIcon={<Feather name="file-text" size={18} color="#ffffff" />}
+            buttonLabel="View Your Entry"
+            onPress={() => {
+              // TODO: Navigate to entry detail screen (Phase 6)
+              router.back();
+            }}
           />
-        )}
+        ) : (
+          <>
+            {(canStartAnalysis || optimisticAnalysing || phase === 'analysing') && (
+              <ActionBanner
+                variant="analyse"
+                onPress={handleStartAnalysis}
+                isLoading={analysisLoading || optimisticAnalysing || phase === 'analysing'}
+              />
+            )}
 
-        <ChatComposer
-          onSend={handleSend}
-          onSendVoiceNote={handleSendVoiceNote}
-          isSending={sendingMessage}
-          canSendMessage={canSendMessage}
-          canSendAudio={canSendAudio}
-          phase={optimisticAnalysing ? 'analysing' : phase}
-        />
+            {canResumeAnalysis && !optimisticAnalysing && context?.activeQuestion?.questionType === 'free_text' && (
+              <ActionBanner
+                variant="continue"
+                onPress={() => handleResumeAnalysis()}
+                isLoading={analysisLoading}
+              />
+            )}
+
+            <ChatComposer
+              onSend={handleSend}
+              onSendVoiceNote={handleSendVoiceNote}
+              isSending={sendingMessage}
+              canSendMessage={canSendMessage}
+              canSendAudio={canSendAudio}
+              phase={optimisticAnalysing ? 'analysing' : phase}
+            />
+          </>
+        )}
       </KeyboardAvoidingView>
 
       {/* Safe area spacer — keyboard covers this when open, visible when closed */}
@@ -304,5 +332,12 @@ const styles = StyleSheet.create({
   },
   kav: {
     flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
+  dimmed: {
+    flex: 1,
+    opacity: 0.4,
   },
 });

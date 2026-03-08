@@ -1,6 +1,6 @@
 # Mobile App — AI Conversation Integration Plan
 
-## Status: Phase 1 DONE, Phases 2-5 remaining
+## Status: Phases 1-4 DONE, Phases 5-6 remaining
 
 ## Context
 
@@ -203,6 +203,113 @@ Render interactive question cards inside message bubbles.
 
 ---
 
+## Phase 6: Entry Detail + Post-Analysis Flow
+
+After analysis completes, the user needs to view, review, and act on the generated artefact. Currently there is no detail screen — tapping an entry from the list navigates back to the chat. This phase adds the entry detail screen, backend endpoints for single-artefact fetch and status updates, and wires navigation from both the chat completion state and the entries list.
+
+### 6.1 Backend — Single artefact + status endpoints
+
+**File:** `apps/api/src/artefacts/artefacts.controller.ts`
+
+Add endpoints:
+- `GET /artefacts/:id` — Fetch single artefact by xid (includes reflection, capabilities, PDP actions)
+- `PATCH /artefacts/:id/status` — Update artefact status (e.g. REVIEW → FINAL)
+
+**File:** `apps/api/src/artefacts/artefacts.service.ts`
+
+- `findByXid(userId, xid)` — fetch single artefact, attach PDP actions
+- `updateStatus(userId, xid, newStatus)` — validate transition (REVIEW → FINAL only), update
+
+**File:** `apps/api/src/artefacts/artefacts.repository.interface.ts`
+
+- Add `findByXid(userId, xid)` to interface + implementation
+
+### 6.2 Backend — PDP action completion
+
+**File:** `apps/api/src/pdp-actions/pdp-actions.controller.ts` (new or extend existing)
+
+- `PATCH /pdp-actions/:id` — Mark PDP action as complete/incomplete (toggle `completedAt`)
+
+**File:** `apps/api/src/pdp-actions/schemas/pdp-action.schema.ts`
+
+- Ensure `completedAt: Date | null` field exists
+
+### 6.3 API client — New methods
+
+**File:** `packages/api-client/src/clients/artefacts.client.ts`
+
+Add methods:
+- `getArtefact(id: string): Promise<Artefact>` — `GET /artefacts/:id`
+- `updateStatus(id: string, status: ArtefactStatus): Promise<Artefact>` — `PATCH /artefacts/:id/status`
+
+**File:** `packages/api-client/src/clients/pdp-actions.client.ts` (new)
+
+- `toggleComplete(id: string): Promise<PdpAction>` — `PATCH /pdp-actions/:id`
+
+### 6.4 Redux — Artefact detail state
+
+**File:** `apps/mobile/src/store/slices/artefacts/thunks.ts`
+
+Add thunks:
+- `fetchArtefact({ artefactId })` — single artefact fetch
+- `updateArtefactStatus({ artefactId, status })` — status transition
+- `togglePdpAction({ actionId })` — mark PDP action complete/incomplete
+
+**File:** `apps/mobile/src/store/slices/artefacts/slice.ts`
+
+- Handle new thunks in extra reducers
+- Update entity in store on status change
+
+### 6.5 Entry Detail Screen
+
+**New file:** `apps/mobile/app/(entry)/[artefactId].tsx`
+
+Sections (scrollable):
+- **Header** — Title, entry type badge, status pill, date
+- **Reflection** — Expandable/collapsible sections (Presentation, Analysis, Learning Points, etc.)
+- **Capabilities** — List of tagged capabilities with code, name, and reasoning
+- **PDP Actions** — Action items with timeframes, checkboxes to mark complete
+- **Footer actions** — "Mark as Final" button (when status is REVIEW), "Open Chat" link
+
+Props derived from Redux `selectArtefactById`.
+
+### 6.6 Navigation wiring
+
+**File:** `apps/mobile/app/(messages)/[conversationId].tsx`
+
+- When `phase === 'completed'`: show ActionBanner with `variant="viewEntry"` that navigates to `(entry)/[artefactId]`
+- Derive `artefactId` from the conversation (available in the artefact entity linked to this conversation)
+
+**File:** `apps/mobile/app/(tabs)/entries/index.tsx`
+
+- Change tap handler: navigate to `(entry)/[artefactId]` instead of `(messages)/[conversationId]`
+- Add secondary action (long-press or icon) to open chat
+
+**File:** `apps/mobile/app/(tabs)/index.tsx` (Home)
+
+- Update `RecentEntryCard` tap to navigate to entry detail
+
+### 6.7 PDP Actions tab
+
+**File:** `apps/mobile/app/(tabs)/pdp.tsx`
+
+- Fetch PDP actions (grouped by artefact/entry)
+- Render action list with checkboxes and timeframes
+- Tap checkbox toggles completion via `togglePdpAction` thunk
+
+### Verification
+
+- Analysis completes → "View Entry" banner appears in chat → tap → entry detail screen
+- Entry detail shows reflection sections, capabilities with reasoning, PDP actions
+- Tap capability → shows code + name + reasoning
+- Tap PDP checkbox → marks action complete, persists to backend
+- "Mark as Final" → status changes to FINAL, pill updates
+- Entries list → tap entry → opens detail screen (not chat)
+- Home → tap recent entry → opens detail screen
+- PDP tab → shows all PDP actions across entries
+
+---
+
 ## File Manifest
 
 ### Modify
@@ -210,9 +317,18 @@ Render interactive question cards inside message bubbles.
 | File | Phases |
 |------|--------|
 | `packages/api-client/src/clients/conversations.client.ts` | 1 ✅ |
+| `packages/api-client/src/clients/artefacts.client.ts` | 6 |
+| `apps/api/src/artefacts/artefacts.controller.ts` | 6 |
+| `apps/api/src/artefacts/artefacts.service.ts` | 6 |
+| `apps/api/src/artefacts/artefacts.repository.interface.ts` | 6 |
 | `apps/mobile/src/store/slices/messages/thunks.ts` | 1 ✅ |
 | `apps/mobile/src/store/slices/messages/slice.ts` | 1 ✅, 3, 5 |
-| `apps/mobile/app/(messages)/[conversationId].tsx` | 1 ✅, 2, 3, 4, 5 |
+| `apps/mobile/src/store/slices/artefacts/thunks.ts` | 6 |
+| `apps/mobile/src/store/slices/artefacts/slice.ts` | 6 |
+| `apps/mobile/app/(messages)/[conversationId].tsx` | 1 ✅, 2, 3, 4, 5, 6 |
+| `apps/mobile/app/(tabs)/entries/index.tsx` | 6 |
+| `apps/mobile/app/(tabs)/index.tsx` | 6 |
+| `apps/mobile/app/(tabs)/pdp.tsx` | 6 |
 | `apps/mobile/src/components/ChatComposer.tsx` | 2, 3 |
 | `apps/mobile/src/components/chat/MessageRow.tsx` | 4 |
 | `apps/mobile/src/components/chat/MessageList.tsx` | 4, 5 |
@@ -228,6 +344,8 @@ Render interactive question cards inside message bubbles.
 | `apps/mobile/src/components/chat/bubble/questions/MultiSelectCard.tsx` | 4 |
 | `apps/mobile/src/components/chat/bubble/questions/FreeTextPrompts.tsx` | 4 |
 | `apps/mobile/src/components/chat/items/AnalysisStatusBanner.tsx` | 5 |
+| `apps/mobile/app/(entry)/[artefactId].tsx` | 6 |
+| `packages/api-client/src/clients/pdp-actions.client.ts` | 6 |
 
 ## Redux State Shape (Final)
 

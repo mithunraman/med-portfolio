@@ -2,6 +2,12 @@
 
 - When app is loading, and profile is being fetched, if server is down, app will show login screen. We need to instead show a screen with error message and retry button.
 
+# LLM
+
+- Add support for Clinical Experience Groups like: Older adults, Urgent and unscheduled care, etc
+
+- In capabilities reasoning, should the text be "I" or "The trainee" ?
+
 # Chat screen
 
 - When any message is sent, there seems to be a delay before the message is displayed. What may be causing this ?

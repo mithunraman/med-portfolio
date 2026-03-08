@@ -10,15 +10,18 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ACCENT_COLOR = '#00a884';
+const AI_REASONING_COLOR = '#8B5CF6';
 
 export default function EntryDetailScreen() {
   const { artefactId } = useLocalSearchParams<{ artefactId: string }>();
@@ -36,6 +39,10 @@ export default function EntryDetailScreen() {
   }, [artefactId, dispatch]);
 
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0]));
+  const [selectedCapability, setSelectedCapability] = useState<{
+    name: string;
+    evidence: string;
+  } | null>(null);
 
   const toggleSection = useCallback((index: number) => {
     setExpandedSections((prev) => {
@@ -128,37 +135,80 @@ export default function EntryDetailScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Capabilities</Text>
           {artefact.capabilities.map((cap, index) => (
-            <View key={index} style={[styles.card, { backgroundColor: colors.surface }]}>
+            <Pressable
+              key={index}
+              onPress={() => setSelectedCapability(cap)}
+              style={[styles.capabilityRow, { backgroundColor: colors.surface }]}
+            >
               <Text style={[styles.capabilityCode, { color: colors.primary }]}>{cap.name}</Text>
-              <Text style={[styles.cardBody, { color: colors.textSecondary }]}>
-                {cap.evidence}
-              </Text>
-            </View>
+              <Ionicons
+                name="information-circle-outline"
+                size={20}
+                color={AI_REASONING_COLOR}
+              />
+            </Pressable>
           ))}
         </View>
       )}
+
+      {/* Capability Evidence Modal */}
+      <Modal
+        visible={selectedCapability !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedCapability(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.primary }]}>
+                {selectedCapability?.name}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setSelectedCapability(null)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalBody}>
+              <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Evidence</Text>
+              <Text style={[styles.modalText, { color: colors.text }]}>
+                {selectedCapability?.evidence}
+              </Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* PDP Goals (read-only) */}
       {artefact.pdpGoals && artefact.pdpGoals.length > 0 && (
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>PDP Goals</Text>
           {artefact.pdpGoals.map((goal) => (
-            <View key={goal.id} style={[styles.card, { backgroundColor: colors.surface }]}>
+            <View key={goal.id} style={[styles.pdpGoalCard, { backgroundColor: colors.surface }]}>
               <Text style={[styles.cardTitle, { color: colors.text }]}>{goal.goal}</Text>
-              {goal.actions.map((action) => (
-                <View key={action.id} style={styles.pdpRow}>
-                  <Ionicons
-                    name={
-                      action.status === PdpGoalStatus.COMPLETED ? 'checkbox' : 'square-outline'
-                    }
-                    size={20}
-                    color={
-                      action.status === PdpGoalStatus.COMPLETED
-                        ? colors.primary
-                        : colors.textSecondary
-                    }
-                  />
-                  <View style={styles.pdpContent}>
+              <View style={styles.pdpActions}>
+                {goal.actions.map((action, actionIndex) => (
+                  <View
+                    key={action.id}
+                    style={[
+                      styles.pdpRow,
+                      actionIndex === goal.actions.length - 1 && styles.pdpRowLast,
+                    ]}
+                  >
+                    <Ionicons
+                      name={
+                        action.status === PdpGoalStatus.COMPLETED ? 'checkbox' : 'square-outline'
+                      }
+                      size={20}
+                      color={
+                        action.status === PdpGoalStatus.COMPLETED
+                          ? colors.primary
+                          : colors.textSecondary
+                      }
+                      style={styles.pdpCheckbox}
+                    />
                     <Text
                       style={[
                         styles.pdpText,
@@ -168,14 +218,9 @@ export default function EntryDetailScreen() {
                     >
                       {action.action}
                     </Text>
-                    {action.intendedEvidence ? (
-                      <Text style={[styles.pdpTimeframe, { color: colors.textSecondary }]}>
-                        Evidence: {action.intendedEvidence}
-                      </Text>
-                    ) : null}
                   </View>
-                </View>
-              ))}
+                ))}
+              </View>
             </View>
           ))}
         </View>
@@ -267,24 +312,89 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  capabilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
   capabilityCode: {
     fontSize: 14,
     fontWeight: '700',
+    flex: 1,
+    marginRight: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    flex: 1,
+    marginRight: 8,
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalBody: {
+    flexGrow: 0,
+  },
+  modalLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  pdpGoalCard: {
+    borderRadius: 12,
+    padding: 14,
+    overflow: 'hidden',
+  },
+  pdpActions: {
+    marginTop: 8,
+    marginLeft: 4,
   },
   pdpRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    borderRadius: 12,
-    padding: 14,
-    gap: 12,
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(150, 150, 150, 0.2)',
   },
-  pdpContent: {
-    flex: 1,
-    gap: 2,
+  pdpRowLast: {
+    borderBottomWidth: 0,
+  },
+  pdpCheckbox: {
+    marginTop: 1,
   },
   pdpText: {
     fontSize: 14,
     lineHeight: 20,
+    flex: 1,
+    flexShrink: 1,
   },
   pdpCompleted: {
     textDecorationLine: 'line-through',

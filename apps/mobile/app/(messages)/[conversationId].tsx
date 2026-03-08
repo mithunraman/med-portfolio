@@ -1,7 +1,6 @@
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '@/api/client';
-import { ActionBanner } from '@/components/ActionBanner';
 import { ChatComposer, MessageList } from '@/components';
+import { ActionBanner } from '@/components/ActionBanner';
 import { CompletionCard } from '@/components/CompletionCard';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
@@ -17,6 +16,7 @@ import {
 import { useTheme } from '@/theme';
 import { logger } from '@/utils/logger';
 import { MediaType, Message, MessageProcessingStatus } from '@acme/shared';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -67,8 +67,9 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
 
-  // Track the real conversation ID (from backend) for new conversations
+  // Track IDs from backend for new conversations
   const realConversationIdRef = useRef<string | null>(null);
+  const artefactIdRef = useRef<string | null>(null);
   const isPendingConversation = isNew === 'true' && !realConversationIdRef.current;
   // Use real conversation ID if available, otherwise use URL param
   const effectiveConversationId = realConversationIdRef.current ?? conversationId ?? '';
@@ -171,6 +172,7 @@ export default function ChatScreen() {
           const artefact = await dispatch(createArtefact({ artefactId: conversationId })).unwrap();
           targetConversationId = artefact.conversation.id;
           realConversationIdRef.current = targetConversationId;
+          artefactIdRef.current = artefact.id;
         }
 
         dispatch(sendMessage({ conversationId: targetConversationId ?? conversationId, mediaId }));
@@ -191,6 +193,7 @@ export default function ChatScreen() {
           const artefact = await dispatch(createArtefact({ artefactId: conversationId })).unwrap();
           const realId = artefact.conversation.id;
           realConversationIdRef.current = realId;
+          artefactIdRef.current = artefact.id;
           await dispatch(sendMessage({ conversationId: realId, content: text }));
         } catch (error) {
           chatLogger.error('Failed to create conversation', { error });
@@ -286,10 +289,9 @@ export default function ChatScreen() {
             buttonIcon={<Feather name="file-text" size={18} color="#ffffff" />}
             buttonLabel="View Your Entry"
             onPress={() => {
-              if (artefact) {
-                router.push(`/(entry)/${artefact.id}`);
-              } else {
-                router.back();
+              const id = artefact?.id ?? artefactIdRef.current;
+              if (id) {
+                router.push(`/(entry)/${id}`);
               }
             }}
           />
@@ -303,13 +305,15 @@ export default function ChatScreen() {
               />
             )}
 
-            {canResumeAnalysis && !optimisticAnalysing && context?.activeQuestion?.questionType === 'free_text' && (
-              <ActionBanner
-                variant="continue"
-                onPress={() => handleResumeAnalysis()}
-                isLoading={analysisLoading}
-              />
-            )}
+            {canResumeAnalysis &&
+              !optimisticAnalysing &&
+              context?.activeQuestion?.questionType === 'free_text' && (
+                <ActionBanner
+                  variant="continue"
+                  onPress={() => handleResumeAnalysis()}
+                  isLoading={analysisLoading}
+                />
+              )}
 
             <ChatComposer
               onSend={handleSend}

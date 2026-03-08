@@ -1,7 +1,7 @@
 import type { Artefact } from '@acme/shared';
 import { createEntityAdapter, createSlice } from '@reduxjs/toolkit';
 import type { RootState } from '../../index';
-import { createArtefact, fetchArtefacts } from './thunks';
+import { createArtefact, fetchArtefact, fetchArtefacts, updateArtefactStatus } from './thunks';
 
 const artefactsAdapter = createEntityAdapter<Artefact>({
   sortComparer: (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
@@ -10,6 +10,7 @@ const artefactsAdapter = createEntityAdapter<Artefact>({
 export interface ArtefactsState {
   creatingArtefact: boolean;
   loading: boolean;
+  updatingStatus: boolean;
   error: string | null;
   nextCursor: string | null;
 }
@@ -19,6 +20,7 @@ const artefactsSlice = createSlice({
   initialState: artefactsAdapter.getInitialState<ArtefactsState>({
     creatingArtefact: false,
     loading: false,
+    updatingStatus: false,
     error: null,
     nextCursor: null,
   }),
@@ -59,6 +61,23 @@ const artefactsSlice = createSlice({
       })
       .addCase(fetchArtefacts.rejected, (state, action) => {
         state.loading = false;
+        state.error = action.payload as string;
+      })
+      // fetchArtefact (single)
+      .addCase(fetchArtefact.fulfilled, (state, action) => {
+        artefactsAdapter.upsertOne(state, action.payload);
+      })
+      // updateArtefactStatus
+      .addCase(updateArtefactStatus.pending, (state) => {
+        state.updatingStatus = true;
+        state.error = null;
+      })
+      .addCase(updateArtefactStatus.fulfilled, (state, action) => {
+        state.updatingStatus = false;
+        artefactsAdapter.upsertOne(state, action.payload);
+      })
+      .addCase(updateArtefactStatus.rejected, (state, action) => {
+        state.updatingStatus = false;
         state.error = action.payload as string;
       });
   },

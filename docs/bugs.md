@@ -10,6 +10,12 @@
 
 - Do not include reasoning in the select questions. Include a small "see why" button / icon / link, which when clicked, shows the reasoning in a popover.
 
+- Implement a claude like "Thinking..." animation when the AI bot is thinking.
+
+- When AI sends suggestions like artefact type, capabilities, etc, there should be an option where users can select something completely different.
+
+- When we click on an artefact the first time, and the loader is showing, the text input is enabled. We need to hide this when the conversation is being loaded for the first time.
+
 - [Fixed] In multi select, after user confirms, i don't see anything happening for some time, and then i suddenly see new messages, spinner, etc.
 
 - [Fixed] When user submits an answer using single select / multi select, the analysis button should be shown as busy, as the chat is currently being analysed.

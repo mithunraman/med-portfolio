@@ -1,6 +1,6 @@
 import type { Artefact, ArtefactListResponse } from '@acme/shared';
-import { Specialty } from '@acme/shared';
-import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { ArtefactStatus, Specialty } from '@acme/shared';
+import { Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { format } from 'date-fns';
 import { Types } from 'mongoose';
 import { isErr } from '../common/utils/result.util';
@@ -92,6 +92,77 @@ export class ArtefactsService {
       },
       { context: 'createArtefact' }
     );
+  }
+
+  async getArtefact(userId: string, xid: string): Promise<Artefact> {
+    const artefactResult = await this.artefactsRepository.findByXid(
+      xid,
+      new Types.ObjectId(userId),
+    );
+
+    if (isErr(artefactResult)) {
+      throw new InternalServerErrorException(artefactResult.error.message);
+    }
+
+    if (!artefactResult.value) {
+      throw new NotFoundException('Artefact not found');
+    }
+
+    const artefact = artefactResult.value;
+
+    const [conversationResult, pdpActionsResult] = await Promise.all([
+      this.conversationsRepository.findActiveConversationByArtefact(artefact._id),
+      this.pdpActionsRepository.findByArtefactId(artefact._id),
+    ]);
+
+    if (isErr(conversationResult)) {
+      throw new InternalServerErrorException(conversationResult.error.message);
+    }
+    if (!conversationResult.value) {
+      throw new NotFoundException('Conversation not found for artefact');
+    }
+    if (isErr(pdpActionsResult)) {
+      throw new InternalServerErrorException(pdpActionsResult.error.message);
+    }
+
+    return toArtefactDto(artefact, conversationResult.value, pdpActionsResult.value);
+  }
+
+  async updateArtefactStatus(userId: string, xid: string, status: ArtefactStatus): Promise<Artefact> {
+    const findResult = await this.artefactsRepository.findByXid(
+      xid,
+      new Types.ObjectId(userId),
+    );
+
+    if (isErr(findResult)) {
+      throw new InternalServerErrorException(findResult.error.message);
+    }
+    if (!findResult.value) {
+      throw new NotFoundException('Artefact not found');
+    }
+
+    const updateResult = await this.artefactsRepository.updateArtefactById(
+      findResult.value._id,
+      { status },
+    );
+
+    if (isErr(updateResult)) {
+      throw new InternalServerErrorException(updateResult.error.message);
+    }
+
+    const [conversationResult, pdpActionsResult] = await Promise.all([
+      this.conversationsRepository.findActiveConversationByArtefact(updateResult.value._id),
+      this.pdpActionsRepository.findByArtefactId(updateResult.value._id),
+    ]);
+
+    if (isErr(conversationResult) || !conversationResult.value) {
+      throw new InternalServerErrorException('Conversation not found');
+    }
+    if (isErr(pdpActionsResult)) {
+      throw new InternalServerErrorException(pdpActionsResult.error.message);
+    }
+
+    return toArtefactDto(updateResult.value, conversationResult.value, pdpActionsResult.value);
   }
 
   async listArtefacts(userId: string, query: ListArtefactsDto): Promise<ArtefactListResponse> {

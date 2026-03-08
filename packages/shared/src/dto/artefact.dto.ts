@@ -18,6 +18,7 @@ export type PdpAction = z.infer<typeof PdpActionSchema>;
 // Capability schema
 export const CapabilitySchema = z.object({
   code: z.string(),
+  name: z.string(),
   evidence: z.string(),
 });
 
@@ -49,6 +50,7 @@ export const ArtefactSchema = z.object({
   specialty: z.nativeEnum(Specialty),
   status: z.nativeEnum(ArtefactStatus),
   artefactType: z.string().nullable(),
+  artefactTypeLabel: z.string().nullable(),
   title: z.string().nullable(),
   reflection: z.array(ReflectionSectionSchema).nullable(),
   pdpActions: z.array(PdpActionSchema).nullable(),
@@ -70,6 +72,12 @@ export const CreateArtefactRequestSchema = z.object({
 });
 
 export type CreateArtefactRequest = z.infer<typeof CreateArtefactRequestSchema>;
+
+export const UpdateArtefactStatusRequestSchema = z.object({
+  status: z.nativeEnum(ArtefactStatus),
+});
+
+export type UpdateArtefactStatusRequest = z.infer<typeof UpdateArtefactStatusRequestSchema>;
 
 // Response schemas
 export const ArtefactListResponseSchema = z.object({

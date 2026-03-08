@@ -1,8 +1,8 @@
 import type { Artefact, ArtefactListResponse } from '@acme/shared';
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ArtefactsService } from './artefacts.service';
-import { CreateArtefactDto, ListArtefactsDto } from './dto';
+import { CreateArtefactDto, ListArtefactsDto, UpdateArtefactStatusDto } from './dto';
 
 @Controller('artefacts')
 export class ArtefactsController {
@@ -22,5 +22,22 @@ export class ArtefactsController {
     @Query() query: ListArtefactsDto
   ): Promise<ArtefactListResponse> {
     return this.artefactsService.listArtefacts(user.userId, query);
+  }
+
+  @Get(':id')
+  async getArtefact(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string
+  ): Promise<Artefact> {
+    return this.artefactsService.getArtefact(user.userId, id);
+  }
+
+  @Put(':id/status')
+  async updateArtefactStatus(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string,
+    @Body() dto: UpdateArtefactStatusDto
+  ): Promise<Artefact> {
+    return this.artefactsService.updateArtefactStatus(user.userId, id, dto.status);
   }
 }

@@ -286,8 +286,11 @@ export default function ChatScreen() {
             buttonIcon={<Feather name="file-text" size={18} color="#ffffff" />}
             buttonLabel="View Your Entry"
             onPress={() => {
-              // TODO: Navigate to entry detail screen (Phase 6)
-              router.back();
+              if (artefact) {
+                router.push(`/(entry)/${artefact.id}`);
+              } else {
+                router.back();
+              }
             }}
           />
         ) : (

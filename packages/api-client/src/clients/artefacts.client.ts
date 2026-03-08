@@ -3,6 +3,7 @@ import type {
   ArtefactListResponse,
   ArtefactStatus,
   CreateArtefactRequest,
+  UpdateArtefactStatusRequest,
 } from '@acme/shared';
 import { BaseApiClient } from '../core/api-client';
 
@@ -17,6 +18,14 @@ export class ArtefactsClient {
 
   async createArtefact(data: CreateArtefactRequest): Promise<Artefact> {
     return this.client.post<Artefact>('/artefacts', data);
+  }
+
+  async getArtefact(id: string): Promise<Artefact> {
+    return this.client.get<Artefact>(`/artefacts/${id}`);
+  }
+
+  async updateArtefactStatus(id: string, data: UpdateArtefactStatusRequest): Promise<Artefact> {
+    return this.client.put<Artefact>(`/artefacts/${id}/status`, data);
   }
 
   async listArtefacts(params?: ListArtefactsParams): Promise<ArtefactListResponse> {

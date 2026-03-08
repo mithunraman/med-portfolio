@@ -106,6 +106,23 @@ export class ArtefactsRepository implements IArtefactsRepository {
     }
   }
 
+  async findByXid(
+    xid: string,
+    userId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<Artefact | null, DBError>> {
+    try {
+      const artefact = await this.artefactModel
+        .findOne({ xid, userId })
+        .lean()
+        .session(session || null);
+      return ok(artefact);
+    } catch (error) {
+      this.logger.error('Failed to find artefact by xid', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find artefact' });
+    }
+  }
+
   async countByUser(
     userId: Types.ObjectId,
     filter?: CountByUserFilter

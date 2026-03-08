@@ -60,6 +60,12 @@ export interface IArtefactsRepository {
     session?: ClientSession
   ): Promise<Result<Artefact, DBError>>;
 
+  findByXid(
+    xid: string,
+    userId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<Artefact | null, DBError>>;
+
   countByUser(
     userId: Types.ObjectId,
     filter?: CountByUserFilter

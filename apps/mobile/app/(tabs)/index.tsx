@@ -3,7 +3,7 @@ import { useAppDispatch, useAppSelector } from '@/hooks';
 import { fetchDashboard } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
-import type { Artefact, DashboardStats, PdpAction } from '@acme/shared';
+import { ArtefactStatus, type Artefact, type DashboardStats, type PdpAction } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { randomUUID } from 'expo-crypto';
 import { useRouter } from 'expo-router';
@@ -232,7 +232,11 @@ export default function HomeScreen() {
 
   const handleEntryPress = useCallback(
     (item: Artefact) => {
-      router.push(`/(messages)/${item.conversation.id}`);
+      if (item.status >= ArtefactStatus.REVIEW) {
+        router.push(`/(entry)/${item.id}`);
+      } else {
+        router.push(`/(messages)/${item.conversation.id}`);
+      }
     },
     [router]
   );

@@ -3,7 +3,7 @@ import { useAppDispatch, useAppSelector } from '@/hooks';
 import { fetchArtefacts, selectAllArtefacts } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
-import type { Artefact, ArtefactStatus } from '@acme/shared';
+import { ArtefactStatus, type Artefact } from '@acme/shared';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -58,7 +58,7 @@ function EntryListItem({ item, onPress }: { item: Artefact; onPress: () => void 
           {item.title || 'Untitled entry'}
         </Text>
         <Text style={[styles.listItemMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-          {item.artefactType ? `${item.artefactType} · ` : ''}Updated {formatTimeAgo(item.updatedAt)}
+          {item.artefactTypeLabel ? `${item.artefactTypeLabel} · ` : ''}Updated {formatTimeAgo(item.updatedAt)}
         </Text>
       </View>
       <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />
@@ -96,7 +96,11 @@ export default function EntriesScreen() {
 
   const handleEntryPress = useCallback(
     (item: Artefact) => {
-      router.push(`/(messages)/${item.conversation.id}`);
+      if (item.status >= ArtefactStatus.REVIEW) {
+        router.push(`/(entry)/${item.id}`);
+      } else {
+        router.push(`/(messages)/${item.conversation.id}`);
+      }
     },
     [router]
   );

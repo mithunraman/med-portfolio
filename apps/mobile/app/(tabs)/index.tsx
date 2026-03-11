@@ -3,11 +3,11 @@ import { useAppDispatch, useAppSelector } from '@/hooks';
 import { fetchDashboard } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
-import { ArtefactStatus, type Artefact, type DashboardStats, type PdpGoal } from '@acme/shared';
+import { ArtefactStatus, type Artefact, type PdpGoal } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { randomUUID } from 'expo-crypto';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -38,28 +38,48 @@ function formatDate(): string {
 
 // ─── Module A: Start New Entry ────────────────────────────────────────────────
 
-function StartNewEntryCard({ onPress }: { onPress: () => void }) {
+const PROMPTS = [
+  'What happened today worth keeping?',
+  'Anything surprise you this week?',
+  'Who did you help recently?',
+  'What went better than expected?',
+  'What would you do differently?',
+];
+
+function StartNewEntryCard({
+  onPress,
+  lastEntryDate,
+}: {
+  onPress: () => void;
+  lastEntryDate?: string;
+}) {
   const { colors } = useTheme();
+  const prompt = useMemo(() => PROMPTS[Math.floor(Math.random() * PROMPTS.length)], []);
+  const recency = lastEntryDate ? `Last entry ${formatTimeAgo(lastEntryDate)}` : null;
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface }]}>
-      <Text style={[styles.cardTitle, { color: colors.text }]}>Capture a moment</Text>
-
-      <TouchableOpacity
-        style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-        onPress={onPress}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityLabel="Start a new entry"
-      >
-        <Ionicons name="add" size={20} color="#fff" />
-        <Text style={styles.primaryButtonText}>Start now</Text>
-      </TouchableOpacity>
-
-      <Text style={[styles.helperText, { color: colors.textSecondary }]}>
-        30–90 seconds is enough. You can refine it later.
-      </Text>
-    </View>
+    <TouchableOpacity
+      style={[styles.captureCard, { backgroundColor: colors.primary + '12' }]}
+      onPress={onPress}
+      activeOpacity={0.75}
+      accessibilityRole="button"
+      accessibilityLabel="Start a new entry"
+    >
+      <View style={styles.captureTextContent}>
+        <Text style={[styles.capturePrompt, { color: colors.text }]} numberOfLines={2}>
+          {prompt}
+        </Text>
+        {recency ? (
+          <Text style={[styles.captureHelper, { color: colors.textSecondary }]}>{recency}</Text>
+        ) : null}
+        <Text style={[styles.captureHelper, { color: colors.textSecondary }]}>
+          Takes under a minute — just speak naturally.
+        </Text>
+      </View>
+      <View style={[styles.micCircle, { backgroundColor: colors.primary }]}>
+        <Ionicons name="mic" size={32} color="#fff" />
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -159,10 +179,7 @@ function PdpDueSoonModule({ items, total }: { items: PdpGoal[]; total: number })
         actionLabel={total > items.length ? `See all (${total})` : undefined}
       />
       {items.map((goal) => (
-        <View
-          key={goal.id}
-          style={[styles.pdpActionCard, { backgroundColor: colors.surface }]}
-        >
+        <View key={goal.id} style={[styles.pdpActionCard, { backgroundColor: colors.surface }]}>
           <Ionicons name="flag-outline" size={18} color={colors.primary} />
           <View style={styles.pdpActionContent}>
             <Text style={[styles.pdpActionText, { color: colors.text }]} numberOfLines={2}>
@@ -174,38 +191,6 @@ function PdpDueSoonModule({ items, total }: { items: PdpGoal[]; total: number })
           </View>
         </View>
       ))}
-    </View>
-  );
-}
-
-// ─── Module D: Progress Snapshot ──────────────────────────────────────────────
-
-function ProgressSnapshotModule({ stats }: { stats: DashboardStats | null }) {
-  const { colors } = useTheme();
-
-  return (
-    <View style={styles.moduleContainer}>
-      <SectionHeader title="Progress" />
-      <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.statNumber, { color: colors.text }]}>
-            {stats?.entriesThisWeek ?? '--'}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>This week</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.statNumber, { color: colors.text }]}>
-            {stats?.toReview ?? '--'}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>To review</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.statNumber, { color: colors.text }]}>
-            {stats?.capabilitiesCount ?? '--'}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Capabilities</Text>
-        </View>
-      </View>
     </View>
   );
 }
@@ -246,7 +231,9 @@ export default function HomeScreen() {
   }, [router]);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+    <View
+      style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}
+    >
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
@@ -262,7 +249,10 @@ export default function HomeScreen() {
         </View>
 
         {/* Module A: Start New Entry */}
-        <StartNewEntryCard onPress={handleStartNew} />
+        <StartNewEntryCard
+          onPress={handleStartNew}
+          lastEntryDate={dashboardData?.recentEntries.items[0]?.updatedAt}
+        />
 
         {/* Module B: Recent Entries */}
         <RecentEntriesModule
@@ -277,9 +267,6 @@ export default function HomeScreen() {
           items={dashboardData?.pdpGoalsDue.items ?? []}
           total={dashboardData?.pdpGoalsDue.total ?? 0}
         />
-
-        {/* Module D: Progress Snapshot */}
-        <ProgressSnapshotModule stats={dashboardData?.stats ?? null} />
       </ScrollView>
     </View>
   );
@@ -313,34 +300,34 @@ const styles = StyleSheet.create({
   },
 
   // Module A: Start New Entry
-  card: {
+  captureCard: {
     marginHorizontal: 20,
-    padding: 20,
-    borderRadius: 16,
-    gap: 12,
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  primaryButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    gap: 8,
+    gap: 12,
   },
-  primaryButtonText: {
-    color: '#fff',
+  micCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  captureTextContent: {
+    flex: 1,
+    gap: 3,
+  },
+  capturePrompt: {
     fontSize: 16,
     fontWeight: '600',
+    lineHeight: 20,
   },
-  helperText: {
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 18,
+  captureHelper: {
+    fontSize: 12,
+    lineHeight: 16,
   },
 
   // Module B: Recent Entries
@@ -414,25 +401,4 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Module D: Stats
-  statsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 10,
-  },
-  statCard: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    gap: 4,
-  },
-  statNumber: {
-    fontSize: 22,
-    fontWeight: '700',
-  },
-  statLabel: {
-    fontSize: 12,
-    textAlign: 'center',
-  },
 });

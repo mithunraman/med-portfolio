@@ -8,7 +8,7 @@ import type { PdpGoalSelection } from '@acme/shared';
 import { ArtefactStatus, PdpGoalStatus } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useNavigation } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -56,6 +56,7 @@ export default function EntryDetailScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const router = useRouter();
   const { showActionSheetWithOptions } = useActionSheet();
 
   const artefact = useAppSelector((state) => selectArtefactById(state, artefactId ?? ''));
@@ -491,6 +492,16 @@ export default function EntryDetailScreen() {
           />
         </View>
       )}
+
+      {/* View Conversation */}
+      <View style={styles.section}>
+        <Button
+          label="View conversation"
+          onPress={() => router.push(`/(entry)/conversation/${artefact.conversation.id}`)}
+          variant="ghost"
+          icon={(color) => <Ionicons name="chatbubble-outline" size={18} color={color} />}
+        />
+      </View>
 
       {/* Archive */}
       {canArchive && (

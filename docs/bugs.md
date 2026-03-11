@@ -2,6 +2,8 @@
 
 - When app is loading, and profile is being fetched, if server is down, app will show login screen. We need to instead show a screen with error message and retry button.
 
+- Work on empty states for all screens.
+
 # LLM
 
 - Add support for Clinical Experience Groups like: Older adults, Urgent and unscheduled care, etc

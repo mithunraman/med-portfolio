@@ -28,6 +28,7 @@ export class DashboardService {
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
     const activeStatuses = [PdpGoalStatus.PENDING, PdpGoalStatus.ACTIVE];
 
@@ -44,6 +45,7 @@ export class DashboardService {
       this.pdpGoalsRepository.findByUserId(userObjectId, activeStatuses, {
         limit: 5,
         sortByNextDueDate: true,
+        dueBefore: thirtyDaysFromNow,
       }),
       this.pdpGoalsRepository.countByUserId(userObjectId, activeStatuses),
       this.artefactsRepository.countByUser(userObjectId, { since: sevenDaysAgo }),

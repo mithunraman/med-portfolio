@@ -21,6 +21,7 @@ export interface CreatePdpGoalData {
 export interface FindByUserOptions {
   limit?: number;
   sortByNextDueDate?: boolean;
+  dueBefore?: Date;
 }
 
 export interface UpdatePdpGoalData {

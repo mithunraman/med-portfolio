@@ -99,8 +99,13 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     options?: FindByUserOptions
   ): Promise<Result<PdpGoal[], DBError>> {
     try {
+      const filter: Record<string, unknown> = { userId, status: { $in: statuses } };
+      if (options?.dueBefore) {
+        filter.reviewDate = { $ne: null, $lte: options.dueBefore };
+      }
+
       let query = this.pdpGoalModel
-        .find({ userId, status: { $in: statuses } })
+        .find(filter)
         .sort(
           options?.sortByNextDueDate ? { nextActionDueDate: 1, createdAt: 1 } : { createdAt: -1 }
         )

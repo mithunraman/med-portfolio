@@ -1,11 +1,18 @@
 import { useTheme } from '@/theme';
 import type { PdpGoal } from '@acme/shared';
-import DateTimePicker, {
-  type DateTimePickerEvent,
-} from '@react-native-community/datetimepicker';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useCallback, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
+import { Calendar } from 'react-native-calendars';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ── Types ──
 
@@ -34,6 +41,25 @@ function formatDate(date: Date): string {
   return `${day} ${month} ${year}`;
 }
 
+function toCalendarString(date: Date): string {
+  const y = date.getFullYear();
+  const m = (date.getMonth() + 1).toString().padStart(2, '0');
+  const d = date.getDate().toString().padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function addDays(date: Date, days: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function addMonths(date: Date, months: number): Date {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
 function initSelections(goals: PdpGoal[]): Map<string, GoalSelectionState> {
   const map = new Map<string, GoalSelectionState>();
   for (const goal of goals) {
@@ -46,7 +72,163 @@ function initSelections(goals: PdpGoal[]): Map<string, GoalSelectionState> {
   return map;
 }
 
-// ── Component ──
+// ── Quick chip presets ──
+
+const PRESETS = [
+  { label: '1 week',    getDays: () => addDays(new Date(), 7) },
+  { label: '2 weeks',   getDays: () => addDays(new Date(), 14) },
+  { label: '1 month',   getDays: () => addMonths(new Date(), 1) },
+  { label: '2 months',  getDays: () => addMonths(new Date(), 2) },
+  { label: '3 months',  getDays: () => addMonths(new Date(), 3) },
+];
+
+// ── Date picker bottom sheet ──
+
+interface DatePickerSheetProps {
+  visible: boolean;
+  currentDate: Date | null;
+  onSelect: (date: Date) => void;
+  onClear: () => void;
+  onDismiss: () => void;
+}
+
+function DatePickerSheet({ visible, currentDate, onSelect, onClear, onDismiss }: DatePickerSheetProps) {
+  const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [showCalendar, setShowCalendar] = useState(false);
+
+  const today = new Date();
+  const minDateStr = toCalendarString(today);
+  const selectedDateStr = currentDate ? toCalendarString(currentDate) : undefined;
+
+  const handlePreset = useCallback((getDate: () => Date) => {
+    onSelect(getDate());
+    onDismiss();
+  }, [onSelect, onDismiss]);
+
+  const handleCalendarDay = useCallback((day: { dateString: string }) => {
+    const [y, m, d] = day.dateString.split('-').map(Number);
+    onSelect(new Date(y, m - 1, d));
+    onDismiss();
+  }, [onSelect, onDismiss]);
+
+  const handleDismiss = useCallback(() => {
+    setShowCalendar(false);
+    onDismiss();
+  }, [onDismiss]);
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={handleDismiss}
+    >
+      <Pressable style={styles.sheetOverlay} onPress={handleDismiss}>
+        <Pressable
+          style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          {/* Handle */}
+          <View style={styles.sheetHandle} />
+
+          {/* Header */}
+          <View style={styles.sheetHeader}>
+            <Text style={[styles.sheetTitle, { color: colors.text }]}>Set review date</Text>
+            {currentDate && (
+              <Pressable onPress={() => { onClear(); onDismiss(); }}>
+                <Text style={[styles.clearText, { color: colors.textSecondary }]}>Clear</Text>
+              </Pressable>
+            )}
+          </View>
+
+          {!showCalendar ? (
+            <>
+              {/* Quick chips */}
+              <View style={styles.chipsGrid}>
+                {PRESETS.map((preset) => {
+                  const presetDate = preset.getDays();
+                  const isSelected = currentDate && toCalendarString(currentDate) === toCalendarString(presetDate);
+                  return (
+                    <Pressable
+                      key={preset.label}
+                      onPress={() => handlePreset(preset.getDays)}
+                      style={[
+                        styles.chip,
+                        {
+                          backgroundColor: isSelected ? colors.primary : colors.background,
+                          borderColor: isSelected ? colors.primary : colors.border,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.chipLabel, { color: isSelected ? '#ffffff' : colors.text }]}>
+                        {preset.label}
+                      </Text>
+                      <Text style={[styles.chipDate, { color: isSelected ? 'rgba(255,255,255,0.75)' : colors.textSecondary }]}>
+                        {formatDate(presetDate)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                <Pressable
+                  onPress={() => setShowCalendar(true)}
+                  style={[
+                    styles.chip,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.border,
+                      borderStyle: 'dashed',
+                    },
+                  ]}
+                >
+                  <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+                  <Text style={[styles.chipLabel, { color: colors.textSecondary }]}>Custom</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : (
+            <>
+              <Pressable
+                onPress={() => setShowCalendar(false)}
+                style={[styles.quickPickPill, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' }]}
+              >
+                <Ionicons name="flash" size={14} color={colors.primary} />
+                <Text style={[styles.quickPickPillText, { color: colors.primary }]}>Quick pick</Text>
+              </Pressable>
+              <Calendar
+                minDate={minDateStr}
+                current={selectedDateStr ?? minDateStr}
+                markedDates={
+                  selectedDateStr
+                    ? { [selectedDateStr]: { selected: true, selectedColor: colors.primary } }
+                    : {}
+                }
+                onDayPress={handleCalendarDay}
+                theme={{
+                  backgroundColor: colors.surface,
+                  calendarBackground: colors.surface,
+                  textSectionTitleColor: colors.textSecondary,
+                  selectedDayBackgroundColor: colors.primary,
+                  selectedDayTextColor: '#ffffff',
+                  todayTextColor: colors.primary,
+                  dayTextColor: colors.text,
+                  textDisabledColor: colors.textSecondary,
+                  arrowColor: colors.primary,
+                  monthTextColor: colors.text,
+                  textDayFontSize: 14,
+                  textMonthFontSize: 15,
+                  textDayHeaderFontSize: 12,
+                }}
+              />
+            </>
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ── Main component ──
 
 export function PdpGoalSelector({
   goals,
@@ -58,21 +240,9 @@ export function PdpGoalSelector({
   const { colors } = useTheme();
   const [datePickerGoalId, setDatePickerGoalId] = useState<string | null>(null);
 
-  const handleDateChange = useCallback(
-    (_event: DateTimePickerEvent, date?: Date) => {
-      if (Platform.OS === 'android') {
-        setDatePickerGoalId(null);
-      }
-      if (date && datePickerGoalId) {
-        onSetReviewDate(datePickerGoalId, date);
-      }
-    },
-    [datePickerGoalId, onSetReviewDate]
-  );
+  const dismissDatePicker = useCallback(() => setDatePickerGoalId(null), []);
 
-  const dismissDatePicker = useCallback(() => {
-    setDatePickerGoalId(null);
-  }, []);
+  const activeGoal = datePickerGoalId ? selections.get(datePickerGoalId) : null;
 
   return (
     <View style={styles.container}>
@@ -139,14 +309,10 @@ export function PdpGoalSelector({
                   <Text
                     style={[
                       styles.dateText,
-                      {
-                        color: sel.reviewDate ? colors.text : colors.textSecondary,
-                      },
+                      { color: sel.reviewDate ? colors.text : colors.textSecondary },
                     ]}
                   >
-                    {sel.reviewDate
-                      ? `Review by ${formatDate(sel.reviewDate)}`
-                      : 'Set review date'}
+                    {sel.reviewDate ? `Review by ${formatDate(sel.reviewDate)}` : 'Set review date'}
                   </Text>
                 </Pressable>
 
@@ -159,7 +325,6 @@ export function PdpGoalSelector({
                 <View style={styles.actionsContainer}>
                   {goal.actions.map((action, index) => {
                     const isChecked = sel.actions.get(action.id) ?? true;
-
                     return (
                       <Pressable
                         key={action.id}
@@ -206,50 +371,18 @@ export function PdpGoalSelector({
         );
       })}
 
-      {/* iOS: date picker in a bottom-sheet modal */}
-      {Platform.OS === 'ios' && (
-        <Modal
-          visible={datePickerGoalId !== null}
-          transparent
-          animationType="slide"
-          onRequestClose={dismissDatePicker}
-        >
-          <Pressable style={styles.modalOverlay} onPress={dismissDatePicker}>
-            <View
-              style={[styles.iosDatePickerContainer, { backgroundColor: colors.surface }]}
-              onStartShouldSetResponder={() => true}
-            >
-              <View style={styles.iosDatePickerHeader}>
-                <Text style={[styles.iosDatePickerLabel, { color: colors.text }]}>
-                  Select review date
-                </Text>
-                <Pressable onPress={dismissDatePicker}>
-                  <Text style={[styles.iosDatePickerDone, { color: colors.primary }]}>Done</Text>
-                </Pressable>
-              </View>
-              {datePickerGoalId && (
-                <DateTimePicker
-                  value={selections.get(datePickerGoalId)?.reviewDate ?? new Date()}
-                  mode="date"
-                  display="spinner"
-                  minimumDate={new Date()}
-                  onChange={handleDateChange}
-                />
-              )}
-            </View>
-          </Pressable>
-        </Modal>
-      )}
-
-      {/* Android: native date dialog */}
-      {datePickerGoalId && Platform.OS === 'android' && (
-        <DateTimePicker
-          value={selections.get(datePickerGoalId)?.reviewDate ?? new Date()}
-          mode="date"
-          minimumDate={new Date()}
-          onChange={handleDateChange}
-        />
-      )}
+      {/* Date picker bottom sheet — one shared instance */}
+      <DatePickerSheet
+        visible={datePickerGoalId !== null}
+        currentDate={activeGoal?.reviewDate ?? null}
+        onSelect={(date) => {
+          if (datePickerGoalId) onSetReviewDate(datePickerGoalId, date);
+        }}
+        onClear={() => {
+          if (datePickerGoalId) onSetReviewDate(datePickerGoalId, null);
+        }}
+        onDismiss={dismissDatePicker}
+      />
     </View>
   );
 }
@@ -342,29 +475,77 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontStyle: 'italic',
   },
-  modalOverlay: {
+  // ── Sheet ──
+  sheetOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
-  iosDatePickerContainer: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 16,
-    paddingBottom: 32,
+  sheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingHorizontal: 16,
   },
-  iosDatePickerHeader: {
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(150,150,150,0.4)',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  sheetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 16,
   },
-  iosDatePickerLabel: {
-    fontSize: 15,
+  sheetTitle: {
+    fontSize: 16,
     fontWeight: '600',
   },
-  iosDatePickerDone: {
-    fontSize: 15,
+  clearText: {
+    fontSize: 14,
+  },
+  // ── Chips ──
+  chipsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingBottom: 8,
+  },
+  chip: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    gap: 2,
+    minWidth: '45%',
+    flex: 1,
+  },
+  chipLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  chipDate: {
+    fontSize: 11,
+  },
+  // ── Calendar back nav ──
+  quickPickPill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  quickPickPillText: {
+    fontSize: 13,
     fontWeight: '600',
   },
 });

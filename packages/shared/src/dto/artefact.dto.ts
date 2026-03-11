@@ -88,9 +88,33 @@ export type CreateArtefactRequest = z.infer<typeof CreateArtefactRequestSchema>;
 
 export const UpdateArtefactStatusRequestSchema = z.object({
   status: z.nativeEnum(ArtefactStatus),
+  archivePdpGoals: z.boolean().optional(),
 });
 
 export type UpdateArtefactStatusRequest = z.infer<typeof UpdateArtefactStatusRequestSchema>;
+
+// Finalise request schemas
+export const PdpGoalActionSelectionSchema = z.object({
+  actionId: z.string(),
+  selected: z.boolean(),
+});
+
+export type PdpGoalActionSelection = z.infer<typeof PdpGoalActionSelectionSchema>;
+
+export const PdpGoalSelectionSchema = z.object({
+  goalId: z.string(),
+  selected: z.boolean(),
+  reviewDate: z.string().datetime().nullable().optional(),
+  actions: z.array(PdpGoalActionSelectionSchema).optional(),
+});
+
+export type PdpGoalSelection = z.infer<typeof PdpGoalSelectionSchema>;
+
+export const FinaliseArtefactRequestSchema = z.object({
+  pdpGoalSelections: z.array(PdpGoalSelectionSchema),
+});
+
+export type FinaliseArtefactRequest = z.infer<typeof FinaliseArtefactRequestSchema>;
 
 // Response schemas
 export const ArtefactListResponseSchema = z.object({

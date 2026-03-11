@@ -1,3 +1,4 @@
+import type { PdpGoalSelection } from '@acme/shared';
 import { ArtefactStatus } from '@acme/shared';
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { api } from '../../../api/client';
@@ -74,22 +75,51 @@ export const fetchArtefact = createAsyncThunk(
 );
 
 /**
- * Update an artefact's status (e.g. REVIEW → FINAL).
+ * Update an artefact's status (e.g. REVIEW → ARCHIVED).
  */
 export const updateArtefactStatus = createAsyncThunk(
   'artefacts/updateArtefactStatus',
-  async (params: { artefactId: string; status: ArtefactStatus }, { rejectWithValue }) => {
+  async (
+    params: { artefactId: string; status: ArtefactStatus; archivePdpGoals?: boolean },
+    { rejectWithValue }
+  ) => {
     artefactsLogger.info('Updating artefact status', params);
 
     try {
       const response = await api.artefacts.updateArtefactStatus(params.artefactId, {
         status: params.status,
+        archivePdpGoals: params.archivePdpGoals,
       });
       artefactsLogger.info('Updated artefact status', { id: response.id, status: response.status });
       return response;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update artefact status';
       artefactsLogger.error('Failed to update artefact status', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
+ * Finalise an artefact — marks it FINAL and activates/archives PDP goals.
+ */
+export const finaliseArtefact = createAsyncThunk(
+  'artefacts/finaliseArtefact',
+  async (
+    params: { artefactId: string; pdpGoalSelections: PdpGoalSelection[] },
+    { rejectWithValue }
+  ) => {
+    artefactsLogger.info('Finalising artefact', { artefactId: params.artefactId });
+
+    try {
+      const response = await api.artefacts.finaliseArtefact(params.artefactId, {
+        pdpGoalSelections: params.pdpGoalSelections,
+      });
+      artefactsLogger.info('Finalised artefact', { id: response.id, status: response.status });
+      return response;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to finalise artefact';
+      artefactsLogger.error('Failed to finalise artefact', { error: message });
       return rejectWithValue(message);
     }
   }

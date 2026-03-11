@@ -23,6 +23,16 @@ export interface FindByUserOptions {
   sortByNextDueDate?: boolean;
 }
 
+export interface UpdatePdpGoalData {
+  status?: PdpGoalStatus;
+  reviewDate?: Date | null;
+}
+
+export interface UpdatePdpGoalActionData {
+  actionXid: string;
+  status: PdpGoalStatus;
+}
+
 export interface IPdpGoalsRepository {
   create(
     goals: CreatePdpGoalData[],
@@ -49,4 +59,18 @@ export interface IPdpGoalsRepository {
     userId: Types.ObjectId,
     statuses: PdpGoalStatus[]
   ): Promise<Result<number, DBError>>;
+
+  updateGoal(
+    goalXid: string,
+    data: UpdatePdpGoalData,
+    actionUpdates?: UpdatePdpGoalActionData[],
+    session?: ClientSession
+  ): Promise<Result<void, DBError>>;
+
+  updateManyByArtefactId(
+    artefactId: Types.ObjectId,
+    filter: { statuses: PdpGoalStatus[] },
+    data: UpdatePdpGoalData,
+    session?: ClientSession
+  ): Promise<Result<void, DBError>>;
 }

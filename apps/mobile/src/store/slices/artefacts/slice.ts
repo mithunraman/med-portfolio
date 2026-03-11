@@ -1,7 +1,13 @@
 import type { Artefact } from '@acme/shared';
 import { createEntityAdapter, createSlice } from '@reduxjs/toolkit';
 import type { RootState } from '../../index';
-import { createArtefact, fetchArtefact, fetchArtefacts, updateArtefactStatus } from './thunks';
+import {
+  createArtefact,
+  fetchArtefact,
+  fetchArtefacts,
+  finaliseArtefact,
+  updateArtefactStatus,
+} from './thunks';
 
 const artefactsAdapter = createEntityAdapter<Artefact>({
   sortComparer: (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
@@ -77,6 +83,19 @@ const artefactsSlice = createSlice({
         artefactsAdapter.upsertOne(state, action.payload);
       })
       .addCase(updateArtefactStatus.rejected, (state, action) => {
+        state.updatingStatus = false;
+        state.error = action.payload as string;
+      })
+      // finaliseArtefact
+      .addCase(finaliseArtefact.pending, (state) => {
+        state.updatingStatus = true;
+        state.error = null;
+      })
+      .addCase(finaliseArtefact.fulfilled, (state, action) => {
+        state.updatingStatus = false;
+        artefactsAdapter.upsertOne(state, action.payload);
+      })
+      .addCase(finaliseArtefact.rejected, (state, action) => {
         state.updatingStatus = false;
         state.error = action.payload as string;
       });

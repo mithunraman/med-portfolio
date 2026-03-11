@@ -10,17 +10,19 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.acme.mobile2",
-      "buildNumber": "1"
+      "bundleIdentifier": "com.mkr.mobile",
+      "buildNumber": "1",
+      "appleTeamId": "D766Z89ML4"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
-      "package": "com.acme.mobile2",
+      "package": "com.mkr.mobile",
       "versionCode": 1,
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": ["android.permission.RECORD_AUDIO", "android.permission.MODIFY_AUDIO_SETTINGS"]
     },
     "plugins": [
       "expo-router",
@@ -55,7 +57,8 @@
         {
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone to record voice notes."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

@@ -2,7 +2,12 @@ import type { Artefact, ArtefactListResponse } from '@acme/shared';
 import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ArtefactsService } from './artefacts.service';
-import { CreateArtefactDto, ListArtefactsDto, UpdateArtefactStatusDto } from './dto';
+import {
+  CreateArtefactDto,
+  FinaliseArtefactDto,
+  ListArtefactsDto,
+  UpdateArtefactStatusDto,
+} from './dto';
 
 @Controller('artefacts')
 export class ArtefactsController {
@@ -38,6 +43,15 @@ export class ArtefactsController {
     @Param('id') id: string,
     @Body() dto: UpdateArtefactStatusDto
   ): Promise<Artefact> {
-    return this.artefactsService.updateArtefactStatus(user.userId, id, dto.status);
+    return this.artefactsService.updateArtefactStatus(user.userId, id, dto);
+  }
+
+  @Post(':id/finalise')
+  async finaliseArtefact(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string,
+    @Body() dto: FinaliseArtefactDto
+  ): Promise<Artefact> {
+    return this.artefactsService.finaliseArtefact(user.userId, id, dto);
   }
 }

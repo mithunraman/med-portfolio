@@ -1,4 +1,5 @@
 export enum ArtefactStatus {
+  ARCHIVED = -1,
   DRAFT = 100,
   PROCESSING = 200,
   REVIEW = 300,

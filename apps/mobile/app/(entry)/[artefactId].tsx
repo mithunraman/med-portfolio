@@ -1,12 +1,14 @@
-import { StatusPill } from '@/components';
+import type { GoalSelectionState, StatusVariant } from '@/components';
+import { Button, PdpGoalSelector, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
-import { fetchArtefact, selectArtefactById, updateArtefactStatus } from '@/store';
+import { fetchArtefact, finaliseArtefact, selectArtefactById, updateArtefactStatus } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
+import type { PdpGoalSelection } from '@acme/shared';
 import { ArtefactStatus, PdpGoalStatus } from '@acme/shared';
-import { Ionicons } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -20,8 +22,32 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const ACCENT_COLOR = '#00a884';
 const AI_REASONING_COLOR = '#8B5CF6';
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatGoalDate(isoDate: string): string {
+  const date = new Date(isoDate);
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = MONTHS[date.getMonth()];
+  const year = date.getFullYear();
+  return `${day} ${month} ${year}`;
+}
+
+function getPdpGoalStatusDisplay(status: PdpGoalStatus): { label: string; variant: StatusVariant } {
+  switch (status) {
+    case PdpGoalStatus.ACTIVE:
+      return { label: 'Active', variant: 'success' };
+    case PdpGoalStatus.COMPLETED:
+      return { label: 'Completed', variant: 'info' };
+    case PdpGoalStatus.ARCHIVED:
+      return { label: 'Archived', variant: 'default' };
+    case PdpGoalStatus.PENDING:
+      return { label: 'Pending', variant: 'processing' };
+    default:
+      return { label: 'Unknown', variant: 'default' };
+  }
+}
 
 export default function EntryDetailScreen() {
   const { artefactId } = useLocalSearchParams<{ artefactId: string }>();
@@ -43,6 +69,26 @@ export default function EntryDetailScreen() {
     name: string;
     evidence: string;
   } | null>(null);
+  const [goalSelections, setGoalSelections] = useState<Map<string, GoalSelectionState>>(new Map());
+
+  // Initialise goal selections when artefact loads in REVIEW status
+  useEffect(() => {
+    if (artefact?.status === ArtefactStatus.REVIEW && artefact.pdpGoals?.length) {
+      setGoalSelections((prev) => {
+        // Only initialise if not already set (avoid resetting user changes)
+        if (prev.size > 0) return prev;
+        const initial = new Map<string, GoalSelectionState>();
+        for (const goal of artefact.pdpGoals!) {
+          initial.set(goal.id, {
+            selected: true,
+            reviewDate: null,
+            actions: new Map(goal.actions.map((a) => [a.id, true])),
+          });
+        }
+        return initial;
+      });
+    }
+  }, [artefact?.status, artefact?.pdpGoals]);
 
   const toggleSection = useCallback((index: number) => {
     setExpandedSections((prev) => {
@@ -56,18 +102,145 @@ export default function EntryDetailScreen() {
     });
   }, []);
 
+  // ── PDP Goal Selection Handlers ──
+
+  const handleToggleGoal = useCallback((goalId: string) => {
+    setGoalSelections((prev) => {
+      const next = new Map(prev);
+      const current = next.get(goalId);
+      if (current) {
+        next.set(goalId, { ...current, selected: !current.selected });
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleAction = useCallback((goalId: string, actionId: string) => {
+    setGoalSelections((prev) => {
+      const next = new Map(prev);
+      const goal = next.get(goalId);
+      if (goal) {
+        const newActions = new Map(goal.actions);
+        newActions.set(actionId, !newActions.get(actionId));
+        next.set(goalId, { ...goal, actions: newActions });
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSetReviewDate = useCallback((goalId: string, date: Date | null) => {
+    setGoalSelections((prev) => {
+      const next = new Map(prev);
+      const goal = next.get(goalId);
+      if (goal) {
+        next.set(goalId, { ...goal, reviewDate: date });
+      }
+      return next;
+    });
+  }, []);
+
+  // ── Mark as Final ──
+
   const handleMarkAsFinal = useCallback(() => {
     if (!artefactId) return;
+
+    // Validate: each selected goal must have a review date
+    const selectedGoals = Array.from(goalSelections.entries()).filter(([, sel]) => sel.selected);
+    const missingDates = selectedGoals.some(([, sel]) => !sel.reviewDate);
+
+    if (missingDates) {
+      Alert.alert('Review Date Required', 'Please set a review date for each selected goal.');
+      return;
+    }
+
     Alert.alert('Mark as Final', 'Are you sure? This marks the entry as ready for export.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Mark as Final',
         onPress: () => {
-          dispatch(updateArtefactStatus({ artefactId, status: ArtefactStatus.FINAL }));
+          const pdpGoalSelections: PdpGoalSelection[] = Array.from(goalSelections.entries()).map(
+            ([goalId, sel]) => ({
+              goalId,
+              selected: sel.selected,
+              reviewDate: sel.selected && sel.reviewDate ? sel.reviewDate.toISOString() : null,
+              actions: sel.selected
+                ? Array.from(sel.actions.entries()).map(([actionId, selected]) => ({
+                    actionId,
+                    selected,
+                  }))
+                : undefined,
+            })
+          );
+
+          dispatch(finaliseArtefact({ artefactId, pdpGoalSelections }));
         },
       },
     ]);
-  }, [artefactId, dispatch]);
+  }, [artefactId, dispatch, goalSelections]);
+
+  // ── Archive ──
+
+  const hasActivePdpGoals = useMemo(() => {
+    if (!artefact?.pdpGoals) return false;
+    return artefact.pdpGoals.some(
+      (g) => g.status === PdpGoalStatus.ACTIVE || g.status === PdpGoalStatus.COMPLETED
+    );
+  }, [artefact?.pdpGoals]);
+
+  const handleArchive = useCallback(() => {
+    if (!artefactId) return;
+
+    if (hasActivePdpGoals) {
+      Alert.alert(
+        'Archive Entry',
+        'This entry has active PDP goals. What would you like to do with them?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Keep Goals',
+            onPress: () => {
+              dispatch(
+                updateArtefactStatus({
+                  artefactId,
+                  status: ArtefactStatus.ARCHIVED,
+                  archivePdpGoals: false,
+                })
+              );
+            },
+          },
+          {
+            text: 'Archive All',
+            style: 'destructive',
+            onPress: () => {
+              dispatch(
+                updateArtefactStatus({
+                  artefactId,
+                  status: ArtefactStatus.ARCHIVED,
+                  archivePdpGoals: true,
+                })
+              );
+            },
+          },
+        ]
+      );
+    } else {
+      Alert.alert('Archive Entry', 'Are you sure you want to archive this entry?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Archive',
+          style: 'destructive',
+          onPress: () => {
+            dispatch(
+              updateArtefactStatus({
+                artefactId,
+                status: ArtefactStatus.ARCHIVED,
+              })
+            );
+          },
+        },
+      ]);
+    }
+  }, [artefactId, dispatch, hasActivePdpGoals]);
 
   if (!artefact) {
     return (
@@ -79,6 +252,7 @@ export default function EntryDetailScreen() {
 
   const statusDisplay = getArtefactStatusDisplay(artefact.status);
   const canMarkAsFinal = artefact.status === ArtefactStatus.REVIEW;
+  const canArchive = artefact.status !== ArtefactStatus.ARCHIVED;
 
   return (
     <ScrollView
@@ -141,11 +315,7 @@ export default function EntryDetailScreen() {
               style={[styles.capabilityRow, { backgroundColor: colors.surface }]}
             >
               <Text style={[styles.capabilityCode, { color: colors.primary }]}>{cap.name}</Text>
-              <Ionicons
-                name="information-circle-outline"
-                size={20}
-                color={AI_REASONING_COLOR}
-              />
+              <Ionicons name="information-circle-outline" size={20} color={AI_REASONING_COLOR} />
             </Pressable>
           ))}
         </View>
@@ -181,74 +351,128 @@ export default function EntryDetailScreen() {
         </View>
       </Modal>
 
-      {/* PDP Goals (read-only) */}
+      {/* PDP Goals */}
       {artefact.pdpGoals && artefact.pdpGoals.length > 0 && (
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>PDP Goals</Text>
-          {artefact.pdpGoals.map((goal) => (
-            <View key={goal.id} style={[styles.pdpGoalCard, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>{goal.goal}</Text>
-              <View style={styles.pdpActions}>
-                {goal.actions.map((action, actionIndex) => (
+          {canMarkAsFinal ? (
+            <PdpGoalSelector
+              goals={artefact.pdpGoals}
+              selections={goalSelections}
+              onToggleGoal={handleToggleGoal}
+              onToggleAction={handleToggleAction}
+              onSetReviewDate={handleSetReviewDate}
+            />
+          ) : (
+            artefact.pdpGoals
+              .filter((goal) => goal.status !== PdpGoalStatus.ARCHIVED)
+              .map((goal) => {
+                const goalStatus = getPdpGoalStatusDisplay(goal.status);
+                const visibleActions = goal.actions.filter(
+                  (a) => a.status !== PdpGoalStatus.ARCHIVED
+                );
+
+                return (
                   <View
-                    key={action.id}
+                    key={goal.id}
                     style={[
-                      styles.pdpRow,
-                      actionIndex === goal.actions.length - 1 && styles.pdpRowLast,
+                      styles.pdpGoalCard,
+                      {
+                        backgroundColor: colors.surface,
+                        borderLeftWidth: 3,
+                        borderLeftColor: colors.primary,
+                      },
                     ]}
                   >
-                    <Ionicons
-                      name={
-                        action.status === PdpGoalStatus.COMPLETED ? 'checkbox' : 'square-outline'
-                      }
-                      size={20}
-                      color={
-                        action.status === PdpGoalStatus.COMPLETED
-                          ? colors.primary
-                          : colors.textSecondary
-                      }
-                      style={styles.pdpCheckbox}
-                    />
-                    <Text
-                      style={[
-                        styles.pdpText,
-                        { color: colors.text },
-                        action.status === PdpGoalStatus.COMPLETED && styles.pdpCompleted,
-                      ]}
-                    >
-                      {action.action}
-                    </Text>
+                    {/* Goal header with status pill */}
+                    <View style={styles.pdpGoalHeader}>
+                      <Text style={[styles.cardTitle, { color: colors.text }]}>{goal.goal}</Text>
+                      <StatusPill label={goalStatus.label} variant={goalStatus.variant} />
+                    </View>
+
+                    {/* Review date */}
+                    {goal.reviewDate && (
+                      <View style={styles.pdpReviewDateRow}>
+                        <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+                        <Text style={[styles.pdpReviewDateText, { color: colors.textSecondary }]}>
+                          Review by {formatGoalDate(goal.reviewDate)}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Actions */}
+                    <View style={styles.pdpActions}>
+                      {visibleActions.map((action, actionIndex) => {
+                        const actionActive = action.status === PdpGoalStatus.ACTIVE;
+
+                        return (
+                          <View
+                            key={action.id}
+                            style={[
+                              styles.pdpRow,
+                              actionIndex === visibleActions.length - 1 && styles.pdpRowLast,
+                            ]}
+                          >
+                            {actionActive ? (
+                              <View
+                                style={[
+                                  styles.pdpActionCheckbox,
+                                  {
+                                    borderColor: colors.primary,
+                                    backgroundColor: colors.primary,
+                                  },
+                                ]}
+                              >
+                                <Feather name="check" size={14} color="#ffffff" />
+                              </View>
+                            ) : (
+                              <View
+                                style={[
+                                  styles.pdpActionCheckbox,
+                                  {
+                                    borderColor: colors.textSecondary,
+                                    backgroundColor: 'transparent',
+                                  },
+                                ]}
+                              />
+                            )}
+                            <Text style={[styles.pdpText, { color: colors.text }]}>
+                              {action.action}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
                   </View>
-                ))}
-              </View>
-            </View>
-          ))}
+                );
+              })
+          )}
         </View>
       )}
 
       {/* Mark as Final */}
       {canMarkAsFinal && (
         <View style={styles.section}>
-          <Pressable
+          <Button
+            label="Mark as Final"
             onPress={handleMarkAsFinal}
+            loading={updatingStatus}
+            icon={(color) => <Ionicons name="checkmark-circle" size={20} color={color} />}
+          />
+        </View>
+      )}
+
+      {/* Archive */}
+      {canArchive && (
+        <View style={styles.archiveLinkContainer}>
+          <Button
+            label="Archive entry"
+            onPress={handleArchive}
+            variant="ghost"
+            color="#dc3545"
             disabled={updatingStatus}
-            style={({ pressed }) => [
-              styles.finalButton,
-              {
-                backgroundColor: ACCENT_COLOR,
-                opacity: pressed || updatingStatus ? 0.7 : 1,
-              },
-            ]}
-          >
-            {updatingStatus ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle" size={20} color="#ffffff" />
-                <Text style={styles.finalButtonText}>Mark as Final</Text>
-              </>
-            )}
-          </Pressable>
+            icon={(color) => <Ionicons name="archive" size={18} color={color} />}
+          />
         </View>
       )}
     </ScrollView>
@@ -396,24 +620,40 @@ const styles = StyleSheet.create({
     flex: 1,
     flexShrink: 1,
   },
-  pdpCompleted: {
+  pdpGoalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  pdpReviewDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+  },
+  pdpReviewDateText: {
+    fontSize: 13,
+  },
+  pdpArchivedGoalText: {
+    opacity: 0.6,
+  },
+  pdpArchivedAction: {
     textDecorationLine: 'line-through',
     opacity: 0.6,
   },
-  pdpTimeframe: {
-    fontSize: 12,
-  },
-  finalButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  pdpActionCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 1,
   },
-  finalButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+  archiveLinkContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
 });

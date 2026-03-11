@@ -8,6 +8,8 @@
 
 - In capabilities reasoning, should the text be "I" or "The trainee" ?
 
+- In LLM MCQ responses, remove the concatenated texts. Use only question to render the MCQ options.
+
 # Chat screen
 
 - When any message is sent, there seems to be a delay before the message is displayed. What may be causing this ?

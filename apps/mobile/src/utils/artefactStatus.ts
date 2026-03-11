@@ -7,6 +7,7 @@ interface StatusDisplay {
 }
 
 const STATUS_MAP: Record<ArtefactStatus, StatusDisplay> = {
+  [ArtefactStatus.ARCHIVED]: { label: 'Archived', variant: 'default' },
   [ArtefactStatus.DRAFT]: { label: 'Draft', variant: 'default' },
   [ArtefactStatus.PROCESSING]: { label: 'Processing', variant: 'processing' },
   [ArtefactStatus.REVIEW]: { label: 'Needs review', variant: 'warning' },

@@ -2,6 +2,7 @@ import { ErrorBoundary } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { initializeAuth, loadNudgeState, loadOnboardingState, store } from '@/store';
 import { ThemeProvider, useTheme } from '@/theme';
+import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -143,7 +144,9 @@ export default function RootLayout() {
         <SafeAreaProvider>
           <KeyboardProvider>
             <ThemeProvider>
-              <RootLayoutNav />
+              <ActionSheetProvider>
+                <RootLayoutNav />
+              </ActionSheetProvider>
             </ThemeProvider>
           </KeyboardProvider>
         </SafeAreaProvider>

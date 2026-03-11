@@ -6,8 +6,9 @@ import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
 import type { PdpGoalSelection } from '@acme/shared';
 import { ArtefactStatus, PdpGoalStatus } from '@acme/shared';
+import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -54,6 +55,8 @@ export default function EntryDetailScreen() {
   const dispatch = useAppDispatch();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const { showActionSheetWithOptions } = useActionSheet();
 
   const artefact = useAppSelector((state) => selectArtefactById(state, artefactId ?? ''));
   const updatingStatus = useAppSelector((state) => state.artefacts.updatingStatus);
@@ -242,6 +245,32 @@ export default function EntryDetailScreen() {
     }
   }, [artefactId, dispatch, hasActivePdpGoals]);
 
+  // ── Header overflow menu (FINAL state) ──
+
+  const handleShowMenu = useCallback(() => {
+    showActionSheetWithOptions(
+      {
+        options: ['Archive entry', 'Cancel'],
+        destructiveButtonIndex: 0,
+        cancelButtonIndex: 1,
+      },
+      (index) => {
+        if (index === 0) handleArchive();
+      }
+    );
+  }, [showActionSheetWithOptions, handleArchive]);
+
+  useEffect(() => {
+    if (!artefact || artefact.status !== ArtefactStatus.FINAL) return;
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable onPress={handleShowMenu} hitSlop={8}>
+          <Ionicons name="ellipsis-vertical" size={22} color={colors.text} />
+        </Pressable>
+      ),
+    });
+  }, [artefact?.status, navigation, colors.text, handleShowMenu]);
+
   if (!artefact) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
@@ -252,12 +281,13 @@ export default function EntryDetailScreen() {
 
   const statusDisplay = getArtefactStatusDisplay(artefact.status);
   const canMarkAsFinal = artefact.status === ArtefactStatus.REVIEW;
-  const canArchive = artefact.status !== ArtefactStatus.ARCHIVED;
+  const canArchive =
+    artefact.status !== ArtefactStatus.ARCHIVED && artefact.status !== ArtefactStatus.FINAL;
 
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 8 }}
     >
       {/* Header */}
       <View style={styles.section}>
@@ -653,7 +683,5 @@ const styles = StyleSheet.create({
   },
   archiveLinkContainer: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 16,
   },
 });

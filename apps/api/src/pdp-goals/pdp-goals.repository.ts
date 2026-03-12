@@ -46,6 +46,7 @@ function mapToGoalWithArtefact(raw: Record<string, unknown>): PdpGoalWithArtefac
     artefactId: raw.artefactId as Types.ObjectId | null,
     status: raw.status as PdpGoalStatus,
     reviewDate: raw.reviewDate as Date | null,
+    completedAt: raw.completedAt as Date | null,
     completionReview: raw.completionReview as string | null,
     actions: raw.actions as PdpGoalWithArtefact['actions'],
     createdAt: raw.createdAt as Date,
@@ -223,6 +224,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       const setFields: Record<string, unknown> = {};
       if (data.status !== undefined) setFields.status = data.status;
       if (data.reviewDate !== undefined) setFields.reviewDate = data.reviewDate;
+      if (data.completedAt !== undefined) setFields.completedAt = data.completedAt;
       if (data.completionReview !== undefined) setFields.completionReview = data.completionReview;
       if (data.actions !== undefined) setFields.actions = data.actions;
 

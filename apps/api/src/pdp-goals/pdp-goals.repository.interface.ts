@@ -27,6 +27,7 @@ export interface FindByUserOptions {
 export interface SaveGoalData {
   status?: PdpGoalStatus;
   reviewDate?: Date | null;
+  completedAt?: Date | null;
   completionReview?: string | null;
   actions?: PdpGoalAction[];
 }
@@ -49,6 +50,7 @@ export interface PdpGoalWithArtefact {
   artefactId: Types.ObjectId | null;
   status: PdpGoalStatus;
   reviewDate: Date | null;
+  completedAt: Date | null;
   completionReview: string | null;
   actions: PdpGoalAction[];
   createdAt: Date;

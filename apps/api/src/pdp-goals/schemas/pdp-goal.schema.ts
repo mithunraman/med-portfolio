@@ -49,6 +49,9 @@ export class PdpGoal {
   reviewDate!: Date | null;
 
   @Prop({ type: Date, default: null })
+  completedAt!: Date | null;
+
+  @Prop({ type: Date, default: null })
   nextActionDueDate!: Date | null;
 
   @Prop({ type: String, default: null })

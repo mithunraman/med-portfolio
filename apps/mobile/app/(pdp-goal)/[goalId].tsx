@@ -516,11 +516,19 @@ export default function PdpGoalDetailScreen() {
           )}
           <View style={styles.metaRow}>
             <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />
+            {isCompleted && goal.completedAt && (
+              <View style={styles.reviewDateButton}>
+                <Ionicons name="checkmark-circle-outline" size={14} color={colors.textSecondary} />
+                <Text style={[styles.reviewDateText, { color: colors.textSecondary }]}>
+                  Completed {formatDate(goal.completedAt)}
+                </Text>
+              </View>
+            )}
             {goal.reviewDate ? (
               <TouchableOpacity
-                onPress={() => !isArchived && setShowDatePicker(true)}
+                onPress={() => !isArchived && !isCompleted && setShowDatePicker(true)}
                 style={styles.reviewDateButton}
-                disabled={isArchived}
+                disabled={isArchived || isCompleted}
               >
                 <Ionicons
                   name={isOverdue ? 'alert-circle-outline' : 'calendar-outline'}
@@ -538,7 +546,7 @@ export default function PdpGoalDetailScreen() {
                 </Text>
               </TouchableOpacity>
             ) : (
-              !isArchived && (
+              !isArchived && !isCompleted && (
                 <TouchableOpacity
                   onPress={() => setShowDatePicker(true)}
                   style={styles.reviewDateButton}

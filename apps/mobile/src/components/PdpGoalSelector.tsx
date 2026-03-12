@@ -28,6 +28,7 @@ interface PdpGoalSelectorProps {
   onToggleGoal: (goalId: string) => void;
   onToggleAction: (goalId: string, actionId: string) => void;
   onSetReviewDate: (goalId: string, date: Date | null) => void;
+  disabled?: boolean;
 }
 
 // ── Helpers ──
@@ -236,6 +237,7 @@ export function PdpGoalSelector({
   onToggleGoal,
   onToggleAction,
   onSetReviewDate,
+  disabled = false,
 }: PdpGoalSelectorProps) {
   const { colors } = useTheme();
   const [datePickerGoalId, setDatePickerGoalId] = useState<string | null>(null);
@@ -256,10 +258,10 @@ export function PdpGoalSelector({
             style={[
               styles.goalCard,
               {
-                backgroundColor: sel.selected ? colors.surface : colors.background,
-                borderLeftWidth: sel.selected ? 3 : 0,
-                borderLeftColor: sel.selected ? colors.primary : 'transparent',
-                opacity: sel.selected ? 1 : 0.65,
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: sel.selected ? colors.primary : colors.border,
+                opacity: sel.selected ? 1 : 0.5,
               },
             ]}
           >
@@ -269,6 +271,7 @@ export function PdpGoalSelector({
                 value={sel.selected}
                 onValueChange={() => onToggleGoal(goal.id)}
                 trackColor={{ true: colors.primary }}
+                disabled={disabled}
               />
               <Text
                 style={[
@@ -286,6 +289,7 @@ export function PdpGoalSelector({
                 {/* Review date chip */}
                 <Pressable
                   onPress={() => setDatePickerGoalId(goal.id)}
+                  disabled={disabled}
                   style={[
                     styles.dateRow,
                     sel.reviewDate
@@ -329,6 +333,7 @@ export function PdpGoalSelector({
                       <Pressable
                         key={action.id}
                         onPress={() => onToggleAction(goal.id, action.id)}
+                        disabled={disabled}
                         style={[
                           styles.actionRow,
                           index === goal.actions.length - 1 && styles.actionRowLast,
@@ -397,7 +402,6 @@ const styles = StyleSheet.create({
   goalCard: {
     borderRadius: 12,
     padding: 14,
-    overflow: 'hidden',
   },
   goalHeader: {
     flexDirection: 'row',

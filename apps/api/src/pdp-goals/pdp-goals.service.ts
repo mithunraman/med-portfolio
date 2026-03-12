@@ -37,6 +37,8 @@ function mapGoalToDto(goal: PdpGoalWithArtefact): PdpGoalResponse {
     status: goal.status,
     reviewDate:
       goal.reviewDate instanceof Date ? goal.reviewDate.toISOString() : (goal.reviewDate ?? null),
+    completedAt:
+      goal.completedAt instanceof Date ? goal.completedAt.toISOString() : (goal.completedAt ?? null),
     completionReview: goal.completionReview,
     actions: goal.actions.map(mapActionToDto),
     artefactId: goal.artefactXid ?? '',
@@ -101,8 +103,9 @@ export class PdpGoalsService {
       goal.reviewDate = dto.reviewDate ? new Date(dto.reviewDate) : null;
     if (dto.completionReview !== undefined) goal.completionReview = dto.completionReview ?? null;
 
-    // When marking complete, complete all non-archived actions
+    // When marking complete, complete all non-archived actions and capture timestamp
     if (dto.status === PdpGoalStatus.COMPLETED) {
+      goal.completedAt = new Date();
       goal.actions = goal.actions.map((a) =>
         a.status !== PdpGoalStatus.ARCHIVED ? { ...a, status: PdpGoalStatus.COMPLETED } : a
       );
@@ -111,6 +114,7 @@ export class PdpGoalsService {
     const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, {
       status: goal.status,
       reviewDate: goal.reviewDate,
+      completedAt: goal.completedAt,
       completionReview: goal.completionReview,
       actions: goal.actions,
     });

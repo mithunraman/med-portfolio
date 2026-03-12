@@ -60,7 +60,11 @@ function GoalListItem({ item, onPress }: { item: PdpGoalResponse; onPress: () =>
         <Text style={[styles.listItemGoal, { color: colors.text }]} numberOfLines={2}>
           {item.goal}
         </Text>
-        {item.reviewDate ? (
+        {item.status === PdpGoalStatus.COMPLETED && item.completedAt ? (
+          <Text style={[styles.listItemMeta, { color: colors.textSecondary }]}>
+            Completed {formatReviewDate(item.completedAt)}
+          </Text>
+        ) : item.reviewDate ? (
           <Text style={[styles.listItemMeta, { color: colors.textSecondary }]}>
             Review by {formatReviewDate(item.reviewDate)}
           </Text>

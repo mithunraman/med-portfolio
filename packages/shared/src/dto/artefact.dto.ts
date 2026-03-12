@@ -22,6 +22,7 @@ export const PdpGoalSchema = z.object({
   goal: z.string(),
   status: z.nativeEnum(PdpGoalStatus),
   reviewDate: z.string().datetime().nullable(),
+  completedAt: z.string().datetime().nullable(),
   completionReview: z.string().nullable(),
   actions: z.array(PdpGoalActionSchema),
 });

@@ -143,7 +143,7 @@ export default function EntryDetailScreen() {
     });
   }, []);
 
-  // ── Mark as Final ──
+  // ── Finalise Entry ──
 
   const handleMarkAsFinal = useCallback(() => {
     if (!artefactId) return;
@@ -157,10 +157,10 @@ export default function EntryDetailScreen() {
       return;
     }
 
-    Alert.alert('Mark as Final', 'Are you sure? This marks the entry as ready for export.', [
+    Alert.alert('Finalise entry', 'Once finalised, this entry will be saved to your portfolio and cannot be edited.', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Mark as Final',
+        text: 'Finalise',
         onPress: () => {
           const pdpGoalSelections: PdpGoalSelection[] = Array.from(goalSelections.entries()).map(
             ([goalId, sel]) => ({
@@ -265,12 +265,12 @@ export default function EntryDetailScreen() {
     if (!artefact || artefact.status !== ArtefactStatus.COMPLETED) return;
     navigation.setOptions({
       headerRight: () => (
-        <Pressable onPress={handleShowMenu} hitSlop={8}>
-          <Ionicons name="ellipsis-vertical" size={22} color={colors.text} />
+        <Pressable onPress={updatingStatus ? undefined : handleShowMenu} hitSlop={8} disabled={updatingStatus}>
+          <Ionicons name="ellipsis-vertical" size={22} color={updatingStatus ? colors.textSecondary : colors.text} />
         </Pressable>
       ),
     });
-  }, [artefact?.status, navigation, colors.text, handleShowMenu]);
+  }, [artefact?.status, navigation, colors.text, colors.textSecondary, handleShowMenu, updatingStatus]);
 
   if (!artefact) {
     return (
@@ -393,6 +393,7 @@ export default function EntryDetailScreen() {
               onToggleGoal={handleToggleGoal}
               onToggleAction={handleToggleAction}
               onSetReviewDate={handleSetReviewDate}
+              disabled={updatingStatus}
             />
           ) : (
             artefact.pdpGoals
@@ -406,14 +407,7 @@ export default function EntryDetailScreen() {
                 return (
                   <View
                     key={goal.id}
-                    style={[
-                      styles.pdpGoalCard,
-                      {
-                        backgroundColor: colors.surface,
-                        borderLeftWidth: 3,
-                        borderLeftColor: colors.primary,
-                      },
-                    ]}
+                    style={[styles.pdpGoalCard, { backgroundColor: colors.surface }]}
                   >
                     {/* Goal header with status pill */}
                     <View style={styles.pdpGoalHeader}>
@@ -481,11 +475,11 @@ export default function EntryDetailScreen() {
         </View>
       )}
 
-      {/* Mark as Final */}
+      {/* Finalise Entry */}
       {canMarkAsFinal && (
         <View style={styles.section}>
           <Button
-            label="Mark as Final"
+            label="Finalise entry"
             onPress={handleMarkAsFinal}
             loading={updatingStatus}
             icon={(color) => <Ionicons name="checkmark-circle" size={20} color={color} />}

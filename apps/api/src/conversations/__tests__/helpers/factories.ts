@@ -61,7 +61,7 @@ export async function createTestArtefact(
       artefactId: `${userId.toString()}_test-${id.toString().slice(-6)}`,
       userId,
       specialty: overrides.specialty ?? Specialty.GP,
-      status: overrides.status ?? ArtefactStatus.PROCESSING,
+      status: overrides.status ?? ArtefactStatus.IN_CONVERSATION,
       title: overrides.title ?? 'Test Artefact',
     },
   ]);

@@ -1,4 +1,4 @@
-import { Button, StatusPill } from '@/components';
+import { Button, EmptyState, StatusPill } from '@/components';
 import type { StatusVariant } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
@@ -576,9 +576,12 @@ export default function PdpGoalDetailScreen() {
           </View>
           <View style={[styles.actionsCard, { backgroundColor: colors.surface }]}>
             {visibleActions.length === 0 ? (
-              <Text style={[styles.emptyActionsText, { color: colors.textSecondary }]}>
-                No actions yet.
-              </Text>
+              <EmptyState
+                variant="compact"
+                icon="checkmark-square-outline"
+                title="No actions yet"
+                description={isActive ? 'Add actions to track progress toward this goal.' : undefined}
+              />
             ) : (
               visibleActions.map((action, index) => {
                 const effectiveStatus = optimisticStatuses[action.id] ?? action.status;
@@ -658,23 +661,13 @@ export default function PdpGoalDetailScreen() {
                 )}
               </Pressable>
             ) : (
-              <Pressable
-                style={[styles.reviewPromptCard, { backgroundColor: colors.surface }]}
-                onPress={() => setShowCompletionReview(true)}
-              >
-                <View style={[styles.reviewPromptIcon, { backgroundColor: colors.background }]}>
-                  <Ionicons name="create-outline" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.reviewPromptText}>
-                  <Text style={[styles.reviewPromptLabel, { color: colors.textSecondary }]}>
-                    How did it go?
-                  </Text>
-                  <Text style={[styles.reviewPromptCta, { color: colors.text }]}>
-                    Write your reflection
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-              </Pressable>
+              <EmptyState
+                icon="create-outline"
+                title="How did it go?"
+                description="Reflect on what you achieved and what you learned."
+                actionLabel="Write reflection"
+                onAction={() => setShowCompletionReview(true)}
+              />
             )}
           </View>
         )}
@@ -786,10 +779,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
   },
-  emptyActionsText: {
-    padding: 16,
-    fontSize: 14,
-  },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -846,32 +835,6 @@ const styles = StyleSheet.create({
   reviewEditIcon: {
     marginTop: 2,
   },
-  reviewPromptCard: {
-    borderRadius: 12,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  reviewPromptIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  reviewPromptText: {
-    flex: 1,
-    gap: 2,
-  },
-  reviewPromptLabel: {
-    fontSize: 12,
-  },
-  reviewPromptCta: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-
   // Modals
   modalOverlay: {
     flex: 1,

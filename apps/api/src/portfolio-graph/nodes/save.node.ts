@@ -30,7 +30,7 @@ export function createSaveNode(deps: GraphDeps) {
                 code: c.code,
                 evidence: c.reasoning,
               })),
-              status: ArtefactStatus.REVIEW,
+              status: ArtefactStatus.IN_REVIEW,
             },
             session
           );

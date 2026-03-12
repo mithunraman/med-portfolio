@@ -39,7 +39,7 @@ export class Artefact {
   @Prop({ required: true, type: Number, default: Specialty.GP })
   specialty!: Specialty;
 
-  @Prop({ required: true, type: Number, default: ArtefactStatus.DRAFT })
+  @Prop({ required: true, type: Number, default: ArtefactStatus.IN_CONVERSATION })
   status!: ArtefactStatus;
 
   @Prop({ type: String, default: null })

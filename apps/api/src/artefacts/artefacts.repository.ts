@@ -36,7 +36,7 @@ export class ArtefactsRepository implements IArtefactsRepository {
               artefactId: data.artefactId,
               userId: data.userId,
               specialty: data.specialty,
-              status: ArtefactStatus.DRAFT,
+              status: ArtefactStatus.IN_CONVERSATION,
               title: data.title,
             },
           },

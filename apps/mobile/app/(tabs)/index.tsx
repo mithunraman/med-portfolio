@@ -233,7 +233,7 @@ export default function HomeScreen() {
 
   const handleEntryPress = useCallback(
     (item: Artefact) => {
-      if (item.status >= ArtefactStatus.REVIEW) {
+      if (item.status >= ArtefactStatus.IN_REVIEW) {
         router.push(`/(entry)/${item.id}`);
       } else {
         router.push(`/(messages)/${item.conversation.id}`);

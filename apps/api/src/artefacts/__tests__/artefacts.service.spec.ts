@@ -17,7 +17,7 @@ function makeArtefactDoc(overrides: Record<string, unknown> = {}) {
     xid: 'art_abc123',
     artefactId: `${userIdStr}_client1`,
     userId,
-    status: ArtefactStatus.REVIEW,
+    status: ArtefactStatus.IN_REVIEW,
     specialty: Specialty.GP,
     title: 'Test Artefact',
     artefactType: null,
@@ -132,9 +132,9 @@ describe('ArtefactsService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('throws BadRequestException when artefact is not in REVIEW status', async () => {
+    it('throws BadRequestException when artefact is not in IN_REVIEW status', async () => {
       mockArtefactsRepo.findByXid.mockResolvedValue(
-        ok(makeArtefactDoc({ status: ArtefactStatus.FINAL })),
+        ok(makeArtefactDoc({ status: ArtefactStatus.COMPLETED })),
       );
 
       await expect(
@@ -142,9 +142,9 @@ describe('ArtefactsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('sets artefact status to FINAL', async () => {
+    it('sets artefact status to COMPLETED', async () => {
       const artefact = makeArtefactDoc();
-      const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.FINAL });
+      const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.COMPLETED });
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
       setupBuildArtefactDtoMocks();
@@ -153,14 +153,14 @@ describe('ArtefactsService', () => {
 
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
-        { status: ArtefactStatus.FINAL },
+        { status: ArtefactStatus.COMPLETED },
         expect.anything(), // session
       );
     });
 
     it('activates selected goals with review date and per-action statuses', async () => {
       const artefact = makeArtefactDoc();
-      const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.FINAL });
+      const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.COMPLETED });
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
       mockPdpGoalsRepo.updateGoal.mockResolvedValue(ok(undefined));
@@ -195,7 +195,7 @@ describe('ArtefactsService', () => {
 
     it('archives unselected goals (cascades to all actions)', async () => {
       const artefact = makeArtefactDoc();
-      const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.FINAL });
+      const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.COMPLETED });
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
       mockPdpGoalsRepo.updateGoal.mockResolvedValue(ok(undefined));
@@ -217,7 +217,7 @@ describe('ArtefactsService', () => {
 
     it('handles mixed selected and unselected goals', async () => {
       const artefact = makeArtefactDoc();
-      const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.FINAL });
+      const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.COMPLETED });
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
       mockPdpGoalsRepo.updateGoal.mockResolvedValue(ok(undefined));
@@ -259,7 +259,7 @@ describe('ArtefactsService', () => {
 
   describe('updateArtefactStatus – archive', () => {
     it('archives PENDING PDP goals when archiving an artefact', async () => {
-      const artefact = makeArtefactDoc({ status: ArtefactStatus.REVIEW });
+      const artefact = makeArtefactDoc({ status: ArtefactStatus.IN_REVIEW });
       const archivedArtefact = makeArtefactDoc({ status: ArtefactStatus.ARCHIVED });
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(archivedArtefact));
@@ -280,7 +280,7 @@ describe('ArtefactsService', () => {
     });
 
     it('does NOT archive ACTIVE/COMPLETED goals when archivePdpGoals is false', async () => {
-      const artefact = makeArtefactDoc({ status: ArtefactStatus.REVIEW });
+      const artefact = makeArtefactDoc({ status: ArtefactStatus.IN_REVIEW });
       const archivedArtefact = makeArtefactDoc({ status: ArtefactStatus.ARCHIVED });
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(archivedArtefact));
@@ -303,7 +303,7 @@ describe('ArtefactsService', () => {
     });
 
     it('archives ACTIVE and COMPLETED goals when archivePdpGoals is true', async () => {
-      const artefact = makeArtefactDoc({ status: ArtefactStatus.REVIEW });
+      const artefact = makeArtefactDoc({ status: ArtefactStatus.IN_REVIEW });
       const archivedArtefact = makeArtefactDoc({ status: ArtefactStatus.ARCHIVED });
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(archivedArtefact));
@@ -334,20 +334,20 @@ describe('ArtefactsService', () => {
     });
 
     it('performs simple status update for non-archive transitions', async () => {
-      const artefact = makeArtefactDoc({ status: ArtefactStatus.DRAFT });
-      const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.PROCESSING });
+      const artefact = makeArtefactDoc({ status: ArtefactStatus.IN_CONVERSATION });
+      const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.IN_REVIEW });
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
       setupBuildArtefactDtoMocks();
 
       await service.updateArtefactStatus(userIdStr, 'art_abc123', {
-        status: ArtefactStatus.PROCESSING,
+        status: ArtefactStatus.IN_REVIEW,
       });
 
       // Direct update, no transaction, no PDP goal changes
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
-        { status: ArtefactStatus.PROCESSING },
+        { status: ArtefactStatus.IN_REVIEW },
       );
       expect(mockPdpGoalsRepo.updateManyByArtefactId).not.toHaveBeenCalled();
     });

@@ -75,9 +75,9 @@ export default function EntryDetailScreen() {
   } | null>(null);
   const [goalSelections, setGoalSelections] = useState<Map<string, GoalSelectionState>>(new Map());
 
-  // Initialise goal selections when artefact loads in REVIEW status
+  // Initialise goal selections when artefact loads in IN_REVIEW status
   useEffect(() => {
-    if (artefact?.status === ArtefactStatus.REVIEW && artefact.pdpGoals?.length) {
+    if (artefact?.status === ArtefactStatus.IN_REVIEW && artefact.pdpGoals?.length) {
       setGoalSelections((prev) => {
         // Only initialise if not already set (avoid resetting user changes)
         if (prev.size > 0) return prev;
@@ -262,7 +262,7 @@ export default function EntryDetailScreen() {
   }, [showActionSheetWithOptions, handleArchive]);
 
   useEffect(() => {
-    if (!artefact || artefact.status !== ArtefactStatus.FINAL) return;
+    if (!artefact || artefact.status !== ArtefactStatus.COMPLETED) return;
     navigation.setOptions({
       headerRight: () => (
         <Pressable onPress={handleShowMenu} hitSlop={8}>
@@ -281,9 +281,9 @@ export default function EntryDetailScreen() {
   }
 
   const statusDisplay = getArtefactStatusDisplay(artefact.status);
-  const canMarkAsFinal = artefact.status === ArtefactStatus.REVIEW;
+  const canMarkAsFinal = artefact.status === ArtefactStatus.IN_REVIEW;
   const canArchive =
-    artefact.status !== ArtefactStatus.ARCHIVED && artefact.status !== ArtefactStatus.FINAL;
+    artefact.status !== ArtefactStatus.ARCHIVED && artefact.status !== ArtefactStatus.COMPLETED;
 
   return (
     <ScrollView

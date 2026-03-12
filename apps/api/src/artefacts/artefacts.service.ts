@@ -196,16 +196,16 @@ export class ArtefactsService {
 
     const artefactDoc = findResult.value;
 
-    if (artefactDoc.status !== ArtefactStatus.REVIEW) {
-      throw new BadRequestException('Artefact must be in REVIEW status to finalise');
+    if (artefactDoc.status !== ArtefactStatus.IN_REVIEW) {
+      throw new BadRequestException('Artefact must be in IN_REVIEW status to finalise');
     }
 
     return this.transactionService.withTransaction(
       async (session) => {
-        // 1. Set artefact to FINAL
+        // 1. Set artefact to COMPLETED
         const updateResult = await this.artefactsRepository.updateArtefactById(
           artefactDoc._id,
-          { status: ArtefactStatus.FINAL },
+          { status: ArtefactStatus.COMPLETED },
           session
         );
 

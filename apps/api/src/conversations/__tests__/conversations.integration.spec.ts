@@ -357,7 +357,7 @@ describe('Conversations Integration Tests', () => {
       const artefact = await getTestArtefact();
       assertDefined(artefact);
 
-      expect(artefact.status).toBe(ArtefactStatus.REVIEW);
+      expect(artefact.status).toBe(ArtefactStatus.IN_REVIEW);
       expect(artefact.artefactType).toBe('CLINICAL_CASE_REVIEW');
       // Reflection persisted as structured sections
       expect(artefact.reflection).toBeDefined();

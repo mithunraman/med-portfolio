@@ -20,10 +20,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Status filter options — using null to mean "All"
 const STATUS_FILTERS: { label: string; value: ArtefactStatus | null }[] = [
   { label: 'All', value: null },
-  { label: 'Draft', value: 100 as ArtefactStatus },
-  { label: 'Needs review', value: 300 as ArtefactStatus },
-  { label: 'Ready to export', value: 400 as ArtefactStatus },
-  { label: 'Exported', value: 500 as ArtefactStatus },
+  { label: 'In progress', value: ArtefactStatus.IN_CONVERSATION },
+  { label: 'Needs review', value: ArtefactStatus.IN_REVIEW },
+  { label: 'Completed', value: ArtefactStatus.COMPLETED },
+  { label: 'Archived', value: ArtefactStatus.ARCHIVED },
 ];
 
 function formatTimeAgo(dateString: string): string {
@@ -97,7 +97,7 @@ export default function EntriesScreen() {
 
   const handleEntryPress = useCallback(
     (item: Artefact) => {
-      if (item.status >= ArtefactStatus.REVIEW) {
+      if (item.status >= ArtefactStatus.IN_REVIEW) {
         router.push(`/(entry)/${item.id}`);
       } else {
         router.push(`/(messages)/${item.conversation.id}`);

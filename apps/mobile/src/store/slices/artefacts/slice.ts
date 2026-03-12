@@ -3,6 +3,7 @@ import { createEntityAdapter, createSlice } from '@reduxjs/toolkit';
 import type { RootState } from '../../index';
 import {
   createArtefact,
+  duplicateToReview,
   fetchArtefact,
   fetchArtefacts,
   finaliseArtefact,
@@ -96,6 +97,19 @@ const artefactsSlice = createSlice({
         artefactsAdapter.upsertOne(state, action.payload);
       })
       .addCase(finaliseArtefact.rejected, (state, action) => {
+        state.updatingStatus = false;
+        state.error = action.payload as string;
+      })
+      // duplicateToReview
+      .addCase(duplicateToReview.pending, (state) => {
+        state.updatingStatus = true;
+        state.error = null;
+      })
+      .addCase(duplicateToReview.fulfilled, (state, action) => {
+        state.updatingStatus = false;
+        artefactsAdapter.upsertOne(state, action.payload);
+      })
+      .addCase(duplicateToReview.rejected, (state, action) => {
         state.updatingStatus = false;
         state.error = action.payload as string;
       });

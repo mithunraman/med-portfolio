@@ -33,6 +33,10 @@ export class ArtefactsClient {
     return this.client.post<Artefact>(`/artefacts/${id}/finalise`, data);
   }
 
+  async duplicateToReview(id: string): Promise<Artefact> {
+    return this.client.post<Artefact>(`/artefacts/${id}/duplicate`, {});
+  }
+
   async listArtefacts(params?: ListArtefactsParams): Promise<ArtefactListResponse> {
     const searchParams = new URLSearchParams();
     if (params?.limit !== undefined) searchParams.set('limit', String(params.limit));

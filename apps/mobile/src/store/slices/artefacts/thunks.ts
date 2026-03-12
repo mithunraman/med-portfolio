@@ -101,6 +101,26 @@ export const updateArtefactStatus = createAsyncThunk(
 );
 
 /**
+ * Duplicate a COMPLETED artefact into a new IN_REVIEW artefact.
+ */
+export const duplicateToReview = createAsyncThunk(
+  'artefacts/duplicateToReview',
+  async (params: { artefactId: string }, { rejectWithValue }) => {
+    artefactsLogger.info('Duplicating artefact to review', { artefactId: params.artefactId });
+
+    try {
+      const response = await api.artefacts.duplicateToReview(params.artefactId);
+      artefactsLogger.info('Duplicated artefact to review', { id: response.id });
+      return response;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to duplicate artefact';
+      artefactsLogger.error('Failed to duplicate artefact to review', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
  * Finalise an artefact — marks it FINAL and activates/archives PDP goals.
  */
 export const finaliseArtefact = createAsyncThunk(

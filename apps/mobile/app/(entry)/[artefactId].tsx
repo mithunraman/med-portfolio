@@ -1,7 +1,7 @@
 import type { GoalSelectionState, StatusVariant } from '@/components';
 import { Button, PdpGoalSelector, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
-import { fetchArtefact, finaliseArtefact, selectArtefactById, updateArtefactStatus } from '@/store';
+import { duplicateToReview, fetchArtefact, finaliseArtefact, selectArtefactById, updateArtefactStatus } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
 import type { PdpGoalSelection } from '@acme/shared';
@@ -246,20 +246,39 @@ export default function EntryDetailScreen() {
     }
   }, [artefactId, dispatch, hasActivePdpGoals]);
 
+  // ── Duplicate to Review ──
+
+  const handleClone = useCallback(() => {
+    if (!artefactId) return;
+    Alert.alert('Duplicate to Review', 'Duplicate this entry and all its data into a new artefact in review?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Duplicate',
+        onPress: async () => {
+          const result = await dispatch(duplicateToReview({ artefactId }));
+          if (duplicateToReview.fulfilled.match(result)) {
+            router.replace(`/(entry)/${result.payload.id}`);
+          }
+        },
+      },
+    ]);
+  }, [artefactId, dispatch, router]);
+
   // ── Header overflow menu (FINAL state) ──
 
   const handleShowMenu = useCallback(() => {
     showActionSheetWithOptions(
       {
-        options: ['Archive entry', 'Cancel'],
+        options: ['Archive entry', 'Duplicate to Review', 'Cancel'],
         destructiveButtonIndex: 0,
-        cancelButtonIndex: 1,
+        cancelButtonIndex: 2,
       },
       (index) => {
         if (index === 0) handleArchive();
+        if (index === 1) handleClone();
       }
     );
-  }, [showActionSheetWithOptions, handleArchive]);
+  }, [showActionSheetWithOptions, handleArchive, handleClone]);
 
   useEffect(() => {
     if (!artefact || artefact.status !== ArtefactStatus.COMPLETED) return;

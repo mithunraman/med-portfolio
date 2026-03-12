@@ -4,7 +4,7 @@ import type {
   FinaliseArtefactRequest,
   UpdateArtefactStatusRequest,
 } from '@acme/shared';
-import { ArtefactStatus, PdpGoalStatus, Specialty } from '@acme/shared';
+import { ArtefactStatus, MessageProcessingStatus, PdpGoalStatus, Specialty } from '@acme/shared';
 import {
   BadRequestException,
   Inject,
@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { format } from 'date-fns';
 import { ClientSession, Types } from 'mongoose';
+import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { isErr } from '../common/utils/result.util';
 import { isNotNull } from '../common/utils/type-guards.util';
 import {
@@ -22,14 +23,15 @@ import {
 } from '../conversations/conversations.repository.interface';
 import { TransactionService } from '../database';
 import {
+  CreatePdpGoalData,
   IPdpGoalsRepository,
   PDP_GOALS_REPOSITORY,
   UpdatePdpGoalActionData,
 } from '../pdp-goals/pdp-goals.repository.interface';
 import { ARTEFACTS_REPOSITORY, IArtefactsRepository } from './artefacts.repository.interface';
 import { CreateArtefactDto, ListArtefactsDto } from './dto';
-import type { Artefact as ArtefactSchema } from './schemas/artefact.schema';
 import { toArtefactDto } from './mappers/artefact.mapper';
+import type { Artefact as ArtefactSchema } from './schemas/artefact.schema';
 import { createInternalArtefactId } from './utils/artefact-id.util';
 
 function generateDefaultTitle(): string {
@@ -110,7 +112,7 @@ export class ArtefactsService {
   async getArtefact(userId: string, xid: string): Promise<Artefact> {
     const artefactResult = await this.artefactsRepository.findByXid(
       xid,
-      new Types.ObjectId(userId),
+      new Types.ObjectId(userId)
     );
 
     if (isErr(artefactResult)) {
@@ -146,10 +148,7 @@ export class ArtefactsService {
     xid: string,
     dto: UpdateArtefactStatusRequest
   ): Promise<Artefact> {
-    const findResult = await this.artefactsRepository.findByXid(
-      xid,
-      new Types.ObjectId(userId),
-    );
+    const findResult = await this.artefactsRepository.findByXid(xid, new Types.ObjectId(userId));
 
     if (isErr(findResult)) {
       throw new InternalServerErrorException(findResult.error.message);
@@ -165,10 +164,9 @@ export class ArtefactsService {
     }
 
     // Simple status update (non-archive transitions)
-    const updateResult = await this.artefactsRepository.updateArtefactById(
-      artefactDoc._id,
-      { status: dto.status },
-    );
+    const updateResult = await this.artefactsRepository.updateArtefactById(artefactDoc._id, {
+      status: dto.status,
+    });
 
     if (isErr(updateResult)) {
       throw new InternalServerErrorException(updateResult.error.message);
@@ -182,10 +180,7 @@ export class ArtefactsService {
     xid: string,
     dto: FinaliseArtefactRequest
   ): Promise<Artefact> {
-    const findResult = await this.artefactsRepository.findByXid(
-      xid,
-      new Types.ObjectId(userId),
-    );
+    const findResult = await this.artefactsRepository.findByXid(xid, new Types.ObjectId(userId));
 
     if (isErr(findResult)) {
       throw new InternalServerErrorException(findResult.error.message);
@@ -217,12 +212,10 @@ export class ArtefactsService {
         for (const selection of dto.pdpGoalSelections) {
           if (selection.selected) {
             // Selected goal → ACTIVE with review date, per-action status based on selection
-            const actionUpdates: UpdatePdpGoalActionData[] = (selection.actions ?? []).map(
-              (a) => ({
-                actionXid: a.actionId,
-                status: a.selected ? PdpGoalStatus.STARTED : PdpGoalStatus.ARCHIVED,
-              })
-            );
+            const actionUpdates: UpdatePdpGoalActionData[] = (selection.actions ?? []).map((a) => ({
+              actionXid: a.actionId,
+              status: a.selected ? PdpGoalStatus.STARTED : PdpGoalStatus.ARCHIVED,
+            }));
 
             const result = await this.pdpGoalsRepository.updateGoal(
               selection.goalId,
@@ -325,6 +318,129 @@ export class ArtefactsService {
     }
 
     return toArtefactDto(artefactDoc, conversationResult.value, pdpGoalsResult.value);
+  }
+
+  async duplicateToReview(userId: string, xid: string): Promise<Artefact> {
+    const findResult = await this.artefactsRepository.findByXid(xid, new Types.ObjectId(userId));
+
+    if (isErr(findResult)) throw new InternalServerErrorException(findResult.error.message);
+    if (!findResult.value) throw new NotFoundException('Artefact not found');
+
+    const sourceArtefact = findResult.value;
+
+    if (sourceArtefact.status !== ArtefactStatus.COMPLETED) {
+      throw new BadRequestException('Only COMPLETED artefacts can be cloned');
+    }
+
+    return this.transactionService.withTransaction(
+      async (session) => {
+        // Fetch source conversation and messages
+        const convResult = await this.conversationsRepository.findActiveConversationByArtefact(
+          sourceArtefact._id,
+          session
+        );
+        if (isErr(convResult)) throw new InternalServerErrorException(convResult.error.message);
+        if (!convResult.value) throw new NotFoundException('Source conversation not found');
+
+        const messagesResult = await this.conversationsRepository.listMessages(
+          { conversation: convResult.value._id },
+          session
+        );
+        if (isErr(messagesResult))
+          throw new InternalServerErrorException(messagesResult.error.message);
+
+        // Fetch source PDP goals
+        const goalsResult = await this.pdpGoalsRepository.findByArtefactId(
+          sourceArtefact._id,
+          session
+        );
+        if (isErr(goalsResult)) throw new InternalServerErrorException(goalsResult.error.message);
+
+        // Create new artefact
+        const newArtefactResult = await this.artefactsRepository.upsertArtefact(
+          {
+            artefactId: createInternalArtefactId(userId, nanoidAlphanumeric()),
+            userId: new Types.ObjectId(userId),
+            specialty: sourceArtefact.specialty,
+            title: `Copy of ${sourceArtefact.title}`,
+          },
+          session
+        );
+        if (isErr(newArtefactResult))
+          throw new InternalServerErrorException(newArtefactResult.error.message);
+
+        const newArtefact = newArtefactResult.value;
+
+        // Update new artefact to IN_REVIEW with cloned content
+        const updateResult = await this.artefactsRepository.updateArtefactById(
+          newArtefact._id,
+          {
+            status: ArtefactStatus.IN_REVIEW,
+            artefactType: sourceArtefact.artefactType ?? null,
+            reflection: sourceArtefact.reflection ?? null,
+            capabilities: sourceArtefact.capabilities ?? null,
+            tags: sourceArtefact.tags ?? null,
+          },
+          session
+        );
+        if (isErr(updateResult)) throw new InternalServerErrorException(updateResult.error.message);
+
+        // Create new conversation
+        const newConvResult = await this.conversationsRepository.createConversation(
+          {
+            userId: new Types.ObjectId(userId),
+            artefact: newArtefact._id,
+            title: `Copy of ${convResult.value.title}`,
+          },
+          session
+        );
+        if (isErr(newConvResult))
+          throw new InternalServerErrorException(newConvResult.error.message);
+
+        const newConversation = newConvResult.value;
+
+        // Clone messages sequentially
+        for (const msg of messagesResult.value.messages) {
+          const msgResult = await this.conversationsRepository.createMessage(
+            {
+              conversation: newConversation._id,
+              userId: new Types.ObjectId(userId),
+              role: msg.role,
+              messageType: msg.messageType,
+              content: msg.content ?? null,
+              processingStatus: MessageProcessingStatus.COMPLETE,
+            },
+            session
+          );
+          if (isErr(msgResult)) throw new InternalServerErrorException(msgResult.error.message);
+        }
+
+        // Clone non-archived PDP goals (reset to NOT_STARTED)
+        const nonArchivedGoals = goalsResult.value.filter(
+          (g) => g.status !== PdpGoalStatus.ARCHIVED
+        );
+        if (nonArchivedGoals.length > 0) {
+          const goalsToCreate: CreatePdpGoalData[] = nonArchivedGoals.map((g) => ({
+            userId: new Types.ObjectId(userId),
+            artefactId: newArtefact._id,
+            goal: g.goal,
+            actions: g.actions
+              .filter((a) => a.status !== PdpGoalStatus.ARCHIVED)
+              .map((a) => ({
+                action: a.action,
+                intendedEvidence: a.intendedEvidence,
+              })),
+          }));
+
+          const createGoalsResult = await this.pdpGoalsRepository.create(goalsToCreate, session);
+          if (isErr(createGoalsResult))
+            throw new InternalServerErrorException(createGoalsResult.error.message);
+        }
+
+        return this.buildArtefactDto(updateResult.value._id, updateResult.value, session);
+      },
+      { context: 'cloneArtefact' }
+    );
   }
 
   async listArtefacts(userId: string, query: ListArtefactsDto): Promise<ArtefactListResponse> {

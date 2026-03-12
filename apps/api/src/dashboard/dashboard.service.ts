@@ -53,6 +53,7 @@ export class DashboardService {
           goal: g.goal,
           status: g.status as PdpGoalStatus,
           reviewDate: g.reviewDate?.toISOString() ?? null,
+          completedAt: g.completedAt?.toISOString() ?? null,
           completionReview: g.completionReview,
           actions: g.actions.map((a) => ({
             id: a.xid,

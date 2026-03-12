@@ -54,4 +54,12 @@ export class ArtefactsController {
   ): Promise<Artefact> {
     return this.artefactsService.finaliseArtefact(user.userId, id, dto);
   }
+
+  @Post(':id/duplicate')
+  async duplicateToReview(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string
+  ): Promise<Artefact> {
+    return this.artefactsService.duplicateToReview(user.userId, id);
+  }
 }

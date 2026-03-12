@@ -48,11 +48,11 @@ function makePdpGoalDoc(overrides: Record<string, unknown> = {}) {
     goal: 'Improve clinical skills',
     userId,
     artefactId: artefactOid,
-    status: PdpGoalStatus.PENDING,
+    status: PdpGoalStatus.NOT_STARTED,
     reviewDate: null,
     actions: [
-      { xid: 'act_1', action: 'Action 1', status: PdpGoalStatus.PENDING },
-      { xid: 'act_2', action: 'Action 2', status: PdpGoalStatus.PENDING },
+      { xid: 'act_1', action: 'Action 1', status: PdpGoalStatus.NOT_STARTED },
+      { xid: 'act_2', action: 'Action 2', status: PdpGoalStatus.NOT_STARTED },
     ],
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -184,9 +184,9 @@ describe('ArtefactsService', () => {
 
       expect(mockPdpGoalsRepo.updateGoal).toHaveBeenCalledWith(
         'goal_1',
-        { status: PdpGoalStatus.ACTIVE, reviewDate: new Date(reviewDate) },
+        { status: PdpGoalStatus.STARTED, reviewDate: new Date(reviewDate) },
         [
-          { actionXid: 'act_1', status: PdpGoalStatus.ACTIVE },
+          { actionXid: 'act_1', status: PdpGoalStatus.STARTED },
           { actionXid: 'act_2', status: PdpGoalStatus.ARCHIVED },
         ],
         expect.anything(), // session
@@ -240,7 +240,7 @@ describe('ArtefactsService', () => {
       // First call: activate goal_1
       expect(mockPdpGoalsRepo.updateGoal).toHaveBeenCalledWith(
         'goal_1',
-        expect.objectContaining({ status: PdpGoalStatus.ACTIVE }),
+        expect.objectContaining({ status: PdpGoalStatus.STARTED }),
         expect.any(Array),
         expect.anything(),
       );
@@ -273,7 +273,7 @@ describe('ArtefactsService', () => {
       // Should always archive PENDING goals
       expect(mockPdpGoalsRepo.updateManyByArtefactId).toHaveBeenCalledWith(
         artefact._id,
-        { statuses: [PdpGoalStatus.PENDING] },
+        { statuses: [PdpGoalStatus.NOT_STARTED] },
         { status: PdpGoalStatus.ARCHIVED },
         expect.anything(),
       );
@@ -296,7 +296,7 @@ describe('ArtefactsService', () => {
       expect(mockPdpGoalsRepo.updateManyByArtefactId).toHaveBeenCalledTimes(1);
       expect(mockPdpGoalsRepo.updateManyByArtefactId).toHaveBeenCalledWith(
         artefact._id,
-        { statuses: [PdpGoalStatus.PENDING] },
+        { statuses: [PdpGoalStatus.NOT_STARTED] },
         { status: PdpGoalStatus.ARCHIVED },
         expect.anything(),
       );
@@ -320,14 +320,14 @@ describe('ArtefactsService', () => {
 
       expect(mockPdpGoalsRepo.updateManyByArtefactId).toHaveBeenCalledWith(
         artefact._id,
-        { statuses: [PdpGoalStatus.PENDING] },
+        { statuses: [PdpGoalStatus.NOT_STARTED] },
         { status: PdpGoalStatus.ARCHIVED },
         expect.anything(),
       );
 
       expect(mockPdpGoalsRepo.updateManyByArtefactId).toHaveBeenCalledWith(
         artefact._id,
-        { statuses: [PdpGoalStatus.ACTIVE, PdpGoalStatus.COMPLETED] },
+        { statuses: [PdpGoalStatus.STARTED, PdpGoalStatus.COMPLETED] },
         { status: PdpGoalStatus.ARCHIVED },
         expect.anything(),
       );

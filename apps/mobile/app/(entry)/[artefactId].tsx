@@ -37,14 +37,14 @@ function formatGoalDate(isoDate: string): string {
 
 function getPdpGoalStatusDisplay(status: PdpGoalStatus): { label: string; variant: StatusVariant } {
   switch (status) {
-    case PdpGoalStatus.ACTIVE:
-      return { label: 'Active', variant: 'success' };
+    case PdpGoalStatus.STARTED:
+      return { label: 'Started', variant: 'success' };
     case PdpGoalStatus.COMPLETED:
       return { label: 'Completed', variant: 'info' };
     case PdpGoalStatus.ARCHIVED:
       return { label: 'Archived', variant: 'default' };
-    case PdpGoalStatus.PENDING:
-      return { label: 'Pending', variant: 'processing' };
+    case PdpGoalStatus.NOT_STARTED:
+      return { label: 'Not started', variant: 'processing' };
     default:
       return { label: 'Unknown', variant: 'default' };
   }
@@ -187,7 +187,7 @@ export default function EntryDetailScreen() {
   const hasActivePdpGoals = useMemo(() => {
     if (!artefact?.pdpGoals) return false;
     return artefact.pdpGoals.some(
-      (g) => g.status === PdpGoalStatus.ACTIVE || g.status === PdpGoalStatus.COMPLETED
+      (g) => g.status === PdpGoalStatus.STARTED || g.status === PdpGoalStatus.COMPLETED
     );
   }, [artefact?.pdpGoals]);
 
@@ -434,7 +434,7 @@ export default function EntryDetailScreen() {
                     {/* Actions */}
                     <View style={styles.pdpActions}>
                       {visibleActions.map((action, actionIndex) => {
-                        const actionActive = action.status === PdpGoalStatus.ACTIVE;
+                        const actionActive = action.status === PdpGoalStatus.STARTED;
 
                         return (
                           <View

@@ -22,7 +22,7 @@ export class DashboardService {
     const now = new Date();
     const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-    const activeStatuses = [PdpGoalStatus.PENDING, PdpGoalStatus.ACTIVE];
+    const activeStatuses = [PdpGoalStatus.NOT_STARTED, PdpGoalStatus.STARTED];
 
     const [recentEntriesResult, pdpGoalsResult, pdpGoalsTotalResult] = await Promise.all([
       this.artefactsService.listArtefacts(userId, { limit: 5 }),

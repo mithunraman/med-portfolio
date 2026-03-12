@@ -40,20 +40,20 @@ async function insertGoal(
       goal: overrides.goal ?? 'Test goal',
       userId: overrides.userId ?? userId,
       artefactId: overrides.artefactId ?? artefactId,
-      status: overrides.status ?? PdpGoalStatus.PENDING,
+      status: overrides.status ?? PdpGoalStatus.NOT_STARTED,
       reviewDate: overrides.reviewDate ?? null,
       actions: overrides.actions ?? [
         {
           xid: 'act_default_1',
           action: 'Default action 1',
           intendedEvidence: 'Evidence 1',
-          status: PdpGoalStatus.PENDING,
+          status: PdpGoalStatus.NOT_STARTED,
         },
         {
           xid: 'act_default_2',
           action: 'Default action 2',
           intendedEvidence: 'Evidence 2',
-          status: PdpGoalStatus.PENDING,
+          status: PdpGoalStatus.NOT_STARTED,
         },
       ],
     },
@@ -108,17 +108,17 @@ describe('PdpGoalsRepository (integration)', () => {
       await insertGoal(model, {
         xid: 'goal_ug1',
         actions: [
-          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.PENDING },
-          { xid: 'act_2', action: 'A2', intendedEvidence: 'E2', status: PdpGoalStatus.PENDING },
+          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.NOT_STARTED },
+          { xid: 'act_2', action: 'A2', intendedEvidence: 'E2', status: PdpGoalStatus.NOT_STARTED },
         ],
       });
 
       const reviewDate = new Date('2026-06-15');
       const result = await repo.updateGoal(
         'goal_ug1',
-        { status: PdpGoalStatus.ACTIVE, reviewDate },
+        { status: PdpGoalStatus.STARTED, reviewDate },
         [
-          { actionXid: 'act_1', status: PdpGoalStatus.ACTIVE },
+          { actionXid: 'act_1', status: PdpGoalStatus.STARTED },
           { actionXid: 'act_2', status: PdpGoalStatus.ARCHIVED },
         ],
       );
@@ -126,9 +126,9 @@ describe('PdpGoalsRepository (integration)', () => {
       expect(isOk(result)).toBe(true);
 
       const updated = await model.findOne({ xid: 'goal_ug1' }).lean();
-      expect(updated!.status).toBe(PdpGoalStatus.ACTIVE);
+      expect(updated!.status).toBe(PdpGoalStatus.STARTED);
       expect(updated!.reviewDate!.toISOString()).toBe(reviewDate.toISOString());
-      expect(updated!.actions[0].status).toBe(PdpGoalStatus.ACTIVE);
+      expect(updated!.actions[0].status).toBe(PdpGoalStatus.STARTED);
       expect(updated!.actions[1].status).toBe(PdpGoalStatus.ARCHIVED);
     });
 
@@ -136,8 +136,8 @@ describe('PdpGoalsRepository (integration)', () => {
       await insertGoal(model, {
         xid: 'goal_cascade',
         actions: [
-          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.PENDING },
-          { xid: 'act_2', action: 'A2', intendedEvidence: 'E2', status: PdpGoalStatus.PENDING },
+          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.NOT_STARTED },
+          { xid: 'act_2', action: 'A2', intendedEvidence: 'E2', status: PdpGoalStatus.NOT_STARTED },
         ],
       });
 
@@ -168,35 +168,35 @@ describe('PdpGoalsRepository (integration)', () => {
       expect(isOk(result)).toBe(true);
 
       const updated = await model.findOne({ xid: 'goal_rd' }).lean();
-      expect(updated!.status).toBe(PdpGoalStatus.PENDING); // unchanged
+      expect(updated!.status).toBe(PdpGoalStatus.NOT_STARTED); // unchanged
       expect(updated!.reviewDate!.toISOString()).toBe(reviewDate.toISOString());
-      expect(updated!.actions[0].status).toBe(PdpGoalStatus.PENDING); // unchanged
+      expect(updated!.actions[0].status).toBe(PdpGoalStatus.NOT_STARTED); // unchanged
     });
 
     it('handles actions with mixed target statuses in one call', async () => {
       await insertGoal(model, {
         xid: 'goal_mixed',
         actions: [
-          { xid: 'act_a', action: 'A', intendedEvidence: 'E', status: PdpGoalStatus.PENDING },
-          { xid: 'act_b', action: 'B', intendedEvidence: 'E', status: PdpGoalStatus.PENDING },
-          { xid: 'act_c', action: 'C', intendedEvidence: 'E', status: PdpGoalStatus.PENDING },
+          { xid: 'act_a', action: 'A', intendedEvidence: 'E', status: PdpGoalStatus.NOT_STARTED },
+          { xid: 'act_b', action: 'B', intendedEvidence: 'E', status: PdpGoalStatus.NOT_STARTED },
+          { xid: 'act_c', action: 'C', intendedEvidence: 'E', status: PdpGoalStatus.NOT_STARTED },
         ],
       });
 
       await repo.updateGoal(
         'goal_mixed',
-        { status: PdpGoalStatus.ACTIVE },
+        { status: PdpGoalStatus.STARTED },
         [
-          { actionXid: 'act_a', status: PdpGoalStatus.ACTIVE },
+          { actionXid: 'act_a', status: PdpGoalStatus.STARTED },
           { actionXid: 'act_b', status: PdpGoalStatus.ARCHIVED },
-          { actionXid: 'act_c', status: PdpGoalStatus.ACTIVE },
+          { actionXid: 'act_c', status: PdpGoalStatus.STARTED },
         ],
       );
 
       const updated = await model.findOne({ xid: 'goal_mixed' }).lean();
-      expect(updated!.actions[0].status).toBe(PdpGoalStatus.ACTIVE);  // act_a
+      expect(updated!.actions[0].status).toBe(PdpGoalStatus.STARTED);  // act_a
       expect(updated!.actions[1].status).toBe(PdpGoalStatus.ARCHIVED); // act_b
-      expect(updated!.actions[2].status).toBe(PdpGoalStatus.ACTIVE);  // act_c
+      expect(updated!.actions[2].status).toBe(PdpGoalStatus.STARTED);  // act_c
     });
   });
 
@@ -204,13 +204,13 @@ describe('PdpGoalsRepository (integration)', () => {
 
   describe('updateManyByArtefactId', () => {
     it('archives all PENDING goals and their actions for an artefact', async () => {
-      await insertGoal(model, { xid: 'goal_p1', status: PdpGoalStatus.PENDING });
-      await insertGoal(model, { xid: 'goal_p2', status: PdpGoalStatus.PENDING });
-      await insertGoal(model, { xid: 'goal_a1', status: PdpGoalStatus.ACTIVE });
+      await insertGoal(model, { xid: 'goal_p1', status: PdpGoalStatus.NOT_STARTED });
+      await insertGoal(model, { xid: 'goal_p2', status: PdpGoalStatus.NOT_STARTED });
+      await insertGoal(model, { xid: 'goal_a1', status: PdpGoalStatus.STARTED });
 
       const result = await repo.updateManyByArtefactId(
         artefactId,
-        { statuses: [PdpGoalStatus.PENDING] },
+        { statuses: [PdpGoalStatus.NOT_STARTED] },
         { status: PdpGoalStatus.ARCHIVED },
       );
 
@@ -227,17 +227,17 @@ describe('PdpGoalsRepository (integration)', () => {
       expect(pending2.status).toBe(PdpGoalStatus.ARCHIVED);
 
       // ACTIVE goal untouched
-      expect(active1.status).toBe(PdpGoalStatus.ACTIVE);
+      expect(active1.status).toBe(PdpGoalStatus.STARTED);
     });
 
     it('archives ACTIVE and COMPLETED goals when targeted', async () => {
-      await insertGoal(model, { xid: 'goal_act', status: PdpGoalStatus.ACTIVE });
+      await insertGoal(model, { xid: 'goal_act', status: PdpGoalStatus.STARTED });
       await insertGoal(model, { xid: 'goal_comp', status: PdpGoalStatus.COMPLETED });
-      await insertGoal(model, { xid: 'goal_pend', status: PdpGoalStatus.PENDING });
+      await insertGoal(model, { xid: 'goal_pend', status: PdpGoalStatus.NOT_STARTED });
 
       await repo.updateManyByArtefactId(
         artefactId,
-        { statuses: [PdpGoalStatus.ACTIVE, PdpGoalStatus.COMPLETED] },
+        { statuses: [PdpGoalStatus.STARTED, PdpGoalStatus.COMPLETED] },
         { status: PdpGoalStatus.ARCHIVED },
       );
 
@@ -251,41 +251,41 @@ describe('PdpGoalsRepository (integration)', () => {
       expect(completed.status).toBe(PdpGoalStatus.ARCHIVED);
 
       // PENDING untouched
-      expect(pending.status).toBe(PdpGoalStatus.PENDING);
+      expect(pending.status).toBe(PdpGoalStatus.NOT_STARTED);
     });
 
     it('does not affect goals from a different artefact', async () => {
       const otherArtefactId = new Types.ObjectId();
-      await insertGoal(model, { xid: 'goal_same', status: PdpGoalStatus.PENDING });
+      await insertGoal(model, { xid: 'goal_same', status: PdpGoalStatus.NOT_STARTED });
       await insertGoal(model, {
         xid: 'goal_other',
         artefactId: otherArtefactId,
-        status: PdpGoalStatus.PENDING,
+        status: PdpGoalStatus.NOT_STARTED,
       });
 
       await repo.updateManyByArtefactId(
         artefactId,
-        { statuses: [PdpGoalStatus.PENDING] },
+        { statuses: [PdpGoalStatus.NOT_STARTED] },
         { status: PdpGoalStatus.ARCHIVED },
       );
 
       const otherGoal = await model.findOne({ xid: 'goal_other' }).lean();
-      expect(otherGoal!.status).toBe(PdpGoalStatus.PENDING); // unchanged
+      expect(otherGoal!.status).toBe(PdpGoalStatus.NOT_STARTED); // unchanged
     });
 
     it('is a no-op when no goals match the filter', async () => {
-      await insertGoal(model, { xid: 'goal_active_only', status: PdpGoalStatus.ACTIVE });
+      await insertGoal(model, { xid: 'goal_active_only', status: PdpGoalStatus.STARTED });
 
       const result = await repo.updateManyByArtefactId(
         artefactId,
-        { statuses: [PdpGoalStatus.PENDING] }, // no PENDING goals exist
+        { statuses: [PdpGoalStatus.NOT_STARTED] }, // no PENDING goals exist
         { status: PdpGoalStatus.ARCHIVED },
       );
 
       expect(isOk(result)).toBe(true);
 
       const goal = await model.findOne({ xid: 'goal_active_only' }).lean();
-      expect(goal!.status).toBe(PdpGoalStatus.ACTIVE); // unchanged
+      expect(goal!.status).toBe(PdpGoalStatus.STARTED); // unchanged
     });
   });
 });

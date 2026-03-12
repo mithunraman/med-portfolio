@@ -13,7 +13,7 @@ export class PdpGoalAction {
   @Prop({ required: true, default: '' })
   intendedEvidence!: string;
 
-  @Prop({ required: true, type: Number, default: PdpGoalStatus.PENDING })
+  @Prop({ required: true, type: Number, default: PdpGoalStatus.NOT_STARTED })
   status!: PdpGoalStatus;
 
   @Prop({ type: Date, default: null })
@@ -42,7 +42,7 @@ export class PdpGoal {
   @Prop({ type: Types.ObjectId, default: null })
   artefactId!: Types.ObjectId | null;
 
-  @Prop({ required: true, type: Number, default: PdpGoalStatus.PENDING })
+  @Prop({ required: true, type: Number, default: PdpGoalStatus.NOT_STARTED })
   status!: PdpGoalStatus;
 
   @Prop({ type: Date, default: null })

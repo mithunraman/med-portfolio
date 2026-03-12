@@ -29,8 +29,8 @@ function formatReviewDate(isoDate: string): string {
 
 function getPdpGoalStatusDisplay(status: PdpGoalStatus): { label: string; variant: StatusVariant } {
   switch (status) {
-    case PdpGoalStatus.ACTIVE:
-      return { label: 'Active', variant: 'success' };
+    case PdpGoalStatus.STARTED:
+      return { label: 'Started', variant: 'success' };
     case PdpGoalStatus.COMPLETED:
       return { label: 'Completed', variant: 'info' };
     default:
@@ -40,7 +40,7 @@ function getPdpGoalStatusDisplay(status: PdpGoalStatus): { label: string; varian
 
 const STATUS_FILTERS: { label: string; value: PdpGoalStatus | null }[] = [
   { label: 'All', value: null },
-  { label: 'Active', value: PdpGoalStatus.ACTIVE },
+  { label: 'Started', value: PdpGoalStatus.STARTED },
   { label: 'Completed', value: PdpGoalStatus.COMPLETED },
 ];
 

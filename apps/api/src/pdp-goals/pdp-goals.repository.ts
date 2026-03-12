@@ -314,7 +314,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
               xid: nanoidAlphanumeric(),
               action: actionText,
               intendedEvidence: '',
-              status: PdpGoalStatus.PENDING,
+              status: PdpGoalStatus.NOT_STARTED,
               dueDate,
               completionReview: null,
             },

@@ -1,6 +1,6 @@
 export enum PdpGoalStatus {
   ARCHIVED = -1,
-  PENDING = 100,
-  ACTIVE = 200,
+  NOT_STARTED = 100,
+  STARTED = 200,
   COMPLETED = 300,
 }

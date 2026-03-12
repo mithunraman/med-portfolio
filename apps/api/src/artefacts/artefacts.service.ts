@@ -220,14 +220,14 @@ export class ArtefactsService {
             const actionUpdates: UpdatePdpGoalActionData[] = (selection.actions ?? []).map(
               (a) => ({
                 actionXid: a.actionId,
-                status: a.selected ? PdpGoalStatus.ACTIVE : PdpGoalStatus.ARCHIVED,
+                status: a.selected ? PdpGoalStatus.STARTED : PdpGoalStatus.ARCHIVED,
               })
             );
 
             const result = await this.pdpGoalsRepository.updateGoal(
               selection.goalId,
               {
-                status: PdpGoalStatus.ACTIVE,
+                status: PdpGoalStatus.STARTED,
                 reviewDate: selection.reviewDate ? new Date(selection.reviewDate) : null,
               },
               actionUpdates,
@@ -278,7 +278,7 @@ export class ArtefactsService {
         // 2. Always archive PENDING goals
         const pendingResult = await this.pdpGoalsRepository.updateManyByArtefactId(
           artefactDoc._id,
-          { statuses: [PdpGoalStatus.PENDING] },
+          { statuses: [PdpGoalStatus.NOT_STARTED] },
           { status: PdpGoalStatus.ARCHIVED },
           session
         );
@@ -291,7 +291,7 @@ export class ArtefactsService {
         if (archiveActivePdpGoals) {
           const activeResult = await this.pdpGoalsRepository.updateManyByArtefactId(
             artefactDoc._id,
-            { statuses: [PdpGoalStatus.ACTIVE, PdpGoalStatus.COMPLETED] },
+            { statuses: [PdpGoalStatus.STARTED, PdpGoalStatus.COMPLETED] },
             { status: PdpGoalStatus.ARCHIVED },
             session
           );

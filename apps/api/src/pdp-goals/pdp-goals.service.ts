@@ -16,7 +16,7 @@ import {
 } from './pdp-goals.repository.interface';
 import { AddPdpGoalActionDto, UpdatePdpGoalActionDto, UpdatePdpGoalDto } from './dto';
 
-const DEFAULT_STATUSES = [PdpGoalStatus.ACTIVE, PdpGoalStatus.COMPLETED];
+const DEFAULT_STATUSES = [PdpGoalStatus.STARTED, PdpGoalStatus.COMPLETED];
 
 function mapActionToDto(a: PdpGoalAction) {
   return {

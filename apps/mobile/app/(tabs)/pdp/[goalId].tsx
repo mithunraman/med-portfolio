@@ -33,6 +33,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+const WARNING_COLOR = '#f59e0b';
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function formatDate(isoDate: string): string {
@@ -52,14 +54,14 @@ function toCalendarString(date: Date): string {
 
 function getPdpGoalStatusDisplay(status: PdpGoalStatus): { label: string; variant: StatusVariant } {
   switch (status) {
-    case PdpGoalStatus.ACTIVE:
-      return { label: 'Active', variant: 'success' };
+    case PdpGoalStatus.STARTED:
+      return { label: 'Started', variant: 'success' };
     case PdpGoalStatus.COMPLETED:
       return { label: 'Completed', variant: 'info' };
     case PdpGoalStatus.ARCHIVED:
       return { label: 'Archived', variant: 'default' };
     default:
-      return { label: 'Pending', variant: 'processing' };
+      return { label: 'Not started', variant: 'processing' };
   }
 }
 
@@ -283,6 +285,8 @@ export default function PdpGoalDetailScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showAddAction, setShowAddAction] = useState(false);
   const [showCompletionReview, setShowCompletionReview] = useState(false);
+  const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, PdpGoalStatus>>({});
+  const [pendingActionIds, setPendingActionIds] = useState<Set<string>>(new Set());
 
   const handleSetReviewDate = useCallback(
     (isoDate: string) => {
@@ -294,6 +298,17 @@ export default function PdpGoalDetailScreen() {
 
   const handleMarkComplete = useCallback(() => {
     if (!goalId) return;
+    const pendingActions = visibleActions.filter(
+      (a) => (optimisticStatuses[a.id] ?? a.status) !== PdpGoalStatus.COMPLETED
+    );
+    if (pendingActions.length > 0) {
+      Alert.alert(
+        'Actions incomplete',
+        'Complete all actions before marking this goal as complete.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     Alert.alert(
       'Mark goal as complete',
       'Are you sure you want to mark this goal as completed?',
@@ -306,7 +321,7 @@ export default function PdpGoalDetailScreen() {
         },
       ]
     );
-  }, [goalId, dispatch]);
+  }, [goalId, dispatch, visibleActions, optimisticStatuses]);
 
   const handleArchive = useCallback(() => {
     if (!goalId) return;
@@ -346,6 +361,27 @@ export default function PdpGoalDetailScreen() {
     });
   }, [goal?.status, navigation, colors.text, handleShowMenu]);
 
+  const handleArchiveAction = useCallback(
+    (actionId: string) => {
+      if (!goalId) return;
+      showActionSheetWithOptions(
+        {
+          options: ['Remove action', 'Cancel'],
+          destructiveButtonIndex: 0,
+          cancelButtonIndex: 1,
+        },
+        (index) => {
+          if (index === 0) {
+            dispatch(
+              updatePdpGoalAction({ goalId, actionId, data: { status: PdpGoalStatus.ARCHIVED } })
+            );
+          }
+        }
+      );
+    },
+    [goalId, dispatch, showActionSheetWithOptions]
+  );
+
   const handleAddAction = useCallback(
     (actionText: string) => {
       if (!goalId) return;
@@ -360,8 +396,38 @@ export default function PdpGoalDetailScreen() {
     (actionId: string, currentStatus: PdpGoalStatus) => {
       if (!goalId) return;
       const newStatus =
-        currentStatus === PdpGoalStatus.ACTIVE ? PdpGoalStatus.PENDING : PdpGoalStatus.ACTIVE;
-      dispatch(updatePdpGoalAction({ goalId, actionId, data: { status: newStatus } }));
+        currentStatus === PdpGoalStatus.COMPLETED ? PdpGoalStatus.STARTED : PdpGoalStatus.COMPLETED;
+
+      // Optimistic update
+      setOptimisticStatuses((prev) => ({ ...prev, [actionId]: newStatus }));
+      setPendingActionIds((prev) => new Set(prev).add(actionId));
+
+      dispatch(updatePdpGoalAction({ goalId, actionId, data: { status: newStatus } }))
+        .unwrap()
+        .then(() => {
+          // Redux store is now updated — clear optimistic override
+          setOptimisticStatuses((prev) => {
+            const next = { ...prev };
+            delete next[actionId];
+            return next;
+          });
+        })
+        .catch(() => {
+          // Revert optimistic update and notify user
+          setOptimisticStatuses((prev) => {
+            const next = { ...prev };
+            delete next[actionId];
+            return next;
+          });
+          Alert.alert('Failed to update action', 'Please try again.');
+        })
+        .finally(() => {
+          setPendingActionIds((prev) => {
+            const next = new Set(prev);
+            next.delete(actionId);
+            return next;
+          });
+        });
     },
     [goalId, dispatch]
   );
@@ -390,10 +456,17 @@ export default function PdpGoalDetailScreen() {
   }
 
   const statusDisplay = getPdpGoalStatusDisplay(goal.status);
-  const isActive = goal.status === PdpGoalStatus.ACTIVE;
+  const isActive = goal.status === PdpGoalStatus.STARTED;
   const isCompleted = goal.status === PdpGoalStatus.COMPLETED;
   const isArchived = goal.status === PdpGoalStatus.ARCHIVED;
   const visibleActions = goal.actions.filter((a) => a.status !== PdpGoalStatus.ARCHIVED);
+  const completedActionCount = visibleActions.filter(
+    (a) => (optimisticStatuses[a.id] ?? a.status) === PdpGoalStatus.COMPLETED
+  ).length;
+  const allActionsDone =
+    visibleActions.length === 0 || completedActionCount === visibleActions.length;
+  const isOverdue =
+    isActive && !!goal.reviewDate && new Date(goal.reviewDate) < new Date();
 
   return (
     <>
@@ -404,6 +477,15 @@ export default function PdpGoalDetailScreen() {
         {/* Goal header */}
         <View style={styles.section}>
           <Text style={[styles.goalText, { color: colors.text }]}>{goal.goal}</Text>
+          {!!goal.artefactId && (
+            <TouchableOpacity style={styles.provenanceRow} onPress={handleViewEntry}>
+              <Ionicons name="document-text-outline" size={13} color={colors.textSecondary} style={styles.provenanceIcon} />
+              <Text style={[styles.provenanceText, { color: colors.textSecondary }]} numberOfLines={2}>
+                {goal.artefactTitle ?? 'View entry'}
+              </Text>
+              <Ionicons name="chevron-forward" size={13} color={colors.textSecondary} style={styles.provenanceIcon} />
+            </TouchableOpacity>
+          )}
           <View style={styles.metaRow}>
             <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />
             {goal.reviewDate ? (
@@ -412,9 +494,19 @@ export default function PdpGoalDetailScreen() {
                 style={styles.reviewDateButton}
                 disabled={isArchived}
               >
-                <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-                <Text style={[styles.reviewDateText, { color: colors.textSecondary }]}>
-                  Review by {formatDate(goal.reviewDate)}
+                <Ionicons
+                  name={isOverdue ? 'alert-circle-outline' : 'calendar-outline'}
+                  size={14}
+                  color={isOverdue ? WARNING_COLOR : colors.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.reviewDateText,
+                    { color: isOverdue ? WARNING_COLOR : colors.textSecondary },
+                  ]}
+                >
+                  {isOverdue ? 'Overdue · ' : 'Review by '}
+                  {formatDate(goal.reviewDate)}
                 </Text>
               </TouchableOpacity>
             ) : (
@@ -435,7 +527,25 @@ export default function PdpGoalDetailScreen() {
 
         {/* Actions */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Actions</Text>
+          <View style={styles.sectionTitleRow}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Actions</Text>
+            {visibleActions.length > 0 && (
+              <Text style={[styles.progressFraction, { color: colors.textSecondary }]}>
+                {completedActionCount}/{visibleActions.length}
+              </Text>
+            )}
+            <View style={styles.sectionTitleSpacer} />
+            {isActive && visibleActions.length > 0 && (
+              <Pressable
+                hitSlop={8}
+                onPress={() =>
+                  Alert.alert('Remove an action', 'Long press any action to remove it.')
+                }
+              >
+                <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} />
+              </Pressable>
+            )}
+          </View>
           <View style={[styles.actionsCard, { backgroundColor: colors.surface }]}>
             {visibleActions.length === 0 ? (
               <Text style={[styles.emptyActionsText, { color: colors.textSecondary }]}>
@@ -443,19 +553,23 @@ export default function PdpGoalDetailScreen() {
               </Text>
             ) : (
               visibleActions.map((action, index) => {
-                const isDone = action.status === PdpGoalStatus.ACTIVE;
+                const effectiveStatus = optimisticStatuses[action.id] ?? action.status;
+                const isDone = isCompleted || effectiveStatus === PdpGoalStatus.COMPLETED;
                 const isLast = index === visibleActions.length - 1;
+                const isPending = pendingActionIds.has(action.id);
 
                 return (
                   <Pressable
                     key={action.id}
-                    onPress={() => !isArchived && handleToggleAction(action.id, action.status)}
+                    onPress={() => !isArchived && !isCompleted && !isPending && handleToggleAction(action.id, effectiveStatus)}
+                    onLongPress={() => isActive && !isPending && handleArchiveAction(action.id)}
+                    delayLongPress={400}
                     style={[
                       styles.actionRow,
                       !isLast && styles.actionRowBorder,
                       { borderBottomColor: colors.border },
                     ]}
-                    disabled={isArchived}
+                    disabled={isArchived || isCompleted || isPending}
                   >
                     <View
                       style={[
@@ -533,22 +647,12 @@ export default function PdpGoalDetailScreen() {
               label="Mark as complete"
               onPress={handleMarkComplete}
               loading={mutating}
+              color={allActionsDone ? colors.primary : colors.textSecondary}
               icon={(color) => <Ionicons name="checkmark-circle" size={20} color={color} />}
             />
           </View>
         )}
 
-        {/* View entry */}
-        {!!goal.artefactId && (
-          <View style={styles.section}>
-            <Button
-              label="View entry"
-              onPress={handleViewEntry}
-              variant="ghost"
-              icon={(color) => <Ionicons name="document-text-outline" size={18} color={color} />}
-            />
-          </View>
-        )}
       </ScrollView>
 
       <DatePickerModal
@@ -595,6 +699,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 28,
   },
+  provenanceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+  },
+  provenanceText: {
+    fontSize: 12,
+    flexShrink: 1,
+  },
+  provenanceIcon: {
+    marginTop: 1,
+  },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -609,9 +727,21 @@ const styles = StyleSheet.create({
   reviewDateText: {
     fontSize: 13,
   },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sectionTitleSpacer: {
+    flex: 1,
+  },
   sectionTitle: {
     fontSize: 17,
     fontWeight: '600',
+  },
+  progressFraction: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   actionsCard: {
     borderRadius: 12,

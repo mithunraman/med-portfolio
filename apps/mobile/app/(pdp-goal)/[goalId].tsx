@@ -372,9 +372,35 @@ export default function PdpGoalDetailScreen() {
         },
         (index) => {
           if (index === 0) {
+            setOptimisticStatuses((prev) => ({ ...prev, [actionId]: PdpGoalStatus.ARCHIVED }));
+            setPendingActionIds((prev) => new Set(prev).add(actionId));
+
             dispatch(
               updatePdpGoalAction({ goalId, actionId, data: { status: PdpGoalStatus.ARCHIVED } })
-            );
+            )
+              .unwrap()
+              .then(() => {
+                setOptimisticStatuses((prev) => {
+                  const next = { ...prev };
+                  delete next[actionId];
+                  return next;
+                });
+              })
+              .catch(() => {
+                setOptimisticStatuses((prev) => {
+                  const next = { ...prev };
+                  delete next[actionId];
+                  return next;
+                });
+                Alert.alert('Failed to remove action', 'Please try again.');
+              })
+              .finally(() => {
+                setPendingActionIds((prev) => {
+                  const next = new Set(prev);
+                  next.delete(actionId);
+                  return next;
+                });
+              });
           }
         }
       );
@@ -459,7 +485,9 @@ export default function PdpGoalDetailScreen() {
   const isActive = goal.status === PdpGoalStatus.STARTED;
   const isCompleted = goal.status === PdpGoalStatus.COMPLETED;
   const isArchived = goal.status === PdpGoalStatus.ARCHIVED;
-  const visibleActions = goal.actions.filter((a) => a.status !== PdpGoalStatus.ARCHIVED);
+  const visibleActions = goal.actions.filter(
+    (a) => (optimisticStatuses[a.id] ?? a.status) !== PdpGoalStatus.ARCHIVED
+  );
   const completedActionCount = visibleActions.filter(
     (a) => (optimisticStatuses[a.id] ?? a.status) === PdpGoalStatus.COMPLETED
   ).length;
@@ -597,7 +625,7 @@ export default function PdpGoalDetailScreen() {
             )}
           </View>
 
-          {!isArchived && (
+          {!isArchived && !isCompleted && (
             <TouchableOpacity
               style={[styles.addActionButton, { borderColor: colors.border }]}
               onPress={() => setShowAddAction(true)}
@@ -630,12 +658,23 @@ export default function PdpGoalDetailScreen() {
                 )}
               </Pressable>
             ) : (
-              <Button
-                label="Write completion review"
+              <Pressable
+                style={[styles.reviewPromptCard, { backgroundColor: colors.surface }]}
                 onPress={() => setShowCompletionReview(true)}
-                variant="ghost"
-                icon={(color) => <Ionicons name="create-outline" size={18} color={color} />}
-              />
+              >
+                <View style={[styles.reviewPromptIcon, { backgroundColor: colors.background }]}>
+                  <Ionicons name="create-outline" size={18} color={colors.primary} />
+                </View>
+                <View style={styles.reviewPromptText}>
+                  <Text style={[styles.reviewPromptLabel, { color: colors.textSecondary }]}>
+                    How did it go?
+                  </Text>
+                  <Text style={[styles.reviewPromptCta, { color: colors.text }]}>
+                    Write your reflection
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+              </Pressable>
             )}
           </View>
         )}
@@ -806,6 +845,31 @@ const styles = StyleSheet.create({
   },
   reviewEditIcon: {
     marginTop: 2,
+  },
+  reviewPromptCard: {
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  reviewPromptIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reviewPromptText: {
+    flex: 1,
+    gap: 2,
+  },
+  reviewPromptLabel: {
+    fontSize: 12,
+  },
+  reviewPromptCta: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 
   // Modals

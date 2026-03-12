@@ -24,6 +24,13 @@ export interface FindByUserOptions {
   dueBefore?: Date;
 }
 
+export interface SaveGoalData {
+  status?: PdpGoalStatus;
+  reviewDate?: Date | null;
+  completionReview?: string | null;
+  actions?: PdpGoalAction[];
+}
+
 export interface UpdatePdpGoalData {
   status?: PdpGoalStatus;
   reviewDate?: Date | null;
@@ -33,11 +40,6 @@ export interface UpdatePdpGoalData {
 export interface UpdatePdpGoalActionData {
   actionXid: string;
   status: PdpGoalStatus;
-}
-
-export interface UpdateSingleActionData {
-  status?: PdpGoalStatus;
-  completionReview?: string | null;
 }
 
 export interface PdpGoalWithArtefact {
@@ -92,23 +94,13 @@ export interface IPdpGoalsRepository {
     statuses: PdpGoalStatus[]
   ): Promise<Result<number, DBError>>;
 
+  saveGoal(xid: string, data: SaveGoalData): Promise<Result<void, DBError>>;
+
   updateGoal(
     goalXid: string,
     data: UpdatePdpGoalData,
     actionUpdates?: UpdatePdpGoalActionData[],
     session?: ClientSession
-  ): Promise<Result<void, DBError>>;
-
-  updateSingleAction(
-    goalXid: string,
-    actionXid: string,
-    data: UpdateSingleActionData
-  ): Promise<Result<void, DBError>>;
-
-  addAction(
-    goalXid: string,
-    actionText: string,
-    dueDate: Date | null
   ): Promise<Result<void, DBError>>;
 
   updateManyByArtefactId(

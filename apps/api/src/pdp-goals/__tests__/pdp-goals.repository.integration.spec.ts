@@ -101,6 +101,61 @@ describe('PdpGoalsRepository (integration)', () => {
     await model.deleteMany({});
   });
 
+  // ─── saveGoal ───
+
+  describe('saveGoal', () => {
+    it('updates goal-level fields', async () => {
+      await insertGoal(model, { xid: 'goal_sg1' });
+
+      const reviewDate = new Date('2026-09-01');
+      const result = await repo.saveGoal('goal_sg1', {
+        status: PdpGoalStatus.STARTED,
+        reviewDate,
+        completionReview: 'Great progress',
+      });
+
+      expect(isOk(result)).toBe(true);
+
+      const updated = await model.findOne({ xid: 'goal_sg1' }).lean();
+      expect(updated!.status).toBe(PdpGoalStatus.STARTED);
+      expect(updated!.reviewDate!.toISOString()).toBe(reviewDate.toISOString());
+      expect(updated!.completionReview).toBe('Great progress');
+    });
+
+    it('overwrites the actions array', async () => {
+      await insertGoal(model, {
+        xid: 'goal_sg2',
+        actions: [
+          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.NOT_STARTED },
+          { xid: 'act_2', action: 'A2', intendedEvidence: 'E2', status: PdpGoalStatus.ARCHIVED },
+        ],
+      });
+
+      const result = await repo.saveGoal('goal_sg2', {
+        actions: [
+          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.COMPLETED, dueDate: null, completionReview: null },
+          { xid: 'act_2', action: 'A2', intendedEvidence: 'E2', status: PdpGoalStatus.ARCHIVED, dueDate: null, completionReview: null },
+        ],
+      });
+
+      expect(isOk(result)).toBe(true);
+
+      const updated = await model.findOne({ xid: 'goal_sg2' }).lean();
+      expect(updated!.actions[0].status).toBe(PdpGoalStatus.COMPLETED); // act_1 updated
+      expect(updated!.actions[1].status).toBe(PdpGoalStatus.ARCHIVED);  // act_2 preserved
+    });
+
+    it('does not touch unspecified fields', async () => {
+      await insertGoal(model, { xid: 'goal_sg3', status: PdpGoalStatus.STARTED });
+
+      await repo.saveGoal('goal_sg3', { completionReview: 'Done' });
+
+      const updated = await model.findOne({ xid: 'goal_sg3' }).lean();
+      expect(updated!.status).toBe(PdpGoalStatus.STARTED); // unchanged
+      expect(updated!.completionReview).toBe('Done');
+    });
+  });
+
   // ─── updateGoal ───
 
   describe('updateGoal', () => {
@@ -144,7 +199,7 @@ describe('PdpGoalsRepository (integration)', () => {
       const result = await repo.updateGoal(
         'goal_cascade',
         { status: PdpGoalStatus.ARCHIVED },
-        undefined, // cascade
+        undefined,
       );
 
       expect(isOk(result)).toBe(true);
@@ -153,24 +208,6 @@ describe('PdpGoalsRepository (integration)', () => {
       expect(updated!.status).toBe(PdpGoalStatus.ARCHIVED);
       expect(updated!.actions[0].status).toBe(PdpGoalStatus.ARCHIVED);
       expect(updated!.actions[1].status).toBe(PdpGoalStatus.ARCHIVED);
-    });
-
-    it('updates only reviewDate without changing statuses', async () => {
-      await insertGoal(model, { xid: 'goal_rd' });
-
-      const reviewDate = new Date('2026-09-01');
-      const result = await repo.updateGoal(
-        'goal_rd',
-        { reviewDate },
-        [], // empty array = no action updates, no cascade
-      );
-
-      expect(isOk(result)).toBe(true);
-
-      const updated = await model.findOne({ xid: 'goal_rd' }).lean();
-      expect(updated!.status).toBe(PdpGoalStatus.NOT_STARTED); // unchanged
-      expect(updated!.reviewDate!.toISOString()).toBe(reviewDate.toISOString());
-      expect(updated!.actions[0].status).toBe(PdpGoalStatus.NOT_STARTED); // unchanged
     });
 
     it('handles actions with mixed target statuses in one call', async () => {

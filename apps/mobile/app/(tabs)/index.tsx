@@ -248,7 +248,7 @@ export default function HomeScreen() {
 
   const handleGoalPress = useCallback(
     (goal: PdpGoal) => {
-      router.push(`/(tabs)/pdp/${goal.id}`);
+      router.push(`/(pdp-goal)/${goal.id}`);
     },
     [router]
   );

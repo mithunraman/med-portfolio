@@ -10,9 +10,9 @@ import {
   FindByUserOptions,
   IPdpGoalsRepository,
   PdpGoalWithArtefact,
+  SaveGoalData,
   UpdatePdpGoalActionData,
   UpdatePdpGoalData,
-  UpdateSingleActionData,
 } from './pdp-goals.repository.interface';
 import { PdpGoal, PdpGoalDocument } from './schemas/pdp-goal.schema';
 
@@ -218,6 +218,25 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     }
   }
 
+  async saveGoal(xid: string, data: SaveGoalData): Promise<Result<void, DBError>> {
+    try {
+      const setFields: Record<string, unknown> = {};
+      if (data.status !== undefined) setFields.status = data.status;
+      if (data.reviewDate !== undefined) setFields.reviewDate = data.reviewDate;
+      if (data.completionReview !== undefined) setFields.completionReview = data.completionReview;
+      if (data.actions !== undefined) setFields.actions = data.actions;
+
+      if (Object.keys(setFields).length > 0) {
+        await this.pdpGoalModel.updateOne({ xid }, { $set: setFields });
+      }
+
+      return ok(undefined);
+    } catch (error) {
+      this.logger.error(`Failed to save PDP goal ${xid}`, error);
+      return err({ code: 'DB_ERROR', message: 'Failed to save PDP goal' });
+    }
+  }
+
   async updateGoal(
     goalXid: string,
     data: UpdatePdpGoalData,
@@ -230,7 +249,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       if (data.reviewDate !== undefined) goalSetFields.reviewDate = data.reviewDate;
       if (data.completionReview !== undefined) goalSetFields.completionReview = data.completionReview;
 
-      if (actionUpdates) {
+      if (actionUpdates && actionUpdates.length > 0) {
         if (Object.keys(goalSetFields).length > 0) {
           await this.pdpGoalModel.updateOne(
             { xid: goalXid },
@@ -254,6 +273,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
           );
         }
       } else {
+        // Cascade: update goal fields and propagate status to all actions
         if (data.status !== undefined) {
           goalSetFields['actions.$[].status'] = data.status;
         }
@@ -271,61 +291,6 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     } catch (error) {
       this.logger.error(`Failed to update PDP goal ${goalXid}`, error);
       return err({ code: 'DB_ERROR', message: 'Failed to update PDP goal' });
-    }
-  }
-
-  async updateSingleAction(
-    goalXid: string,
-    actionXid: string,
-    data: UpdateSingleActionData
-  ): Promise<Result<void, DBError>> {
-    try {
-      const setFields: Record<string, unknown> = {};
-      if (data.status !== undefined) setFields['actions.$[elem].status'] = data.status;
-      if (data.completionReview !== undefined)
-        setFields['actions.$[elem].completionReview'] = data.completionReview;
-
-      if (Object.keys(setFields).length === 0) return ok(undefined);
-
-      await this.pdpGoalModel.updateOne(
-        { xid: goalXid },
-        { $set: setFields },
-        { arrayFilters: [{ 'elem.xid': actionXid }] }
-      );
-
-      return ok(undefined);
-    } catch (error) {
-      this.logger.error(`Failed to update action ${actionXid} on goal ${goalXid}`, error);
-      return err({ code: 'DB_ERROR', message: 'Failed to update action' });
-    }
-  }
-
-  async addAction(
-    goalXid: string,
-    actionText: string,
-    dueDate: Date | null
-  ): Promise<Result<void, DBError>> {
-    try {
-      await this.pdpGoalModel.updateOne(
-        { xid: goalXid },
-        {
-          $push: {
-            actions: {
-              xid: nanoidAlphanumeric(),
-              action: actionText,
-              intendedEvidence: '',
-              status: PdpGoalStatus.NOT_STARTED,
-              dueDate,
-              completionReview: null,
-            },
-          },
-        }
-      );
-
-      return ok(undefined);
-    } catch (error) {
-      this.logger.error(`Failed to add action to goal ${goalXid}`, error);
-      return err({ code: 'DB_ERROR', message: 'Failed to add action' });
     }
   }
 

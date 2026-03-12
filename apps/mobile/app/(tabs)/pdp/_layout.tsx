@@ -15,7 +15,6 @@ export default function PdpLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="[goalId]" options={{ title: 'PDP Goal' }} />
     </Stack>
   );
 }

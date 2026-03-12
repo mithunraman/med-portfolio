@@ -105,7 +105,7 @@ export default function PdpScreen() {
 
   const handleGoalPress = useCallback(
     (goal: PdpGoalResponse) => {
-      router.push(`/(tabs)/pdp/${goal.id}`);
+      router.push(`/(pdp-goal)/${goal.id}`);
     },
     [router]
   );

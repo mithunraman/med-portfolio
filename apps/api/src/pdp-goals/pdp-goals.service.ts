@@ -7,14 +7,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Types } from 'mongoose';
+import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { isErr } from '../common/utils/result.util';
-import type { PdpGoalAction } from './schemas/pdp-goal.schema';
+import { AddPdpGoalActionDto, UpdatePdpGoalActionDto, UpdatePdpGoalDto } from './dto';
 import {
   IPdpGoalsRepository,
   PDP_GOALS_REPOSITORY,
   PdpGoalWithArtefact,
 } from './pdp-goals.repository.interface';
-import { AddPdpGoalActionDto, UpdatePdpGoalActionDto, UpdatePdpGoalDto } from './dto';
+import type { PdpGoalAction } from './schemas/pdp-goal.schema';
 
 const DEFAULT_STATUSES = [PdpGoalStatus.STARTED, PdpGoalStatus.COMPLETED];
 
@@ -34,7 +35,8 @@ function mapGoalToDto(goal: PdpGoalWithArtefact): PdpGoalResponse {
     id: goal.xid,
     goal: goal.goal,
     status: goal.status,
-    reviewDate: goal.reviewDate instanceof Date ? goal.reviewDate.toISOString() : (goal.reviewDate ?? null),
+    reviewDate:
+      goal.reviewDate instanceof Date ? goal.reviewDate.toISOString() : (goal.reviewDate ?? null),
     completionReview: goal.completionReview,
     actions: goal.actions.map(mapActionToDto),
     artefactId: goal.artefactXid ?? '',
@@ -79,41 +81,74 @@ export class PdpGoalsService {
     return mapGoalToDto(result.value);
   }
 
-  async updateGoal(userId: string, goalXid: string, dto: UpdatePdpGoalDto): Promise<PdpGoalResponse> {
-    const existing = await this.pdpGoalsRepository.findOneWithArtefact(
+  async updateGoal(
+    userId: string,
+    goalXid: string,
+    dto: UpdatePdpGoalDto
+  ): Promise<PdpGoalResponse> {
+    const result = await this.pdpGoalsRepository.findOneWithArtefact(
       goalXid,
       new Types.ObjectId(userId)
     );
 
-    if (isErr(existing)) throw new InternalServerErrorException(existing.error.message);
-    if (!existing.value) throw new NotFoundException('PDP goal not found');
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
+    if (!result.value) throw new NotFoundException('PDP goal not found');
 
-    const updateResult = await this.pdpGoalsRepository.updateGoal(goalXid, {
-      status: dto.status,
-      reviewDate: dto.reviewDate !== undefined ? (dto.reviewDate ? new Date(dto.reviewDate) : null) : undefined,
-      completionReview: dto.completionReview,
+    const goal = result.value;
+
+    if (dto.status !== undefined) goal.status = dto.status;
+    if (dto.reviewDate !== undefined)
+      goal.reviewDate = dto.reviewDate ? new Date(dto.reviewDate) : null;
+    if (dto.completionReview !== undefined) goal.completionReview = dto.completionReview ?? null;
+
+    // When marking complete, complete all non-archived actions
+    if (dto.status === PdpGoalStatus.COMPLETED) {
+      goal.actions = goal.actions.map((a) =>
+        a.status !== PdpGoalStatus.ARCHIVED ? { ...a, status: PdpGoalStatus.COMPLETED } : a
+      );
+    }
+
+    const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, {
+      status: goal.status,
+      reviewDate: goal.reviewDate,
+      completionReview: goal.completionReview,
+      actions: goal.actions,
     });
 
-    if (isErr(updateResult)) throw new InternalServerErrorException(updateResult.error.message);
+    if (isErr(saveResult)) throw new InternalServerErrorException(saveResult.error.message);
 
-    return this.getGoal(userId, goalXid);
+    return mapGoalToDto(goal);
   }
 
-  async addAction(userId: string, goalXid: string, dto: AddPdpGoalActionDto): Promise<PdpGoalResponse> {
-    const existing = await this.pdpGoalsRepository.findOneWithArtefact(
+  async addAction(
+    userId: string,
+    goalXid: string,
+    dto: AddPdpGoalActionDto
+  ): Promise<PdpGoalResponse> {
+    const result = await this.pdpGoalsRepository.findOneWithArtefact(
       goalXid,
       new Types.ObjectId(userId)
     );
 
-    if (isErr(existing)) throw new InternalServerErrorException(existing.error.message);
-    if (!existing.value) throw new NotFoundException('PDP goal not found');
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
+    if (!result.value) throw new NotFoundException('PDP goal not found');
 
-    const dueDate = existing.value.reviewDate;
+    const goal = result.value;
+    const newAction: PdpGoalAction = {
+      xid: nanoidAlphanumeric(),
+      action: dto.action,
+      intendedEvidence: '',
+      status: PdpGoalStatus.NOT_STARTED,
+      dueDate: goal.reviewDate,
+      completionReview: null,
+    };
 
-    const addResult = await this.pdpGoalsRepository.addAction(goalXid, dto.action, dueDate);
-    if (isErr(addResult)) throw new InternalServerErrorException(addResult.error.message);
+    goal.actions = [...goal.actions, newAction];
 
-    return this.getGoal(userId, goalXid);
+    const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, { actions: goal.actions });
+    if (isErr(saveResult)) throw new InternalServerErrorException(saveResult.error.message);
+
+    return mapGoalToDto(goal);
   }
 
   async updateAction(
@@ -122,24 +157,24 @@ export class PdpGoalsService {
     actionXid: string,
     dto: UpdatePdpGoalActionDto
   ): Promise<PdpGoalResponse> {
-    const existing = await this.pdpGoalsRepository.findOneWithArtefact(
+    const result = await this.pdpGoalsRepository.findOneWithArtefact(
       goalXid,
       new Types.ObjectId(userId)
     );
 
-    if (isErr(existing)) throw new InternalServerErrorException(existing.error.message);
-    if (!existing.value) throw new NotFoundException('PDP goal not found');
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
+    if (!result.value) throw new NotFoundException('PDP goal not found');
 
-    const actionExists = existing.value.actions.some((a) => a.xid === actionXid);
-    if (!actionExists) throw new NotFoundException('Action not found');
+    const goal = result.value;
+    const action = goal.actions.find((a) => a.xid === actionXid);
+    if (!action) throw new NotFoundException('Action not found');
 
-    const updateResult = await this.pdpGoalsRepository.updateSingleAction(goalXid, actionXid, {
-      status: dto.status,
-      completionReview: dto.completionReview,
-    });
+    if (dto.status !== undefined) action.status = dto.status;
+    if (dto.completionReview !== undefined) action.completionReview = dto.completionReview ?? null;
 
-    if (isErr(updateResult)) throw new InternalServerErrorException(updateResult.error.message);
+    const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, { actions: goal.actions });
+    if (isErr(saveResult)) throw new InternalServerErrorException(saveResult.error.message);
 
-    return this.getGoal(userId, goalXid);
+    return mapGoalToDto(goal);
   }
 }

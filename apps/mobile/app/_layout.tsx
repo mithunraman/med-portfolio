@@ -131,6 +131,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(messages)" options={{ presentation: 'card' }} />
         <Stack.Screen name="(entry)" options={{ presentation: 'card' }} />
+        <Stack.Screen name="(pdp-goal)" options={{ presentation: 'card' }} />
       </Stack>
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </View>

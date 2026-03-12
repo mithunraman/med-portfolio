@@ -2,7 +2,7 @@ import { PdpGoalStatus } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
 import type { DBError } from '../artefacts/artefacts.repository.interface';
 import type { Result } from '../common/utils/result.util';
-import type { PdpGoal } from './schemas/pdp-goal.schema';
+import type { PdpGoal, PdpGoalAction } from './schemas/pdp-goal.schema';
 
 export const PDP_GOALS_REPOSITORY = Symbol('PDP_GOALS_REPOSITORY');
 
@@ -27,11 +27,32 @@ export interface FindByUserOptions {
 export interface UpdatePdpGoalData {
   status?: PdpGoalStatus;
   reviewDate?: Date | null;
+  completionReview?: string | null;
 }
 
 export interface UpdatePdpGoalActionData {
   actionXid: string;
   status: PdpGoalStatus;
+}
+
+export interface UpdateSingleActionData {
+  status?: PdpGoalStatus;
+  completionReview?: string | null;
+}
+
+export interface PdpGoalWithArtefact {
+  xid: string;
+  goal: string;
+  userId: Types.ObjectId;
+  artefactId: Types.ObjectId | null;
+  status: PdpGoalStatus;
+  reviewDate: Date | null;
+  completionReview: string | null;
+  actions: PdpGoalAction[];
+  createdAt: Date;
+  updatedAt: Date;
+  artefactXid: string | null;
+  artefactTitle: string | null;
 }
 
 export interface IPdpGoalsRepository {
@@ -56,6 +77,16 @@ export interface IPdpGoalsRepository {
     options?: FindByUserOptions
   ): Promise<Result<PdpGoal[], DBError>>;
 
+  findByUserIdWithArtefact(
+    userId: Types.ObjectId,
+    statuses: PdpGoalStatus[]
+  ): Promise<Result<PdpGoalWithArtefact[], DBError>>;
+
+  findOneWithArtefact(
+    goalXid: string,
+    userId: Types.ObjectId
+  ): Promise<Result<PdpGoalWithArtefact | null, DBError>>;
+
   countByUserId(
     userId: Types.ObjectId,
     statuses: PdpGoalStatus[]
@@ -66,6 +97,18 @@ export interface IPdpGoalsRepository {
     data: UpdatePdpGoalData,
     actionUpdates?: UpdatePdpGoalActionData[],
     session?: ClientSession
+  ): Promise<Result<void, DBError>>;
+
+  updateSingleAction(
+    goalXid: string,
+    actionXid: string,
+    data: UpdateSingleActionData
+  ): Promise<Result<void, DBError>>;
+
+  addAction(
+    goalXid: string,
+    actionText: string,
+    dueDate: Date | null
   ): Promise<Result<void, DBError>>;
 
   updateManyByArtefactId(

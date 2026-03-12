@@ -7,6 +7,7 @@ import {
   messagesReducer,
   nudgeReducer,
   onboardingReducer,
+  pdpGoalsReducer,
 } from './slices';
 
 export const store = configureStore({
@@ -18,6 +19,7 @@ export const store = configureStore({
     onboarding: onboardingReducer,
     nudge: nudgeReducer,
     dashboard: dashboardReducer,
+    pdpGoals: pdpGoalsReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

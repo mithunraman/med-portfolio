@@ -18,3 +18,6 @@ export { default as nudgeReducer } from './nudgeSlice';
 
 export * from './dashboard';
 export { dashboardReducer } from './dashboard';
+
+export * from './pdpGoals';
+export { pdpGoalsReducer } from './pdpGoals';

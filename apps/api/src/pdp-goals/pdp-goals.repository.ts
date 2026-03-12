@@ -9,10 +9,51 @@ import {
   CreatePdpGoalData,
   FindByUserOptions,
   IPdpGoalsRepository,
+  PdpGoalWithArtefact,
   UpdatePdpGoalActionData,
   UpdatePdpGoalData,
+  UpdateSingleActionData,
 } from './pdp-goals.repository.interface';
 import { PdpGoal, PdpGoalDocument } from './schemas/pdp-goal.schema';
+
+const ARTEFACT_LOOKUP_PIPELINE = [
+  {
+    $lookup: {
+      from: 'artefacts',
+      localField: 'artefactId',
+      foreignField: '_id',
+      as: '_artefact',
+      pipeline: [{ $project: { xid: 1, title: 1 } }],
+    },
+  },
+  {
+    $addFields: {
+      _artefactDoc: { $arrayElemAt: ['$_artefact', 0] },
+      _sortDate: {
+        $cond: [{ $eq: ['$reviewDate', null] }, new Date('9999-12-31'), '$reviewDate'],
+      },
+    },
+  },
+  { $project: { _artefact: 0 } },
+];
+
+function mapToGoalWithArtefact(raw: Record<string, unknown>): PdpGoalWithArtefact {
+  const artefactDoc = raw._artefactDoc as { xid?: string; title?: string } | undefined;
+  return {
+    xid: raw.xid as string,
+    goal: raw.goal as string,
+    userId: raw.userId as Types.ObjectId,
+    artefactId: raw.artefactId as Types.ObjectId | null,
+    status: raw.status as PdpGoalStatus,
+    reviewDate: raw.reviewDate as Date | null,
+    completionReview: raw.completionReview as string | null,
+    actions: raw.actions as PdpGoalWithArtefact['actions'],
+    createdAt: raw.createdAt as Date,
+    updatedAt: raw.updatedAt as Date,
+    artefactXid: artefactDoc?.xid ?? null,
+    artefactTitle: artefactDoc?.title ?? null,
+  };
+}
 
 @Injectable()
 export class PdpGoalsRepository implements IPdpGoalsRepository {
@@ -123,6 +164,44 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     }
   }
 
+  async findByUserIdWithArtefact(
+    userId: Types.ObjectId,
+    statuses: PdpGoalStatus[]
+  ): Promise<Result<PdpGoalWithArtefact[], DBError>> {
+    try {
+      const results = await this.pdpGoalModel.aggregate([
+        { $match: { userId, status: { $in: statuses } } },
+        ...ARTEFACT_LOOKUP_PIPELINE,
+        { $sort: { _sortDate: 1 } },
+        { $project: { _sortDate: 0 } },
+      ]);
+
+      return ok(results.map(mapToGoalWithArtefact));
+    } catch (error) {
+      this.logger.error('Failed to find PDP goals with artefact info', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find PDP goals' });
+    }
+  }
+
+  async findOneWithArtefact(
+    goalXid: string,
+    userId: Types.ObjectId
+  ): Promise<Result<PdpGoalWithArtefact | null, DBError>> {
+    try {
+      const results = await this.pdpGoalModel.aggregate([
+        { $match: { xid: goalXid, userId } },
+        ...ARTEFACT_LOOKUP_PIPELINE,
+        { $project: { _sortDate: 0 } },
+        { $limit: 1 },
+      ]);
+
+      return ok(results.length > 0 ? mapToGoalWithArtefact(results[0]) : null);
+    } catch (error) {
+      this.logger.error(`Failed to find PDP goal ${goalXid}`, error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find PDP goal' });
+    }
+  }
+
   async countByUserId(
     userId: Types.ObjectId,
     statuses: PdpGoalStatus[]
@@ -149,9 +228,9 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       const goalSetFields: Record<string, unknown> = {};
       if (data.status !== undefined) goalSetFields.status = data.status;
       if (data.reviewDate !== undefined) goalSetFields.reviewDate = data.reviewDate;
+      if (data.completionReview !== undefined) goalSetFields.completionReview = data.completionReview;
 
       if (actionUpdates) {
-        // Update goal-level fields + specific actions by xid
         if (Object.keys(goalSetFields).length > 0) {
           await this.pdpGoalModel.updateOne(
             { xid: goalXid },
@@ -160,7 +239,6 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
           );
         }
 
-        // Group actions by target status for batch updates
         const byStatus = new Map<PdpGoalStatus, string[]>();
         for (const au of actionUpdates) {
           const xids = byStatus.get(au.status) || [];
@@ -176,7 +254,6 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
           );
         }
       } else {
-        // No specific action updates — cascade goal status to all actions
         if (data.status !== undefined) {
           goalSetFields['actions.$[].status'] = data.status;
         }
@@ -194,6 +271,61 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     } catch (error) {
       this.logger.error(`Failed to update PDP goal ${goalXid}`, error);
       return err({ code: 'DB_ERROR', message: 'Failed to update PDP goal' });
+    }
+  }
+
+  async updateSingleAction(
+    goalXid: string,
+    actionXid: string,
+    data: UpdateSingleActionData
+  ): Promise<Result<void, DBError>> {
+    try {
+      const setFields: Record<string, unknown> = {};
+      if (data.status !== undefined) setFields['actions.$[elem].status'] = data.status;
+      if (data.completionReview !== undefined)
+        setFields['actions.$[elem].completionReview'] = data.completionReview;
+
+      if (Object.keys(setFields).length === 0) return ok(undefined);
+
+      await this.pdpGoalModel.updateOne(
+        { xid: goalXid },
+        { $set: setFields },
+        { arrayFilters: [{ 'elem.xid': actionXid }] }
+      );
+
+      return ok(undefined);
+    } catch (error) {
+      this.logger.error(`Failed to update action ${actionXid} on goal ${goalXid}`, error);
+      return err({ code: 'DB_ERROR', message: 'Failed to update action' });
+    }
+  }
+
+  async addAction(
+    goalXid: string,
+    actionText: string,
+    dueDate: Date | null
+  ): Promise<Result<void, DBError>> {
+    try {
+      await this.pdpGoalModel.updateOne(
+        { xid: goalXid },
+        {
+          $push: {
+            actions: {
+              xid: nanoidAlphanumeric(),
+              action: actionText,
+              intendedEvidence: '',
+              status: PdpGoalStatus.PENDING,
+              dueDate,
+              completionReview: null,
+            },
+          },
+        }
+      );
+
+      return ok(undefined);
+    } catch (error) {
+      this.logger.error(`Failed to add action to goal ${goalXid}`, error);
+      return err({ code: 'DB_ERROR', message: 'Failed to add action' });
     }
   }
 

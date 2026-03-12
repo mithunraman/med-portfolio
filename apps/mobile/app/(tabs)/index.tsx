@@ -155,7 +155,15 @@ function RecentEntriesModule({
 
 // ─── Module C: PDP Goals Due Soon ─────────────────────────────────────────────
 
-function PdpDueSoonModule({ items, total }: { items: PdpGoal[]; total: number }) {
+function PdpDueSoonModule({
+  items,
+  total,
+  onGoalPress,
+}: {
+  items: PdpGoal[];
+  total: number;
+  onGoalPress: (goal: PdpGoal) => void;
+}) {
   const { colors } = useTheme();
 
   if (items.length === 0) {
@@ -179,7 +187,14 @@ function PdpDueSoonModule({ items, total }: { items: PdpGoal[]; total: number })
         actionLabel={total > items.length ? `See all (${total})` : undefined}
       />
       {items.map((goal) => (
-        <View key={goal.id} style={[styles.pdpActionCard, { backgroundColor: colors.surface }]}>
+        <TouchableOpacity
+          key={goal.id}
+          style={[styles.pdpActionCard, { backgroundColor: colors.surface }]}
+          onPress={() => onGoalPress(goal)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`PDP goal: ${goal.goal}`}
+        >
           <Ionicons name="flag-outline" size={18} color={colors.primary} />
           <View style={styles.pdpActionContent}>
             <Text style={[styles.pdpActionText, { color: colors.text }]} numberOfLines={2}>
@@ -189,7 +204,8 @@ function PdpDueSoonModule({ items, total }: { items: PdpGoal[]; total: number })
               {goal.actions.length} action{goal.actions.length !== 1 ? 's' : ''}
             </Text>
           </View>
-        </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+        </TouchableOpacity>
       ))}
     </View>
   );
@@ -230,6 +246,13 @@ export default function HomeScreen() {
     router.push('/(tabs)/entries');
   }, [router]);
 
+  const handleGoalPress = useCallback(
+    (goal: PdpGoal) => {
+      router.push(`/(tabs)/pdp/${goal.id}`);
+    },
+    [router]
+  );
+
   return (
     <View
       style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}
@@ -266,6 +289,7 @@ export default function HomeScreen() {
         <PdpDueSoonModule
           items={dashboardData?.pdpGoalsDue.items ?? []}
           total={dashboardData?.pdpGoalsDue.total ?? 0}
+          onGoalPress={handleGoalPress}
         />
       </ScrollView>
     </View>
@@ -400,5 +424,4 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 20,
   },
-
 });

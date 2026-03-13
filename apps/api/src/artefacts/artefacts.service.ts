@@ -1,7 +1,10 @@
 import type {
   Artefact,
   ArtefactListResponse,
+  ArtefactVersionHistoryResponse,
+  EditArtefactRequest,
   FinaliseArtefactRequest,
+  RestoreArtefactVersionRequest,
   UpdateArtefactStatusRequest,
 } from '@acme/shared';
 import { ArtefactStatus, MessageProcessingStatus, PdpGoalStatus, Specialty } from '@acme/shared';
@@ -28,6 +31,7 @@ import {
   PDP_GOALS_REPOSITORY,
   UpdatePdpGoalActionData,
 } from '../pdp-goals/pdp-goals.repository.interface';
+import { VersionHistoryService } from '../version-history';
 import { ARTEFACTS_REPOSITORY, IArtefactsRepository } from './artefacts.repository.interface';
 import { CreateArtefactDto, ListArtefactsDto } from './dto';
 import { toArtefactDto } from './mappers/artefact.mapper';
@@ -40,6 +44,8 @@ function generateDefaultTitle(): string {
 
 @Injectable()
 export class ArtefactsService {
+  private static readonly ENTITY_TYPE = 'artefact';
+
   constructor(
     @Inject(ARTEFACTS_REPOSITORY)
     private readonly artefactsRepository: IArtefactsRepository,
@@ -47,7 +53,8 @@ export class ArtefactsService {
     private readonly conversationsRepository: IConversationsRepository,
     @Inject(PDP_GOALS_REPOSITORY)
     private readonly pdpGoalsRepository: IPdpGoalsRepository,
-    private readonly transactionService: TransactionService
+    private readonly transactionService: TransactionService,
+    private readonly versionHistoryService: VersionHistoryService
   ) {}
 
   async createArtefact(userId: string, dto: CreateArtefactDto): Promise<Artefact> {
@@ -125,9 +132,10 @@ export class ArtefactsService {
 
     const artefact = artefactResult.value;
 
-    const [conversationResult, pdpGoalsResult] = await Promise.all([
+    const [conversationResult, pdpGoalsResult, versionCount] = await Promise.all([
       this.conversationsRepository.findActiveConversationByArtefact(artefact._id),
       this.pdpGoalsRepository.findByArtefactId(artefact._id),
+      this.versionHistoryService.countVersions(ArtefactsService.ENTITY_TYPE, artefact._id),
     ]);
 
     if (isErr(conversationResult)) {
@@ -140,7 +148,7 @@ export class ArtefactsService {
       throw new InternalServerErrorException(pdpGoalsResult.error.message);
     }
 
-    return toArtefactDto(artefact, conversationResult.value, pdpGoalsResult.value);
+    return toArtefactDto(artefact, conversationResult.value, pdpGoalsResult.value, versionCount);
   }
 
   async updateArtefactStatus(
@@ -300,10 +308,183 @@ export class ArtefactsService {
     );
   }
 
+  async editArtefact(userId: string, xid: string, dto: EditArtefactRequest): Promise<Artefact> {
+    const findResult = await this.artefactsRepository.findByXid(xid, new Types.ObjectId(userId));
+
+    if (isErr(findResult)) {
+      throw new InternalServerErrorException(findResult.error.message);
+    }
+    if (!findResult.value) {
+      throw new NotFoundException('Artefact not found');
+    }
+
+    const artefactDoc = findResult.value;
+
+    if (artefactDoc.status !== ArtefactStatus.IN_REVIEW) {
+      throw new BadRequestException('Artefact can only be edited in IN_REVIEW status');
+    }
+
+    const editData: { title?: string; reflection?: Array<{ title: string; text: string }> } = {};
+    if (dto.title !== undefined) editData.title = dto.title;
+    if (dto.reflection !== undefined) editData.reflection = dto.reflection;
+
+    if (Object.keys(editData).length === 0) {
+      throw new BadRequestException('No editable fields provided');
+    }
+
+    return this.transactionService.withTransaction(
+      async (session) => {
+        await this.versionHistoryService.createVersion(
+          ArtefactsService.ENTITY_TYPE,
+          artefactDoc._id,
+          new Types.ObjectId(userId),
+          {
+            title: artefactDoc.title,
+            reflection: artefactDoc.reflection,
+          },
+          session
+        );
+
+        const updateResult = await this.artefactsRepository.updateArtefactById(
+          artefactDoc._id,
+          editData,
+          session
+        );
+
+        if (isErr(updateResult)) {
+          throw new InternalServerErrorException(updateResult.error.message);
+        }
+
+        const versionCount = await this.versionHistoryService.countVersions(
+          ArtefactsService.ENTITY_TYPE,
+          artefactDoc._id,
+          session
+        );
+
+        return this.buildArtefactDto(
+          updateResult.value._id,
+          updateResult.value,
+          session,
+          versionCount
+        );
+      },
+      { context: 'editArtefact' }
+    );
+  }
+
+  async getVersionHistory(userId: string, xid: string): Promise<ArtefactVersionHistoryResponse> {
+    const findResult = await this.artefactsRepository.findByXid(xid, new Types.ObjectId(userId));
+
+    if (isErr(findResult)) {
+      throw new InternalServerErrorException(findResult.error.message);
+    }
+    if (!findResult.value) {
+      throw new NotFoundException('Artefact not found');
+    }
+
+    const versions = await this.versionHistoryService.getVersions(
+      ArtefactsService.ENTITY_TYPE,
+      findResult.value._id
+    );
+
+    return {
+      versions: versions.map((v) => ({
+        version: v.version,
+        timestamp: v.timestamp.toISOString(),
+        title: (v.snapshot.title as string) ?? null,
+        reflection: (v.snapshot.reflection as Array<{ title: string; text: string }>) ?? null,
+      })),
+    };
+  }
+
+  async restoreVersion(
+    userId: string,
+    xid: string,
+    dto: RestoreArtefactVersionRequest
+  ): Promise<Artefact> {
+    const findResult = await this.artefactsRepository.findByXid(xid, new Types.ObjectId(userId));
+
+    if (isErr(findResult)) {
+      throw new InternalServerErrorException(findResult.error.message);
+    }
+    if (!findResult.value) {
+      throw new NotFoundException('Artefact not found');
+    }
+
+    const artefactDoc = findResult.value;
+
+    if (artefactDoc.status !== ArtefactStatus.IN_REVIEW) {
+      throw new BadRequestException('Artefact can only be restored in IN_REVIEW status');
+    }
+
+    const targetVersion = await this.versionHistoryService.getVersion(
+      ArtefactsService.ENTITY_TYPE,
+      artefactDoc._id,
+      dto.version
+    );
+
+    if (!targetVersion) {
+      throw new NotFoundException('Version not found');
+    }
+
+    return this.transactionService.withTransaction(
+      async (session) => {
+        // Snapshot current state before restoring
+        await this.versionHistoryService.createVersion(
+          ArtefactsService.ENTITY_TYPE,
+          artefactDoc._id,
+          new Types.ObjectId(userId),
+          {
+            title: artefactDoc.title,
+            reflection: artefactDoc.reflection,
+          },
+          session
+        );
+
+        const editData: { title?: string; reflection?: Array<{ title: string; text: string }> } =
+          {};
+        if (targetVersion.snapshot.title !== undefined) {
+          editData.title = targetVersion.snapshot.title as string;
+        }
+        if (targetVersion.snapshot.reflection !== undefined) {
+          editData.reflection = targetVersion.snapshot.reflection as Array<{
+            title: string;
+            text: string;
+          }>;
+        }
+
+        const updateResult = await this.artefactsRepository.updateArtefactById(
+          artefactDoc._id,
+          editData,
+          session
+        );
+
+        if (isErr(updateResult)) {
+          throw new InternalServerErrorException(updateResult.error.message);
+        }
+
+        const versionCount = await this.versionHistoryService.countVersions(
+          ArtefactsService.ENTITY_TYPE,
+          artefactDoc._id,
+          session
+        );
+
+        return this.buildArtefactDto(
+          updateResult.value._id,
+          updateResult.value,
+          session,
+          versionCount
+        );
+      },
+      { context: 'restoreVersion' }
+    );
+  }
+
   private async buildArtefactDto(
     artefactId: Types.ObjectId,
     artefactDoc: ArtefactSchema,
-    session?: ClientSession
+    session?: ClientSession,
+    versionCount?: number
   ): Promise<Artefact> {
     const [conversationResult, pdpGoalsResult] = await Promise.all([
       this.conversationsRepository.findActiveConversationByArtefact(artefactId, session),
@@ -317,7 +498,12 @@ export class ArtefactsService {
       throw new InternalServerErrorException(pdpGoalsResult.error.message);
     }
 
-    return toArtefactDto(artefactDoc, conversationResult.value, pdpGoalsResult.value);
+    return toArtefactDto(
+      artefactDoc,
+      conversationResult.value,
+      pdpGoalsResult.value,
+      versionCount ?? 0
+    );
   }
 
   async duplicateToReview(userId: string, xid: string): Promise<Artefact> {

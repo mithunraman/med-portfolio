@@ -90,12 +90,20 @@ const mockTransactionService = {
   withTransaction: jest.fn((fn: (session: any) => Promise<any>) => fn({})),
 };
 
+const mockVersionHistoryService = {
+  createVersion: jest.fn(),
+  getVersions: jest.fn(),
+  getVersion: jest.fn(),
+  countVersions: jest.fn().mockResolvedValue(0),
+};
+
 function createService(): ArtefactsService {
   return new ArtefactsService(
     mockArtefactsRepo as any,
     mockConversationsRepo as any,
     mockPdpGoalsRepo as any,
     mockTransactionService as any,
+    mockVersionHistoryService as any,
   );
 }
 
@@ -119,6 +127,42 @@ describe('ArtefactsService', () => {
       (fn: (session: any) => Promise<any>) => fn({}),
     );
     service = createService();
+  });
+
+  // ─── getArtefact ───
+
+  describe('getArtefact', () => {
+    it('throws NotFoundException when artefact does not exist', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(null));
+
+      await expect(service.getArtefact(userIdStr, 'art_abc123')).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns artefact with versionCount from version history service', async () => {
+      const artefact = makeArtefactDoc();
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      setupBuildArtefactDtoMocks();
+      mockVersionHistoryService.countVersions.mockResolvedValue(3);
+
+      const result = await service.getArtefact(userIdStr, 'art_abc123');
+
+      expect(mockVersionHistoryService.countVersions).toHaveBeenCalledWith(
+        'artefact',
+        artefact._id,
+      );
+      expect(result.versionCount).toBe(3);
+    });
+
+    it('returns versionCount 0 when no versions exist', async () => {
+      const artefact = makeArtefactDoc();
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      setupBuildArtefactDtoMocks();
+      mockVersionHistoryService.countVersions.mockResolvedValue(0);
+
+      const result = await service.getArtefact(userIdStr, 'art_abc123');
+
+      expect(result.versionCount).toBe(0);
+    });
   });
 
   // ─── finaliseArtefact ───
@@ -350,6 +394,265 @@ describe('ArtefactsService', () => {
         { status: ArtefactStatus.IN_REVIEW },
       );
       expect(mockPdpGoalsRepo.updateManyByArtefactId).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── editArtefact ───
+
+  describe('editArtefact', () => {
+    it('throws NotFoundException when artefact does not exist', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(null));
+
+      await expect(
+        service.editArtefact(userIdStr, 'art_abc123', { title: 'New Title' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws BadRequestException when artefact is ARCHIVED', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(
+        ok(makeArtefactDoc({ status: ArtefactStatus.ARCHIVED })),
+      );
+
+      await expect(
+        service.editArtefact(userIdStr, 'art_abc123', { title: 'New Title' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when artefact is IN_CONVERSATION', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(
+        ok(makeArtefactDoc({ status: ArtefactStatus.IN_CONVERSATION })),
+      );
+
+      await expect(
+        service.editArtefact(userIdStr, 'art_abc123', { title: 'New Title' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('allows editing when artefact is IN_REVIEW', async () => {
+      const artefact = makeArtefactDoc({ status: ArtefactStatus.IN_REVIEW });
+      const updatedArtefact = makeArtefactDoc({ title: 'New Title' });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
+      mockVersionHistoryService.countVersions.mockResolvedValue(1);
+      setupBuildArtefactDtoMocks();
+
+      await service.editArtefact(userIdStr, 'art_abc123', { title: 'New Title' });
+
+      expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
+        artefact._id,
+        { title: 'New Title' },
+        expect.anything(), // session
+      );
+    });
+
+    it('throws BadRequestException when artefact is COMPLETED', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(
+        ok(makeArtefactDoc({ status: ArtefactStatus.COMPLETED })),
+      );
+
+      await expect(
+        service.editArtefact(userIdStr, 'art_abc123', { title: 'Edited' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when no editable fields provided', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(makeArtefactDoc()));
+
+      await expect(
+        service.editArtefact(userIdStr, 'art_abc123', {} as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('creates a version snapshot before applying edits', async () => {
+      const artefact = makeArtefactDoc({
+        title: 'Old Title',
+        reflection: [{ title: 'S1', text: 'T1' }],
+      });
+      const updatedArtefact = makeArtefactDoc({ title: 'New Title' });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
+      mockVersionHistoryService.countVersions.mockResolvedValue(1);
+      setupBuildArtefactDtoMocks();
+
+      await service.editArtefact(userIdStr, 'art_abc123', { title: 'New Title' });
+
+      // Verify createVersion was called with current state BEFORE update
+      expect(mockVersionHistoryService.createVersion).toHaveBeenCalledWith(
+        'artefact',
+        artefact._id,
+        expect.any(Types.ObjectId),
+        { title: 'Old Title', reflection: [{ title: 'S1', text: 'T1' }] },
+        expect.anything(), // session
+      );
+
+      // Verify createVersion was called before updateArtefactById
+      const createVersionOrder = mockVersionHistoryService.createVersion.mock.invocationCallOrder[0];
+      const updateOrder = mockArtefactsRepo.updateArtefactById.mock.invocationCallOrder[0];
+      expect(createVersionOrder).toBeLessThan(updateOrder);
+    });
+
+    it('updates only the provided fields', async () => {
+      const artefact = makeArtefactDoc();
+      const updatedArtefact = makeArtefactDoc({ title: 'New Title' });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
+      mockVersionHistoryService.countVersions.mockResolvedValue(1);
+      setupBuildArtefactDtoMocks();
+
+      // Only title, no reflection
+      await service.editArtefact(userIdStr, 'art_abc123', { title: 'New Title' });
+
+      expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
+        artefact._id,
+        { title: 'New Title' },
+        expect.anything(),
+      );
+    });
+
+    it('can edit reflection without title', async () => {
+      const artefact = makeArtefactDoc();
+      const reflection = [{ title: 'New Section', text: 'New Text' }];
+      const updatedArtefact = makeArtefactDoc({ reflection });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
+      mockVersionHistoryService.countVersions.mockResolvedValue(1);
+      setupBuildArtefactDtoMocks();
+
+      await service.editArtefact(userIdStr, 'art_abc123', { reflection });
+
+      expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
+        artefact._id,
+        { reflection },
+        expect.anything(),
+      );
+    });
+  });
+
+  // ─── restoreVersion ───
+
+  describe('restoreVersion', () => {
+    it('throws NotFoundException when artefact does not exist', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(null));
+
+      await expect(
+        service.restoreVersion(userIdStr, 'art_abc123', { version: 1 }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws BadRequestException when artefact is ARCHIVED', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(
+        ok(makeArtefactDoc({ status: ArtefactStatus.ARCHIVED })),
+      );
+
+      await expect(
+        service.restoreVersion(userIdStr, 'art_abc123', { version: 1 }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when artefact is IN_CONVERSATION', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(
+        ok(makeArtefactDoc({ status: ArtefactStatus.IN_CONVERSATION })),
+      );
+
+      await expect(
+        service.restoreVersion(userIdStr, 'art_abc123', { version: 1 }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws NotFoundException when target version does not exist', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(makeArtefactDoc()));
+      mockVersionHistoryService.getVersion.mockResolvedValue(null);
+
+      await expect(
+        service.restoreVersion(userIdStr, 'art_abc123', { version: 999 }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('snapshots current state before restoring', async () => {
+      const artefact = makeArtefactDoc({
+        title: 'Current Title',
+        reflection: [{ title: 'Current', text: 'Content' }],
+      });
+      const targetVersion = {
+        version: 1,
+        snapshot: { title: 'Old Title', reflection: [{ title: 'Old', text: 'Content' }] },
+      };
+      const updatedArtefact = makeArtefactDoc({ title: 'Old Title' });
+
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockVersionHistoryService.getVersion.mockResolvedValue(targetVersion);
+      mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
+      mockVersionHistoryService.countVersions.mockResolvedValue(2);
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      setupBuildArtefactDtoMocks();
+
+      await service.restoreVersion(userIdStr, 'art_abc123', { version: 1 });
+
+      // Verify snapshot of CURRENT state was created
+      expect(mockVersionHistoryService.createVersion).toHaveBeenCalledWith(
+        'artefact',
+        artefact._id,
+        expect.any(Types.ObjectId),
+        { title: 'Current Title', reflection: [{ title: 'Current', text: 'Content' }] },
+        expect.anything(), // session
+      );
+    });
+
+    it('applies target version snapshot fields to artefact', async () => {
+      const artefact = makeArtefactDoc();
+      const targetVersion = {
+        version: 1,
+        snapshot: {
+          title: 'Restored Title',
+          reflection: [{ title: 'Restored', text: 'Body' }],
+        },
+      };
+      const updatedArtefact = makeArtefactDoc({ title: 'Restored Title' });
+
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockVersionHistoryService.getVersion.mockResolvedValue(targetVersion);
+      mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
+      mockVersionHistoryService.countVersions.mockResolvedValue(2);
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      setupBuildArtefactDtoMocks();
+
+      await service.restoreVersion(userIdStr, 'art_abc123', { version: 1 });
+
+      expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
+        artefact._id,
+        {
+          title: 'Restored Title',
+          reflection: [{ title: 'Restored', text: 'Body' }],
+        },
+        expect.anything(), // session
+      );
+    });
+
+    it('creates snapshot before applying restore (non-destructive)', async () => {
+      const artefact = makeArtefactDoc();
+      const targetVersion = {
+        version: 1,
+        snapshot: { title: 'Old' },
+      };
+      const updatedArtefact = makeArtefactDoc({ title: 'Old' });
+
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockVersionHistoryService.getVersion.mockResolvedValue(targetVersion);
+      mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
+      mockVersionHistoryService.countVersions.mockResolvedValue(2);
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      setupBuildArtefactDtoMocks();
+
+      await service.restoreVersion(userIdStr, 'art_abc123', { version: 1 });
+
+      // createVersion called before updateArtefactById
+      const snapshotOrder = mockVersionHistoryService.createVersion.mock.invocationCallOrder[0];
+      const updateOrder = mockArtefactsRepo.updateArtefactById.mock.invocationCallOrder[0];
+      expect(snapshotOrder).toBeLessThan(updateOrder);
     });
   });
 });

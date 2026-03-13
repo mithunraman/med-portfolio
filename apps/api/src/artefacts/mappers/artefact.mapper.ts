@@ -18,7 +18,8 @@ export function toActiveConversationDto(doc: Conversation): ActiveConversation {
 export function toArtefactDto(
   artefact: ArtefactSchema,
   conversation: Conversation,
-  pdpGoals: PdpGoal[] = []
+  pdpGoals: PdpGoal[] = [],
+  versionCount: number = 0
 ): Artefact {
   const config = getSpecialtyConfig(artefact.specialty);
 
@@ -62,6 +63,7 @@ export function toArtefactDto(
     })) ?? null,
     tags: artefact.tags,
     conversation: toActiveConversationDto(conversation),
+    versionCount,
     createdAt: artefact.createdAt.toISOString(),
     updatedAt: artefact.updatedAt.toISOString(),
   };

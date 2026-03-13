@@ -4,9 +4,11 @@ import type { RootState } from '../../index';
 import {
   createArtefact,
   duplicateToReview,
+  editArtefact,
   fetchArtefact,
   fetchArtefacts,
   finaliseArtefact,
+  restoreVersion,
   updateArtefactStatus,
 } from './thunks';
 
@@ -18,6 +20,7 @@ export interface ArtefactsState {
   creatingArtefact: boolean;
   loading: boolean;
   updatingStatus: boolean;
+  saving: boolean;
   error: string | null;
   nextCursor: string | null;
 }
@@ -28,6 +31,7 @@ const artefactsSlice = createSlice({
     creatingArtefact: false,
     loading: false,
     updatingStatus: false,
+    saving: false,
     error: null,
     nextCursor: null,
   }),
@@ -111,6 +115,32 @@ const artefactsSlice = createSlice({
       })
       .addCase(duplicateToReview.rejected, (state, action) => {
         state.updatingStatus = false;
+        state.error = action.payload as string;
+      })
+      // editArtefact
+      .addCase(editArtefact.pending, (state) => {
+        state.saving = true;
+        state.error = null;
+      })
+      .addCase(editArtefact.fulfilled, (state, action) => {
+        state.saving = false;
+        artefactsAdapter.upsertOne(state, action.payload);
+      })
+      .addCase(editArtefact.rejected, (state, action) => {
+        state.saving = false;
+        state.error = action.payload as string;
+      })
+      // restoreVersion
+      .addCase(restoreVersion.pending, (state) => {
+        state.saving = true;
+        state.error = null;
+      })
+      .addCase(restoreVersion.fulfilled, (state, action) => {
+        state.saving = false;
+        artefactsAdapter.upsertOne(state, action.payload);
+      })
+      .addCase(restoreVersion.rejected, (state, action) => {
+        state.saving = false;
         state.error = action.payload as string;
       });
   },

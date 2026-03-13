@@ -2,8 +2,11 @@ import type {
   Artefact,
   ArtefactListResponse,
   ArtefactStatus,
+  ArtefactVersionHistoryResponse,
   CreateArtefactRequest,
+  EditArtefactRequest,
   FinaliseArtefactRequest,
+  RestoreArtefactVersionRequest,
   UpdateArtefactStatusRequest,
 } from '@acme/shared';
 import { BaseApiClient } from '../core/api-client';
@@ -35,6 +38,18 @@ export class ArtefactsClient {
 
   async duplicateToReview(id: string): Promise<Artefact> {
     return this.client.post<Artefact>(`/artefacts/${id}/duplicate`, {});
+  }
+
+  async editArtefact(id: string, data: EditArtefactRequest): Promise<Artefact> {
+    return this.client.patch<Artefact>(`/artefacts/${id}`, data);
+  }
+
+  async getVersionHistory(id: string): Promise<ArtefactVersionHistoryResponse> {
+    return this.client.get<ArtefactVersionHistoryResponse>(`/artefacts/${id}/versions`);
+  }
+
+  async restoreVersion(id: string, data: RestoreArtefactVersionRequest): Promise<Artefact> {
+    return this.client.post<Artefact>(`/artefacts/${id}/versions/restore`, data);
   }
 
   async listArtefacts(params?: ListArtefactsParams): Promise<ArtefactListResponse> {

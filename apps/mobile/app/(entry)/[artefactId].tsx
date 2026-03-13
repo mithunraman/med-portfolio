@@ -1,10 +1,24 @@
 import type { GoalSelectionState, StatusVariant } from '@/components';
-import { Button, PdpGoalSelector, StatusPill } from '@/components';
+import {
+  Button,
+  EditableReflectionSection,
+  EditableTitle,
+  FullScreenSectionEditor,
+  PdpGoalSelector,
+  StatusPill,
+} from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
-import { duplicateToReview, fetchArtefact, finaliseArtefact, selectArtefactById, updateArtefactStatus } from '@/store';
+import {
+  duplicateToReview,
+  editArtefact,
+  fetchArtefact,
+  finaliseArtefact,
+  selectArtefactById,
+  updateArtefactStatus,
+} from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
-import type { PdpGoalSelection } from '@acme/shared';
+import type { PdpGoalSelection, ReflectionSection } from '@acme/shared';
 import { ArtefactStatus, PdpGoalStatus } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -13,7 +27,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -61,6 +77,7 @@ export default function EntryDetailScreen() {
 
   const artefact = useAppSelector((state) => selectArtefactById(state, artefactId ?? ''));
   const updatingStatus = useAppSelector((state) => state.artefacts.updatingStatus);
+  const saving = useAppSelector((state) => state.artefacts.saving);
 
   useEffect(() => {
     if (artefactId) {
@@ -68,31 +85,103 @@ export default function EntryDetailScreen() {
     }
   }, [artefactId, dispatch]);
 
+  // ── Edit State ──
+
+  const [editedTitle, setEditedTitle] = useState<string | null>(null);
+  const [editedReflection, setEditedReflection] = useState<ReflectionSection[] | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0]));
   const [selectedCapability, setSelectedCapability] = useState<{
     name: string;
     evidence: string;
   } | null>(null);
   const [goalSelections, setGoalSelections] = useState<Map<string, GoalSelectionState>>(new Map());
+  const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
+  const isEditable = artefact?.status === ArtefactStatus.IN_REVIEW;
 
-  // Initialise goal selections when artefact loads in IN_REVIEW status
-  useEffect(() => {
-    if (artefact?.status === ArtefactStatus.IN_REVIEW && artefact.pdpGoals?.length) {
-      setGoalSelections((prev) => {
-        // Only initialise if not already set (avoid resetting user changes)
-        if (prev.size > 0) return prev;
-        const initial = new Map<string, GoalSelectionState>();
-        for (const goal of artefact.pdpGoals!) {
-          initial.set(goal.id, {
-            selected: true,
-            reviewDate: null,
-            actions: new Map(goal.actions.map((a) => [a.id, true])),
-          });
-        }
-        return initial;
+  const hasChanges = editedTitle !== null || editedReflection !== null;
+
+  // Current displayed values (edited or server)
+  const displayTitle = editedTitle ?? artefact?.title ?? '';
+  const displayReflection = editedReflection ?? artefact?.reflection ?? [];
+
+  // ── Edit Handlers ──
+
+  const handleTitleChange = useCallback((text: string) => {
+    setEditedTitle(text);
+  }, []);
+
+  const handleSectionSave = useCallback(
+    (title: string, text: string) => {
+      if (editingSectionIndex === null) return;
+      setEditedReflection((prev) => {
+        const sections = [...(prev ?? artefact?.reflection ?? [])];
+        sections[editingSectionIndex] = { title, text };
+        return sections;
       });
+    },
+    [editingSectionIndex, artefact?.reflection]
+  );
+
+  // ── Save Changes ──
+
+  const handleSaveChanges = useCallback(async () => {
+    if (!artefactId || !hasChanges) return;
+
+    const payload: { artefactId: string; title?: string; reflection?: ReflectionSection[] } = {
+      artefactId,
+    };
+    if (editedTitle !== null) payload.title = editedTitle;
+    if (editedReflection !== null) payload.reflection = editedReflection;
+
+    const result = await dispatch(editArtefact(payload));
+    if (editArtefact.fulfilled.match(result)) {
+      setEditedTitle(null);
+      setEditedReflection(null);
+      Alert.alert('Saved', 'Your changes have been saved.');
+    } else {
+      Alert.alert('Error', 'Failed to save changes. Please try again.');
     }
-  }, [artefact?.status, artefact?.pdpGoals]);
+  }, [artefactId, hasChanges, editedTitle, editedReflection, dispatch]);
+
+  const handleDiscardChanges = useCallback(() => {
+    Alert.alert('Discard changes?', 'All unsaved edits will be lost.', [
+      { text: 'Keep editing', style: 'cancel' },
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: () => {
+          setEditedTitle(null);
+          setEditedReflection(null);
+        },
+      },
+    ]);
+  }, []);
+
+  // ── Discard on navigate away ──
+
+  useEffect(() => {
+    if (!hasChanges) return;
+
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      e.preventDefault();
+      Alert.alert('Discard changes?', 'You have unsaved edits. Discard them?', [
+        { text: 'Keep editing', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: () => {
+            setEditedTitle(null);
+            setEditedReflection(null);
+            navigation.dispatch(e.data.action);
+          },
+        },
+      ]);
+    });
+
+    return unsubscribe;
+  }, [hasChanges, navigation]);
+
+  // ── Existing handlers ──
 
   const toggleSection = useCallback((index: number) => {
     setExpandedSections((prev) => {
@@ -106,7 +195,23 @@ export default function EntryDetailScreen() {
     });
   }, []);
 
-  // ── PDP Goal Selection Handlers ──
+  // Initialise goal selections when artefact loads in IN_REVIEW status
+  useEffect(() => {
+    if (artefact?.status === ArtefactStatus.IN_REVIEW && artefact.pdpGoals?.length) {
+      setGoalSelections((prev) => {
+        if (prev.size > 0) return prev;
+        const initial = new Map<string, GoalSelectionState>();
+        for (const goal of artefact.pdpGoals!) {
+          initial.set(goal.id, {
+            selected: true,
+            reviewDate: null,
+            actions: new Map(goal.actions.map((a) => [a.id, true])),
+          });
+        }
+        return initial;
+      });
+    }
+  }, [artefact?.status, artefact?.pdpGoals]);
 
   const handleToggleGoal = useCallback((goalId: string) => {
     setGoalSelections((prev) => {
@@ -148,7 +253,6 @@ export default function EntryDetailScreen() {
   const handleMarkAsFinal = useCallback(() => {
     if (!artefactId) return;
 
-    // Validate: each selected goal must have a review date
     const selectedGoals = Array.from(goalSelections.entries()).filter(([, sel]) => sel.selected);
     const missingDates = selectedGoals.some(([, sel]) => !sel.reviewDate);
 
@@ -157,7 +261,7 @@ export default function EntryDetailScreen() {
       return;
     }
 
-    Alert.alert('Finalise entry', 'Once finalised, this entry will be saved to your portfolio and cannot be edited.', [
+    Alert.alert('Finalise entry', 'Once finalised, this entry will be saved to your portfolio.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Finalise',
@@ -264,24 +368,43 @@ export default function EntryDetailScreen() {
     ]);
   }, [artefactId, dispatch, router]);
 
-  // ── Header overflow menu (FINAL state) ──
+  // ── Header overflow menu ──
+
+  const showHeaderMenu =
+    artefact?.status === ArtefactStatus.COMPLETED ||
+    (artefact?.status !== ArtefactStatus.ARCHIVED && artefact?.status !== undefined);
 
   const handleShowMenu = useCallback(() => {
-    showActionSheetWithOptions(
-      {
-        options: ['Archive entry', 'Duplicate to Review', 'Cancel'],
-        destructiveButtonIndex: 0,
-        cancelButtonIndex: 2,
-      },
-      (index) => {
-        if (index === 0) handleArchive();
-        if (index === 1) handleClone();
-      }
-    );
-  }, [showActionSheetWithOptions, handleArchive, handleClone]);
+    if (artefact?.status === ArtefactStatus.COMPLETED) {
+      showActionSheetWithOptions(
+        {
+          options: ['Archive entry', 'Duplicate to Review', 'Cancel'],
+          destructiveButtonIndex: 0,
+          cancelButtonIndex: 2,
+        },
+        (index) => {
+          if (index === 0) handleArchive();
+          if (index === 1) handleClone();
+        }
+      );
+    } else if (
+      artefact?.status !== ArtefactStatus.ARCHIVED
+    ) {
+      showActionSheetWithOptions(
+        {
+          options: ['Archive entry', 'Cancel'],
+          destructiveButtonIndex: 0,
+          cancelButtonIndex: 1,
+        },
+        (index) => {
+          if (index === 0) handleArchive();
+        }
+      );
+    }
+  }, [artefact?.status, showActionSheetWithOptions, handleArchive, handleClone]);
 
   useEffect(() => {
-    if (!artefact || artefact.status !== ArtefactStatus.COMPLETED) return;
+    if (!artefact || !showHeaderMenu) return;
     navigation.setOptions({
       headerRight: () => (
         <Pressable onPress={updatingStatus ? undefined : handleShowMenu} hitSlop={8} disabled={updatingStatus}>
@@ -289,7 +412,7 @@ export default function EntryDetailScreen() {
         </Pressable>
       ),
     });
-  }, [artefact?.status, navigation, colors.text, colors.textSecondary, handleShowMenu, updatingStatus]);
+  }, [artefact, showHeaderMenu, navigation, colors.text, colors.textSecondary, handleShowMenu, updatingStatus]);
 
   if (!artefact) {
     return (
@@ -301,235 +424,286 @@ export default function EntryDetailScreen() {
 
   const statusDisplay = getArtefactStatusDisplay(artefact.status);
   const canMarkAsFinal = artefact.status === ArtefactStatus.IN_REVIEW;
-  const canArchive =
-    artefact.status !== ArtefactStatus.ARCHIVED && artefact.status !== ArtefactStatus.COMPLETED;
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 8 }}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* Header */}
-      <View style={styles.section}>
-        <Text style={[styles.title, { color: colors.text }]}>
-          {artefact.title || 'Untitled entry'}
-        </Text>
-        <View style={styles.headerMeta}>
-          {artefact.artefactTypeLabel && (
-            <View style={[styles.typeBadge, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.typeBadgeText, { color: colors.textSecondary }]}>
-                {artefact.artefactTypeLabel}
-              </Text>
-            </View>
-          )}
-          <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />
-        </View>
-      </View>
-
-      {/* Reflection Sections */}
-      {artefact.reflection && artefact.reflection.length > 0 && (
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Reflection</Text>
-          {artefact.reflection.map((section, index) => (
-            <Pressable
-              key={index}
-              onPress={() => toggleSection(index)}
-              style={[styles.card, { backgroundColor: colors.surface }]}
-            >
-              <View style={styles.cardHeader}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>{section.title}</Text>
-                <Ionicons
-                  name={expandedSections.has(index) ? 'chevron-up' : 'chevron-down'}
-                  size={18}
-                  color={colors.textSecondary}
-                />
-              </View>
-              {expandedSections.has(index) && (
-                <Text style={[styles.cardBody, { color: colors.textSecondary }]}>
-                  {section.text}
-                </Text>
-              )}
-            </Pressable>
-          ))}
-        </View>
-      )}
-
-      {/* Capabilities */}
-      {artefact.capabilities && artefact.capabilities.length > 0 && (
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Capabilities</Text>
-          {artefact.capabilities.map((cap, index) => (
-            <Pressable
-              key={index}
-              onPress={() => setSelectedCapability(cap)}
-              style={[styles.capabilityRow, { backgroundColor: colors.surface }]}
-            >
-              <Text style={[styles.capabilityCode, { color: colors.primary }]}>{cap.name}</Text>
-              <Ionicons name="information-circle-outline" size={20} color={AI_REASONING_COLOR} />
-            </Pressable>
-          ))}
-        </View>
-      )}
-
-      {/* Capability Evidence Modal */}
-      <Modal
-        visible={selectedCapability !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedCapability(null)}
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 8 }}
+        keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.primary }]}>
-                {selectedCapability?.name}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setSelectedCapability(null)}
-                style={styles.modalCloseButton}
-              >
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalBody}>
-              <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Evidence</Text>
-              <Text style={[styles.modalText, { color: colors.text }]}>
-                {selectedCapability?.evidence}
-              </Text>
-            </ScrollView>
+        {/* Header */}
+        <View style={styles.section}>
+          <EditableTitle
+            value={displayTitle}
+            onChange={handleTitleChange}
+            editable={isEditable}
+          />
+          <View style={styles.headerMeta}>
+            {artefact.artefactTypeLabel && (
+              <View style={[styles.typeBadge, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.typeBadgeText, { color: colors.textSecondary }]}>
+                  {artefact.artefactTypeLabel}
+                </Text>
+              </View>
+            )}
+            <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />
           </View>
         </View>
-      </Modal>
 
-      {/* PDP Goals */}
-      {artefact.pdpGoals && artefact.pdpGoals.length > 0 && (
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>PDP Goals</Text>
-          {canMarkAsFinal ? (
-            <PdpGoalSelector
-              goals={artefact.pdpGoals}
-              selections={goalSelections}
-              onToggleGoal={handleToggleGoal}
-              onToggleAction={handleToggleAction}
-              onSetReviewDate={handleSetReviewDate}
-              disabled={updatingStatus}
-            />
-          ) : (
-            artefact.pdpGoals
-              .filter((goal) => goal.status !== PdpGoalStatus.ARCHIVED)
-              .map((goal) => {
-                const goalStatus = getPdpGoalStatusDisplay(goal.status);
-                const visibleActions = goal.actions.filter(
-                  (a) => a.status !== PdpGoalStatus.ARCHIVED
-                );
+        {/* Reflection Sections */}
+        {displayReflection.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Reflection</Text>
+            {displayReflection.map((section, index) => (
+              <EditableReflectionSection
+                key={index}
+                section={section}
+                editable={isEditable}
+                expanded={expandedSections.has(index)}
+                onToggleExpand={() => toggleSection(index)}
+                onEdit={() => setEditingSectionIndex(index)}
+              />
+            ))}
+          </View>
+        )}
 
-                return (
-                  <View
-                    key={goal.id}
-                    style={[styles.pdpGoalCard, { backgroundColor: colors.surface }]}
-                  >
-                    {/* Goal header with status pill */}
-                    <View style={styles.pdpGoalHeader}>
-                      <Text style={[styles.cardTitle, { color: colors.text }]}>{goal.goal}</Text>
-                      <StatusPill label={goalStatus.label} variant={goalStatus.variant} />
-                    </View>
+        {/* Capabilities */}
+        {artefact.capabilities && artefact.capabilities.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Capabilities</Text>
+            {artefact.capabilities.map((cap, index) => (
+              <Pressable
+                key={index}
+                onPress={() => setSelectedCapability(cap)}
+                style={[styles.capabilityRow, { backgroundColor: colors.surface }]}
+              >
+                <Text style={[styles.capabilityCode, { color: colors.primary }]}>{cap.name}</Text>
+                <Ionicons name="information-circle-outline" size={20} color={AI_REASONING_COLOR} />
+              </Pressable>
+            ))}
+          </View>
+        )}
 
-                    {/* Review date */}
-                    {goal.reviewDate && (
-                      <View style={styles.pdpReviewDateRow}>
-                        <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-                        <Text style={[styles.pdpReviewDateText, { color: colors.textSecondary }]}>
-                          Review by {formatGoalDate(goal.reviewDate)}
-                        </Text>
-                      </View>
-                    )}
+        {/* Capability Evidence Modal */}
+        <Modal
+          visible={selectedCapability !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedCapability(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.primary }]}>
+                  {selectedCapability?.name}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setSelectedCapability(null)}
+                  style={styles.modalCloseButton}
+                >
+                  <Ionicons name="close" size={24} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.modalBody}>
+                <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Evidence</Text>
+                <Text style={[styles.modalText, { color: colors.text }]}>
+                  {selectedCapability?.evidence}
+                </Text>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
 
-                    {/* Actions */}
-                    <View style={styles.pdpActions}>
-                      {visibleActions.map((action, actionIndex) => {
-                        const actionActive = action.status === PdpGoalStatus.STARTED;
-
-                        return (
-                          <View
-                            key={action.id}
-                            style={[
-                              styles.pdpRow,
-                              actionIndex === visibleActions.length - 1 && styles.pdpRowLast,
-                            ]}
-                          >
-                            {actionActive ? (
-                              <View
-                                style={[
-                                  styles.pdpActionCheckbox,
-                                  {
-                                    borderColor: colors.primary,
-                                    backgroundColor: colors.primary,
-                                  },
-                                ]}
-                              >
-                                <Feather name="check" size={14} color="#ffffff" />
-                              </View>
-                            ) : (
-                              <View
-                                style={[
-                                  styles.pdpActionCheckbox,
-                                  {
-                                    borderColor: colors.textSecondary,
-                                    backgroundColor: 'transparent',
-                                  },
-                                ]}
-                              />
-                            )}
-                            <Text style={[styles.pdpText, { color: colors.text }]}>
-                              {action.action}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-                );
-              })
-          )}
-        </View>
-      )}
-
-      {/* Finalise Entry */}
-      {canMarkAsFinal && (
-        <View style={styles.section}>
-          <Button
-            label="Finalise entry"
-            onPress={handleMarkAsFinal}
-            loading={updatingStatus}
-            icon={(color) => <Ionicons name="checkmark-circle" size={20} color={color} />}
-          />
-        </View>
-      )}
-
-      {/* View Conversation */}
-      <View style={styles.section}>
-        <Button
-          label="View conversation"
-          onPress={() => router.push(`/(entry)/conversation/${artefact.conversation.id}`)}
-          variant="ghost"
-          icon={(color) => <Ionicons name="chatbubble-outline" size={18} color={color} />}
+        {/* Full Screen Section Editor */}
+        <FullScreenSectionEditor
+          visible={editingSectionIndex !== null}
+          sectionTitle={
+            editingSectionIndex !== null ? displayReflection[editingSectionIndex]?.title ?? '' : ''
+          }
+          sectionText={
+            editingSectionIndex !== null ? displayReflection[editingSectionIndex]?.text ?? '' : ''
+          }
+          onSave={handleSectionSave}
+          onClose={() => setEditingSectionIndex(null)}
         />
-      </View>
 
-      {/* Archive */}
-      {canArchive && (
-        <View style={styles.archiveLinkContainer}>
-          <Button
-            label="Archive entry"
-            onPress={handleArchive}
-            variant="ghost"
-            color="#dc3545"
-            disabled={updatingStatus}
-            icon={(color) => <Ionicons name="archive" size={18} color={color} />}
-          />
+        {/* PDP Goals */}
+        {artefact.pdpGoals &&
+          (canMarkAsFinal
+            ? artefact.pdpGoals.length > 0
+            : artefact.pdpGoals.some((g) => g.status !== PdpGoalStatus.ARCHIVED)) && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>PDP Goals</Text>
+            {canMarkAsFinal ? (
+              <PdpGoalSelector
+                goals={artefact.pdpGoals}
+                selections={goalSelections}
+                onToggleGoal={handleToggleGoal}
+                onToggleAction={handleToggleAction}
+                onSetReviewDate={handleSetReviewDate}
+                disabled={updatingStatus}
+              />
+            ) : (
+              artefact.pdpGoals
+                .filter((goal) => goal.status !== PdpGoalStatus.ARCHIVED)
+                .map((goal) => {
+                  const goalStatus = getPdpGoalStatusDisplay(goal.status);
+                  const visibleActions = goal.actions.filter(
+                    (a) => a.status !== PdpGoalStatus.ARCHIVED
+                  );
+
+                  return (
+                    <View
+                      key={goal.id}
+                      style={[styles.pdpGoalCard, { backgroundColor: colors.surface }]}
+                    >
+                      <View style={styles.pdpGoalHeader}>
+                        <Text style={[styles.cardTitle, { color: colors.text }]}>{goal.goal}</Text>
+                        <StatusPill label={goalStatus.label} variant={goalStatus.variant} />
+                      </View>
+
+                      {goal.reviewDate && (
+                        <View style={styles.pdpReviewDateRow}>
+                          <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+                          <Text style={[styles.pdpReviewDateText, { color: colors.textSecondary }]}>
+                            Review by {formatGoalDate(goal.reviewDate)}
+                          </Text>
+                        </View>
+                      )}
+
+                      <View style={styles.pdpActions}>
+                        {visibleActions.map((action, actionIndex) => {
+                          const actionActive = action.status === PdpGoalStatus.STARTED;
+
+                          return (
+                            <View
+                              key={action.id}
+                              style={[
+                                styles.pdpRow,
+                                actionIndex === visibleActions.length - 1 && styles.pdpRowLast,
+                              ]}
+                            >
+                              {actionActive ? (
+                                <View
+                                  style={[
+                                    styles.pdpActionCheckbox,
+                                    {
+                                      borderColor: colors.primary,
+                                      backgroundColor: colors.primary,
+                                    },
+                                  ]}
+                                >
+                                  <Feather name="check" size={14} color="#ffffff" />
+                                </View>
+                              ) : (
+                                <View
+                                  style={[
+                                    styles.pdpActionCheckbox,
+                                    {
+                                      borderColor: colors.textSecondary,
+                                      backgroundColor: 'transparent',
+                                    },
+                                  ]}
+                                />
+                              )}
+                              <Text style={[styles.pdpText, { color: colors.text }]}>
+                                {action.action}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  );
+                })
+            )}
+          </View>
+        )}
+
+        {/* Actions — hidden when there are unsaved changes */}
+        {!hasChanges && (
+          <>
+            {/* Navigation links */}
+            <View style={styles.section}>
+              <View style={[styles.navGroup, { backgroundColor: colors.surface }]}>
+                <Pressable
+                  onPress={() => router.push(`/(entry)/conversation/${artefact.conversation.id}`)}
+                  style={styles.navRow}
+                >
+                  <Ionicons name="chatbubble-outline" size={18} color={colors.textSecondary} />
+                  <Text style={[styles.navRowLabel, { color: colors.text }]}>View conversation</Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                </Pressable>
+                {artefact.versionCount > 0 && (
+                  <>
+                    <View style={[styles.navDivider, { backgroundColor: colors.border }]} />
+                    <Pressable
+                      onPress={() => router.push(`/(entry)/versions/${artefact.id}`)}
+                      style={styles.navRow}
+                    >
+                      <Feather name="clock" size={18} color={colors.textSecondary} />
+                      <Text style={[styles.navRowLabel, { color: colors.text }]}>Version history</Text>
+                      <View style={styles.navRowRight}>
+                        <Text style={[styles.navBadge, { color: colors.textSecondary }]}>
+                          {artefact.versionCount}
+                        </Text>
+                        <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                      </View>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            </View>
+
+            {/* Finalise Entry */}
+            {canMarkAsFinal && (
+              <View style={styles.section}>
+                <Button
+                  label="Finalise entry"
+                  onPress={handleMarkAsFinal}
+                  loading={updatingStatus}
+                  icon={(color) => <Ionicons name="checkmark-circle" size={20} color={color} />}
+                />
+              </View>
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      {/* Sticky Save / Discard bar */}
+      {hasChanges && (
+        <View
+          style={[
+            styles.stickyBar,
+            {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.border,
+              paddingBottom: insets.bottom + 8,
+            },
+          ]}
+        >
+          <Pressable
+            onPress={handleDiscardChanges}
+            disabled={saving}
+            style={[styles.stickyDiscardButton, { borderColor: colors.border }]}
+          >
+            <Feather name="x" size={18} color={saving ? colors.textSecondary : '#dc3545'} />
+          </Pressable>
+          <View style={styles.stickySaveWrapper}>
+            <Button
+              label="Save changes"
+              onPress={handleSaveChanges}
+              loading={saving}
+              icon={(color) => <Feather name="save" size={18} color={color} />}
+            />
+          </View>
         </View>
       )}
-    </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -546,10 +720,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 20,
     gap: 10,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
   },
   headerMeta: {
     flexDirection: 'row',
@@ -570,25 +740,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 2,
   },
-  card: {
-    borderRadius: 12,
-    padding: 14,
-    gap: 8,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
   cardTitle: {
     fontSize: 15,
     fontWeight: '600',
     flex: 1,
     marginRight: 8,
-  },
-  cardBody: {
-    fontSize: 14,
-    lineHeight: 20,
   },
   capabilityRow: {
     flexDirection: 'row',
@@ -665,9 +821,6 @@ const styles = StyleSheet.create({
   pdpRowLast: {
     borderBottomWidth: 0,
   },
-  pdpCheckbox: {
-    marginTop: 1,
-  },
   pdpText: {
     fontSize: 14,
     lineHeight: 20,
@@ -689,13 +842,6 @@ const styles = StyleSheet.create({
   pdpReviewDateText: {
     fontSize: 13,
   },
-  pdpArchivedGoalText: {
-    opacity: 0.6,
-  },
-  pdpArchivedAction: {
-    textDecorationLine: 'line-through',
-    opacity: 0.6,
-  },
   pdpActionCheckbox: {
     width: 20,
     height: 20,
@@ -705,7 +851,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 1,
   },
-  archiveLinkContainer: {
+  navGroup: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 10,
+  },
+  navRowLabel: {
+    fontSize: 15,
+    flex: 1,
+  },
+  navRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  navBadge: {
+    fontSize: 14,
+  },
+  navDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 42,
+  },
+  stickyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  stickyDiscardButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stickySaveWrapper: {
+    flex: 1,
   },
 });

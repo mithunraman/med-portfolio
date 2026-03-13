@@ -1,11 +1,13 @@
-import type { Artefact, ArtefactListResponse } from '@acme/shared';
-import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import type { Artefact, ArtefactListResponse, ArtefactVersionHistoryResponse } from '@acme/shared';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ArtefactsService } from './artefacts.service';
 import {
   CreateArtefactDto,
+  EditArtefactDto,
   FinaliseArtefactDto,
   ListArtefactsDto,
+  RestoreArtefactVersionDto,
   UpdateArtefactStatusDto,
 } from './dto';
 
@@ -37,6 +39,15 @@ export class ArtefactsController {
     return this.artefactsService.getArtefact(user.userId, id);
   }
 
+  @Patch(':id')
+  async editArtefact(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string,
+    @Body() dto: EditArtefactDto
+  ): Promise<Artefact> {
+    return this.artefactsService.editArtefact(user.userId, id, dto);
+  }
+
   @Put(':id/status')
   async updateArtefactStatus(
     @CurrentUser() user: CurrentUserPayload,
@@ -61,5 +72,22 @@ export class ArtefactsController {
     @Param('id') id: string
   ): Promise<Artefact> {
     return this.artefactsService.duplicateToReview(user.userId, id);
+  }
+
+  @Get(':id/versions')
+  async getVersionHistory(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string
+  ): Promise<ArtefactVersionHistoryResponse> {
+    return this.artefactsService.getVersionHistory(user.userId, id);
+  }
+
+  @Post(':id/versions/restore')
+  async restoreVersion(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string,
+    @Body() dto: RestoreArtefactVersionDto
+  ): Promise<Artefact> {
+    return this.artefactsService.restoreVersion(user.userId, id, dto);
   }
 }

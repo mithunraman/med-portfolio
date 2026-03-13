@@ -38,6 +38,17 @@ export default function EntryLayout() {
           ),
         }}
       />
+      <Stack.Screen
+        name="versions/[artefactId]"
+        options={{
+          title: 'Version History',
+          headerLeft: () => (
+            <Pressable onPress={() => router.back()} hitSlop={8}>
+              <Feather name="arrow-left" size={24} color={colors.text} />
+            </Pressable>
+          ),
+        }}
+      />
     </Stack>
   );
 }

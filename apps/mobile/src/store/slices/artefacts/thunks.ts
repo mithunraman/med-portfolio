@@ -1,4 +1,4 @@
-import type { PdpGoalSelection } from '@acme/shared';
+import type { ArtefactVersionHistoryResponse, EditArtefactRequest, PdpGoalSelection } from '@acme/shared';
 import { ArtefactStatus } from '@acme/shared';
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { api } from '../../../api/client';
@@ -115,6 +115,72 @@ export const duplicateToReview = createAsyncThunk(
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to duplicate artefact';
       artefactsLogger.error('Failed to duplicate artefact to review', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
+ * Edit an artefact's editable fields (title, reflection).
+ */
+export const editArtefact = createAsyncThunk(
+  'artefacts/editArtefact',
+  async (
+    params: { artefactId: string } & EditArtefactRequest,
+    { rejectWithValue }
+  ) => {
+    artefactsLogger.info('Editing artefact', { artefactId: params.artefactId });
+
+    try {
+      const { artefactId, ...editData } = params;
+      const response = await api.artefacts.editArtefact(artefactId, editData);
+      artefactsLogger.info('Edited artefact', { id: response.id });
+      return response;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to edit artefact';
+      artefactsLogger.error('Failed to edit artefact', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
+ * Fetch version history for an artefact.
+ */
+export const fetchVersionHistory = createAsyncThunk(
+  'artefacts/fetchVersionHistory',
+  async (params: { artefactId: string }, { rejectWithValue }) => {
+    artefactsLogger.info('Fetching version history', { artefactId: params.artefactId });
+
+    try {
+      const response = await api.artefacts.getVersionHistory(params.artefactId);
+      artefactsLogger.info('Fetched version history', { count: response.versions.length });
+      return response;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch version history';
+      artefactsLogger.error('Failed to fetch version history', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
+ * Restore an artefact to a previous version.
+ */
+export const restoreVersion = createAsyncThunk(
+  'artefacts/restoreVersion',
+  async (params: { artefactId: string; version: number }, { rejectWithValue }) => {
+    artefactsLogger.info('Restoring version', params);
+
+    try {
+      const response = await api.artefacts.restoreVersion(params.artefactId, {
+        version: params.version,
+      });
+      artefactsLogger.info('Restored version', { id: response.id });
+      return response;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to restore version';
+      artefactsLogger.error('Failed to restore version', { error: message });
       return rejectWithValue(message);
     }
   }

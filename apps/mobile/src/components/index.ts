@@ -1,9 +1,12 @@
 export { Button } from './Button';
 export { MessageList } from './chat';
 export { ChatComposer } from './ChatComposer';
+export { EditableReflectionSection } from './EditableReflectionSection';
+export { EditableTitle } from './EditableTitle';
 export { EmptyState } from './EmptyState';
 export { ErrorBoundary } from './ErrorBoundary';
 export { FloatingActionButton } from './FloatingActionButton';
+export { FullScreenSectionEditor } from './FullScreenTextEditor';
 export { MultiSelect, type MultiSelectOption } from './MultiSelect';
 export { PdpGoalSelector, type GoalSelectionState } from './PdpGoalSelector';
 export { RestoreAccountBanner } from './RestoreAccountBanner';

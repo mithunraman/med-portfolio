@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { DatabaseModule } from '../database';
 import { PdpGoalsModule } from '../pdp-goals/pdp-goals.module';
+import { VersionHistoryModule } from '../version-history';
 import { ArtefactsController } from './artefacts.controller';
 import { ArtefactsRepository } from './artefacts.repository';
 import { ARTEFACTS_REPOSITORY } from './artefacts.repository.interface';
@@ -14,6 +15,7 @@ import { Artefact, ArtefactSchema } from './schemas/artefact.schema';
     DatabaseModule,
     MongooseModule.forFeature([{ name: Artefact.name, schema: ArtefactSchema }]),
     PdpGoalsModule,
+    VersionHistoryModule,
     forwardRef(() => ConversationsModule),
   ],
   controllers: [ArtefactsController],

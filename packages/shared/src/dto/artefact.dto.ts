@@ -71,6 +71,7 @@ export const ArtefactSchema = z.object({
   capabilities: z.array(CapabilitySchema).nullable(),
   tags: z.record(z.array(z.string())).nullable(),
   conversation: ActiveConversationSchema,
+  versionCount: z.number().default(0),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -116,6 +117,36 @@ export const FinaliseArtefactRequestSchema = z.object({
 });
 
 export type FinaliseArtefactRequest = z.infer<typeof FinaliseArtefactRequestSchema>;
+
+// Edit request schemas
+export const EditArtefactRequestSchema = z.object({
+  title: z.string().max(200).optional(),
+  reflection: z.array(ReflectionSectionSchema).optional(),
+});
+
+export type EditArtefactRequest = z.infer<typeof EditArtefactRequestSchema>;
+
+// Version schemas
+export const ArtefactVersionSchema = z.object({
+  version: z.number(),
+  timestamp: z.string().datetime(),
+  title: z.string().nullable(),
+  reflection: z.array(ReflectionSectionSchema).nullable(),
+});
+
+export type ArtefactVersion = z.infer<typeof ArtefactVersionSchema>;
+
+export const ArtefactVersionHistoryResponseSchema = z.object({
+  versions: z.array(ArtefactVersionSchema),
+});
+
+export type ArtefactVersionHistoryResponse = z.infer<typeof ArtefactVersionHistoryResponseSchema>;
+
+export const RestoreArtefactVersionRequestSchema = z.object({
+  version: z.number(),
+});
+
+export type RestoreArtefactVersionRequest = z.infer<typeof RestoreArtefactVersionRequestSchema>;
 
 // Response schemas
 export const ArtefactListResponseSchema = z.object({

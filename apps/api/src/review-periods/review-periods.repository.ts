@@ -62,13 +62,9 @@ export class ReviewPeriodsRepository implements IReviewPeriodsRepository {
     }
   }
 
-  async findActiveByUserId(
-    userId: Types.ObjectId
-  ): Promise<Result<ReviewPeriod | null, DBError>> {
+  async findActiveByUserId(userId: Types.ObjectId): Promise<Result<ReviewPeriod | null, DBError>> {
     try {
-      const doc = await this.model
-        .findOne({ userId, status: ReviewPeriodStatus.ACTIVE })
-        .lean();
+      const doc = await this.model.findOne({ userId, status: ReviewPeriodStatus.ACTIVE }).lean();
       return ok(doc);
     } catch (error) {
       this.logger.error('Failed to find active review period', error);

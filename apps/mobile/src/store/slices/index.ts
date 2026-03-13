@@ -21,3 +21,6 @@ export { dashboardReducer } from './dashboard';
 
 export * from './pdpGoals';
 export { pdpGoalsReducer } from './pdpGoals';
+
+export * from './reviewPeriods';
+export { reviewPeriodsReducer } from './reviewPeriods';

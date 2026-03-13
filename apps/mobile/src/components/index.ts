@@ -1,4 +1,5 @@
 export { Button } from './Button';
+export { CoverageRing } from './CoverageRing';
 export { MessageList } from './chat';
 export { ChatComposer } from './ChatComposer';
 export { EditableReflectionSection } from './EditableReflectionSection';

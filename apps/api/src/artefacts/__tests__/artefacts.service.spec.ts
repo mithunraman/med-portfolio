@@ -97,6 +97,10 @@ const mockVersionHistoryService = {
   countVersions: jest.fn().mockResolvedValue(0),
 };
 
+const mockEventEmitter = {
+  emit: jest.fn(),
+};
+
 function createService(): ArtefactsService {
   return new ArtefactsService(
     mockArtefactsRepo as any,
@@ -104,6 +108,7 @@ function createService(): ArtefactsService {
     mockPdpGoalsRepo as any,
     mockTransactionService as any,
     mockVersionHistoryService as any,
+    mockEventEmitter as any,
   );
 }
 
@@ -197,7 +202,7 @@ describe('ArtefactsService', () => {
 
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
-        { status: ArtefactStatus.COMPLETED },
+        { status: ArtefactStatus.COMPLETED, completedAt: expect.any(Date) },
         expect.anything(), // session
       );
     });

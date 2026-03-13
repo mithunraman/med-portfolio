@@ -57,6 +57,9 @@ export class Artefact {
   @Prop({ type: Object, default: null })
   tags!: Record<string, string[]> | null;
 
+  @Prop({ type: Date, default: null })
+  completedAt!: Date | null;
+
   createdAt!: Date;
   updatedAt!: Date;
 }
@@ -69,3 +72,4 @@ export const ArtefactSchema = SchemaFactory.createForClass(Artefact);
 ArtefactSchema.index({ artefactId: 1 }, { unique: true });
 ArtefactSchema.index({ userId: 1, status: 1 });
 ArtefactSchema.index({ userId: 1, createdAt: -1 });
+ArtefactSchema.index({ userId: 1, status: 1, completedAt: 1 });

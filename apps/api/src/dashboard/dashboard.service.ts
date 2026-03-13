@@ -8,13 +8,15 @@ import {
   IPdpGoalsRepository,
   PDP_GOALS_REPOSITORY,
 } from '../pdp-goals/pdp-goals.repository.interface';
+import { ReviewPeriodsService } from '../review-periods/review-periods.service';
 
 @Injectable()
 export class DashboardService {
   constructor(
     private readonly artefactsService: ArtefactsService,
     @Inject(PDP_GOALS_REPOSITORY)
-    private readonly pdpGoalsRepository: IPdpGoalsRepository
+    private readonly pdpGoalsRepository: IPdpGoalsRepository,
+    private readonly reviewPeriodsService: ReviewPeriodsService
   ) {}
 
   async getDashboard(userId: string): Promise<DashboardResponse> {
@@ -24,15 +26,17 @@ export class DashboardService {
 
     const activeStatuses = [PdpGoalStatus.NOT_STARTED, PdpGoalStatus.STARTED];
 
-    const [recentEntriesResult, pdpGoalsResult, pdpGoalsTotalResult] = await Promise.all([
-      this.artefactsService.listArtefacts(userId, { limit: 5 }),
-      this.pdpGoalsRepository.findByUserId(userObjectId, activeStatuses, {
-        limit: 5,
-        sortByNextDueDate: true,
-        dueBefore: thirtyDaysFromNow,
-      }),
-      this.pdpGoalsRepository.countByUserId(userObjectId, activeStatuses),
-    ]);
+    const [recentEntriesResult, pdpGoalsResult, pdpGoalsTotalResult, activeReviewPeriod] =
+      await Promise.all([
+        this.artefactsService.listArtefacts(userId, { limit: 5 }),
+        this.pdpGoalsRepository.findByUserId(userObjectId, activeStatuses, {
+          limit: 5,
+          sortByNextDueDate: true,
+          dueBefore: thirtyDaysFromNow,
+        }),
+        this.pdpGoalsRepository.countByUserId(userObjectId, activeStatuses),
+        this.reviewPeriodsService.getActiveCoverageSummary(userId),
+      ]);
 
     if (isErr(pdpGoalsResult)) {
       throw new InternalServerErrorException(pdpGoalsResult.error.message);
@@ -65,6 +69,7 @@ export class DashboardService {
           })),
         })),
       },
+      activeReviewPeriod: activeReviewPeriod,
     };
   }
 }

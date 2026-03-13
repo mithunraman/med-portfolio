@@ -15,8 +15,10 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { format } from 'date-fns';
 import { ClientSession, Types } from 'mongoose';
+import { ARTEFACT_STATE_CHANGED, type ArtefactStateChangedEvent } from '../common/events';
 import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { isErr } from '../common/utils/result.util';
 import { isNotNull } from '../common/utils/type-guards.util';
@@ -54,7 +56,8 @@ export class ArtefactsService {
     @Inject(PDP_GOALS_REPOSITORY)
     private readonly pdpGoalsRepository: IPdpGoalsRepository,
     private readonly transactionService: TransactionService,
-    private readonly versionHistoryService: VersionHistoryService
+    private readonly versionHistoryService: VersionHistoryService,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   async createArtefact(userId: string, dto: CreateArtefactDto): Promise<Artefact> {
@@ -203,12 +206,12 @@ export class ArtefactsService {
       throw new BadRequestException('Artefact must be in IN_REVIEW status to finalise');
     }
 
-    return this.transactionService.withTransaction(
+    const artefact = await this.transactionService.withTransaction(
       async (session) => {
         // 1. Set artefact to COMPLETED
         const updateResult = await this.artefactsRepository.updateArtefactById(
           artefactDoc._id,
-          { status: ArtefactStatus.COMPLETED },
+          { status: ArtefactStatus.COMPLETED, completedAt: new Date() },
           session
         );
 
@@ -257,13 +260,16 @@ export class ArtefactsService {
       },
       { context: 'finaliseArtefact' }
     );
+
+    this.emitStateChanged(userId);
+    return artefact;
   }
 
   private async archiveArtefact(
     artefactDoc: ArtefactSchema,
     archiveActivePdpGoals: boolean
   ): Promise<Artefact> {
-    return this.transactionService.withTransaction(
+    const artefact = await this.transactionService.withTransaction(
       async (session) => {
         // 1. Set artefact status to ARCHIVED
         const updateResult = await this.artefactsRepository.updateArtefactById(
@@ -306,6 +312,9 @@ export class ArtefactsService {
       },
       { context: 'archiveArtefact' }
     );
+
+    this.emitStateChanged(artefactDoc.userId.toString());
+    return artefact;
   }
 
   async editArtefact(userId: string, xid: string, dto: EditArtefactRequest): Promise<Artefact> {
@@ -686,5 +695,9 @@ export class ArtefactsService {
       nextCursor,
       limit,
     };
+  }
+
+  private emitStateChanged(userId: string): void {
+    this.eventEmitter.emit(ARTEFACT_STATE_CHANGED, { userId } satisfies ArtefactStateChangedEvent);
   }
 }

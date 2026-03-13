@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ConfigModule } from './config';
 import { DatabaseModule } from './database';
 import { AuthModule } from './auth/auth.module';
@@ -13,12 +14,14 @@ import { MediaModule } from './media';
 import { ProcessingModule } from './processing';
 import { AnalysisRunsModule } from './analysis-runs';
 import { OutboxModule } from './outbox';
+import { ReviewPeriodsModule } from './review-periods/review-periods.module';
 import { JwtAuthGuard, RolesGuard } from './common/guards';
 
 @Module({
   imports: [
     ConfigModule,
     DatabaseModule,
+    EventEmitterModule.forRoot(),
     AuthModule,
     ItemsModule,
     StorageModule,
@@ -30,6 +33,7 @@ import { JwtAuthGuard, RolesGuard } from './common/guards';
     DashboardModule,
     AnalysisRunsModule,
     OutboxModule,
+    ReviewPeriodsModule,
   ],
   providers: [
     {

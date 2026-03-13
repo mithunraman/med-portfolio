@@ -12,3 +12,4 @@ export * from './message-type.enum';
 export * from './pdp-goal-status.enum';
 export * from './analysis-run-status.enum';
 export * from './outbox-status.enum';
+export * from './review-period-status.enum';

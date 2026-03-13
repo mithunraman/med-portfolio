@@ -36,6 +36,7 @@ export interface UpdateArtefactData {
   capabilities?: Array<{ code: string; evidence: string }> | null;
   tags?: Record<string, string[]> | null;
   status?: ArtefactStatus;
+  completedAt?: Date | null;
 }
 
 export interface CountByUserFilter {

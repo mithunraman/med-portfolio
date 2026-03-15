@@ -75,11 +75,11 @@ Each feature lists backend and mobile frontend status separately, verified again
 | Finalise artefact (save PDP goal selections)                  | ✅ `POST /artefacts/:id/finalise`                          | ✅ `finaliseArtefact` thunk wired to "Mark as Final" button               |
 | PDP Goal Selector (review date + action toggles)              | —                                                          | ✅ `PdpGoalSelector.tsx` — select goals, toggle actions, set review dates |
 | Archive entry (with PDP goal handling)                        | ✅ `PUT /artefacts/:id/status` with `archivePdpGoals` flag | ✅ Archive alert with "Keep Goals" / "Archive All" options                |
-| Partial edit artefact (title, reflection, capabilities, tags) | ❌ No `PATCH /artefacts/:id` endpoint                      | ❌ No inline editing — all sections are read-only                         |
-| PDP action CRUD (add / edit / delete individual actions)      | ❌ No `/pdp-actions` CRUD endpoints                        | ❌ Not implemented                                                        |
+| Partial edit artefact (title, reflection)                     | ✅ `PATCH /artefacts/:id` with `EditArtefactRequest`       | ✅ `EditableTitle` + `EditableReflectionSection` + `FullScreenTextEditor` |
+| PDP action CRUD (add / edit / delete individual actions)      | ✅ `POST /pdp-goals/:id/actions`, `PATCH` for updates      | ✅ PDP goal actions wired via `addAction` / `updateAction` thunks         |
 | Pre-export checks computed checklist                          | —                                                          | ❌ Not implemented                                                        |
-| Overview section (summary + learning points editable)         | ❌ No PATCH endpoint                                       | ❌ Not implemented                                                        |
-| Evidence/Notes section (editable)                             | ❌ No PATCH endpoint                                       | ❌ Not implemented                                                        |
+| Overview section (summary + learning points editable)         | ✅ Covered by `PATCH /artefacts/:id` (title + reflection)  | ✅ `EditableTitle` + reflection section editing                           |
+| Evidence/Notes section (editable)                             | ✅ Covered by `PATCH /artefacts/:id` (reflection sections) | ✅ Inline editable reflection sections                                    |
 
 ---
 
@@ -106,8 +106,8 @@ Each feature lists backend and mobile frontend status separately, verified again
 | Home Module C — PDP goals due soon                                 | ✅ Dashboard returns top 5 active goals sorted by next due date                                                      | ✅ `PdpDueSoonModule` renders goal cards with action count                  |
 | Home Module D — Progress snapshot stats                            | ✅ Dashboard returns `entriesThisWeek`, `toReview`, `capabilitiesCount`                                              | ✅ `ProgressSnapshotModule` renders 3 stat cards                            |
 | Home Module C — Artefacts needing attention (separate from recent) | ❌ Dashboard does not break out needs-review / ready-to-export counts                                                | ❌ Not shown separately on Home                                             |
-| PDP tab — full list with filters                                   | ❌ No global PDP list endpoint                                                                                       | ❌ PDP tab is empty state shell only — no data                              |
-| PDP tab — Mark done / update status per goal                       | ❌ No PATCH endpoint for goals                                                                                       | ❌ Not implemented                                                          |
+| PDP tab — full list with filters                                   | ✅ `GET /pdp-goals` with status filter                                                                               | ✅ PDP tab renders full goal list with filter pills                         |
+| PDP tab — Mark done / update status per goal                       | ✅ `PATCH /pdp-goals/:id` updates status, reviewDate, completionReview                                               | ✅ `updatePdpGoal` thunk wired to goal actions                              |
 | Entries list — status filter pills                                 | ✅ `GET /artefacts?status=X` supported                                                                               | ✅ Filter pills exist but filtering is client-side only (not passed to API) |
 | Returning user header ("Welcome back, Next best action")           | —                                                                                                                    | ❌ Not implemented — always shows static "Home" heading                     |
 
@@ -118,8 +118,8 @@ Each feature lists backend and mobile frontend status separately, verified again
 | Feature                                                | Backend                                        | Mobile                                        |
 | ------------------------------------------------------ | ---------------------------------------------- | --------------------------------------------- |
 | Full-text search across entries                        | ❌ No search index or `?search=` param         | ❌ No search bar                              |
-| Artefact versioning (snapshot on generate/edit/export) | ❌ No versioning schema or endpoints           | ❌ No version history UI                      |
-| Restore previous version                               | ❌ Not implemented                             | ❌ Not implemented                            |
+| Artefact versioning (snapshot on generate/edit/export) | ✅ `GET /artefacts/:id/versions` + snapshot-before-edit pattern | ✅ `VersionHistoryScreen` with version list + modal preview |
+| Restore previous version                               | ✅ `POST /artefacts/:id/versions/restore`                      | ✅ `restoreVersion` thunk with confirmation UI              |
 | Flag / report AI suggestion                            | ❌ No `POST /reports` endpoint                 | ❌ No flag button on messages or suggestions  |
 | Regenerate per section                                 | ❌ No targeted regeneration endpoint           | ❌ No regenerate option on sections           |
 | Progressive safety checklist (collapse after 5 uses)   | —                                              | ❌ Not implemented                            |
@@ -136,10 +136,10 @@ Each feature lists backend and mobile frontend status separately, verified again
 | 2     | Capture — voice recording, chat, audio pipeline    | ✅ Done                                        | ✅ Done                                                 |
 | 3     | Convert — AI generation, question UI, completion   | ✅ Done                                        | ✅ Done (minus safety checklist + AI action pills)      |
 | AI UX | Phase-aware composer, inline questions, banners    | ✅ Done                                        | ✅ Done                                                 |
-| 4     | Review & Edit — inline editing, autosave, PATCH    | 🔄 Partial (finalise + status done, no PATCH)  | 🔄 Partial (read-only view + finalise done, no editing) |
-| 5     | Export — PDF generation, templates, download/share | ❌ Not started                                 | ❌ Not started                                          |
-| 6     | Track — PDP tab, full dashboard, returning user    | 🔄 Partial (dashboard done, no PDP list/PATCH) | 🔄 Partial (Home modules wired, PDP tab is shell)       |
-| 7     | Polish — search, versioning, flag AI, regenerate   | ❌ Not started (archive only)                  | 🔄 Partial (archive done, everything else not started)  |
+| 4     | Review & Edit — inline editing, autosave, PATCH    | ✅ Done (PATCH, finalise, status, PDP CRUD)    | ✅ Done (inline editing, PDP actions — minus pre-export checks) |
+| 5     | Export — PDF generation, templates, download/share | ❌ Not started                                 | ❌ Not started                                                  |
+| 6     | Track — PDP tab, full dashboard, returning user    | ✅ Done (dashboard, PDP list/PATCH)            | 🔄 Partial (needs attention module + returning user header)     |
+| 7     | Polish — search, versioning, flag AI, regenerate   | 🔄 Partial (versioning + archive done)         | 🔄 Partial (versioning + archive done)                          |
 
 ---
 

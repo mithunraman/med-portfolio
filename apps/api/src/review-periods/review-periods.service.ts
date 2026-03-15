@@ -52,8 +52,11 @@ export class ReviewPeriodsService {
     const startDate = new Date(dto.startDate);
     const endDate = new Date(dto.endDate);
 
-    // Validate: endDate must be in the future
+    // Validate: dates must not be in the past
     const today = startOfDay(new Date());
+    if (startDate < today) {
+      throw new BadRequestException('Start date must not be in the past');
+    }
     if (endDate <= today) {
       throw new BadRequestException('End date must be in the future');
     }

@@ -3,6 +3,7 @@ import {
   Button,
   EditableReflectionSection,
   EditableTitle,
+  ExportSheet,
   FullScreenSectionEditor,
   PdpGoalSelector,
   StatusPill,
@@ -96,7 +97,11 @@ export default function EntryDetailScreen() {
   } | null>(null);
   const [goalSelections, setGoalSelections] = useState<Map<string, GoalSelectionState>>(new Map());
   const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
+  const [exportSheetVisible, setExportSheetVisible] = useState(false);
   const isEditable = artefact?.status === ArtefactStatus.IN_REVIEW;
+  const canExport =
+    artefact?.status === ArtefactStatus.IN_REVIEW ||
+    artefact?.status === ArtefactStatus.COMPLETED;
 
   const hasChanges = editedTitle !== null || editedReflection !== null;
 
@@ -404,15 +409,24 @@ export default function EntryDetailScreen() {
   }, [artefact?.status, showActionSheetWithOptions, handleArchive, handleClone]);
 
   useEffect(() => {
-    if (!artefact || !showHeaderMenu) return;
+    if (!artefact) return;
     navigation.setOptions({
       headerRight: () => (
-        <Pressable onPress={updatingStatus ? undefined : handleShowMenu} hitSlop={8} disabled={updatingStatus}>
-          <Ionicons name="ellipsis-vertical" size={22} color={updatingStatus ? colors.textSecondary : colors.text} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          {canExport && (
+            <Pressable onPress={() => setExportSheetVisible(true)} hitSlop={8}>
+              <Feather name="share" size={20} color={colors.text} />
+            </Pressable>
+          )}
+          {showHeaderMenu && (
+            <Pressable onPress={updatingStatus ? undefined : handleShowMenu} hitSlop={8} disabled={updatingStatus}>
+              <Ionicons name="ellipsis-vertical" size={22} color={updatingStatus ? colors.textSecondary : colors.text} />
+            </Pressable>
+          )}
+        </View>
       ),
     });
-  }, [artefact, showHeaderMenu, navigation, colors.text, colors.textSecondary, handleShowMenu, updatingStatus]);
+  }, [artefact, canExport, showHeaderMenu, navigation, colors.text, colors.textSecondary, handleShowMenu, updatingStatus]);
 
   if (!artefact) {
     return (
@@ -702,6 +716,13 @@ export default function EntryDetailScreen() {
             />
           </View>
         </View>
+      )}
+      {canExport && (
+        <ExportSheet
+          visible={exportSheetVisible}
+          onClose={() => setExportSheetVisible(false)}
+          artefact={artefact}
+        />
       )}
     </KeyboardAvoidingView>
   );

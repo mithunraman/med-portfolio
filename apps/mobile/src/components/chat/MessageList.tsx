@@ -1,4 +1,5 @@
 import type { Message } from '@acme/shared';
+import type { RenderableMessage } from '../../store/slices/messages/slice';
 import { memo, useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -32,6 +33,7 @@ export interface MessageListProps {
   isLoading?: boolean;
   activeQuestionMessageId?: string;
   onAnswerQuestion?: (messageId: string, value: Record<string, unknown>) => void;
+  onRetry?: (localId: string) => void;
   onReply?: (message: Message) => void;
   onCopy?: (message: Message) => void;
   onStar?: (message: Message) => void;
@@ -59,6 +61,7 @@ export const MessageList = memo(function MessageList({
   isLoading = false,
   activeQuestionMessageId,
   onAnswerQuestion,
+  onRetry,
   onReply,
   onCopy,
   onStar,
@@ -112,17 +115,21 @@ export const MessageList = memo(function MessageList({
   const renderItem = useCallback(
     ({ item }: { item: FlatListItem }) => {
       switch (item.type) {
-        case 'message':
+        case 'message': {
+          const renderable = item.data as RenderableMessage;
           return (
             <MessageRow
               message={item.data}
               isLastInGroup={item.isLastInGroup}
               isFirstInGroup={item.isFirstInGroup}
               isActiveQuestion={item.data.id === activeQuestionMessageId}
+              deliveryStatus={renderable._deliveryStatus}
               onAnswerQuestion={onAnswerQuestion}
               onLongPress={handleLongPress}
+              onRetry={onRetry}
             />
           );
+        }
         case 'dateSeparator':
           return <DateSeparator date={item.date} />;
         case 'typingIndicator':
@@ -131,7 +138,7 @@ export const MessageList = memo(function MessageList({
           return <NoticeItem text={item.text} />;
       }
     },
-    [handleLongPress, activeQuestionMessageId, onAnswerQuestion]
+    [handleLongPress, activeQuestionMessageId, onAnswerQuestion, onRetry]
   );
 
   const content = isLoading ? (

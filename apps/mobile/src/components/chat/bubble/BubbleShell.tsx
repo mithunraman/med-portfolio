@@ -1,4 +1,5 @@
 import { MessageProcessingStatus, MessageRole, PROCESSING_STATUS_LABELS, type Message } from '@acme/shared';
+import type { DeliveryStatus } from '../../../store/slices/messages/slice';
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -40,6 +41,7 @@ interface Props {
   message: Message;
   isLastInGroup: boolean;
   isFirstInGroup: boolean;
+  deliveryStatus?: DeliveryStatus;
   children: React.ReactNode;
 }
 
@@ -47,6 +49,7 @@ export const BubbleShell = memo(function BubbleShell({
   message,
   isLastInGroup,
   isFirstInGroup,
+  deliveryStatus,
   children,
 }: Props) {
   const { isDark } = useTheme();
@@ -60,9 +63,19 @@ export const BubbleShell = memo(function BubbleShell({
 
   const metaColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)';
 
-  // Status tick for user messages
+  // Status tick for user messages — delivery status takes precedence over processing status
   const tick = (() => {
     if (!isUser) return null;
+
+    // Optimistic message: clock icon while sending, error icon if failed
+    if (deliveryStatus === 'sending') {
+      return <Ionicons name="time-outline" size={12} color="#8696a0" />;
+    }
+    if (deliveryStatus === 'failed') {
+      return <Ionicons name="alert-circle" size={12} color="#ef4444" />;
+    }
+
+    // Server message — existing logic
     if (message.processingStatus === MessageProcessingStatus.FAILED) {
       return <Ionicons name="close" size={12} color="#ef4444" />;
     }
@@ -85,7 +98,11 @@ export const BubbleShell = memo(function BubbleShell({
 
       {/* Timestamp + ticks row */}
       <View style={styles.footer}>
-        {statusLabel ? <ProcessingLabel label={statusLabel} color={metaColor} /> : null}
+        {deliveryStatus === 'failed' ? (
+          <Text style={styles.failedLabel}>Failed to send · Tap to retry</Text>
+        ) : statusLabel ? (
+          <ProcessingLabel label={statusLabel} color={metaColor} />
+        ) : null}
         <View style={styles.footerRight}>
           <Text style={[styles.timestamp, { color: metaColor }]}>{formatTimestamp(message.createdAt)}</Text>
           {tick}
@@ -124,6 +141,11 @@ const styles = StyleSheet.create({
   },
   processingLabel: {
     fontSize: 13,
+    fontStyle: 'italic',
+  },
+  failedLabel: {
+    fontSize: 12,
+    color: '#ef4444',
     fontStyle: 'italic',
   },
   footerRight: {

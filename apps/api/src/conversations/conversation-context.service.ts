@@ -34,10 +34,12 @@ export class ConversationContextService {
 
   async computeContext(
     conversationOid: Types.ObjectId,
-    conversationStatus: ConversationStatus
+    conversationStatus: ConversationStatus,
+    artefactId: string,
   ): Promise<ConversationContext> {
     if (conversationStatus === ConversationStatus.CLOSED) {
       return {
+        artefactId,
         phase: 'closed',
         actions: {
           sendMessage: denied('CONVERSATION_CLOSED', 'This conversation is closed.'),
@@ -85,7 +87,7 @@ export class ConversationContextService {
     const activeQuestion = await this.buildActiveQuestion(latestRun);
     const analysisRun = latestRun ? { id: latestRun.xid, status: latestRun.status } : undefined;
 
-    return { phase, actions, activeQuestion, analysisRun };
+    return { artefactId, phase, actions, activeQuestion, analysisRun };
   }
 
   private derivePhase(latestRun: AnalysisRun | null): ConversationPhase {

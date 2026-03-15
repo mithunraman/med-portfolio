@@ -70,10 +70,30 @@ export class ConversationsService {
     if (!dto.content && !dto.mediaId)
       throw new BadRequestException('Either content or mediaId must be provided');
 
+    const userOid = new Types.ObjectId(userId);
+
+    // Idempotency check: if key is provided, look for an existing message
+    if (dto.idempotencyKey) {
+      const existingResult = await this.conversationsRepository.findMessageByIdempotencyKey(
+        userOid,
+        dto.idempotencyKey
+      );
+      if (isErr(existingResult))
+        throw new InternalServerErrorException(existingResult.error.message);
+      if (existingResult.value) {
+        const existing = existingResult.value;
+        this.logger.log(`Idempotent hit for key ${dto.idempotencyKey}, returning existing message ${existing.xid}`);
+        // Return existing message — find conversation xid for the DTO
+        const convResult = await this.conversationsRepository.findConversationById(existing.conversation);
+        if (isErr(convResult)) throw new InternalServerErrorException(convResult.error.message);
+        return toMessageDto(existing, convResult.value?.xid ?? conversationId, buildMediaData(existing, null));
+      }
+    }
+
     // Phase 1: Pre-validation (outside transaction)
     const conversationResult = await this.conversationsRepository.findConversationByXid(
       conversationId,
-      new Types.ObjectId(userId)
+      userOid
     );
 
     if (isErr(conversationResult))
@@ -106,11 +126,12 @@ export class ConversationsService {
         const messageResult = await this.conversationsRepository.createMessage(
           {
             conversation: conversation._id,
-            userId: new Types.ObjectId(userId),
+            userId: userOid,
             role: MessageRole.USER,
             messageType,
             rawContent: dto.content || null,
             media: validatedMedia?.mediaId || null,
+            idempotencyKey: dto.idempotencyKey || null,
           },
           session
         );
@@ -376,6 +397,23 @@ export class ConversationsService {
         break;
     }
 
+    // Extract idempotency key from value (client sends it alongside selection data)
+    const idempotencyKey = (value?.idempotencyKey as string) || null;
+
+    // Idempotency check: if key is provided and message already exists, skip creation
+    if (idempotencyKey) {
+      const existingResult = await this.conversationsRepository.findMessageByIdempotencyKey(
+        userOid,
+        idempotencyKey
+      );
+      if (isErr(existingResult))
+        throw new InternalServerErrorException(existingResult.error.message);
+      if (existingResult.value) {
+        this.logger.log(`Idempotent hit for resume key ${idempotencyKey}, skipping message creation`);
+        return; // Already processed — outbox entry already enqueued
+      }
+    }
+
     // 6. Transaction: USER text message (for selections) + outbox entry
     await this.transactionService.withTransaction(
       async (session) => {
@@ -392,6 +430,7 @@ export class ConversationsService {
               messageType: MessageType.TEXT,
               content: `Selected: ${label}`,
               processingStatus: MessageProcessingStatus.COMPLETE,
+              idempotencyKey,
             },
             session
           );
@@ -407,6 +446,7 @@ export class ConversationsService {
               messageType: MessageType.TEXT,
               content: `Selected: ${labels.join(', ')}`,
               processingStatus: MessageProcessingStatus.COMPLETE,
+              idempotencyKey,
             },
             session
           );
@@ -452,7 +492,7 @@ export class ConversationsService {
     conversationOid: Types.ObjectId,
     conversationStatus: ConversationStatus,
   ): Promise<void> {
-    const context = await this.contextService.computeContext(conversationOid, conversationStatus);
+    const context = await this.contextService.computeContext(conversationOid, conversationStatus, '');
     if (!context.actions.sendMessage.allowed) {
       throw new ConflictException(
         context.actions.sendMessage.reason || 'Cannot send messages at this time.',
@@ -499,8 +539,14 @@ export class ConversationsService {
       })
     );
 
+    // Resolve artefact xid for the context
+    const artefactXidResult = await this.conversationsRepository.findArtefactXidByConversationId(
+      conversation._id
+    );
+    const artefactId = !isErr(artefactXidResult) ? (artefactXidResult.value ?? '') : '';
+
     // Compute context (server-driven action state)
-    const context = await this.contextService.computeContext(conversation._id, conversation.status);
+    const context = await this.contextService.computeContext(conversation._id, conversation.status, artefactId);
 
     return { messages: enriched, context };
   }

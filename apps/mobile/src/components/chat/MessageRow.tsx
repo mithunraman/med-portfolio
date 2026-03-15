@@ -1,4 +1,5 @@
 import { MessageProcessingStatus, MessageRole, MessageType, type Message } from '@acme/shared';
+import type { DeliveryStatus } from '../../store/slices/messages/slice';
 import { memo, useCallback, useRef } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { AudioContent } from './bubble/AudioContent';
@@ -22,8 +23,10 @@ interface Props {
   isLastInGroup: boolean;
   isFirstInGroup: boolean;
   isActiveQuestion?: boolean;
+  deliveryStatus?: DeliveryStatus;
   onAnswerQuestion?: (messageId: string, value: Record<string, unknown>) => void;
   onLongPress?: (message: Message, pageY: number) => void;
+  onRetry?: (localId: string) => void;
 }
 
 export const MessageRow = memo(function MessageRow({
@@ -31,8 +34,10 @@ export const MessageRow = memo(function MessageRow({
   isLastInGroup,
   isFirstInGroup,
   isActiveQuestion = false,
+  deliveryStatus,
   onAnswerQuestion,
   onLongPress,
+  onRetry,
 }: Props) {
   const isUser = message.role === MessageRole.USER;
   const rowRef = useRef<View>(null);
@@ -43,6 +48,12 @@ export const MessageRow = memo(function MessageRow({
       onLongPress(message, pageY);
     });
   }, [message, onLongPress]);
+
+  const handlePress = useCallback(() => {
+    if (deliveryStatus === 'failed' && onRetry) {
+      onRetry(message.id); // message.id is the localId for optimistic messages
+    }
+  }, [deliveryStatus, onRetry, message.id]);
 
   const content = isDeleted(message) ? (
     <DeletedContent />
@@ -68,7 +79,8 @@ export const MessageRow = memo(function MessageRow({
       ]}
     >
       <Pressable
-        onLongPress={handleLongPress}
+        onPress={deliveryStatus === 'failed' ? handlePress : undefined}
+        onLongPress={deliveryStatus ? undefined : handleLongPress}
         delayLongPress={350}
         style={[styles.pressable, isUser ? styles.pressableRight : styles.pressableLeft]}
       >
@@ -76,6 +88,7 @@ export const MessageRow = memo(function MessageRow({
           message={message}
           isLastInGroup={isLastInGroup}
           isFirstInGroup={isFirstInGroup}
+          deliveryStatus={deliveryStatus}
         >
           {content}
         </BubbleShell>

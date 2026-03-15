@@ -275,4 +275,43 @@ export class ConversationsRepository implements IConversationsRepository {
       return err({ code: 'DB_ERROR', message: 'Failed to get last message role' });
     }
   }
+
+  async findMessageByIdempotencyKey(
+    userId: Types.ObjectId,
+    idempotencyKey: string,
+    session?: ClientSession
+  ): Promise<Result<Message | null, DBError>> {
+    try {
+      const message = await this.messageModel
+        .findOne({ userId, idempotencyKey })
+        .populate('media')
+        .session(session || null);
+
+      return ok(message);
+    } catch (error) {
+      this.logger.error('Failed to find message by idempotency key', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find message by idempotency key' });
+    }
+  }
+
+  async findArtefactXidByConversationId(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<string | null, DBError>> {
+    try {
+      const conversation = await this.conversationModel
+        .findById(conversationId)
+        .populate('artefact', 'xid')
+        .lean()
+        .session(session || null);
+
+      if (!conversation) return ok(null);
+
+      const artefact = conversation.artefact as unknown as { xid: string } | null;
+      return ok(artefact?.xid ?? null);
+    } catch (error) {
+      this.logger.error('Failed to find artefact xid by conversation id', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find artefact xid' });
+    }
+  }
 }

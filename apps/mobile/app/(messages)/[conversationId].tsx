@@ -1,4 +1,3 @@
-import { api } from '@/api/client';
 import { ChatComposer, MessageList } from '@/components';
 import { ActionBanner } from '@/components/ActionBanner';
 import { CompletionCard } from '@/components/CompletionCard';
@@ -9,17 +8,26 @@ import {
   fetchMessages,
   pollConversation,
   resumeAnalysis,
-  selectAllArtefacts,
-  sendMessage,
+  resumeAnalysisWithOptimistic,
+  retryFailedMessage,
+  sendMessageWithRetry,
+  sendVoiceNoteWithRetry,
   startAnalysis,
 } from '@/store';
+import { type RenderableMessage, toRenderableMessage } from '@/store/slices/messages/slice';
 import { useTheme } from '@/theme';
+import { generateIdempotencyKey } from '@/utils/idempotency';
 import { logger } from '@/utils/logger';
-import { MediaType, Message, MessageProcessingStatus } from '@acme/shared';
+import {
+  type Message,
+  type MultiSelectQuestion,
+  type SingleSelectQuestion,
+  MessageProcessingStatus,
+} from '@acme/shared';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,9 +42,13 @@ const TERMINAL_STATUSES = new Set([
 ]);
 
 // Phase-aware polling intervals (ms). null = no polling.
-function getPollInterval(phase: string | undefined, hasProcessingMessages: boolean): number | null {
-  // Messages still processing — poll fast regardless of phase
-  if (hasProcessingMessages) return 3_000;
+function getPollInterval(
+  phase: string | undefined,
+  hasProcessingMessages: boolean,
+  hasOptimisticMessages: boolean
+): number | null {
+  // Messages still processing or optimistic messages pending — poll fast
+  if (hasProcessingMessages || hasOptimisticMessages) return 3_000;
 
   switch (phase) {
     case 'analysing':
@@ -53,6 +65,11 @@ function getPollInterval(phase: string | undefined, hasProcessingMessages: boole
   }
 }
 
+let localIdCounter = 0;
+function generateLocalId(): string {
+  return `opt_${Date.now()}_${++localIdCounter}`;
+}
+
 const chatLogger = logger.createScope('ChatScreen');
 
 export default function ChatScreen() {
@@ -67,12 +84,14 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
 
-  // Track IDs from backend for new conversations
+  // Track IDs from backend for new conversations.
+  // State drives re-renders (selectors); ref provides stale-closure-safe access in callbacks.
+  const [realConversationId, setRealConversationId] = useState<string | null>(null);
   const realConversationIdRef = useRef<string | null>(null);
   const artefactIdRef = useRef<string | null>(null);
-  const isPendingConversation = isNew === 'true' && !realConversationIdRef.current;
+  const isPendingConversation = isNew === 'true' && !realConversationId;
   // Use real conversation ID if available, otherwise use URL param
-  const effectiveConversationId = realConversationIdRef.current ?? conversationId ?? '';
+  const effectiveConversationId = realConversationId ?? conversationId ?? '';
 
   const loadingMessages = useAppSelector((state) => state.messages.loading);
   const sendingMessage = useAppSelector((state) => state.messages.sending);
@@ -83,10 +102,8 @@ export default function ChatScreen() {
     (state) => state.messages.contextByConversation[effectiveConversationId]
   );
 
-  // Find the artefact linked to this conversation (for completion card)
-  const artefact = useAppSelector((state) =>
-    selectAllArtefacts(state).find((a) => a.conversation.id === effectiveConversationId)
-  );
+  // Artefact ID comes from the server-driven context (reliable across all flows)
+  const artefactId = context?.artefactId ?? artefactIdRef.current;
 
   // Step 1: stable ID list — only changes when this conversation's message list changes
   const messageIds = useAppSelector(
@@ -95,10 +112,27 @@ export default function ChatScreen() {
 
   // Step 2: map IDs → entities — shallowEqual means re-render only when a message
   // object in THIS conversation changes, not when any other conversation is updated
-  const messages = useAppSelector(
+  const serverMessages = useAppSelector(
     (state) => messageIds.map((id) => state.messages.entities[id]).filter(Boolean) as Message[],
     shallowEqual
   );
+
+  // Optimistic messages for this conversation
+  const optimisticMessages = useAppSelector((state) => {
+    const all = state.messages.optimisticMessages;
+    return Object.values(all).filter((m) => m.conversationId === effectiveConversationId);
+  }, shallowEqual);
+
+  // Merge server messages + optimistic messages, sorted newest first
+  const mergedMessages: RenderableMessage[] = useMemo(() => {
+    const optimisticRendered = optimisticMessages.map(toRenderableMessage);
+    const all = [...(serverMessages as RenderableMessage[]), ...optimisticRendered];
+    // Sort newest first (matches inverted FlatList)
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return all;
+  }, [serverMessages, optimisticMessages]);
+
+  const hasUnsentMessages = optimisticMessages.length > 0;
 
   // Fetch messages for existing conversations (not newly created ones)
   useEffect(() => {
@@ -108,8 +142,10 @@ export default function ChatScreen() {
   }, [conversationId, isNew, dispatch]);
 
   // Poll fast while any message is still being processed (transcription, cleaning, etc.)
-  const hasProcessingMessages = messages.some((m) => !TERMINAL_STATUSES.has(m.processingStatus));
-  const pollIntervalMs = getPollInterval(context?.phase, hasProcessingMessages);
+  const hasProcessingMessages = serverMessages.some(
+    (m) => !TERMINAL_STATUSES.has(m.processingStatus)
+  );
+  const pollIntervalMs = getPollInterval(context?.phase, hasProcessingMessages, hasUnsentMessages);
 
   useEffect(() => {
     if (!effectiveConversationId || isPendingConversation || pollIntervalMs === null) return;
@@ -151,34 +187,30 @@ export default function ChatScreen() {
     async (recording: AudioRecordingResult) => {
       if (!conversationId) return;
 
-      try {
-        const { mediaId, uploadUrl } = await api.media.initiateUpload({
-          mediaType: MediaType.AUDIO,
-          mimeType: recording.mime,
-        });
-
-        // Upload the audio file directly to S3 via the presigned URL
-        const fileResponse = await fetch(recording.uri);
-        const blob = await fileResponse.blob();
-        await fetch(uploadUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': recording.mime },
-          body: blob,
-        });
-
-        // For new conversations, create artefact first — same as handleSend
-        let targetConversationId = realConversationIdRef.current;
-        if (!targetConversationId && isNew === 'true') {
+      // For new conversations, create artefact first
+      let targetConversationId = realConversationIdRef.current;
+      if (!targetConversationId && isNew === 'true') {
+        try {
           const artefact = await dispatch(createArtefact({ artefactId: conversationId })).unwrap();
           targetConversationId = artefact.conversation.id;
           realConversationIdRef.current = targetConversationId;
+          setRealConversationId(targetConversationId);
           artefactIdRef.current = artefact.id;
+        } catch (error) {
+          chatLogger.error('Failed to create conversation for voice note', { error });
+          return;
         }
-
-        dispatch(sendMessage({ conversationId: targetConversationId ?? conversationId, mediaId }));
-      } catch (error) {
-        chatLogger.error('Failed to send voice note', { error });
       }
+
+      dispatch(
+        sendVoiceNoteWithRetry({
+          conversationId: targetConversationId ?? conversationId,
+          localId: generateLocalId(),
+          idempotencyKey: generateIdempotencyKey(),
+          recordingUri: recording.uri,
+          recordingMime: recording.mime,
+        })
+      );
     },
     [conversationId, isNew, dispatch]
   );
@@ -188,21 +220,46 @@ export default function ChatScreen() {
       if (!conversationId || !text.trim()) return;
 
       // For new conversations, create artefact first to get real conversation ID
+      let targetConversationId = effectiveConversationId;
       if (isPendingConversation) {
         try {
           const artefact = await dispatch(createArtefact({ artefactId: conversationId })).unwrap();
-          const realId = artefact.conversation.id;
-          realConversationIdRef.current = realId;
+          targetConversationId = artefact.conversation.id;
+          realConversationIdRef.current = targetConversationId;
+          setRealConversationId(targetConversationId);
           artefactIdRef.current = artefact.id;
-          await dispatch(sendMessage({ conversationId: realId, content: text }));
         } catch (error) {
           chatLogger.error('Failed to create conversation', { error });
+          return;
         }
-      } else {
-        dispatch(sendMessage({ conversationId: effectiveConversationId, content: text }));
       }
+
+      dispatch(
+        sendMessageWithRetry({
+          conversationId: targetConversationId,
+          content: text.trim(),
+          localId: generateLocalId(),
+          idempotencyKey: generateIdempotencyKey(),
+        })
+      );
     },
     [conversationId, effectiveConversationId, isPendingConversation, dispatch]
+  );
+
+  const handleRetry = useCallback(
+    (localId: string) => {
+      const opt = optimisticMessages.find((m) => m.localId === localId);
+      if (!opt || !opt.content) return;
+      dispatch(
+        retryFailedMessage({
+          localId: opt.localId,
+          conversationId: opt.conversationId,
+          content: opt.content,
+          idempotencyKey: opt.idempotencyKey,
+        })
+      );
+    },
+    [optimisticMessages, dispatch]
   );
 
   // Optimistic flag — bridges the gap between thunk resolve and poll update
@@ -214,6 +271,9 @@ export default function ChatScreen() {
   const canStartAnalysis = context?.actions.startAnalysis.allowed ?? false;
   const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
+
+  // Action banner blocked state — disabled when messages are processing or unsent
+  const isBannerBlocked = hasProcessingMessages || hasUnsentMessages;
 
   // Clear optimistic flag once backend confirms phase change
   useEffect(() => {
@@ -253,14 +313,55 @@ export default function ChatScreen() {
 
   const handleAnswerQuestion = useCallback(
     (messageId: string, value: Record<string, unknown>) => {
-      handleResumeAnalysis(messageId, value);
+      // Find the question message to resolve option labels for the optimistic bubble
+      const questionMessage = mergedMessages.find((m) => m.id === messageId);
+      const question = questionMessage?.question;
+
+      if (
+        question &&
+        (question.questionType === 'single_select' || question.questionType === 'multi_select')
+      ) {
+        let optimisticContent: string;
+
+        if (question.questionType === 'single_select') {
+          const q = question as SingleSelectQuestion;
+          const selectedKey = value.selectedKey as string;
+          const label = q.options.find((o) => o.key === selectedKey)?.label ?? selectedKey;
+          optimisticContent = `Selected: ${label}`;
+        } else {
+          const q = question as MultiSelectQuestion;
+          const selectedKeys = value.selectedKeys as string[];
+          const labels = selectedKeys.map((k) => q.options.find((o) => o.key === k)?.label ?? k);
+          optimisticContent = `Selected: ${labels.join(', ')}`;
+        }
+
+        setOptimisticAnalysing(true);
+        dispatch(
+          resumeAnalysisWithOptimistic({
+            conversationId: effectiveConversationId,
+            messageId,
+            value,
+            optimisticContent,
+            localId: generateLocalId(),
+            idempotencyKey: generateIdempotencyKey(),
+          })
+        ).then((result) => {
+          if (resumeAnalysisWithOptimistic.rejected.match(result)) {
+            setOptimisticAnalysing(false);
+          }
+          dispatch(pollConversation(effectiveConversationId));
+        });
+      } else {
+        // Fallback for free_text or unknown question types — no optimistic bubble
+        handleResumeAnalysis(messageId, value);
+      }
     },
-    [handleResumeAnalysis]
+    [mergedMessages, effectiveConversationId, handleResumeAnalysis, dispatch]
   );
 
   const activeQuestionMessageId = context?.activeQuestion?.messageId;
 
-  const isLoading = loadingMessages && messages.length === 0 && isNew !== 'true';
+  const isLoading = loadingMessages && mergedMessages.length === 0 && isNew !== 'true';
   const composerBg = isDark ? colors.surface : colors.background;
 
   return (
@@ -272,11 +373,12 @@ export default function ChatScreen() {
       >
         <View style={phase === 'completed' ? styles.dimmed : styles.flex}>
           <MessageList
-            messages={messages}
+            messages={mergedMessages}
             currentUserId={user?.id ?? ''}
             isLoading={isLoading}
             activeQuestionMessageId={activeQuestionMessageId}
             onAnswerQuestion={handleAnswerQuestion}
+            onRetry={handleRetry}
           />
         </View>
 
@@ -285,13 +387,11 @@ export default function ChatScreen() {
             icon={<MaterialCommunityIcons name="party-popper" size={20} color="#ffffff" />}
             heading="All Done!"
             supportText="Your portfolio entry is ready for review"
-            subtitle={artefact?.title}
             buttonIcon={<Feather name="file-text" size={18} color="#ffffff" />}
             buttonLabel="View Your Entry"
             onPress={() => {
-              const id = artefact?.id ?? artefactIdRef.current;
-              if (id) {
-                router.push(`/(entry)/${id}`);
+              if (artefactId) {
+                router.push(`/(entry)/${artefactId}`);
               }
             }}
           />
@@ -302,6 +402,8 @@ export default function ChatScreen() {
                 variant="analyse"
                 onPress={handleStartAnalysis}
                 isLoading={analysisLoading || optimisticAnalysing || phase === 'analysing'}
+                disabled={isBannerBlocked && !optimisticAnalysing && phase !== 'analysing'}
+                helperText="Waiting for messages to be delivered"
               />
             )}
 
@@ -312,6 +414,8 @@ export default function ChatScreen() {
                   variant="continue"
                   onPress={() => handleResumeAnalysis()}
                   isLoading={analysisLoading}
+                  disabled={isBannerBlocked}
+                  helperText="Waiting for messages to be delivered"
                 />
               )}
 

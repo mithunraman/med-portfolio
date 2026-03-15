@@ -109,6 +109,7 @@ export const MessageSchema = z.object({
   media: MessageMediaSchema.nullable(),
   question: QuestionSchema.nullable().optional(),
   answer: AnswerSchema.nullable().optional(),
+  idempotencyKey: z.string().nullable().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -131,6 +132,7 @@ export const SendMessageRequestSchema = z
   .object({
     content: z.string().min(1).max(10000).optional(),
     mediaId: z.string().min(1).max(50).optional(),
+    idempotencyKey: z.string().min(1).max(24).optional(),
   })
   .refine((data) => Boolean(data.content) !== Boolean(data.mediaId), {
     message: 'Exactly one of content or mediaId must be provided',
@@ -185,6 +187,7 @@ export const ActionStateSchema = z.object({
 export type ActionState = z.infer<typeof ActionStateSchema>;
 
 export const ConversationContextSchema = z.object({
+  artefactId: z.string(),
   actions: z.object({
     sendMessage: ActionStateSchema,
     sendAudio: ActionStateSchema,

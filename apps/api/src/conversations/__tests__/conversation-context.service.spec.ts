@@ -67,7 +67,7 @@ describe('ConversationContextService', () => {
 
   describe('when conversation is CLOSED', () => {
     it('returns phase "closed" with all actions denied', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.CLOSED);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.CLOSED, 'test-artefact-id');
 
       expect(ctx.phase).toBe('closed');
       expect(ctx.actions.sendMessage).toEqual({
@@ -93,7 +93,7 @@ describe('ConversationContextService', () => {
     });
 
     it('does not query analysis runs or messages', async () => {
-      await service.computeContext(conversationOid, ConversationStatus.CLOSED);
+      await service.computeContext(conversationOid, ConversationStatus.CLOSED, 'test-artefact-id');
 
       expect(mockAnalysisRunsService.findLatestRun).not.toHaveBeenCalled();
       expect(mockRepo.hasProcessingMessages).not.toHaveBeenCalled();
@@ -112,7 +112,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.phase).toBe('composing');
     });
 
@@ -120,7 +120,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.actions.sendMessage).toEqual({ allowed: true });
       expect(ctx.actions.sendAudio).toEqual({ allowed: true });
     });
@@ -129,7 +129,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.actions.startAnalysis).toEqual({ allowed: true });
     });
 
@@ -137,7 +137,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(true));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.actions.startAnalysis).toEqual({
         allowed: false,
         code: 'MESSAGES_PROCESSING',
@@ -149,7 +149,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(false));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.actions.startAnalysis).toEqual({
         allowed: false,
         code: 'NO_MESSAGES',
@@ -161,7 +161,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.actions.resumeAnalysis).toEqual({
         allowed: false,
         code: 'NO_ACTIVE_QUESTION',
@@ -173,7 +173,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.analysisRun).toBeUndefined();
       expect(ctx.activeQuestion).toBeUndefined();
     });
@@ -191,17 +191,17 @@ describe('ConversationContextService', () => {
     });
 
     it('returns phase "composing" (allows retry)', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.phase).toBe('composing');
     });
 
     it('allows startAnalysis (retry after failure)', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.actions.startAnalysis).toEqual({ allowed: true });
     });
 
     it('includes analysisRun summary', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.analysisRun).toEqual({
         id: 'run_abc123',
         status: AnalysisRunStatus.FAILED,
@@ -220,12 +220,12 @@ describe('ConversationContextService', () => {
     });
 
     it('returns phase "completed"', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.phase).toBe('completed');
     });
 
     it('does not query message state (not in composing phase)', async () => {
-      await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(mockRepo.hasProcessingMessages).not.toHaveBeenCalled();
       expect(mockRepo.hasCompleteMessages).not.toHaveBeenCalled();
     });
@@ -242,12 +242,12 @@ describe('ConversationContextService', () => {
     });
 
     it('returns phase "analysing"', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.phase).toBe('analysing');
     });
 
     it('denies all actions', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.actions.sendMessage.allowed).toBe(false);
       expect(ctx.actions.sendAudio.allowed).toBe(false);
       expect(ctx.actions.startAnalysis.allowed).toBe(false);
@@ -255,7 +255,7 @@ describe('ConversationContextService', () => {
     });
 
     it('does not query message state', async () => {
-      await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(mockRepo.hasProcessingMessages).not.toHaveBeenCalled();
     });
   });
@@ -275,30 +275,30 @@ describe('ConversationContextService', () => {
       });
 
       it('returns phase "awaiting_input"', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
         expect(ctx.phase).toBe('awaiting_input');
       });
 
       it('allows sendMessage and sendAudio for free_text', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
         expect(ctx.actions.sendMessage).toEqual({ allowed: true });
         expect(ctx.actions.sendAudio).toEqual({ allowed: true });
       });
 
       it('allows resumeAnalysis', async () => {
         mockRepo.getLastMessageRole.mockResolvedValue(ok(MessageRole.USER));
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
         expect(ctx.actions.resumeAnalysis).toEqual({ allowed: true });
       });
 
       it('denies startAnalysis', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
         expect(ctx.actions.startAnalysis.allowed).toBe(false);
         expect(ctx.actions.startAnalysis.code).toBe('ANALYSIS_RUNNING');
       });
 
       it('includes activeQuestion with messageId and questionType', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
         expect(ctx.activeQuestion).toEqual({
           messageId: expect.any(String),
           questionType: 'free_text',
@@ -306,7 +306,7 @@ describe('ConversationContextService', () => {
       });
 
       it('includes analysisRun summary', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
         expect(ctx.analysisRun).toEqual({
           id: 'run_abc123',
           status: AnalysisRunStatus.AWAITING_INPUT,
@@ -325,7 +325,7 @@ describe('ConversationContextService', () => {
       });
 
       it('denies sendMessage and sendAudio for structured input', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
         expect(ctx.actions.sendMessage).toEqual({
           allowed: false,
           code: 'STRUCTURED_INPUT_REQUIRED',
@@ -339,12 +339,12 @@ describe('ConversationContextService', () => {
       });
 
       it('still allows resumeAnalysis', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
         expect(ctx.actions.resumeAnalysis).toEqual({ allowed: true });
       });
 
       it('returns correct activeQuestion type', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
         expect(ctx.activeQuestion?.questionType).toBe('single_select');
       });
     });
@@ -360,13 +360,13 @@ describe('ConversationContextService', () => {
       });
 
       it('denies sendMessage for structured input', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
         expect(ctx.actions.sendMessage.allowed).toBe(false);
         expect(ctx.actions.sendMessage.code).toBe('STRUCTURED_INPUT_REQUIRED');
       });
 
       it('returns correct activeQuestion type', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
         expect(ctx.activeQuestion?.questionType).toBe('multi_select');
       });
     });
@@ -382,12 +382,12 @@ describe('ConversationContextService', () => {
     });
 
     it('returns phase "completed"', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.phase).toBe('completed');
     });
 
     it('denies all actions', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.actions.sendMessage.allowed).toBe(false);
       expect(ctx.actions.sendAudio.allowed).toBe(false);
       expect(ctx.actions.startAnalysis.allowed).toBe(false);
@@ -395,18 +395,18 @@ describe('ConversationContextService', () => {
     });
 
     it('uses ANALYSIS_COMPLETE codes', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.actions.sendMessage.code).toBe('ANALYSIS_COMPLETE');
       expect(ctx.actions.startAnalysis.code).toBe('ANALYSIS_COMPLETE');
     });
 
     it('does not include activeQuestion', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.activeQuestion).toBeUndefined();
     });
 
     it('includes analysisRun summary', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.analysisRun).toEqual({
         id: 'run_abc123',
         status: AnalysisRunStatus.COMPLETED,
@@ -425,7 +425,7 @@ describe('ConversationContextService', () => {
         })
       );
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.activeQuestion).toBeUndefined();
     });
 
@@ -437,7 +437,7 @@ describe('ConversationContextService', () => {
         })
       );
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.activeQuestion).toBeUndefined();
     });
 
@@ -453,7 +453,7 @@ describe('ConversationContextService', () => {
         })
       );
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       expect(ctx.activeQuestion).toBeUndefined();
     });
   });
@@ -469,7 +469,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(err({ code: 'DB_ERROR', message: 'fail' }));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       // hasProcessing = false (error), hasComplete = true → startAnalysis allowed
       expect(ctx.actions.startAnalysis).toEqual({ allowed: true });
     });
@@ -478,7 +478,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(err({ code: 'DB_ERROR', message: 'fail' }));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
       // hasProcessing = false, hasComplete = false (error) → NO_MESSAGES
       expect(ctx.actions.startAnalysis.code).toBe('NO_MESSAGES');
     });

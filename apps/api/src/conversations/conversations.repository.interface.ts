@@ -29,6 +29,7 @@ export interface CreateMessageData {
   processingStatus?: MessageProcessingStatus;
   media?: Types.ObjectId | null;
   question?: Question | null;
+  idempotencyKey?: string | null;
 }
 
 export interface UpdateMessageData {
@@ -134,4 +135,22 @@ export interface IConversationsRepository {
     conversationId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<MessageRole | null, DBError>>;
+
+  /**
+   * Find a message by its idempotency key, scoped to a specific user.
+   * Used for deduplication on retries.
+   */
+  findMessageByIdempotencyKey(
+    userId: Types.ObjectId,
+    idempotencyKey: string,
+    session?: ClientSession
+  ): Promise<Result<Message | null, DBError>>;
+
+  /**
+   * Resolve the artefact xid for a conversation by populating the artefact ref.
+   */
+  findArtefactXidByConversationId(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<string | null, DBError>>;
 }

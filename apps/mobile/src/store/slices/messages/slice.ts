@@ -1,4 +1,5 @@
 import type { ConversationContext, Message } from '@acme/shared';
+import { MessageRole, MessageProcessingStatus, MessageType } from '@acme/shared';
 import { createEntityAdapter, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import {
   fetchMessages,
@@ -14,11 +15,55 @@ const messagesAdapter = createEntityAdapter<Message>({
   sortComparer: (a, b) => b.createdAt.localeCompare(a.createdAt),
 });
 
+// ── Optimistic message types ──
+
+export type DeliveryStatus = 'sending' | 'failed';
+
+export interface OptimisticMessage {
+  localId: string;
+  conversationId: string;
+  content: string | null;
+  mediaId: string | null;
+  deliveryStatus: DeliveryStatus;
+  idempotencyKey: string;
+  createdAt: string;
+  error?: string;
+  /** For voice notes — local recording URI for retry */
+  recordingUri?: string;
+  recordingMime?: string;
+}
+
+/**
+ * Shape an optimistic message as a Message so it can be rendered by MessageRow/BubbleShell.
+ * The `_deliveryStatus` field is a client-only extension for rendering the clock/failed icon.
+ */
+export type RenderableMessage = Message & { _deliveryStatus?: DeliveryStatus; _localId?: string };
+
+export function toRenderableMessage(opt: OptimisticMessage): RenderableMessage {
+  return {
+    id: opt.localId,
+    conversationId: opt.conversationId,
+    role: MessageRole.USER,
+    messageType: opt.mediaId ? MessageType.AUDIO : MessageType.TEXT,
+    processingStatus: MessageProcessingStatus.PENDING,
+    content: opt.content,
+    media: null,
+    question: null,
+    answer: null,
+    createdAt: opt.createdAt,
+    updatedAt: opt.createdAt,
+    _deliveryStatus: opt.deliveryStatus,
+    _localId: opt.localId,
+  };
+}
+
 interface MessagesExtraState {
   // Ordered message IDs per conversation — the index for O(1) per-conversation lookups
   idsByConversation: Record<string, string[]>;
   // Server-driven conversation context per conversation
   contextByConversation: Record<string, ConversationContext>;
+  // Optimistic messages awaiting server confirmation, keyed by localId
+  optimisticMessages: Record<string, OptimisticMessage>;
   loading: boolean;
   sending: boolean;
   analysisLoading: boolean;
@@ -29,6 +74,7 @@ interface MessagesExtraState {
 const initialState = messagesAdapter.getInitialState<MessagesExtraState>({
   idsByConversation: {},
   contextByConversation: {},
+  optimisticMessages: {},
   loading: false,
   sending: false,
   analysisLoading: false,
@@ -41,6 +87,9 @@ export type MessagesState = typeof initialState;
 /**
  * Full-replace messages + context for a conversation.
  * Used by both fetchMessages and pollConversation.
+ *
+ * Also reconciles optimistic messages: if a server message carries an
+ * idempotencyKey matching an optimistic entry, the optimistic entry is removed.
  */
 function replaceConversationMessages(
   state: MessagesState,
@@ -55,6 +104,21 @@ function replaceConversationMessages(
   messagesAdapter.setMany(state, messages);
   state.idsByConversation[conversationId] = messages.map((m) => m.id);
   state.contextByConversation[conversationId] = context;
+
+  // Reconcile: remove optimistic messages that the server has confirmed.
+  // Match by idempotencyKey if available, or by content + createdAt proximity.
+  const serverKeys = new Set(
+    messages
+      .map((m) => (m as RenderableMessage & { idempotencyKey?: string }).idempotencyKey)
+      .filter(Boolean) as string[],
+  );
+
+  for (const [localId, opt] of Object.entries(state.optimisticMessages)) {
+    if (opt.conversationId !== conversationId) continue;
+    if (serverKeys.has(opt.idempotencyKey)) {
+      delete state.optimisticMessages[localId];
+    }
+  }
 }
 
 const messagesSlice = createSlice({
@@ -84,6 +148,25 @@ const messagesSlice = createSlice({
         state.idsByConversation[msg.conversationId] = [msg.id, ...ids];
       }
       // If the ID is already present, entity is updated in place — index unchanged ✓
+    },
+
+    // ── Optimistic message management ──
+
+    addOptimisticMessage(state, action: PayloadAction<OptimisticMessage>) {
+      state.optimisticMessages[action.payload.localId] = action.payload;
+    },
+    updateOptimisticStatus(
+      state,
+      action: PayloadAction<{ localId: string; status: DeliveryStatus; error?: string }>,
+    ) {
+      const opt = state.optimisticMessages[action.payload.localId];
+      if (opt) {
+        opt.deliveryStatus = action.payload.status;
+        opt.error = action.payload.error;
+      }
+    },
+    removeOptimisticMessage(state, action: PayloadAction<string>) {
+      delete state.optimisticMessages[action.payload];
     },
   },
   extraReducers: (builder) => {
@@ -155,8 +238,15 @@ const messagesSlice = createSlice({
   },
 });
 
-export const { clearMessagesError, clearAnalysisError, clearMessages, upsertMessage } =
-  messagesSlice.actions;
+export const {
+  clearMessagesError,
+  clearAnalysisError,
+  clearMessages,
+  upsertMessage,
+  addOptimisticMessage,
+  updateOptimisticStatus,
+  removeOptimisticMessage,
+} = messagesSlice.actions;
 
 // Unbound selectors — pass the messages slice state directly.
 // Avoids circular deps with RootState.

@@ -18,6 +18,7 @@ export function toMessageDto(
     media: mediaData,
     question: doc.question ?? null,
     answer: (doc.answer as Answer) ?? null,
+    idempotencyKey: doc.idempotencyKey ?? null,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   };

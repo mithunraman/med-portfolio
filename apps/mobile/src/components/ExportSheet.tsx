@@ -1,16 +1,9 @@
 import { useTheme } from '@/theme';
-import { shareAsPdf, copyAsText } from '@/utils/export';
+import { copyAsText, shareAsPdf } from '@/utils/export';
 import type { Artefact } from '@acme/shared';
 import { Feather } from '@expo/vector-icons';
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface ExportSheetProps {
   visible: boolean;
@@ -60,7 +53,7 @@ export function ExportSheet({ visible, onClose, artefact }: ExportSheetProps) {
             <View style={styles.optionText}>
               <Text style={[styles.optionTitle, { color: colors.text }]}>Share as PDF</Text>
               <Text style={[styles.optionDesc, { color: colors.textSecondary }]}>
-                Save to Files, AirDrop, email, or print
+                Save to Files, AirDrop, WhatsApp, Email, or Print.
               </Text>
             </View>
             <Feather name="chevron-right" size={18} color={colors.textSecondary} />
@@ -74,7 +67,7 @@ export function ExportSheet({ visible, onClose, artefact }: ExportSheetProps) {
             <View style={styles.optionText}>
               <Text style={[styles.optionTitle, { color: colors.text }]}>Copy as text</Text>
               <Text style={[styles.optionDesc, { color: colors.textSecondary }]}>
-                Paste into FourteenFish or other apps
+                Paste into other apps
               </Text>
             </View>
             <Feather name="chevron-right" size={18} color={colors.textSecondary} />

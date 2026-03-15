@@ -85,16 +85,16 @@ Each feature lists backend and mobile frontend status separately, verified again
 
 ### Phase 5 — Export
 
-| Feature                                                  | Backend                                     | Mobile             |
-| -------------------------------------------------------- | ------------------------------------------- | ------------------ |
-| PDF generation service                                   | ❌ No `POST /artefacts/:id/export` endpoint | —                  |
-| PDF templates (FourteenFish-friendly, Compact, Detailed) | ❌ Not implemented                          | —                  |
-| Export history schema + endpoint                         | ❌ Not implemented                          | —                  |
-| Export options sheet (template picker, toggles)          | —                                           | ❌ Not implemented |
-| PDF generation progress screen                           | —                                           | ❌ Not implemented |
-| Download / Share via system share sheet                  | —                                           | ❌ Not implemented |
-| Copy as text fallback                                    | —                                           | ❌ Not implemented |
-| Post-export banner ("changed since last export")         | —                                           | ❌ Not implemented |
+| Feature                                                  | Backend                                     | Mobile                                                                              |
+| -------------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| PDF generation (on-device via expo-print)                | — (client-side, no backend needed)          | ✅ `buildExportHtml` → `expo-print` generates A4 PDF on device                     |
+| PDF template (FourteenFish-friendly)                     | —                                           | ✅ Single HTML template with header, reflection, capabilities table, PDP goal cards |
+| Export bottom sheet (Share as PDF / Copy as text)        | —                                           | ✅ `ExportSheet` bottom sheet on entry detail (IN_REVIEW + COMPLETED)               |
+| Download / Share via system share sheet                  | —                                           | ✅ `expo-sharing` opens native share sheet (Files, AirDrop, email, etc.)            |
+| Copy as text fallback                                    | —                                           | ✅ `expo-clipboard` copies structured plain text + confirmation alert               |
+| Export history schema + endpoint                         | ❌ Not implemented                          | —                                                                                   |
+| Additional PDF templates (Compact, Detailed)             | —                                           | ❌ Not implemented (single template for MVP)                                        |
+| Post-export banner ("changed since last export")         | —                                           | ❌ Not implemented                                                                  |
 
 ---
 
@@ -137,7 +137,7 @@ Each feature lists backend and mobile frontend status separately, verified again
 | 3     | Convert — AI generation, question UI, completion   | ✅ Done                                        | ✅ Done (minus safety checklist + AI action pills)      |
 | AI UX | Phase-aware composer, inline questions, banners    | ✅ Done                                        | ✅ Done                                                 |
 | 4     | Review & Edit — inline editing, autosave, PATCH    | ✅ Done (PATCH, finalise, status, PDP CRUD)    | ✅ Done (inline editing, PDP actions — minus pre-export checks) |
-| 5     | Export — PDF generation, templates, download/share | ❌ Not started                                 | ❌ Not started                                                  |
+| 5     | Export — PDF generation, templates, download/share | — (client-side MVP, no backend needed)         | ✅ Done (PDF + share + copy-as-text — minus export history + extra templates) |
 | 6     | Track — PDP tab, full dashboard, returning user    | ✅ Done (dashboard, PDP list/PATCH)            | 🔄 Partial (needs attention module + returning user header)     |
 | 7     | Polish — search, versioning, flag AI, regenerate   | 🔄 Partial (versioning + archive done)         | 🔄 Partial (versioning + archive done)                          |
 

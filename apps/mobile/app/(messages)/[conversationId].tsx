@@ -286,7 +286,16 @@ export default function ChatScreen() {
   const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
 
+  // Optimistic flag — gives instant feedback while the HTTP call is in flight
+  const [pendingAnalysis, setPendingAnalysis] = useState(false);
+
+  // Clear the flag once the server confirms the phase change
+  useEffect(() => {
+    if (phase === 'analysing') setPendingAnalysis(false);
+  }, [phase]);
+
   const handleStartAnalysis = useCallback(async () => {
+    setPendingAnalysis(true);
     await dispatch(startAnalysis(effectiveConversationId));
   }, [effectiveConversationId, dispatch]);
 
@@ -294,6 +303,7 @@ export default function ChatScreen() {
     async (messageId?: string, value?: Record<string, unknown>) => {
       const msgId = messageId ?? context?.activeQuestion?.messageId;
       if (!msgId) return;
+      setPendingAnalysis(true);
       await dispatch(
         resumeAnalysis({
           conversationId: effectiveConversationId,
@@ -360,8 +370,8 @@ export default function ChatScreen() {
       return { mode: 'status', reason: 'Processing your message...' };
     }
 
-    // Server-driven analysis in progress
-    if (phase === 'analysing') {
+    // Optimistic or server-confirmed analysis in progress
+    if (pendingAnalysis || phase === 'analysing') {
       const reason = thinkingStepLabel(context?.analysisRun?.thinkingReason) ?? 'Starting analysis...';
       return { mode: 'status', reason };
     }
@@ -381,6 +391,7 @@ export default function ChatScreen() {
     context,
     hasUnsentMessages,
     hasProcessingMessages,
+    pendingAnalysis,
     phase,
     canStartAnalysis,
     canResumeAnalysis,

@@ -1,5 +1,6 @@
 import type {
   AnalysisActionRequest,
+  ConversationContext,
   Message,
   MessageListResponse,
   MultiSelectQuestion,
@@ -199,7 +200,7 @@ export class ConversationsService {
     userId: string,
     conversationId: string,
     dto: AnalysisActionRequest
-  ): Promise<void> {
+  ): Promise<ConversationContext> {
     // 1. Validate conversation ownership
     const conversationResult = await this.conversationsRepository.findConversationByXid(
       conversationId,
@@ -233,15 +234,25 @@ export class ConversationsService {
     }
 
     // 3. Branch on action type
-    if (dto.type === 'start') return this.handleStart(userId, convIdStr, conversation);
+    if (dto.type === 'start') {
+      await this.handleStart(userId, convIdStr, conversation);
+    } else {
+      await this.handleResume(
+        userId,
+        convIdStr,
+        conversation._id,
+        dto.messageId,
+        'value' in dto ? (dto.value as Record<string, unknown>) : undefined
+      );
+    }
 
-    return this.handleResume(
-      userId,
-      convIdStr,
-      conversation._id,
-      dto.messageId,
-      'value' in dto ? (dto.value as Record<string, unknown>) : undefined
+    // 4. Compute and return updated context (run is now PENDING → phase = 'analysing')
+    const artefactXidResult = await this.conversationsRepository.findArtefactXidByConversationId(
+      conversation._id
     );
+    const artefactId = !isErr(artefactXidResult) ? (artefactXidResult.value ?? '') : '';
+
+    return this.contextService.computeContext(conversation._id, conversation.status, artefactId);
   }
 
   /**

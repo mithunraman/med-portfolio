@@ -315,7 +315,7 @@ export const resumeAnalysisWithOptimistic = createAsyncThunk(
     let lastError: unknown;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        await api.conversations.analysis(conversationId, {
+        const context = await api.conversations.analysis(conversationId, {
           type: 'resume',
           messageId,
           value: { ...value, idempotencyKey },
@@ -325,7 +325,7 @@ export const resumeAnalysisWithOptimistic = createAsyncThunk(
         // Don't remove optimistic — wait for poll to bring the server message
         // Just mark delivery as successful by keeping status as 'sending'
         // The poll reconciliation will remove it when server message arrives
-        return { conversationId };
+        return { conversationId, context };
       } catch (error) {
         lastError = error;
         if (!isRetryableError(error)) break;
@@ -361,15 +361,16 @@ export const pollConversation = createAsyncThunk(
 );
 
 /**
- * Start analysis for a conversation. Fire-and-forget — backend returns 204.
+ * Start analysis for a conversation. Returns the updated ConversationContext
+ * so the client can apply the new phase immediately without polling.
  */
 export const startAnalysis = createAsyncThunk(
   'messages/startAnalysis',
   async (conversationId: string, { rejectWithValue }) => {
     messagesLogger.info('Starting analysis', { conversationId });
     try {
-      await api.conversations.analysis(conversationId, { type: 'start' });
-      return { conversationId };
+      const context = await api.conversations.analysis(conversationId, { type: 'start' });
+      return { conversationId, context };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start analysis';
       messagesLogger.error('Failed to start analysis', { error: message });
@@ -379,7 +380,8 @@ export const startAnalysis = createAsyncThunk(
 );
 
 /**
- * Resume analysis with a user response. Fire-and-forget — backend returns 204.
+ * Resume analysis with a user response. Returns the updated ConversationContext
+ * so the client can apply the new phase immediately without polling.
  */
 export const resumeAnalysis = createAsyncThunk(
   'messages/resumeAnalysis',
@@ -389,12 +391,12 @@ export const resumeAnalysis = createAsyncThunk(
   ) => {
     messagesLogger.info('Resuming analysis', params);
     try {
-      await api.conversations.analysis(params.conversationId, {
+      const context = await api.conversations.analysis(params.conversationId, {
         type: 'resume',
         messageId: params.messageId,
         value: params.value,
       });
-      return { conversationId: params.conversationId };
+      return { conversationId: params.conversationId, context };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to resume analysis';
       messagesLogger.error('Failed to resume analysis', { error: message });

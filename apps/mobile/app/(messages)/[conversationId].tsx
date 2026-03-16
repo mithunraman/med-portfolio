@@ -262,12 +262,9 @@ export default function ChatScreen() {
     [optimisticMessages, dispatch]
   );
 
-  // Optimistic flag — bridges the gap between thunk resolve and poll update
-  const [optimisticAnalysing, setOptimisticAnalysing] = useState(false);
-
   // Phase-aware flags derived from server context
-  const canSendMessage = (context?.actions.sendMessage.allowed ?? true) && !optimisticAnalysing;
-  const canSendAudio = (context?.actions.sendAudio.allowed ?? true) && !optimisticAnalysing;
+  const canSendMessage = context?.actions.sendMessage.allowed ?? true;
+  const canSendAudio = context?.actions.sendAudio.allowed ?? true;
   const canStartAnalysis = context?.actions.startAnalysis.allowed ?? false;
   const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
@@ -275,38 +272,21 @@ export default function ChatScreen() {
   // Action banner blocked state — disabled when messages are processing or unsent
   const isBannerBlocked = hasProcessingMessages || hasUnsentMessages;
 
-  // Clear optimistic flag once backend confirms phase change
-  useEffect(() => {
-    if (phase && phase !== 'composing') {
-      setOptimisticAnalysing(false);
-    }
-  }, [phase]);
-
   const handleStartAnalysis = useCallback(async () => {
-    setOptimisticAnalysing(true);
-    const result = await dispatch(startAnalysis(effectiveConversationId));
-    if (startAnalysis.rejected.match(result)) {
-      setOptimisticAnalysing(false);
-    }
-    dispatch(pollConversation(effectiveConversationId));
+    await dispatch(startAnalysis(effectiveConversationId));
   }, [effectiveConversationId, dispatch]);
 
   const handleResumeAnalysis = useCallback(
     async (messageId?: string, value?: Record<string, unknown>) => {
       const msgId = messageId ?? context?.activeQuestion?.messageId;
       if (!msgId) return;
-      setOptimisticAnalysing(true);
-      const result = await dispatch(
+      await dispatch(
         resumeAnalysis({
           conversationId: effectiveConversationId,
           messageId: msgId,
           value,
         })
       );
-      if (resumeAnalysis.rejected.match(result)) {
-        setOptimisticAnalysing(false);
-      }
-      dispatch(pollConversation(effectiveConversationId));
     },
     [effectiveConversationId, context?.activeQuestion?.messageId, dispatch]
   );
@@ -335,7 +315,6 @@ export default function ChatScreen() {
           optimisticContent = `Selected: ${labels.join(', ')}`;
         }
 
-        setOptimisticAnalysing(true);
         dispatch(
           resumeAnalysisWithOptimistic({
             conversationId: effectiveConversationId,
@@ -345,12 +324,7 @@ export default function ChatScreen() {
             localId: generateLocalId(),
             idempotencyKey: generateIdempotencyKey(),
           })
-        ).then((result) => {
-          if (resumeAnalysisWithOptimistic.rejected.match(result)) {
-            setOptimisticAnalysing(false);
-          }
-          dispatch(pollConversation(effectiveConversationId));
-        });
+        );
       } else {
         // Fallback for free_text or unknown question types — no optimistic bubble
         handleResumeAnalysis(messageId, value);
@@ -361,7 +335,7 @@ export default function ChatScreen() {
 
   // Single derived banner state — all visibility/loading/disabled logic in one place
   const bannerState = useMemo(() => {
-    if (optimisticAnalysing || phase === 'analysing') {
+    if (phase === 'analysing') {
       return {
         type: 'analyse' as const,
         loading: true,
@@ -387,7 +361,6 @@ export default function ChatScreen() {
     }
     return null;
   }, [
-    optimisticAnalysing,
     phase,
     canStartAnalysis,
     canResumeAnalysis,
@@ -452,7 +425,7 @@ export default function ChatScreen() {
               isSending={sendingMessage}
               canSendMessage={canSendMessage}
               canSendAudio={canSendAudio}
-              phase={optimisticAnalysing ? 'analysing' : phase}
+              phase={phase}
             />
           </>
         )}

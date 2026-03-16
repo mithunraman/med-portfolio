@@ -1,5 +1,10 @@
-import type { AnalysisActionRequest, Message, MessageListResponse } from '@acme/shared';
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import type {
+  AnalysisActionRequest,
+  ConversationContext,
+  Message,
+  MessageListResponse,
+} from '@acme/shared';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ConversationsService } from './conversations.service';
 import { AnalysisActionPipe, SendMessageDto } from './dto';
@@ -18,13 +23,12 @@ export class ConversationsController {
   }
 
   @Post(':conversationId/analysis')
-  @HttpCode(HttpStatus.NO_CONTENT)
   async analysis(
     @CurrentUser() user: CurrentUserPayload,
     @Param('conversationId') conversationId: string,
     @Body(new AnalysisActionPipe()) dto: AnalysisActionRequest
-  ): Promise<void> {
-    await this.conversationsService.handleAnalysis(user.userId, conversationId, dto);
+  ): Promise<ConversationContext> {
+    return this.conversationsService.handleAnalysis(user.userId, conversationId, dto);
   }
 
   @Get(':conversationId/messages')

@@ -5,6 +5,7 @@ import {
   fetchMessages,
   pollConversation,
   resumeAnalysis,
+  resumeAnalysisWithOptimistic,
   sendMessage,
   startAnalysis,
 } from './thunks';
@@ -215,8 +216,10 @@ const messagesSlice = createSlice({
         state.analysisLoading = true;
         state.analysisError = null;
       })
-      .addCase(startAnalysis.fulfilled, (state) => {
+      .addCase(startAnalysis.fulfilled, (state, action) => {
         state.analysisLoading = false;
+        const { conversationId, context } = action.payload;
+        state.contextByConversation[conversationId] = context;
       })
       .addCase(startAnalysis.rejected, (state, action) => {
         state.analysisLoading = false;
@@ -228,12 +231,20 @@ const messagesSlice = createSlice({
         state.analysisLoading = true;
         state.analysisError = null;
       })
-      .addCase(resumeAnalysis.fulfilled, (state) => {
+      .addCase(resumeAnalysis.fulfilled, (state, action) => {
         state.analysisLoading = false;
+        const { conversationId, context } = action.payload;
+        state.contextByConversation[conversationId] = context;
       })
       .addCase(resumeAnalysis.rejected, (state, action) => {
         state.analysisLoading = false;
         state.analysisError = action.payload as string;
+      })
+
+      // Resume analysis with optimistic bubble
+      .addCase(resumeAnalysisWithOptimistic.fulfilled, (state, action) => {
+        const { conversationId, context } = action.payload;
+        state.contextByConversation[conversationId] = context;
       });
   },
 });

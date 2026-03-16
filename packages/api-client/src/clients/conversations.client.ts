@@ -1,5 +1,6 @@
 import type {
   AnalysisActionRequest,
+  ConversationContext,
   ConversationListResponse,
   Message,
   MessageListResponse,
@@ -34,7 +35,7 @@ export class ConversationsClient {
     return this.client.post<Message>(`/conversations/${conversationId}/messages`, data);
   }
 
-  async analysis(conversationId: string, data: AnalysisActionRequest): Promise<void> {
-    await this.client.post<void>(`/conversations/${conversationId}/analysis`, data);
+  async analysis(conversationId: string, data: AnalysisActionRequest): Promise<ConversationContext> {
+    return this.client.post<ConversationContext>(`/conversations/${conversationId}/analysis`, data);
   }
 }

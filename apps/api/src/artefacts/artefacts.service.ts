@@ -604,6 +604,7 @@ export class ArtefactsService {
               messageType: msg.messageType,
               content: msg.content ?? null,
               processingStatus: MessageProcessingStatus.COMPLETE,
+              idempotencyKey: nanoidAlphanumeric(),
             },
             session
           );

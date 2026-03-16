@@ -8,6 +8,7 @@ import {
   Specialty,
 } from '@acme/shared';
 import { Model, Types } from 'mongoose';
+import { nanoidAlphanumeric } from '../../../common/utils/nanoid.util';
 import { Artefact, ArtefactDocument } from '../../../artefacts/schemas/artefact.schema';
 import { PdpGoal, PdpGoalDocument } from '../../../pdp-goals/schemas/pdp-goal.schema';
 import { ConversationDocument } from '../../schemas/conversation.schema';
@@ -115,6 +116,7 @@ export async function createTestMessage(
       content: overrides.content ?? 'I saw a patient today with type 2 diabetes.',
       processingStatus: overrides.processingStatus ?? MessageProcessingStatus.COMPLETE,
       question: overrides.question ?? null,
+      idempotencyKey: nanoidAlphanumeric(),
     },
   ]);
   return doc;

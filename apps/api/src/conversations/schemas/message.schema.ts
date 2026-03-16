@@ -79,9 +79,10 @@ export class Message {
   @Prop({ type: TranscriptionMetadata, default: null })
   transcription!: TranscriptionMetadata | null;
 
-  // Client-generated idempotency key for deduplication (unique per user, sparse)
-  @Prop({ type: String, default: null })
-  idempotencyKey!: string | null;
+  // Idempotency key for deduplication (unique per user).
+  // Must be set by the caller — auto-generated at the service/graph layer.
+  @Prop({ required: true, type: String })
+  idempotencyKey!: string;
 
   createdAt!: Date;
   updatedAt!: Date;
@@ -95,5 +96,4 @@ export const MessageSchema = SchemaFactory.createForClass(Message);
 MessageSchema.index({ conversation: 1, _id: -1 });
 
 // Compound unique index for idempotency: userId + idempotencyKey.
-// sparse: true excludes documents where idempotencyKey is null (old messages, system messages).
-MessageSchema.index({ userId: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
+MessageSchema.index({ userId: 1, idempotencyKey: 1 }, { unique: true });

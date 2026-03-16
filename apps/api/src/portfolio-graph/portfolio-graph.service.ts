@@ -13,6 +13,7 @@ import { MongoDBSaver } from '@langchain/langgraph-checkpoint-mongodb';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { Connection, Types } from 'mongoose';
+import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import {
   ARTEFACTS_REPOSITORY,
   IArtefactsRepository,
@@ -282,6 +283,7 @@ export class PortfolioGraphService implements OnModuleInit {
           content,
           processingStatus: MessageProcessingStatus.COMPLETE,
           question,
+          idempotencyKey: nanoidAlphanumeric(),
         });
 
         if (!result.ok) {
@@ -323,6 +325,7 @@ export class PortfolioGraphService implements OnModuleInit {
           content,
           processingStatus: MessageProcessingStatus.COMPLETE,
           question,
+          idempotencyKey: nanoidAlphanumeric(),
         });
 
         if (!followupResult.ok) {
@@ -365,6 +368,7 @@ export class PortfolioGraphService implements OnModuleInit {
           content: capContent,
           processingStatus: MessageProcessingStatus.COMPLETE,
           question,
+          idempotencyKey: nanoidAlphanumeric(),
         });
 
         if (!capResult.ok) {

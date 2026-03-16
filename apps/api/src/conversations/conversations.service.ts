@@ -28,7 +28,7 @@ import {
 } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { AnalysisRunsService } from '../analysis-runs/analysis-runs.service';
-import { generateXid } from '../common/utils/nanoid.util';
+import { generateXid, nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { isErr } from '../common/utils/result.util';
 import { TransactionService } from '../database';
 import { IMediaRepository, MEDIA_REPOSITORY, MediaService } from '../media';
@@ -132,7 +132,7 @@ export class ConversationsService {
             messageType,
             rawContent: dto.content || null,
             media: validatedMedia?.mediaId || null,
-            idempotencyKey: dto.idempotencyKey || null,
+            idempotencyKey: dto.idempotencyKey || nanoidAlphanumeric(),
           },
           session
         );
@@ -409,7 +409,7 @@ export class ConversationsService {
     }
 
     // Extract idempotency key from value (client sends it alongside selection data)
-    const idempotencyKey = (value?.idempotencyKey as string) || null;
+    const idempotencyKey = (value?.idempotencyKey as string) || nanoidAlphanumeric();
 
     // Idempotency check: if key is provided and message already exists, skip creation
     if (idempotencyKey) {

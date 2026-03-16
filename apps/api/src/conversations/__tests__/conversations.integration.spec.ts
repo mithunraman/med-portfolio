@@ -884,7 +884,7 @@ describe('Conversations Integration Tests', () => {
           type: 'resume',
           messageId: followupMessageXid,
         })
-      ).resolves.toBeUndefined();
+      ).resolves.toBeDefined();
 
       // Wait for graph to settle so the fire-and-forget doesn't leak into the next test
       await waitForRunStable(harness, conv._id, true);
@@ -947,7 +947,7 @@ describe('Conversations Integration Tests', () => {
           messageId: classificationMsg.xid,
           value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
         })
-      ).resolves.toBeUndefined();
+      ).resolves.toBeDefined();
 
       await waitForRunStable(harness, conv._id, true);
 

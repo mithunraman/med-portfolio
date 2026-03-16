@@ -29,7 +29,7 @@ export interface CreateMessageData {
   processingStatus?: MessageProcessingStatus;
   media?: Types.ObjectId | null;
   question?: Question | null;
-  idempotencyKey?: string | null;
+  idempotencyKey: string;
 }
 
 export interface UpdateMessageData {

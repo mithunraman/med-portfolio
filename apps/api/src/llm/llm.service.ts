@@ -4,6 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AssemblyAI, PiiPolicy, SpeechModel } from 'assemblyai';
 import { z } from 'zod';
+import { sleep } from '../common/utils/sleep.util';
 import { MEDICAL_KEYTERMS, NHS_NUMBER_PATTERN, TRANSCRIPTION_TIMEOUT_MS } from './medical-keyterms';
 
 export const OpenAIModels = {
@@ -98,6 +99,8 @@ export class LLMService {
     schema: z.ZodType<T>,
     options: LLMOptions = {}
   ): Promise<StructuredResponse<T>> {
+    await sleep(5000);
+
     const { model = DEFAULT_MODEL, temperature = 0.1, maxTokens = 2000 } = options;
 
     this.logger.debug(

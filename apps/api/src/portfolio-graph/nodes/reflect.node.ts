@@ -3,7 +3,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
-import { GraphDeps } from '../graph-deps';
+import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('ReflectNode');
@@ -144,6 +144,7 @@ export function createReflectNode(deps: GraphDeps) {
   return async function reflectNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'reflect' });
     logger.log(
       `Generating reflection for conversation ${state.conversationId} (type: ${state.entryType})`
     );

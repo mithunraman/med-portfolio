@@ -1,7 +1,7 @@
 import { ArtefactStatus } from '@acme/shared';
 import { Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
-import { GraphDeps } from '../graph-deps';
+import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PortfolioStateType } from '../portfolio-graph.state';
 
 /**
@@ -12,6 +12,7 @@ export function createSaveNode(deps: GraphDeps) {
   const logger = new Logger('SaveNode');
 
   return async (state: PortfolioStateType): Promise<Partial<PortfolioStateType>> => {
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'save' });
     logger.log(`Saving entry for artefact ${state.artefactId}`);
 
     const artefactObjectId = new Types.ObjectId(state.artefactId);

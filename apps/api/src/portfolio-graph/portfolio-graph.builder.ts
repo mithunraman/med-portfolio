@@ -7,11 +7,11 @@ import {
   createClassifyNode,
   createGatherContextNode,
   createGeneratePdpNode,
+  createPresentCapabilitiesNode,
+  createPresentClassificationNode,
   createReflectNode,
   createSaveNode,
   createTagCapabilitiesNode,
-  presentCapabilitiesNode,
-  presentClassificationNode,
 } from './nodes';
 import { PortfolioState, PortfolioStateType } from './portfolio-graph.state';
 
@@ -67,11 +67,11 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
     // ── Nodes ──
     .addNode('gather_context', createGatherContextNode(deps))
     .addNode('classify', createClassifyNode(deps))
-    .addNode('present_classification', presentClassificationNode)
+    .addNode('present_classification', createPresentClassificationNode(deps))
     .addNode('check_completeness', createCheckCompletenessNode(deps))
     .addNode('ask_followup', createAskFollowupNode(deps))
     .addNode('tag_capabilities', createTagCapabilitiesNode(deps))
-    .addNode('present_capabilities', presentCapabilitiesNode)
+    .addNode('present_capabilities', createPresentCapabilitiesNode(deps))
     .addNode('reflect', createReflectNode(deps))
     .addNode('generate_pdp', createGeneratePdpNode(deps))
     .addNode('save', createSaveNode(deps))

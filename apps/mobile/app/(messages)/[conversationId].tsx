@@ -372,7 +372,8 @@ export default function ChatScreen() {
 
     // Optimistic or server-confirmed analysis in progress
     if (pendingAnalysis || phase === 'analysing') {
-      const reason = thinkingStepLabel(context?.analysisRun?.thinkingReason) ?? 'Starting analysis...';
+      const reason =
+        thinkingStepLabel(context?.analysisRun?.thinkingReason) ?? 'Starting analysis...';
       return { mode: 'status', reason };
     }
 

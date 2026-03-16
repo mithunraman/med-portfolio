@@ -3,7 +3,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
-import { GraphDeps } from '../graph-deps';
+import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { CapabilityTag, PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('TagCapabilitiesNode');
@@ -173,6 +173,7 @@ export function createTagCapabilitiesNode(deps: GraphDeps) {
   return async function tagCapabilitiesNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'tag_capabilities' });
     logger.log(`Tagging capabilities for conversation ${state.conversationId}`);
 
     const specialty = Number(state.specialty) as Specialty;

@@ -90,6 +90,17 @@ export class AnalysisRunsService {
     return result.value;
   }
 
+  /**
+   * Update the currentStep field on the active run for a conversation.
+   * Used by the event listener to track graph node progress.
+   */
+  async updateCurrentStep(conversationId: Types.ObjectId, step: string): Promise<void> {
+    const result = await this.repository.updateCurrentStep(conversationId, step);
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+  }
+
   async findLatestRun(
     conversationId: Types.ObjectId,
     session?: ClientSession

@@ -172,6 +172,25 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
     }
   }
 
+  async updateCurrentStep(
+    conversationId: Types.ObjectId,
+    step: string,
+  ): Promise<Result<AnalysisRun | null, DBError>> {
+    try {
+      const run = await this.analysisRunModel
+        .findOneAndUpdate(
+          { conversationId, status: { $nin: TERMINAL_STATUSES } },
+          { $set: { currentStep: step } },
+          { new: true, sort: { createdAt: -1 } },
+        )
+        .lean();
+      return ok(run);
+    } catch (error) {
+      this.logger.error('Failed to update current step', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to update current step' });
+    }
+  }
+
   async listRuns(
     conversationId: Types.ObjectId,
     session?: ClientSession,

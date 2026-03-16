@@ -3,7 +3,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
-import { GraphDeps } from '../graph-deps';
+import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PdpGoal, PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('GeneratePdpNode');
@@ -167,6 +167,7 @@ export function createGeneratePdpNode(deps: GraphDeps) {
   return async function generatePdpNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'generate_pdp' });
     logger.log(`Generating PDP for conversation ${state.conversationId}`);
 
     // ── Guard: no reflection ──

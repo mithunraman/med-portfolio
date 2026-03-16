@@ -3,7 +3,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
-import { GraphDeps } from '../graph-deps';
+import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { ClassificationAlternative, PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('ClassifyNode');
@@ -175,6 +175,7 @@ export function createClassifyNode(deps: GraphDeps) {
   return async function classifyNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'classify' });
     logger.log(`Classifying entry for conversation ${state.conversationId}`);
 
     const specialty = Number(state.specialty) as Specialty;

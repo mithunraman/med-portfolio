@@ -2,6 +2,7 @@ import { type ClassificationOption, Specialty } from '@acme/shared';
 import { interrupt } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
+import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('PresentClassificationNode');
@@ -11,7 +12,7 @@ interface ClassificationResumeValue {
 }
 
 /**
- * Pure graph node — no side effects.
+ * Factory that creates the present_classification node with injected dependencies.
  *
  * Builds classification options from the LLM's suggestion + alternatives,
  * then pauses the graph via interrupt(). The interrupt payload carries the
@@ -21,10 +22,12 @@ interface ClassificationResumeValue {
  * On resume, validates the user's chosen entry type against the specialty config.
  * Invalid selections fall back to the LLM's original suggestion.
  */
-export async function presentClassificationNode(
-  state: PortfolioStateType,
-): Promise<Partial<PortfolioStateType>> {
-  logger.log(`Presenting classification for conversation ${state.conversationId}`);
+export function createPresentClassificationNode(deps: GraphDeps) {
+  return async function presentClassificationNode(
+    state: PortfolioStateType,
+  ): Promise<Partial<PortfolioStateType>> {
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'present_classification' });
+    logger.log(`Presenting classification for conversation ${state.conversationId}`);
 
   const specialty = Number(state.specialty) as Specialty;
   const config = getSpecialtyConfig(specialty);
@@ -82,5 +85,6 @@ export async function presentClassificationNode(
   );
   return {
     classificationSource: 'USER_CONFIRMED',
+  };
   };
 }

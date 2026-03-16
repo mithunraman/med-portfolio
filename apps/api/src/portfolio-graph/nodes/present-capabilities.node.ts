@@ -1,6 +1,7 @@
 import type { CapabilityOption } from '@acme/shared';
 import { interrupt } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
+import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('PresentCapabilitiesNode');
@@ -10,7 +11,7 @@ interface CapabilitiesResumeValue {
 }
 
 /**
- * Pure graph node — no side effects.
+ * Factory that creates the present_capabilities node with injected dependencies.
  *
  * Presents the LLM-tagged capabilities to the user for confirmation.
  * The user can select/deselect from the suggestions (multi-select).
@@ -21,10 +22,12 @@ interface CapabilitiesResumeValue {
  * that were presented. Invalid codes are silently dropped.
  * If nothing valid remains, falls back to the full LLM suggestion.
  */
-export async function presentCapabilitiesNode(
-  state: PortfolioStateType
-): Promise<Partial<PortfolioStateType>> {
-  logger.log(`Presenting capabilities for conversation ${state.conversationId}`);
+export function createPresentCapabilitiesNode(deps: GraphDeps) {
+  return async function presentCapabilitiesNode(
+    state: PortfolioStateType
+  ): Promise<Partial<PortfolioStateType>> {
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'present_capabilities' });
+    logger.log(`Presenting capabilities for conversation ${state.conversationId}`);
 
   // Build options from the LLM-tagged capabilities (already sorted by confidence)
   const options: CapabilityOption[] = state.capabilities.map((cap) => ({
@@ -60,4 +63,5 @@ export async function presentCapabilitiesNode(
   // No valid selections — keep all LLM suggestions
   logger.warn('No valid capability selections — keeping all LLM suggestions');
   return {};
+  };
 }

@@ -11,6 +11,7 @@ import {
 import { Command } from '@langchain/langgraph';
 import { MongoDBSaver } from '@langchain/langgraph-checkpoint-mongodb';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectConnection } from '@nestjs/mongoose';
 import { Connection, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
@@ -65,6 +66,7 @@ export class PortfolioGraphService implements OnModuleInit {
     private readonly pdpGoalsRepository: IPdpGoalsRepository,
     private readonly transactionService: TransactionService,
     private readonly llmService: LLMService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async onModuleInit() {
@@ -95,6 +97,7 @@ export class PortfolioGraphService implements OnModuleInit {
       pdpGoalsRepository: this.pdpGoalsRepository,
       transactionService: this.transactionService,
       llmService: this.llmService,
+      eventEmitter: this.eventEmitter,
     };
     this.graph = buildPortfolioGraph(this.checkpointer, deps);
     this.logger.log('Portfolio graph compiled and ready');

@@ -34,7 +34,7 @@ export class AnalysisResumeHandler implements OutboxHandler {
       runId,
       AnalysisRunStatus.AWAITING_INPUT,
       AnalysisRunStatus.RUNNING,
-      { currentQuestion: null, thinkingReason: null },
+      { currentQuestion: null, currentStep: null },
     );
 
     this.logger.log(
@@ -80,7 +80,7 @@ export class AnalysisResumeHandler implements OutboxHandler {
               node: pauseResult.pausedNode,
               questionType: pauseResult.questionType,
             },
-            thinkingReason: null,
+            currentStep: null,
           },
         );
       } else {
@@ -88,7 +88,7 @@ export class AnalysisResumeHandler implements OutboxHandler {
           runId,
           AnalysisRunStatus.RUNNING,
           AnalysisRunStatus.COMPLETED,
-          { thinkingReason: null },
+          { currentStep: null },
         );
       }
     } catch (error) {
@@ -100,7 +100,7 @@ export class AnalysisResumeHandler implements OutboxHandler {
           runId,
           AnalysisRunStatus.RUNNING,
           AnalysisRunStatus.FAILED,
-          { error: { code: 'GRAPH_RESUME_FAILED', message: errorMessage }, thinkingReason: null },
+          { error: { code: 'GRAPH_RESUME_FAILED', message: errorMessage }, currentStep: null },
         );
       } catch {
         this.logger.warn(`Could not transition run ${data.analysisRunId} to FAILED`);

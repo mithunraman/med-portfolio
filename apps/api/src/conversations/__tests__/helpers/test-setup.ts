@@ -1,8 +1,10 @@
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { MongooseModule, getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { Connection, Model } from 'mongoose';
 
+import { AnalysisRunListener } from '../../../analysis-runs/analysis-run.listener';
 import { AnalysisRunsRepository } from '../../../analysis-runs/analysis-runs.repository';
 import { ANALYSIS_RUNS_REPOSITORY } from '../../../analysis-runs/analysis-runs.repository.interface';
 import { AnalysisRunsService } from '../../../analysis-runs/analysis-runs.service';
@@ -80,6 +82,7 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
 
   const module = await Test.createTestingModule({
     imports: [
+      EventEmitterModule.forRoot(),
       MongooseModule.forRoot(uri),
       MongooseModule.forFeature([
         { name: Conversation.name, schema: ConversationSchema },
@@ -111,8 +114,9 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
         useClass: PdpGoalsRepository,
       },
 
-      // Analysis runs — real service + repository
+      // Analysis runs — real service + repository + listener
       AnalysisRunsService,
+      AnalysisRunListener,
       {
         provide: ANALYSIS_RUNS_REPOSITORY,
         useClass: AnalysisRunsRepository,

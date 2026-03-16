@@ -3,7 +3,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
-import { GraphDeps } from '../graph-deps';
+import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PortfolioStateType, SectionCoverage } from '../portfolio-graph.state';
 
 const logger = new Logger('CheckCompletenessNode');
@@ -84,6 +84,7 @@ export function createCheckCompletenessNode(deps: GraphDeps) {
   return async function checkCompletenessNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'check_completeness' });
     logger.log(
       `Checking completeness for conversation ${state.conversationId} (type: ${state.entryType})`
     );

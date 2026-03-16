@@ -4,7 +4,7 @@ import { interrupt } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
-import { GraphDeps } from '../graph-deps';
+import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('AskFollowupNode');
@@ -88,6 +88,7 @@ export function createAskFollowupNode(deps: GraphDeps) {
   return async function askFollowupNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'ask_followup' });
     logger.log(
       `Asking follow-up for conversation ${state.conversationId} ` +
         `(round ${state.followUpRound + 1}, missing: ${state.missingSections.join(', ')})`

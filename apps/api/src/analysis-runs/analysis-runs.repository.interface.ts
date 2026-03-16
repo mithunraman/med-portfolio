@@ -29,7 +29,7 @@ export interface UpdateAnalysisRunData {
   };
   currentQuestion?: { messageId: Types.ObjectId; node: string; questionType: string } | null;
   artefactId?: Types.ObjectId | null;
-  thinkingReason?: string | null;
+  currentStep?: string | null;
   error?: { code: string; message: string } | null;
 }
 
@@ -96,6 +96,15 @@ export interface IAnalysisRunsRepository {
     conversationId: Types.ObjectId,
     session?: ClientSession,
   ): Promise<Result<number, DBError>>;
+
+  /**
+   * Update currentStep on the active (non-terminal) run for a conversation.
+   * Returns the updated run, or null if no active run exists.
+   */
+  updateCurrentStep(
+    conversationId: Types.ObjectId,
+    step: string,
+  ): Promise<Result<AnalysisRun | null, DBError>>;
 
   /**
    * List all runs for a conversation, ordered by runNumber descending.

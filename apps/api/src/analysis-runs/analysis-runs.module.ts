@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { AnalysisRunListener } from './analysis-run.listener';
 import { AnalysisRunsRepository } from './analysis-runs.repository';
 import { ANALYSIS_RUNS_REPOSITORY } from './analysis-runs.repository.interface';
 import { AnalysisRunsService } from './analysis-runs.service';
@@ -13,6 +14,7 @@ import { AnalysisRun, AnalysisRunSchema } from './schemas/analysis-run.schema';
   ],
   providers: [
     AnalysisRunsService,
+    AnalysisRunListener,
     {
       provide: ANALYSIS_RUNS_REPOSITORY,
       useClass: AnalysisRunsRepository,

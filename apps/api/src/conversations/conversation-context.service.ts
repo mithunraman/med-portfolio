@@ -90,7 +90,7 @@ export class ConversationContextService {
       ? {
           id: latestRun.xid,
           status: latestRun.status,
-          thinkingReason: latestRun.thinkingReason as ThinkingStep | null,
+          thinkingReason: latestRun.currentStep as ThinkingStep | null,
         }
       : undefined;
 

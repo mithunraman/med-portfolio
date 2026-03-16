@@ -12,6 +12,8 @@
 
 - In LLM MCQ responses, remove the concatenated texts. Use only question to render the MCQ options.
 
+- [Bug] Strong hallucination. When passing random text in Audio conversation (like Malyalam), it converts to english for some reason.
+
 # Chat screen
 
 - When any message is sent, there seems to be a delay before the message is displayed. What may be causing this ?

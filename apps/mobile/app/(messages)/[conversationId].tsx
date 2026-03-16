@@ -359,6 +359,45 @@ export default function ChatScreen() {
     [mergedMessages, effectiveConversationId, handleResumeAnalysis, dispatch]
   );
 
+  // Single derived banner state — all visibility/loading/disabled logic in one place
+  const bannerState = useMemo(() => {
+    if (optimisticAnalysing || phase === 'analysing') {
+      return {
+        type: 'analyse' as const,
+        loading: true,
+        disabled: false,
+        onPress: handleStartAnalysis,
+      };
+    }
+    if (canStartAnalysis) {
+      return {
+        type: 'analyse' as const,
+        loading: analysisLoading,
+        disabled: isBannerBlocked,
+        onPress: handleStartAnalysis,
+      };
+    }
+    if (canResumeAnalysis && context?.activeQuestion?.questionType === 'free_text') {
+      return {
+        type: 'continue' as const,
+        loading: analysisLoading,
+        disabled: isBannerBlocked,
+        onPress: () => handleResumeAnalysis(),
+      };
+    }
+    return null;
+  }, [
+    optimisticAnalysing,
+    phase,
+    canStartAnalysis,
+    canResumeAnalysis,
+    analysisLoading,
+    isBannerBlocked,
+    context?.activeQuestion?.questionType,
+    handleStartAnalysis,
+    handleResumeAnalysis,
+  ]);
+
   const activeQuestionMessageId = context?.activeQuestion?.messageId;
 
   const isLoading = loadingMessages && mergedMessages.length === 0 && isNew !== 'true';
@@ -397,27 +436,15 @@ export default function ChatScreen() {
           />
         ) : (
           <>
-            {(canStartAnalysis || optimisticAnalysing || phase === 'analysing') && (
+            {bannerState && (
               <ActionBanner
-                variant="analyse"
-                onPress={handleStartAnalysis}
-                isLoading={analysisLoading || optimisticAnalysing || phase === 'analysing'}
-                disabled={isBannerBlocked && !optimisticAnalysing && phase !== 'analysing'}
+                variant={bannerState.type}
+                onPress={bannerState.onPress}
+                isLoading={bannerState.loading}
+                disabled={bannerState.disabled}
                 helperText="Waiting for messages to be delivered"
               />
             )}
-
-            {canResumeAnalysis &&
-              !optimisticAnalysing &&
-              context?.activeQuestion?.questionType === 'free_text' && (
-                <ActionBanner
-                  variant="continue"
-                  onPress={() => handleResumeAnalysis()}
-                  isLoading={analysisLoading}
-                  disabled={isBannerBlocked}
-                  helperText="Waiting for messages to be delivered"
-                />
-              )}
 
             <ChatComposer
               onSend={handleSend}

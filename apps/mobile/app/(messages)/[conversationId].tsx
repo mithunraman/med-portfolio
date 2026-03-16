@@ -283,6 +283,7 @@ export default function ChatScreen() {
   const canSendMessage = context?.actions.sendMessage.allowed ?? true;
   const canSendAudio = context?.actions.sendAudio.allowed ?? true;
   const canStartAnalysis = context?.actions.startAnalysis.allowed ?? false;
+  const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
 
   const handleStartAnalysis = useCallback(async () => {
@@ -365,12 +366,13 @@ export default function ChatScreen() {
       return { mode: 'status', reason };
     }
 
-    // Awaiting input — question UI is inline, hide the bar
-    if (phase === 'awaiting_input') return null;
-
-    // Action buttons — always enabled when visible
+    // Action buttons — always enabled when visible, driven by server context
     if (canStartAnalysis) {
       return { mode: 'action', variant: 'start', onPress: handleStartAnalysis };
+    }
+    // Only show "Continue Analysis" for free_text — select questions resume via the inline card
+    if (canResumeAnalysis && context?.activeQuestion?.questionType === 'free_text') {
+      return { mode: 'action', variant: 'continue', onPress: () => handleResumeAnalysis() };
     }
 
     return null;
@@ -381,7 +383,9 @@ export default function ChatScreen() {
     hasProcessingMessages,
     phase,
     canStartAnalysis,
+    canResumeAnalysis,
     handleStartAnalysis,
+    handleResumeAnalysis,
   ]);
 
   const activeQuestionMessageId = context?.activeQuestion?.messageId;

@@ -103,6 +103,9 @@ function ActionButton({
   );
 }
 
+// Fixed inner height so both modes occupy the same space — prevents layout shift
+const INNER_HEIGHT = 48;
+
 // --- Styles ---
 
 const styles = StyleSheet.create({
@@ -113,11 +116,10 @@ const styles = StyleSheet.create({
   },
   // Status mode
   statusRow: {
-    flexDirection: 'row',
+    height: INNER_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
+    gap: 2,
   },
   thinkingLabel: {
     fontSize: 14,
@@ -131,11 +133,11 @@ const styles = StyleSheet.create({
   },
   // Action mode
   button: {
+    height: INNER_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
     borderRadius: 12,
   },
   buttonLabel: {

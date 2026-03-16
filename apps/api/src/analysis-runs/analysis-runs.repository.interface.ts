@@ -29,6 +29,7 @@ export interface UpdateAnalysisRunData {
   };
   currentQuestion?: { messageId: Types.ObjectId; node: string; questionType: string } | null;
   artefactId?: Types.ObjectId | null;
+  thinkingReason?: string | null;
   error?: { code: string; message: string } | null;
 }
 

@@ -58,6 +58,7 @@ export class AnalysisStartHandler implements OutboxHandler {
               node: pauseResult.pausedNode,
               questionType: pauseResult.questionType,
             },
+            thinkingReason: null,
           },
         );
       } else {
@@ -66,6 +67,7 @@ export class AnalysisStartHandler implements OutboxHandler {
           runId,
           AnalysisRunStatus.RUNNING,
           AnalysisRunStatus.COMPLETED,
+          { thinkingReason: null },
         );
       }
     } catch (error) {
@@ -78,7 +80,7 @@ export class AnalysisStartHandler implements OutboxHandler {
           runId,
           AnalysisRunStatus.RUNNING,
           AnalysisRunStatus.FAILED,
-          { error: { code: 'GRAPH_START_FAILED', message: errorMessage } },
+          { error: { code: 'GRAPH_START_FAILED', message: errorMessage }, thinkingReason: null },
         );
       } catch {
         // Status may have already changed — log and move on

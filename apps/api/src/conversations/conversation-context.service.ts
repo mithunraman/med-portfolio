@@ -6,6 +6,7 @@ import {
   type ConversationContext,
   type ConversationPhase,
   type QuestionType,
+  type ThinkingStep,
 } from '@acme/shared';
 import { Inject, Injectable } from '@nestjs/common';
 import { Types } from 'mongoose';
@@ -85,7 +86,13 @@ export class ConversationContextService {
       lastMessageIsUser
     );
     const activeQuestion = await this.buildActiveQuestion(latestRun);
-    const analysisRun = latestRun ? { id: latestRun.xid, status: latestRun.status } : undefined;
+    const analysisRun = latestRun
+      ? {
+          id: latestRun.xid,
+          status: latestRun.status,
+          thinkingReason: latestRun.thinkingReason as ThinkingStep | null,
+        }
+      : undefined;
 
     return { artefactId, phase, actions, activeQuestion, analysisRun };
   }

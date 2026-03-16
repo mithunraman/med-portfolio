@@ -1,5 +1,5 @@
 import { ChatComposer, MessageList } from '@/components';
-import { ActionBanner } from '@/components/ActionBanner';
+import { type ActionBarState, ActionBar } from '@/components/ActionBar';
 import { CompletionCard } from '@/components/CompletionCard';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
@@ -23,6 +23,7 @@ import {
   type MultiSelectQuestion,
   type SingleSelectQuestion,
   MessageProcessingStatus,
+  ThinkingStep,
 } from '@acme/shared';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -70,6 +71,24 @@ function generateLocalId(): string {
   return `opt_${Date.now()}_${++localIdCounter}`;
 }
 
+const THINKING_STEP_LABELS: Record<string, string> = {
+  [ThinkingStep.GATHER_CONTEXT]: 'Gathering context...',
+  [ThinkingStep.CLASSIFY]: 'Classifying entry...',
+  [ThinkingStep.PRESENT_CLASSIFICATION]: 'Reviewing classification...',
+  [ThinkingStep.ASK_FOLLOWUP]: 'Preparing questions...',
+  [ThinkingStep.TAG_CAPABILITIES]: 'Identifying capabilities...',
+  [ThinkingStep.PRESENT_CAPABILITIES]: 'Reviewing capabilities...',
+  [ThinkingStep.CHECK_COMPLETENESS]: 'Checking completeness...',
+  [ThinkingStep.REFLECT]: 'Reflecting on analysis...',
+  [ThinkingStep.GENERATE_PDP]: 'Generating development plan...',
+  [ThinkingStep.SAVE]: 'Saving results...',
+};
+
+function thinkingStepLabel(step?: string | null): string | null {
+  if (!step) return null;
+  return THINKING_STEP_LABELS[step] ?? null;
+}
+
 const chatLogger = logger.createScope('ChatScreen');
 
 export default function ChatScreen() {
@@ -95,8 +114,6 @@ export default function ChatScreen() {
 
   const loadingMessages = useAppSelector((state) => state.messages.loading);
   const sendingMessage = useAppSelector((state) => state.messages.sending);
-  const analysisLoading = useAppSelector((state) => state.messages.analysisLoading);
-
   // Conversation context — server-driven action state
   const context = useAppSelector(
     (state) => state.messages.contextByConversation[effectiveConversationId]
@@ -269,9 +286,6 @@ export default function ChatScreen() {
   const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
 
-  // Action banner blocked state — disabled when messages are processing or unsent
-  const isBannerBlocked = hasProcessingMessages || hasUnsentMessages;
-
   const handleStartAnalysis = useCallback(async () => {
     await dispatch(startAnalysis(effectiveConversationId));
   }, [effectiveConversationId, dispatch]);
@@ -333,40 +347,47 @@ export default function ChatScreen() {
     [mergedMessages, effectiveConversationId, handleResumeAnalysis, dispatch]
   );
 
-  // Single derived banner state — all visibility/loading/disabled logic in one place
-  const bannerState = useMemo(() => {
-    if (phase === 'analysing') {
-      return {
-        type: 'analyse' as const,
-        loading: true,
-        disabled: false,
-        onPress: handleStartAnalysis,
-      };
+  // Single derived bar state — status mode (busy) or action mode (clickable)
+  const actionBarState = useMemo((): ActionBarState | null => {
+    // No conversation yet — hide the bar entirely
+    if (mergedMessages.length === 0 && !context) return null;
+
+    // Local pipeline states take priority (sending / processing)
+    if (hasUnsentMessages) {
+      return { mode: 'status', reason: 'Sending your message...' };
     }
+    if (hasProcessingMessages) {
+      return { mode: 'status', reason: 'Processing your message...' };
+    }
+
+    // Server-driven analysis in progress
+    if (phase === 'analysing') {
+      const reason = thinkingStepLabel(context?.analysisRun?.thinkingReason) ?? 'Starting analysis...';
+      return { mode: 'status', reason };
+    }
+
+    // Awaiting input for select questions — inline question UI handles interaction
+    if (phase === 'awaiting_input' && context?.activeQuestion?.questionType !== 'free_text') {
+      return { mode: 'status', reason: 'Waiting for your answer...' };
+    }
+
+    // Action buttons — always enabled when visible
     if (canStartAnalysis) {
-      return {
-        type: 'analyse' as const,
-        loading: analysisLoading,
-        disabled: isBannerBlocked,
-        onPress: handleStartAnalysis,
-      };
+      return { mode: 'action', variant: 'start', onPress: handleStartAnalysis };
     }
     if (canResumeAnalysis && context?.activeQuestion?.questionType === 'free_text') {
-      return {
-        type: 'continue' as const,
-        loading: analysisLoading,
-        disabled: isBannerBlocked,
-        onPress: () => handleResumeAnalysis(),
-      };
+      return { mode: 'action', variant: 'continue', onPress: () => handleResumeAnalysis() };
     }
+
     return null;
   }, [
+    mergedMessages.length,
+    context,
+    hasUnsentMessages,
+    hasProcessingMessages,
     phase,
     canStartAnalysis,
     canResumeAnalysis,
-    analysisLoading,
-    isBannerBlocked,
-    context?.activeQuestion?.questionType,
     handleStartAnalysis,
     handleResumeAnalysis,
   ]);
@@ -409,15 +430,7 @@ export default function ChatScreen() {
           />
         ) : (
           <>
-            {bannerState && (
-              <ActionBanner
-                variant={bannerState.type}
-                onPress={bannerState.onPress}
-                isLoading={bannerState.loading}
-                disabled={bannerState.disabled}
-                helperText="Waiting for messages to be delivered"
-              />
-            )}
+            {actionBarState && <ActionBar state={actionBarState} />}
 
             <ChatComposer
               onSend={handleSend}

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AnalysisRunStatus } from '../enums/analysis-run-status.enum';
+import { ThinkingStep } from '../enums/thinking-step.enum';
 import { ConversationStatus } from '../enums/conversation-status.enum';
 import { MessageProcessingStatus } from '../enums/message-processing-status.enum';
 import { MessageRole } from '../enums/message-role.enum';
@@ -205,6 +206,7 @@ export const ConversationContextSchema = z.object({
     .object({
       id: z.string(),
       status: z.nativeEnum(AnalysisRunStatus),
+      thinkingReason: z.nativeEnum(ThinkingStep).nullable().optional(),
     })
     .optional(),
 });

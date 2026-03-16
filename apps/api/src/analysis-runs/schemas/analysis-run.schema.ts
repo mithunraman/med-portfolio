@@ -65,6 +65,9 @@ export class AnalysisRun {
   @Prop({ required: true, type: String })
   langGraphThreadId!: string;
 
+  @Prop({ type: String, default: null })
+  thinkingReason!: string | null;
+
   @Prop({ type: AnalysisRunError, default: null })
   error!: AnalysisRunError | null;
 

@@ -3,8 +3,8 @@ import { ChatOpenAI } from '@langchain/openai';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AssemblyAI, PiiPolicy, SpeechModel } from 'assemblyai';
+import { backOff } from 'exponential-backoff';
 import { z } from 'zod';
-import { sleep } from '../common/utils/sleep.util';
 import { MEDICAL_KEYTERMS, NHS_NUMBER_PATTERN, TRANSCRIPTION_TIMEOUT_MS } from './medical-keyterms';
 
 export const OpenAIModels = {
@@ -99,25 +99,40 @@ export class LLMService {
     schema: z.ZodType<T>,
     options: LLMOptions = {}
   ): Promise<StructuredResponse<T>> {
-    await sleep(5000);
-
     const { model = DEFAULT_MODEL, temperature = 0.1, maxTokens = 2000 } = options;
 
     this.logger.debug(
       `invokeStructured [${model}] messages:\n${messages.map((m) => `[${m.type}] ${m.content}`).join('\n')}`
     );
 
-    const chatModel = this.createChatModel({ model, temperature, maxTokens });
+    return backOff(
+      async () => {
+        const chatModel = this.createChatModel({ model, temperature, maxTokens });
 
-    // Cast to `any` to avoid TS2589 (excessive type depth) from LangChain's
-    // heavily overloaded withStructuredOutput generics. Caller-side type
-    // safety is preserved by the method signature: schema: ZodType<T> → T.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const structuredModel = (chatModel as any).withStructuredOutput(schema);
+        // Cast to `any` to avoid TS2589 (excessive type depth) from LangChain's
+        // heavily overloaded withStructuredOutput generics. Caller-side type
+        // safety is preserved by the method signature: schema: ZodType<T> → T.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const structuredModel = (chatModel as any).withStructuredOutput(schema);
 
-    const data = (await structuredModel.invoke(messages)) as T;
+        const data = (await structuredModel.invoke(messages)) as T;
 
-    return { data, model, tokensUsed: null };
+        return { data, model, tokensUsed: null };
+      },
+      {
+        numOfAttempts: 3,
+        startingDelay: 1000,
+        timeMultiple: 2,
+        jitter: 'full',
+        retry: (error) => {
+          const retryable = this.isRetryableApiError(error);
+          if (retryable) {
+            this.logger.warn(`Retryable OpenAI error, retrying...`, error);
+          }
+          return retryable;
+        },
+      }
+    );
   }
 
   private createChatModel(options: Required<LLMOptions>): ChatOpenAI {
@@ -139,51 +154,92 @@ export class LLMService {
   async transcribeAudio(audioUrl: string): Promise<TranscriptionResult> {
     this.logger.log('Starting transcription with AssemblyAI Universal-3 Pro');
 
-    // Create transcription with timeout
-    const transcriptPromise = this.assemblyai.transcripts.transcribe({
-      audio_url: audioUrl,
-      speech_models: ['universal-3-pro'] as unknown as SpeechModel[],
-      language_code: 'en_uk',
-      // Medical keyterms for improved accuracy
-      keyterms_prompt: MEDICAL_KEYTERMS,
-      // PII redaction
-      redact_pii: true,
-      redact_pii_policies: UK_PII_POLICIES,
-      redact_pii_sub: 'entity_name', // Replace with entity type e.g. [PERSON_NAME]
-    });
+    return backOff(
+      async () => {
+        // Create transcription with timeout
+        const transcriptPromise = this.assemblyai.transcripts.transcribe({
+          audio_url: audioUrl,
+          speech_models: ['universal-3-pro'] as unknown as SpeechModel[],
+          language_code: 'en_uk',
+          // Medical keyterms for improved accuracy
+          keyterms_prompt: MEDICAL_KEYTERMS,
+          // PII redaction
+          redact_pii: true,
+          redact_pii_policies: UK_PII_POLICIES,
+          redact_pii_sub: 'entity_name', // Replace with entity type e.g. [PERSON_NAME]
+        });
 
-    // Apply timeout (2 minutes for max 5-minute audio)
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(`Transcription timed out after ${TRANSCRIPTION_TIMEOUT_MS}ms`));
-      }, TRANSCRIPTION_TIMEOUT_MS);
-    });
+        // Apply timeout (2 minutes for max 5-minute audio)
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error(`Transcription timed out after ${TRANSCRIPTION_TIMEOUT_MS}ms`));
+          }, TRANSCRIPTION_TIMEOUT_MS);
+        });
 
-    const transcript = await Promise.race([transcriptPromise, timeoutPromise]);
+        const transcript = await Promise.race([transcriptPromise, timeoutPromise]);
 
-    if (transcript.status === 'error') {
-      this.logger.error(`Transcription failed: ${transcript.error}`);
-      throw new Error(`Transcription failed: ${transcript.error}`);
+        if (transcript.status === 'error') {
+          this.logger.error(`Transcription failed: ${transcript.error}`);
+          throw new Error(`Transcription failed: ${transcript.error}`);
+        }
+
+        // Post-process: catch any NHS numbers that slipped through PII redaction
+        const sanitizedText = transcript.text?.replace(NHS_NUMBER_PATTERN, '[NHS_NUMBER]') ?? '';
+
+        const wordCount = transcript.words?.length ?? 0;
+        const confidence = transcript.confidence ?? null;
+        const audioDurationMs = transcript.audio_duration
+          ? Math.round(transcript.audio_duration * 1000)
+          : null;
+
+        this.logger.log(
+          `Transcription completed: ${wordCount} words, confidence: ${confidence}, duration: ${audioDurationMs}ms`
+        );
+
+        return {
+          text: sanitizedText,
+          confidence,
+          audioDurationMs,
+          wordCount,
+        };
+      },
+      {
+        numOfAttempts: 3,
+        startingDelay: 2000,
+        timeMultiple: 2,
+        jitter: 'full',
+        retry: (error) => {
+          // Don't retry timeouts — they've already waited long enough
+          if (error instanceof Error && error.message.includes('timed out')) return false;
+
+          const retryable = this.isRetryableApiError(error);
+          if (retryable) {
+            this.logger.warn(`Retryable AssemblyAI error, retrying...`, error);
+          }
+          return retryable;
+        },
+      }
+    );
+  }
+
+  private isRetryableApiError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+
+    const message = error.message.toLowerCase();
+
+    // Rate limits, server errors, network issues
+    if (message.includes('429') || message.includes('rate limit')) return true;
+    if (message.includes('500') || message.includes('502') || message.includes('503')) return true;
+    if (message.includes('504') || message.includes('gateway')) return true;
+    if (message.includes('econnreset') || message.includes('econnrefused')) return true;
+    if (message.includes('etimedout') || message.includes('network')) return true;
+
+    // Check for status code on error object (common in API client errors)
+    const status = (error as any).status ?? (error as any).statusCode;
+    if (typeof status === 'number') {
+      return status === 429 || status >= 500;
     }
 
-    // Post-process: catch any NHS numbers that slipped through PII redaction
-    const sanitizedText = transcript.text?.replace(NHS_NUMBER_PATTERN, '[NHS_NUMBER]') ?? '';
-
-    const wordCount = transcript.words?.length ?? 0;
-    const confidence = transcript.confidence ?? null;
-    const audioDurationMs = transcript.audio_duration
-      ? Math.round(transcript.audio_duration * 1000)
-      : null;
-
-    this.logger.log(
-      `Transcription completed: ${wordCount} words, confidence: ${confidence}, duration: ${audioDurationMs}ms`
-    );
-
-    return {
-      text: sanitizedText,
-      confidence,
-      audioDurationMs,
-      wordCount,
-    };
+    return false;
   }
 }

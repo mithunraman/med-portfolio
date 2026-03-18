@@ -19,6 +19,7 @@ import {
   IArtefactsRepository,
 } from '../artefacts/artefacts.repository.interface';
 import {
+  type CreateMessageData,
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from '../conversations/conversations.repository.interface';
@@ -42,10 +43,11 @@ export interface GraphResumeMap {
 
 export type InterruptNode = keyof GraphResumeMap;
 
-/** Returned when graph pauses at an interrupt. null when graph completes. */
-export interface GraphPauseResult {
-  questionMessageId: Types.ObjectId;
+/** Data needed to create the ASSISTANT question message for an interrupt. No DB writes. */
+export interface InterruptPayload {
+  idempotencyKey: string;
   pausedNode: InterruptNode;
+  messageData: CreateMessageData;
   questionType: 'single_select' | 'multi_select' | 'free_text';
 }
 
@@ -104,14 +106,15 @@ export class PortfolioGraphService implements OnModuleInit {
 
   /**
    * Start a new graph execution for a conversation.
-   * Returns GraphPauseResult if the graph paused at an interrupt, null if it completed.
+   * Returns the interrupt node name if the graph paused, null if it completed.
+   * No side effects (message creation) — the handler is responsible for those.
    */
   async startGraph(params: {
     conversationId: string;
     artefactId: string;
     userId: string;
     specialty: string;
-  }): Promise<GraphPauseResult | null> {
+  }): Promise<InterruptNode | null> {
     const { conversationId } = params;
     const config = { configurable: { thread_id: conversationId } };
 
@@ -129,12 +132,13 @@ export class PortfolioGraphService implements OnModuleInit {
 
     // graph.invoke() returns normally when a node calls interrupt() —
     // it does NOT throw. Check the checkpoint for a pending interrupt.
-    return this.handleInterruptSideEffectsIfPaused(conversationId);
+    return this.getPausedNode(conversationId);
   }
 
   /**
    * Resume a paused graph after the user responds (to classification, follow-up, or review).
-   * Returns GraphPauseResult if the graph paused at another interrupt, null if it completed.
+   * Returns the interrupt node name if the graph paused again, null if it completed.
+   * No side effects (message creation) — the handler is responsible for those.
    *
    * Type-safe: each interrupt node declares its resume value shape in GraphResumeMap.
    * Nodes that resume with just a signal (e.g. ask_followup) take no resumeValue arg.
@@ -143,7 +147,7 @@ export class PortfolioGraphService implements OnModuleInit {
     conversationId: string,
     node: N,
     ...args: GraphResumeMap[N] extends true ? [] : [resumeValue: GraphResumeMap[N]]
-  ): Promise<GraphPauseResult | null> {
+  ): Promise<InterruptNode | null> {
     const config = { configurable: { thread_id: conversationId } };
     const resumeValue = args.length > 0 ? args[0] : true;
 
@@ -154,7 +158,7 @@ export class PortfolioGraphService implements OnModuleInit {
     await this.graph.invoke(new Command({ resume: resumeValue }), config);
 
     // The resumed graph may hit another interrupt (e.g. follow-up after classification).
-    return this.handleInterruptSideEffectsIfPaused(conversationId);
+    return this.getPausedNode(conversationId);
   }
 
   /**
@@ -203,49 +207,20 @@ export class PortfolioGraphService implements OnModuleInit {
   }
 
   /**
-   * Check if the graph is paused at an interrupt node after invoke() returns.
-   * If so, handle side effects (e.g. writing an ASSISTANT message) and return
-   * the pause result bundling the question message ID and paused node.
+   * Read the interrupt payload from the checkpoint and return all data needed
+   * to create the ASSISTANT question message. **No DB writes.**
    *
-   * graph.invoke() does NOT throw on interrupt — it returns normally after
-   * saving the checkpoint. We inspect the snapshot to detect the pause.
+   * The handler is responsible for creating the message and transitioning
+   * the run status — both wrapped in a single transaction (Phase 3).
+   *
+   * Idempotency key is derived deterministically from
+   * `${conversationId}:${pausedNode}:${checkpointId}` so retries produce
+   * the same key and can check-before-create.
+   *
+   * Returns null if no interrupt payload is found (unknown interrupt type).
    */
-  private async handleInterruptSideEffectsIfPaused(
-    conversationId: string
-  ): Promise<GraphPauseResult | null> {
-    const pausedNode = await this.getPausedNode(conversationId);
-    if (!pausedNode) return null;
-
-    this.logger.log(`Graph paused at "${pausedNode}" for conversation ${conversationId}`);
-    const sideEffectResult = await this.handleInterruptSideEffects(conversationId);
-    if (!sideEffectResult) return null;
-
-    return {
-      questionMessageId: sideEffectResult.messageId,
-      pausedNode,
-      questionType: sideEffectResult.questionType,
-    };
-  }
-
-  /**
-   * Read the interrupt payload from the checkpoint and perform side effects
-   * (e.g. writing an ASSISTANT message to the conversation).
-   *
-   * Idempotency: the key is derived deterministically from
-   * `${conversationId}:${pausedNode}:${checkpointId}`. On retry, the same
-   * key is generated. If a message with that key already exists, the cached
-   * result is returned without creating a duplicate.
-   *
-   * Returns the created (or existing) message's ObjectId and question type.
-   * Returns null only if no interrupt payload is found (unknown interrupt type).
-   * Throws if message creation fails — this lets the handler transition to
-   * FAILED and allows outbox retry.
-   */
-  private async handleInterruptSideEffects(conversationId: string): Promise<{
-    messageId: Types.ObjectId;
-    questionType: 'single_select' | 'multi_select' | 'free_text';
-  } | null> {
-    const config = { configurable: { thread_id: conversationId } };
+  async getInterruptPayload(threadId: string): Promise<InterruptPayload | null> {
+    const config = { configurable: { thread_id: threadId } };
     const snapshot = await this.graph.getState(config);
 
     // The interrupt payload is stored in snapshot.tasks[].interrupts[].value
@@ -260,35 +235,18 @@ export class PortfolioGraphService implements OnModuleInit {
       userId: string;
     };
 
+    const pausedNode = snapshot.next?.[0] as InterruptNode | undefined;
+    if (!pausedNode) return null;
+
     // Derive a deterministic idempotency key from the checkpoint state.
     // Same interrupt at the same checkpoint always produces the same key,
     // making retries safe (no duplicate messages).
     const checkpointId =
       (snapshot?.config?.configurable?.checkpoint_id as string) ?? 'unknown';
-    const pausedNodeName = snapshot.next?.[0] ?? 'unknown';
-    const idempotencyKey = `${state.conversationId}:${pausedNodeName}:${checkpointId}`;
-
-    // Check-before-create: if a message with this key already exists (from a
-    // previous attempt), return the cached result instead of creating a duplicate.
-    const userOid = new Types.ObjectId(state.userId);
-    const existingResult =
-      await this.conversationsRepository.findMessageByIdempotencyKey(userOid, idempotencyKey);
-    if (existingResult.ok && existingResult.value) {
-      const existing = existingResult.value;
-      const existingQuestion = existing.question as { questionType: string } | undefined;
-      this.logger.log(
-        `Idempotent hit for interrupt message (key: ${idempotencyKey}), reusing existing message`
-      );
-      return {
-        messageId: existing._id,
-        questionType: (existingQuestion?.questionType ?? 'free_text') as
-          | 'single_select'
-          | 'multi_select'
-          | 'free_text',
-      };
-    }
+    const idempotencyKey = `${state.conversationId}:${pausedNode}:${checkpointId}`;
 
     const conversationOid = new Types.ObjectId(state.conversationId);
+    const userOid = new Types.ObjectId(state.userId);
 
     switch (interruptValue.type) {
       case 'classification': {
@@ -312,22 +270,22 @@ export class PortfolioGraphService implements OnModuleInit {
           suggestedKey: interruptValue.suggestedEntryType as string,
         };
 
-        const result = await this.conversationsRepository.createMessage({
-          conversation: conversationOid,
-          userId: userOid,
-          role: MessageRole.ASSISTANT,
-          messageType: MessageType.TEXT,
-          rawContent: content,
-          content,
-          processingStatus: MessageProcessingStatus.COMPLETE,
-          question,
+        return {
           idempotencyKey,
-        });
-
-        if (!result.ok) {
-          throw new Error(`Failed to create classification message: ${result.error.message}`);
-        }
-        return { messageId: result.value._id, questionType: 'single_select' };
+          pausedNode,
+          questionType: 'single_select',
+          messageData: {
+            conversation: conversationOid,
+            userId: userOid,
+            role: MessageRole.ASSISTANT,
+            messageType: MessageType.TEXT,
+            rawContent: content,
+            content,
+            processingStatus: MessageProcessingStatus.COMPLETE,
+            question,
+            idempotencyKey,
+          },
+        };
       }
 
       case 'followup': {
@@ -353,22 +311,22 @@ export class PortfolioGraphService implements OnModuleInit {
           entryType: interruptValue.entryType as string,
         };
 
-        const followupResult = await this.conversationsRepository.createMessage({
-          conversation: conversationOid,
-          userId: userOid,
-          role: MessageRole.ASSISTANT,
-          messageType: MessageType.TEXT,
-          rawContent: content,
-          content,
-          processingStatus: MessageProcessingStatus.COMPLETE,
-          question,
+        return {
           idempotencyKey,
-        });
-
-        if (!followupResult.ok) {
-          throw new Error(`Failed to create follow-up message: ${followupResult.error.message}`);
-        }
-        return { messageId: followupResult.value._id, questionType: 'free_text' };
+          pausedNode,
+          questionType: 'free_text',
+          messageData: {
+            conversation: conversationOid,
+            userId: userOid,
+            role: MessageRole.ASSISTANT,
+            messageType: MessageType.TEXT,
+            rawContent: content,
+            content,
+            processingStatus: MessageProcessingStatus.COMPLETE,
+            question,
+            idempotencyKey,
+          },
+        };
       }
 
       case 'capabilities': {
@@ -395,22 +353,22 @@ export class PortfolioGraphService implements OnModuleInit {
           })),
         };
 
-        const capResult = await this.conversationsRepository.createMessage({
-          conversation: conversationOid,
-          userId: userOid,
-          role: MessageRole.ASSISTANT,
-          messageType: MessageType.TEXT,
-          rawContent: capContent,
-          content: capContent,
-          processingStatus: MessageProcessingStatus.COMPLETE,
-          question,
+        return {
           idempotencyKey,
-        });
-
-        if (!capResult.ok) {
-          throw new Error(`Failed to create capabilities message: ${capResult.error.message}`);
-        }
-        return { messageId: capResult.value._id, questionType: 'multi_select' };
+          pausedNode,
+          questionType: 'multi_select',
+          messageData: {
+            conversation: conversationOid,
+            userId: userOid,
+            role: MessageRole.ASSISTANT,
+            messageType: MessageType.TEXT,
+            rawContent: capContent,
+            content: capContent,
+            processingStatus: MessageProcessingStatus.COMPLETE,
+            question,
+            idempotencyKey,
+          },
+        };
       }
     }
 

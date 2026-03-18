@@ -1,7 +1,12 @@
 import { AnalysisRunStatus } from '@acme/shared';
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { AnalysisRunsService } from '../../analysis-runs/analysis-runs.service';
+import {
+  CONVERSATIONS_REPOSITORY,
+  IConversationsRepository,
+} from '../../conversations/conversations.repository.interface';
+import { TransactionService } from '../../database/transaction.service';
 import { PortfolioGraphService } from '../../portfolio-graph/portfolio-graph.service';
 import type { OutboxHandler } from '../outbox.consumer';
 
@@ -21,6 +26,9 @@ export class AnalysisStartHandler implements OutboxHandler {
   constructor(
     private readonly analysisRunsService: AnalysisRunsService,
     private readonly portfolioGraphService: PortfolioGraphService,
+    private readonly transactionService: TransactionService,
+    @Inject(CONVERSATIONS_REPOSITORY)
+    private readonly conversationsRepository: IConversationsRepository,
   ) {}
 
   async handle(payload: Record<string, unknown>): Promise<void> {
@@ -48,30 +56,72 @@ export class AnalysisStartHandler implements OutboxHandler {
     this.logger.log(`Starting graph for analysis run ${data.analysisRunId}`);
 
     try {
-      // Use the existing graph service to invoke LangGraph.
-      // Returns GraphPauseResult if paused, null if completed.
-      const pauseResult = await this.portfolioGraphService.startGraph({
+      const pausedNode = await this.portfolioGraphService.startGraph({
         conversationId: data.conversationId,
         artefactId: data.artefactId,
         userId: data.userId,
         specialty: data.specialty,
       });
 
-      if (pauseResult) {
-        // Graph is waiting for user input
-        await this.analysisRunsService.transitionStatus(
-          runId,
-          AnalysisRunStatus.RUNNING,
-          AnalysisRunStatus.AWAITING_INPUT,
-          {
-            currentQuestion: {
-              messageId: pauseResult.questionMessageId,
-              node: pauseResult.pausedNode,
-              questionType: pauseResult.questionType,
-            },
-            currentStep: null,
-          },
+      if (pausedNode) {
+        const interruptPayload = await this.portfolioGraphService.getInterruptPayload(
+          data.conversationId,
         );
+        if (!interruptPayload) {
+          throw new Error(`Graph paused at ${pausedNode} but no interrupt payload found`);
+        }
+
+        // Check-before-create (idempotency): if message already exists from a
+        // previous attempt, just transition status without creating a duplicate.
+        const userOid = new Types.ObjectId(data.userId);
+        const existingResult =
+          await this.conversationsRepository.findMessageByIdempotencyKey(
+            userOid,
+            interruptPayload.idempotencyKey,
+          );
+
+        if (existingResult.ok && existingResult.value) {
+          this.logger.log(
+            `Idempotent hit for interrupt message (key: ${interruptPayload.idempotencyKey}), reusing existing`,
+          );
+          await this.analysisRunsService.transitionStatus(
+            runId,
+            AnalysisRunStatus.RUNNING,
+            AnalysisRunStatus.AWAITING_INPUT,
+            {
+              currentQuestion: {
+                messageId: existingResult.value._id,
+                node: interruptPayload.pausedNode,
+                questionType: interruptPayload.questionType,
+              },
+              currentStep: null,
+            },
+          );
+        } else {
+          // Atomic: create message + transition status in one transaction
+          await this.transactionService.withTransaction(async (session) => {
+            const msgResult = await this.conversationsRepository.createMessage(
+              interruptPayload.messageData,
+              session,
+            );
+            if (!msgResult.ok) throw new Error(msgResult.error.message);
+
+            await this.analysisRunsService.transitionStatus(
+              runId,
+              AnalysisRunStatus.RUNNING,
+              AnalysisRunStatus.AWAITING_INPUT,
+              {
+                currentQuestion: {
+                  messageId: msgResult.value._id,
+                  node: interruptPayload.pausedNode,
+                  questionType: interruptPayload.questionType,
+                },
+                currentStep: null,
+              },
+              session,
+            );
+          }, { context: 'start-handler-interrupt' });
+        }
       } else {
         // Graph completed (no interrupt hit)
         await this.analysisRunsService.transitionStatus(

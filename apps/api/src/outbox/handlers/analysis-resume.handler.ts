@@ -1,7 +1,12 @@
 import { AnalysisRunStatus } from '@acme/shared';
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { AnalysisRunsService } from '../../analysis-runs/analysis-runs.service';
+import {
+  CONVERSATIONS_REPOSITORY,
+  IConversationsRepository,
+} from '../../conversations/conversations.repository.interface';
+import { TransactionService } from '../../database/transaction.service';
 import {
   type InterruptNode,
   PortfolioGraphService,
@@ -22,7 +27,10 @@ export class AnalysisResumeHandler implements OutboxHandler {
 
   constructor(
     private readonly analysisRunsService: AnalysisRunsService,
-    private readonly portfolioGraphService: PortfolioGraphService
+    private readonly portfolioGraphService: PortfolioGraphService,
+    private readonly transactionService: TransactionService,
+    @Inject(CONVERSATIONS_REPOSITORY)
+    private readonly conversationsRepository: IConversationsRepository,
   ) {}
 
   async handle(payload: Record<string, unknown>): Promise<void> {
@@ -53,24 +61,23 @@ export class AnalysisResumeHandler implements OutboxHandler {
     try {
       // Resume the graph using the existing service.
       // Type-safe dispatch based on node type.
-      // Returns GraphPauseResult if the graph pauses again, null if completed.
-      let pauseResult;
+      let pausedNode: InterruptNode | null;
       switch (data.node) {
         case 'ask_followup':
-          pauseResult = await this.portfolioGraphService.resumeGraph(
+          pausedNode = await this.portfolioGraphService.resumeGraph(
             data.conversationId,
             'ask_followup'
           );
           break;
         case 'present_classification':
-          pauseResult = await this.portfolioGraphService.resumeGraph(
+          pausedNode = await this.portfolioGraphService.resumeGraph(
             data.conversationId,
             'present_classification',
             data.resumeValue as { entryType: string }
           );
           break;
         case 'present_capabilities':
-          pauseResult = await this.portfolioGraphService.resumeGraph(
+          pausedNode = await this.portfolioGraphService.resumeGraph(
             data.conversationId,
             'present_capabilities',
             data.resumeValue as { selectedCodes: string[] }
@@ -78,20 +85,65 @@ export class AnalysisResumeHandler implements OutboxHandler {
           break;
       }
 
-      if (pauseResult) {
-        await this.analysisRunsService.transitionStatus(
-          runId,
-          AnalysisRunStatus.RUNNING,
-          AnalysisRunStatus.AWAITING_INPUT,
-          {
-            currentQuestion: {
-              messageId: pauseResult.questionMessageId,
-              node: pauseResult.pausedNode,
-              questionType: pauseResult.questionType,
-            },
-            currentStep: null,
-          }
+      if (pausedNode) {
+        const interruptPayload = await this.portfolioGraphService.getInterruptPayload(
+          data.conversationId,
         );
+        if (!interruptPayload) {
+          throw new Error(`Graph paused at ${pausedNode} but no interrupt payload found`);
+        }
+
+        // Check-before-create (idempotency): if message already exists from a
+        // previous attempt, just transition status without creating a duplicate.
+        // userId comes from graph state via the interrupt payload's messageData.
+        const existingResult =
+          await this.conversationsRepository.findMessageByIdempotencyKey(
+            interruptPayload.messageData.userId,
+            interruptPayload.idempotencyKey,
+          );
+
+        if (existingResult.ok && existingResult.value) {
+          this.logger.log(
+            `Idempotent hit for interrupt message (key: ${interruptPayload.idempotencyKey}), reusing existing`,
+          );
+          await this.analysisRunsService.transitionStatus(
+            runId,
+            AnalysisRunStatus.RUNNING,
+            AnalysisRunStatus.AWAITING_INPUT,
+            {
+              currentQuestion: {
+                messageId: existingResult.value._id,
+                node: interruptPayload.pausedNode,
+                questionType: interruptPayload.questionType,
+              },
+              currentStep: null,
+            }
+          );
+        } else {
+          // Atomic: create message + transition status in one transaction
+          await this.transactionService.withTransaction(async (session) => {
+            const msgResult = await this.conversationsRepository.createMessage(
+              interruptPayload.messageData,
+              session,
+            );
+            if (!msgResult.ok) throw new Error(msgResult.error.message);
+
+            await this.analysisRunsService.transitionStatus(
+              runId,
+              AnalysisRunStatus.RUNNING,
+              AnalysisRunStatus.AWAITING_INPUT,
+              {
+                currentQuestion: {
+                  messageId: msgResult.value._id,
+                  node: interruptPayload.pausedNode,
+                  questionType: interruptPayload.questionType,
+                },
+                currentStep: null,
+              },
+              session,
+            );
+          }, { context: 'resume-handler-interrupt' });
+        }
       } else {
         await this.analysisRunsService.transitionStatus(
           runId,

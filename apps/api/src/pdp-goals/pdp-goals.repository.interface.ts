@@ -111,4 +111,9 @@ export interface IPdpGoalsRepository {
     data: UpdatePdpGoalData,
     session?: ClientSession
   ): Promise<Result<void, DBError>>;
+
+  deleteByArtefactId(
+    artefactId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<number, DBError>>;
 }

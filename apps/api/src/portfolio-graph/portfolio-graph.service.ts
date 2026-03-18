@@ -18,7 +18,6 @@ import {
   ARTEFACTS_REPOSITORY,
   IArtefactsRepository,
 } from '../artefacts/artefacts.repository.interface';
-import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
@@ -232,7 +231,12 @@ export class PortfolioGraphService implements OnModuleInit {
    * Read the interrupt payload from the checkpoint and perform side effects
    * (e.g. writing an ASSISTANT message to the conversation).
    *
-   * Returns the created message's ObjectId and question type.
+   * Idempotency: the key is derived deterministically from
+   * `${conversationId}:${pausedNode}:${checkpointId}`. On retry, the same
+   * key is generated. If a message with that key already exists, the cached
+   * result is returned without creating a duplicate.
+   *
+   * Returns the created (or existing) message's ObjectId and question type.
    * Returns null only if no interrupt payload is found (unknown interrupt type).
    * Throws if message creation fails — this lets the handler transition to
    * FAILED and allows outbox retry.
@@ -255,6 +259,36 @@ export class PortfolioGraphService implements OnModuleInit {
       conversationId: string;
       userId: string;
     };
+
+    // Derive a deterministic idempotency key from the checkpoint state.
+    // Same interrupt at the same checkpoint always produces the same key,
+    // making retries safe (no duplicate messages).
+    const checkpointId =
+      (snapshot?.config?.configurable?.checkpoint_id as string) ?? 'unknown';
+    const pausedNodeName = snapshot.next?.[0] ?? 'unknown';
+    const idempotencyKey = `${state.conversationId}:${pausedNodeName}:${checkpointId}`;
+
+    // Check-before-create: if a message with this key already exists (from a
+    // previous attempt), return the cached result instead of creating a duplicate.
+    const userOid = new Types.ObjectId(state.userId);
+    const existingResult =
+      await this.conversationsRepository.findMessageByIdempotencyKey(userOid, idempotencyKey);
+    if (existingResult.ok && existingResult.value) {
+      const existing = existingResult.value;
+      const existingQuestion = existing.question as { questionType: string } | undefined;
+      this.logger.log(
+        `Idempotent hit for interrupt message (key: ${idempotencyKey}), reusing existing message`
+      );
+      return {
+        messageId: existing._id,
+        questionType: (existingQuestion?.questionType ?? 'free_text') as
+          | 'single_select'
+          | 'multi_select'
+          | 'free_text',
+      };
+    }
+
+    const conversationOid = new Types.ObjectId(state.conversationId);
 
     switch (interruptValue.type) {
       case 'classification': {
@@ -279,15 +313,15 @@ export class PortfolioGraphService implements OnModuleInit {
         };
 
         const result = await this.conversationsRepository.createMessage({
-          conversation: new Types.ObjectId(state.conversationId),
-          userId: new Types.ObjectId(state.userId),
+          conversation: conversationOid,
+          userId: userOid,
           role: MessageRole.ASSISTANT,
           messageType: MessageType.TEXT,
           rawContent: content,
           content,
           processingStatus: MessageProcessingStatus.COMPLETE,
           question,
-          idempotencyKey: nanoidAlphanumeric(),
+          idempotencyKey,
         });
 
         if (!result.ok) {
@@ -320,15 +354,15 @@ export class PortfolioGraphService implements OnModuleInit {
         };
 
         const followupResult = await this.conversationsRepository.createMessage({
-          conversation: new Types.ObjectId(state.conversationId),
-          userId: new Types.ObjectId(state.userId),
+          conversation: conversationOid,
+          userId: userOid,
           role: MessageRole.ASSISTANT,
           messageType: MessageType.TEXT,
           rawContent: content,
           content,
           processingStatus: MessageProcessingStatus.COMPLETE,
           question,
-          idempotencyKey: nanoidAlphanumeric(),
+          idempotencyKey,
         });
 
         if (!followupResult.ok) {
@@ -362,15 +396,15 @@ export class PortfolioGraphService implements OnModuleInit {
         };
 
         const capResult = await this.conversationsRepository.createMessage({
-          conversation: new Types.ObjectId(state.conversationId),
-          userId: new Types.ObjectId(state.userId),
+          conversation: conversationOid,
+          userId: userOid,
           role: MessageRole.ASSISTANT,
           messageType: MessageType.TEXT,
           rawContent: capContent,
           content: capContent,
           processingStatus: MessageProcessingStatus.COMPLETE,
           question,
-          idempotencyKey: nanoidAlphanumeric(),
+          idempotencyKey,
         });
 
         if (!capResult.ok) {

@@ -12,7 +12,10 @@ function makeDeps(overrides: Partial<GraphDeps> = {}): GraphDeps {
   return {
     artefactsRepository: { updateArtefactById: jest.fn() } as any,
     conversationsRepository: {} as any,
-    pdpGoalsRepository: { create: jest.fn() } as any,
+    pdpGoalsRepository: {
+      create: jest.fn(),
+      deleteByArtefactId: jest.fn().mockResolvedValue({ ok: true, value: 0 }),
+    } as any,
     transactionService: {
       withTransaction: jest.fn((fn) => fn({})), // pass a fake session
     } as any,
@@ -149,5 +152,60 @@ describe('SaveNode', () => {
       expect.objectContaining({ status: ArtefactStatus.IN_REVIEW }),
       expect.anything()
     );
+  });
+
+  describe('PDP goal idempotency (delete-then-create)', () => {
+    it('should delete existing goals before creating new ones', async () => {
+      const deps = makeDeps();
+      (deps.artefactsRepository.updateArtefactById as jest.Mock).mockResolvedValue({
+        ok: true,
+        value: {},
+      });
+      const deleteMock = deps.pdpGoalsRepository.deleteByArtefactId as jest.Mock;
+      deleteMock.mockResolvedValue({ ok: true, value: 1 });
+      (deps.pdpGoalsRepository.create as jest.Mock).mockResolvedValue({
+        ok: true,
+        value: [],
+      });
+
+      const node = createSaveNode(deps);
+      await node(makeState());
+
+      expect(deleteMock).toHaveBeenCalledWith(expect.any(Types.ObjectId), expect.anything());
+      // Delete must be called before create
+      const deleteOrder = deleteMock.mock.invocationCallOrder[0];
+      const createOrder = (deps.pdpGoalsRepository.create as jest.Mock).mock.invocationCallOrder[0];
+      expect(deleteOrder).toBeLessThan(createOrder);
+    });
+
+    it('should propagate delete errors', async () => {
+      const deps = makeDeps();
+      (deps.artefactsRepository.updateArtefactById as jest.Mock).mockResolvedValue({
+        ok: true,
+        value: {},
+      });
+      (deps.pdpGoalsRepository.deleteByArtefactId as jest.Mock).mockResolvedValue({
+        ok: false,
+        error: { code: 'DB_ERROR', message: 'Delete failed' },
+      });
+
+      const node = createSaveNode(deps);
+
+      await expect(node(makeState())).rejects.toThrow('Delete failed');
+    });
+
+    it('should not delete or create goals when pdpGoals is empty', async () => {
+      const deps = makeDeps();
+      (deps.artefactsRepository.updateArtefactById as jest.Mock).mockResolvedValue({
+        ok: true,
+        value: {},
+      });
+
+      const node = createSaveNode(deps);
+      await node(makeState({ pdpGoals: [] }));
+
+      expect(deps.pdpGoalsRepository.deleteByArtefactId).not.toHaveBeenCalled();
+      expect(deps.pdpGoalsRepository.create).not.toHaveBeenCalled();
+    });
   });
 });

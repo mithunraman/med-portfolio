@@ -41,6 +41,13 @@ export function createSaveNode(deps: GraphDeps) {
         if (!artefactResult.ok) throw new Error(artefactResult.error.message);
 
         if (state.pdpGoals.length > 0) {
+          // Delete-then-create for idempotency: if LangGraph replays this node
+          // (e.g. checkpoint write failed after transaction committed), re-running
+          // produces the same result instead of duplicating goals.
+          const deleteResult =
+            await deps.pdpGoalsRepository.deleteByArtefactId(artefactObjectId, session);
+          if (!deleteResult.ok) throw new Error(deleteResult.error.message);
+
           const pdpResult = await deps.pdpGoalsRepository.create(
             state.pdpGoals.map((g) => ({
               userId: userObjectId,

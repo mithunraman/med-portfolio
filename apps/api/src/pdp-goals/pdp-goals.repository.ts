@@ -326,4 +326,17 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       return err({ code: 'DB_ERROR', message: 'Failed to bulk-update PDP goals' });
     }
   }
+
+  async deleteByArtefactId(
+    artefactId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.pdpGoalModel.deleteMany({ artefactId }, { session });
+      return ok(result.deletedCount);
+    } catch (error) {
+      this.logger.error(`Failed to delete PDP goals for artefact ${artefactId}`, error);
+      return err({ code: 'DB_ERROR', message: 'Failed to delete PDP goals' });
+    }
+  }
 }

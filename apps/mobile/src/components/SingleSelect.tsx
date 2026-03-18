@@ -1,11 +1,9 @@
 import { Feather } from '@expo/vector-icons';
-import { memo, useCallback, useState } from 'react';
-import { LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+const ANIMATION_DURATION = 250;
 
 export interface SingleSelectOption {
   key: string;
@@ -33,7 +31,6 @@ export const SingleSelect = memo(function SingleSelect({
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   const handleToggleExpand = useCallback((key: string) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedKey((prev) => (prev === key ? null : key));
   }, []);
 
@@ -154,12 +151,69 @@ const SingleSelectItem = memo(function SingleSelectItem({
           </View>
         )}
       </View>
-      {isExpanded && option.reasoning && (
-        <Text style={[styles.reasoning, { color: colors.textSecondary }]}>
+      {option.reasoning && (
+        <CollapsibleReasoning isExpanded={isExpanded} color={colors.textSecondary}>
           {option.reasoning}
-        </Text>
+        </CollapsibleReasoning>
       )}
     </Pressable>
+  );
+});
+
+interface CollapsibleReasoningProps {
+  isExpanded: boolean;
+  color: string;
+  children: string;
+}
+
+const CollapsibleReasoning = memo(function CollapsibleReasoning({
+  isExpanded,
+  color,
+  children,
+}: CollapsibleReasoningProps) {
+  const animValue = useRef(new Animated.Value(0)).current;
+  const contentHeight = useRef(0);
+  const animRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  useEffect(() => {
+    animRef.current?.stop();
+    animRef.current = Animated.timing(animValue, {
+      toValue: isExpanded ? 1 : 0,
+      duration: ANIMATION_DURATION,
+      useNativeDriver: false,
+    });
+    animRef.current.start(() => {
+      animRef.current = null;
+    });
+    return () => {
+      animRef.current?.stop();
+    };
+  }, [isExpanded, animValue]);
+
+  const height = animValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, contentHeight.current || 200],
+    extrapolate: 'clamp',
+  });
+
+  const containerStyle = useMemo(
+    () => [styles.collapsibleContainer, { height, opacity: animValue }],
+    [height, animValue],
+  );
+
+  const handleLayout = useCallback((e: { nativeEvent: { layout: { height: number } } }) => {
+    const h = e.nativeEvent.layout.height;
+    if (h > 0) {
+      contentHeight.current = h;
+    }
+  }, []);
+
+  return (
+    <Animated.View style={containerStyle}>
+      <View onLayout={handleLayout} style={styles.reasoningInner}>
+        <Text style={[styles.reasoning, { color }]}>{children}</Text>
+      </View>
+    </Animated.View>
   );
 });
 
@@ -218,6 +272,15 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  collapsibleContainer: {
+    overflow: 'hidden' as const,
+  },
+  reasoningInner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
   reasoning: {
     fontSize: 13,

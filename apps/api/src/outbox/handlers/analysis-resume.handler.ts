@@ -22,24 +22,33 @@ export class AnalysisResumeHandler implements OutboxHandler {
 
   constructor(
     private readonly analysisRunsService: AnalysisRunsService,
-    private readonly portfolioGraphService: PortfolioGraphService,
+    private readonly portfolioGraphService: PortfolioGraphService
   ) {}
 
   async handle(payload: Record<string, unknown>): Promise<void> {
     const data = payload as unknown as AnalysisResumePayload;
     const runId = new Types.ObjectId(data.analysisRunId);
 
+    // Early exit: if run is already terminal, skip — prevents wasted retries
+    const run = await this.analysisRunsService.findRunById(runId);
+    if (!run) return;
+    if (
+      run.status === AnalysisRunStatus.FAILED ||
+      run.status === AnalysisRunStatus.COMPLETED
+    ) {
+      this.logger.log(`Run ${data.analysisRunId} already ${run.status}, skipping`);
+      return;
+    }
+
     // Transition run: AWAITING_INPUT → RUNNING
     await this.analysisRunsService.transitionStatus(
       runId,
       AnalysisRunStatus.AWAITING_INPUT,
       AnalysisRunStatus.RUNNING,
-      { currentQuestion: null, currentStep: null },
+      { currentQuestion: null, currentStep: null }
     );
 
-    this.logger.log(
-      `Resuming graph for analysis run ${data.analysisRunId} at node "${data.node}"`,
-    );
+    this.logger.log(`Resuming graph for analysis run ${data.analysisRunId} at node "${data.node}"`);
 
     try {
       // Resume the graph using the existing service.
@@ -50,21 +59,21 @@ export class AnalysisResumeHandler implements OutboxHandler {
         case 'ask_followup':
           pauseResult = await this.portfolioGraphService.resumeGraph(
             data.conversationId,
-            'ask_followup',
+            'ask_followup'
           );
           break;
         case 'present_classification':
           pauseResult = await this.portfolioGraphService.resumeGraph(
             data.conversationId,
             'present_classification',
-            data.resumeValue as { entryType: string },
+            data.resumeValue as { entryType: string }
           );
           break;
         case 'present_capabilities':
           pauseResult = await this.portfolioGraphService.resumeGraph(
             data.conversationId,
             'present_capabilities',
-            data.resumeValue as { selectedCodes: string[] },
+            data.resumeValue as { selectedCodes: string[] }
           );
           break;
       }
@@ -81,14 +90,14 @@ export class AnalysisResumeHandler implements OutboxHandler {
               questionType: pauseResult.questionType,
             },
             currentStep: null,
-          },
+          }
         );
       } else {
         await this.analysisRunsService.transitionStatus(
           runId,
           AnalysisRunStatus.RUNNING,
           AnalysisRunStatus.COMPLETED,
-          { currentStep: null },
+          { currentStep: null }
         );
       }
     } catch (error) {
@@ -100,7 +109,7 @@ export class AnalysisResumeHandler implements OutboxHandler {
           runId,
           AnalysisRunStatus.RUNNING,
           AnalysisRunStatus.FAILED,
-          { error: { code: 'GRAPH_RESUME_FAILED', message: errorMessage }, currentStep: null },
+          { error: { code: 'GRAPH_RESUME_FAILED', message: errorMessage }, currentStep: null }
         );
       } catch {
         this.logger.warn(`Could not transition run ${data.analysisRunId} to FAILED`);

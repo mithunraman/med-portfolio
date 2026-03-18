@@ -27,6 +27,17 @@ export class AnalysisStartHandler implements OutboxHandler {
     const data = payload as unknown as AnalysisStartPayload;
     const runId = new Types.ObjectId(data.analysisRunId);
 
+    // Early exit: if run is already terminal, skip — prevents wasted retries
+    const run = await this.analysisRunsService.findRunById(runId);
+    if (!run) return;
+    if (
+      run.status === AnalysisRunStatus.FAILED ||
+      run.status === AnalysisRunStatus.COMPLETED
+    ) {
+      this.logger.log(`Run ${data.analysisRunId} already ${run.status}, skipping`);
+      return;
+    }
+
     // Transition run: PENDING → RUNNING
     await this.analysisRunsService.transitionStatus(
       runId,

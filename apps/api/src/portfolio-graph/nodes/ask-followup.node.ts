@@ -5,6 +5,7 @@ import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
+import { MAX_FOLLOWUP_ROUNDS } from '../portfolio-graph.builder';
 import { PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('AskFollowupNode');
@@ -88,6 +89,15 @@ export function createAskFollowupNode(deps: GraphDeps) {
   return async function askFollowupNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
+    // Defence-in-depth: circuit breaker against router bugs that could cause
+    // an infinite follow-up loop with unbounded LLM spend.
+    if (state.followUpRound >= MAX_FOLLOWUP_ROUNDS) {
+      throw new Error(
+        `Follow-up round ${state.followUpRound} exceeds maximum ${MAX_FOLLOWUP_ROUNDS}. ` +
+          'This indicates a router bug in completenessRouter.'
+      );
+    }
+
     deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'ask_followup' });
     logger.log(
       `Asking follow-up for conversation ${state.conversationId} ` +

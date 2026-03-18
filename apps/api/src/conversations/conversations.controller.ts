@@ -34,7 +34,7 @@ export class ConversationsController {
   @Get(':conversationId/messages')
   async listMessages(
     @CurrentUser() user: CurrentUserPayload,
-    @Param('conversationId') conversationId: string,
+    @Param('conversationId') conversationId: string
   ): Promise<MessageListResponse> {
     return this.conversationsService.listMessages(user.userId, conversationId);
   }

@@ -7,6 +7,9 @@ import { PortfolioStateType } from '../portfolio-graph.state';
 /**
  * Saves the completed entry to the artefact and creates PDP goals.
  * Both writes are wrapped in a transaction so they succeed or fail together.
+ *
+ * Errors are NOT caught — they propagate through graph.invoke() so the
+ * handler can transition the run to FAILED and the outbox can retry.
  */
 export function createSaveNode(deps: GraphDeps) {
   const logger = new Logger('SaveNode');
@@ -18,50 +21,44 @@ export function createSaveNode(deps: GraphDeps) {
     const artefactObjectId = new Types.ObjectId(state.artefactId);
     const userObjectId = new Types.ObjectId(state.userId);
 
-    try {
-      await deps.transactionService.withTransaction(
-        async (session) => {
-          const artefactResult = await deps.artefactsRepository.updateArtefactById(
-            artefactObjectId,
-            {
-              artefactType: state.entryType,
-              title: state.title,
-              reflection: state.reflection,
-              capabilities: state.capabilities.map((c) => ({
-                code: c.code,
-                evidence: c.reasoning,
+    await deps.transactionService.withTransaction(
+      async (session) => {
+        const artefactResult = await deps.artefactsRepository.updateArtefactById(
+          artefactObjectId,
+          {
+            artefactType: state.entryType,
+            title: state.title,
+            reflection: state.reflection,
+            capabilities: state.capabilities.map((c) => ({
+              code: c.code,
+              evidence: c.reasoning,
+            })),
+            status: ArtefactStatus.IN_REVIEW,
+          },
+          session
+        );
+
+        if (!artefactResult.ok) throw new Error(artefactResult.error.message);
+
+        if (state.pdpGoals.length > 0) {
+          const pdpResult = await deps.pdpGoalsRepository.create(
+            state.pdpGoals.map((g) => ({
+              userId: userObjectId,
+              artefactId: artefactObjectId,
+              goal: g.goal,
+              actions: g.actions.map((a) => ({
+                action: a.action,
+                intendedEvidence: a.intendedEvidence,
               })),
-              status: ArtefactStatus.IN_REVIEW,
-            },
+            })),
             session
           );
 
-          if (!artefactResult.ok) throw new Error(artefactResult.error.message);
-
-          if (state.pdpGoals.length > 0) {
-            const pdpResult = await deps.pdpGoalsRepository.create(
-              state.pdpGoals.map((g) => ({
-                userId: userObjectId,
-                artefactId: artefactObjectId,
-                goal: g.goal,
-                actions: g.actions.map((a) => ({
-                  action: a.action,
-                  intendedEvidence: a.intendedEvidence,
-                })),
-              })),
-              session
-            );
-
-            if (!pdpResult.ok) throw new Error(pdpResult.error.message);
-          }
-        },
-        { context: 'save-node' }
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      logger.error(`Failed to save artefact ${state.artefactId}: ${message}`);
-      return { error: `Failed to save artefact: ${message}` };
-    }
+          if (!pdpResult.ok) throw new Error(pdpResult.error.message);
+        }
+      },
+      { context: 'save-node' }
+    );
 
     logger.log(`Artefact ${state.artefactId} saved successfully`);
     return {};

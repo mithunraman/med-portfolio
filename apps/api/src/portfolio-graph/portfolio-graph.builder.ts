@@ -16,7 +16,7 @@ import {
 import { PortfolioState, PortfolioStateType } from './portfolio-graph.state';
 
 // ── Max loop limits ──
-const MAX_FOLLOWUP_ROUNDS = 2;
+export const MAX_FOLLOWUP_ROUNDS = 2;
 
 // ── Router functions ──
 

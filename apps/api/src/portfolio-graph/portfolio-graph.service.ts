@@ -14,11 +14,11 @@ import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectConnection } from '@nestjs/mongoose';
 import { Connection, Types } from 'mongoose';
-import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import {
   ARTEFACTS_REPOSITORY,
   IArtefactsRepository,
 } from '../artefacts/artefacts.repository.interface';
+import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
@@ -66,7 +66,7 @@ export class PortfolioGraphService implements OnModuleInit {
     private readonly pdpGoalsRepository: IPdpGoalsRepository,
     private readonly transactionService: TransactionService,
     private readonly llmService: LLMService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   async onModuleInit() {
@@ -212,7 +212,7 @@ export class PortfolioGraphService implements OnModuleInit {
    * saving the checkpoint. We inspect the snapshot to detect the pause.
    */
   private async handleInterruptSideEffectsIfPaused(
-    conversationId: string,
+    conversationId: string
   ): Promise<GraphPauseResult | null> {
     const pausedNode = await this.getPausedNode(conversationId);
     if (!pausedNode) return null;
@@ -232,14 +232,15 @@ export class PortfolioGraphService implements OnModuleInit {
    * Read the interrupt payload from the checkpoint and perform side effects
    * (e.g. writing an ASSISTANT message to the conversation).
    *
-   * Returns the created message's ObjectId, or null if no message was created.
-   *
-   * This runs once per startGraph()/resumeGraph() call — outside the graph's
-   * replay cycle — so there is no idempotency concern.
+   * Returns the created message's ObjectId and question type.
+   * Returns null only if no interrupt payload is found (unknown interrupt type).
+   * Throws if message creation fails — this lets the handler transition to
+   * FAILED and allows outbox retry.
    */
-  private async handleInterruptSideEffects(
-    conversationId: string,
-  ): Promise<{ messageId: Types.ObjectId; questionType: 'single_select' | 'multi_select' | 'free_text' } | null> {
+  private async handleInterruptSideEffects(conversationId: string): Promise<{
+    messageId: Types.ObjectId;
+    questionType: 'single_select' | 'multi_select' | 'free_text';
+  } | null> {
     const config = { configurable: { thread_id: conversationId } };
     const snapshot = await this.graph.getState(config);
 
@@ -290,8 +291,7 @@ export class PortfolioGraphService implements OnModuleInit {
         });
 
         if (!result.ok) {
-          this.logger.error(`Failed to send classification options: ${result.error.message}`);
-          return null;
+          throw new Error(`Failed to create classification message: ${result.error.message}`);
         }
         return { messageId: result.value._id, questionType: 'single_select' };
       }
@@ -332,8 +332,7 @@ export class PortfolioGraphService implements OnModuleInit {
         });
 
         if (!followupResult.ok) {
-          this.logger.error(`Failed to send follow-up questions: ${followupResult.error.message}`);
-          return null;
+          throw new Error(`Failed to create follow-up message: ${followupResult.error.message}`);
         }
         return { messageId: followupResult.value._id, questionType: 'free_text' };
       }
@@ -375,8 +374,7 @@ export class PortfolioGraphService implements OnModuleInit {
         });
 
         if (!capResult.ok) {
-          this.logger.error(`Failed to send capability options: ${capResult.error.message}`);
-          return null;
+          throw new Error(`Failed to create capabilities message: ${capResult.error.message}`);
         }
         return { messageId: capResult.value._id, questionType: 'multi_select' };
       }

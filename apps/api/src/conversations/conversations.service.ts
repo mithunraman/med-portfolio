@@ -63,7 +63,7 @@ export class ConversationsService {
     private readonly portfolioGraphService: PortfolioGraphService,
     private readonly analysisRunsService: AnalysisRunsService,
     private readonly outboxService: OutboxService,
-    private readonly contextService: ConversationContextService,
+    private readonly contextService: ConversationContextService
   ) {}
 
   async sendMessage(userId: string, conversationId: string, dto: SendMessageDto): Promise<Message> {
@@ -83,11 +83,19 @@ export class ConversationsService {
         throw new InternalServerErrorException(existingResult.error.message);
       if (existingResult.value) {
         const existing = existingResult.value;
-        this.logger.log(`Idempotent hit for key ${dto.idempotencyKey}, returning existing message ${existing.xid}`);
+        this.logger.log(
+          `Idempotent hit for key ${dto.idempotencyKey}, returning existing message ${existing.xid}`
+        );
         // Return existing message — find conversation xid for the DTO
-        const convResult = await this.conversationsRepository.findConversationById(existing.conversation);
+        const convResult = await this.conversationsRepository.findConversationById(
+          existing.conversation
+        );
         if (isErr(convResult)) throw new InternalServerErrorException(convResult.error.message);
-        return toMessageDto(existing, convResult.value?.xid ?? conversationId, buildMediaData(existing, null));
+        return toMessageDto(
+          existing,
+          convResult.value?.xid ?? conversationId,
+          buildMediaData(existing, null)
+        );
       }
     }
 
@@ -420,7 +428,9 @@ export class ConversationsService {
       if (isErr(existingResult))
         throw new InternalServerErrorException(existingResult.error.message);
       if (existingResult.value) {
-        this.logger.log(`Idempotent hit for resume key ${idempotencyKey}, skipping message creation`);
+        this.logger.log(
+          `Idempotent hit for resume key ${idempotencyKey}, skipping message creation`
+        );
         return; // Already processed — outbox entry already enqueued
       }
     }
@@ -501,20 +511,21 @@ export class ConversationsService {
    */
   private async assertCanSendMessage(
     conversationOid: Types.ObjectId,
-    conversationStatus: ConversationStatus,
+    conversationStatus: ConversationStatus
   ): Promise<void> {
-    const context = await this.contextService.computeContext(conversationOid, conversationStatus, '');
+    const context = await this.contextService.computeContext(
+      conversationOid,
+      conversationStatus,
+      ''
+    );
     if (!context.actions.sendMessage.allowed) {
       throw new ConflictException(
-        context.actions.sendMessage.reason || 'Cannot send messages at this time.',
+        context.actions.sendMessage.reason || 'Cannot send messages at this time.'
       );
     }
   }
 
-  async listMessages(
-    userId: string,
-    conversationId: string,
-  ): Promise<MessageListResponse> {
+  async listMessages(userId: string, conversationId: string): Promise<MessageListResponse> {
     // Find conversation by xid
     const conversationResult = await this.conversationsRepository.findConversationByXid(
       conversationId,
@@ -557,7 +568,11 @@ export class ConversationsService {
     const artefactId = !isErr(artefactXidResult) ? (artefactXidResult.value ?? '') : '';
 
     // Compute context (server-driven action state)
-    const context = await this.contextService.computeContext(conversation._id, conversation.status, artefactId);
+    const context = await this.contextService.computeContext(
+      conversation._id,
+      conversation.status,
+      artefactId
+    );
 
     return { messages: enriched, context };
   }

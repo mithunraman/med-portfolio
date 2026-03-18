@@ -7,8 +7,8 @@ import {
 } from './outbox.repository.interface';
 import type { OutboxEntry } from './schemas/outbox.schema';
 
-/** Default lock duration: 5 minutes */
-const DEFAULT_LOCK_DURATION_MS = 5 * 60 * 1000;
+/** Default lock duration: 10 minutes */
+const DEFAULT_LOCK_DURATION_MS = 10 * 60 * 1000;
 
 /** Default batch size for claiming jobs */
 const DEFAULT_BATCH_SIZE = 5;

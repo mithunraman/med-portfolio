@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import { Result, err, ok } from '../common/utils/result.util';
+import { TransactionService } from '../database/transaction.service';
 import { CreateOutboxEntryData, DBError, IOutboxRepository } from './outbox.repository.interface';
 import { OutboxEntry, OutboxEntryDocument } from './schemas/outbox.schema';
 
@@ -17,7 +18,8 @@ export class OutboxRepository implements IOutboxRepository {
 
   constructor(
     @InjectModel(OutboxEntry.name)
-    private outboxModel: Model<OutboxEntryDocument>
+    private outboxModel: Model<OutboxEntryDocument>,
+    private readonly transactionService: TransactionService
   ) {}
 
   async create(
@@ -103,34 +105,34 @@ export class OutboxRepository implements IOutboxRepository {
     error: string
   ): Promise<Result<OutboxEntry | null, DBError>> {
     try {
-      // First read current state to determine retry vs permanent failure
-      const current = await this.outboxModel.findById(entryId).lean();
-      if (!current) return ok(null);
+      const entry = await this.transactionService.withTransaction(
+        async (session) => {
+          const current = await this.outboxModel.findById(entryId).session(session).lean();
+          if (!current || current.status !== OutboxStatus.PROCESSING) return null;
 
-      const newAttempts = current.attempts + 1;
-      const isPermanentFailure = newAttempts >= current.maxAttempts;
+          const newAttempts = current.attempts + 1;
+          const isPermanentFailure = newAttempts >= current.maxAttempts;
 
-      const update: Record<string, unknown> = {
-        attempts: newAttempts,
-        lastError: error,
-        lockedUntil: null,
-      };
+          const update: Record<string, unknown> = {
+            attempts: newAttempts,
+            lastError: error,
+            lockedUntil: null,
+          };
 
-      if (isPermanentFailure) {
-        update.status = OutboxStatus.FAILED;
-      } else {
-        // Reschedule with exponential backoff
-        update.status = OutboxStatus.PENDING;
-        update.processAfter = new Date(Date.now() + calculateBackoffMs(newAttempts));
-      }
+          if (isPermanentFailure) {
+            update.status = OutboxStatus.FAILED;
+          } else {
+            update.status = OutboxStatus.PENDING;
+            update.processAfter = new Date(Date.now() + calculateBackoffMs(newAttempts));
+          }
 
-      const entry = await this.outboxModel
-        .findOneAndUpdate(
-          { _id: entryId, status: OutboxStatus.PROCESSING },
-          { $set: update },
-          { new: true }
-        )
-        .lean();
+          await this.outboxModel.updateOne({ _id: entryId }, { $set: update }, { session });
+
+          return await this.outboxModel.findById(entryId).session(session).lean();
+        },
+        { context: 'outbox-mark-failed' }
+      );
+
       return ok(entry);
     } catch (err_) {
       this.logger.error('Failed to mark outbox entry as failed', err_);

@@ -44,10 +44,8 @@ export const MultiSelectCard = memo(function MultiSelectCard({
   const options: MultiSelectOption[] = question.options.map((o) => ({
     key: o.key,
     label: o.label,
-    sublabel:
-      [o.confidence != null ? `${Math.round(o.confidence * 100)}% confidence` : null, o.reasoning]
-        .filter(Boolean)
-        .join(' - ') || undefined,
+    confidence: o.confidence,
+    reasoning: o.reasoning,
   }));
 
   return (

@@ -25,7 +25,7 @@ const capabilityTagSchema = z.object({
   reasoning: z
     .string()
     .describe(
-      '1-2 sentence explanation of why this capability is demonstrated, referencing specific details from the transcript.'
+      '1-2 sentence explanation written in the first person (e.g. "I considered broader patient care…") of why this capability is demonstrated, referencing specific details from the transcript.'
     ),
 });
 
@@ -100,9 +100,7 @@ function formatCapabilityBlock(specialty: Specialty): string {
   return config.capabilities
     .map(
       (cap) =>
-        `### ${cap.code} — ${cap.name}\n` +
-        `Domain: ${cap.domainName}\n` +
-        `${cap.description}`
+        `### ${cap.code} — ${cap.name}\n` + `Domain: ${cap.domainName}\n` + `${cap.description}`
     )
     .join('\n\n');
 }
@@ -173,7 +171,10 @@ export function createTagCapabilitiesNode(deps: GraphDeps) {
   return async function tagCapabilitiesNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'tag_capabilities' });
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
+      conversationId: state.conversationId,
+      step: 'tag_capabilities',
+    });
     logger.log(`Tagging capabilities for conversation ${state.conversationId}`);
 
     const specialty = Number(state.specialty) as Specialty;

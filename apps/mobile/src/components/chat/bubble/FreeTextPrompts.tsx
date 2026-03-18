@@ -8,10 +8,7 @@ interface Props {
   isActive: boolean;
 }
 
-export const FreeTextPrompts = memo(function FreeTextPrompts({
-  question,
-  isActive,
-}: Props) {
+export const FreeTextPrompts = memo(function FreeTextPrompts({ question, isActive }: Props) {
   const { colors } = useTheme();
 
   return (
@@ -21,20 +18,11 @@ export const FreeTextPrompts = memo(function FreeTextPrompts({
           Missing sections: {question.missingSections.join(', ')}
         </Text>
       )}
-      {question.followUpRound != null && (
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>
-          Follow-up round {question.followUpRound}
-        </Text>
-      )}
       <View style={styles.promptList}>
         {question.prompts.map((prompt, index) => (
           <View key={prompt.key} style={styles.promptRow}>
-            <Text style={[styles.promptNumber, { color: colors.primary }]}>
-              {index + 1}.
-            </Text>
-            <Text style={[styles.promptText, { color: colors.text }]}>
-              {prompt.text}
-            </Text>
+            <Text style={[styles.promptNumber, { color: colors.primary }]}>{index + 1}.</Text>
+            <Text style={[styles.promptText, { color: colors.text }]}>{prompt.text}</Text>
           </View>
         ))}
       </View>

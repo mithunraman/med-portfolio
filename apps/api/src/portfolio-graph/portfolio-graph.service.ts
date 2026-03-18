@@ -44,6 +44,59 @@ export interface GraphResumeMap {
 
 export type InterruptNode = keyof GraphResumeMap;
 
+const CLASSIFICATION_PROMPTS = [
+  'Which entry type best describes this? Select one below, or choose a different one.',
+  "I've identified some possible entry types. Pick the best match, or choose another.",
+  'Here are the entry types I think fit best. Select one, or go with something else.',
+  "Based on what you've shared, these entry types seem most relevant. Which one fits?",
+  'I narrowed it down to a few entry types. Choose the closest match below.',
+  'Take a look at the options below — which entry type feels right?',
+  "These entry types look like the best fit. Select one, or pick a different one if you'd prefer.",
+  'I think one of these entry types matches your input. Which would you go with?',
+  "Here's what I came up with — select the entry type that fits best, or choose your own.",
+  'A few entry types stood out. Pick the one that best captures your input.',
+] as const;
+
+const FOLLOWUP_PROMPTS: Record<string, readonly string[]> = {
+  initial: [
+    'Thanks for sharing that. I have a couple more questions to strengthen your portfolio entry. Take your time — answer all at once or one by one.',
+    "Great input! Just a couple more things I'd like to know to make your entry shine.",
+    'Nearly there — I have a couple more questions to round out your portfolio entry.',
+    'Thanks! A couple more quick questions to make sure we capture everything.',
+    'Appreciate the detail. Just a couple more questions to fill in the gaps.',
+    "That's really helpful. I have a couple more follow-ups to get the full picture.",
+    'Good stuff — a couple more questions and your entry will be in great shape.',
+    'Thanks for that. A couple more things to cover so your portfolio entry stands out.',
+    'Nice work so far. Just a couple more questions to bring it all together.',
+    'Almost done — I have a couple more questions to make your entry as strong as possible.',
+  ],
+  final: [
+    "You're almost there! Just a few final questions to polish your portfolio entry.",
+    'Thanks for sticking with it. A few final questions to wrap things up.',
+    "We're in the home stretch — a few final things to make your entry complete.",
+    'Nearly finished! Just a few final questions to tie everything together.',
+    'Last stretch — I have a few final questions to round off your entry.',
+    'Great progress. A few final questions and your portfolio entry will be ready.',
+    'Thanks for all the detail so far. Just a few final follow-ups.',
+    'Almost there — a few final questions to make sure nothing is missed.',
+    "You've done the hard part. A few final questions to finish strong.",
+    'Just a few final things to cover, then your entry will be all set.',
+  ],
+} as const;
+
+const CAPABILITIES_PROMPTS = [
+  'I spotted some capabilities in your entry. Confirm the ones that apply, or deselect any that don\'t fit.',
+  "Here are the capabilities I picked up from your input. Check the ones that match.",
+  "I've mapped your entry to a few capabilities. Select the ones that are relevant.",
+  "Based on what you've shared, these capabilities stood out. Confirm or adjust as needed.",
+  "A few capabilities came through in your entry. Keep the ones that fit and remove any that don't.",
+  "I've highlighted some capabilities from your input. Does this look right?",
+  "These capabilities seem to align with your entry. Deselect any that aren't a match.",
+  "Your entry maps to the capabilities below. Confirm the ones you'd like to include.",
+  "I found some relevant capabilities in your input. Review and adjust the selection.",
+  "Here's what I identified — select the capabilities that best reflect your entry.",
+] as const;
+
 /** Data needed to create the ASSISTANT question message for an interrupt. No DB writes. */
 export interface InterruptPayload {
   idempotencyKey: string;
@@ -122,7 +175,9 @@ export class PortfolioGraphService implements OnModuleInit {
     const { threadId } = params;
     const config = { configurable: { thread_id: threadId } };
 
-    this.logger.log(`Starting portfolio graph for conversation ${params.conversationId} (thread: ${threadId})`);
+    this.logger.log(
+      `Starting portfolio graph for conversation ${params.conversationId} (thread: ${threadId})`
+    );
 
     await this.graph.invoke(
       {
@@ -156,9 +211,7 @@ export class PortfolioGraphService implements OnModuleInit {
     const config = { configurable: { thread_id: threadId } };
     const resumeValue = args.length > 0 ? args[0] : true;
 
-    this.logger.log(
-      `Resuming portfolio graph at node "${node}" (thread: ${threadId})`
-    );
+    this.logger.log(`Resuming portfolio graph at node "${node}" (thread: ${threadId})`);
 
     await this.graph.invoke(new Command({ resume: resumeValue }), config);
 
@@ -260,8 +313,7 @@ export class PortfolioGraphService implements OnModuleInit {
     // Derive a deterministic idempotency key from the checkpoint state.
     // Same interrupt at the same checkpoint always produces the same key,
     // making retries safe (no duplicate messages).
-    const checkpointId =
-      (snapshot?.config?.configurable?.checkpoint_id as string) ?? 'unknown';
+    const checkpointId = (snapshot?.config?.configurable?.checkpoint_id as string) ?? 'unknown';
     const idempotencyKey = `${state.conversationId}:${pausedNode}:${checkpointId}`;
 
     const conversationOid = new Types.ObjectId(state.conversationId);
@@ -270,13 +322,9 @@ export class PortfolioGraphService implements OnModuleInit {
     switch (interruptValue.type) {
       case 'classification': {
         const options = interruptValue.options as ClassificationOption[];
-        const optionLines = options
-          .map((o, i) => `${i + 1}. **${o.label}** (${Math.round(o.confidence * 100)}% confidence)`)
-          .join('\n');
 
         const content =
-          `Based on your input, I think this is most likely:\n\n${optionLines}\n\n` +
-          `Please select the entry type, or choose a different one.`;
+          CLASSIFICATION_PROMPTS[Math.floor(Math.random() * CLASSIFICATION_PROMPTS.length)];
 
         const question: SingleSelectQuestion = {
           questionType: 'single_select',
@@ -314,13 +362,9 @@ export class PortfolioGraphService implements OnModuleInit {
         }>;
         const followUpRound = interruptValue.followUpRound as number;
 
-        const questionLines = questions.map((q) => `- ${q.question}`).join('\n');
-        const roundLabel = followUpRound === 1 ? 'a couple more' : 'a few final';
-
-        const content =
-          `Thanks for sharing that. I just have ${roundLabel} questions to make sure your portfolio entry is as strong as possible:\n\n` +
-          `${questionLines}\n\n` +
-          `Take your time — you can answer all of these in one go or one at a time.`;
+        const roundKey = followUpRound === 1 ? 'initial' : 'final';
+        const prompts = FOLLOWUP_PROMPTS[roundKey];
+        const content = prompts[Math.floor(Math.random() * prompts.length)];
 
         const question: FreeTextQuestion = {
           questionType: 'free_text',
@@ -350,17 +394,9 @@ export class PortfolioGraphService implements OnModuleInit {
 
       case 'capabilities': {
         const options = interruptValue.options as CapabilityOption[];
-        const optionLines = options
-          .map(
-            (o, i) =>
-              `${i + 1}. **${o.code} — ${o.name}** (${Math.round(o.confidence * 100)}% confidence)\n` +
-              `   _${o.reasoning}_`
-          )
-          .join('\n');
 
         const capContent =
-          `I've identified the following capabilities in your entry:\n\n${optionLines}\n\n` +
-          `Please confirm which capabilities apply, or deselect any that don't fit.`;
+          CAPABILITIES_PROMPTS[Math.floor(Math.random() * CAPABILITIES_PROMPTS.length)];
 
         const question: MultiSelectQuestion = {
           questionType: 'multi_select',

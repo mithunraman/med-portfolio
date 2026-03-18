@@ -276,12 +276,6 @@ export class ConversationsService {
     conversation: { _id: Types.ObjectId; artefact: Types.ObjectId },
     idempotencyKey?: string
   ): Promise<void> {
-    const hasCheckpoint = await this.portfolioGraphService.hasCheckpoint(convIdStr);
-
-    if (hasCheckpoint) {
-      throw new ConflictException('Analysis already started. Use { type: "resume" } to continue.');
-    }
-
     // Guard: require at least one COMPLETE user message before starting
     const completeResult = await this.conversationsRepository.hasCompleteMessages(conversation._id);
     if (isErr(completeResult)) throw new InternalServerErrorException(completeResult.error.message);
@@ -295,15 +289,14 @@ export class ConversationsService {
     }
 
     const effectiveIdempotencyKey = idempotencyKey || generateXid();
-    const langGraphThreadId = convIdStr; // Thread ID = conversation _id (matches existing behavior)
 
-    // Transactional: create analysis_run + outbox entry atomically
+    // Transactional: create analysis_run + outbox entry atomically.
+    // threadId is derived internally by createRun as `${conversationId}:${runNumber}`.
     await this.transactionService.withTransaction(
       async (session) => {
         const { run } = await this.analysisRunsService.createRun(
           conversation._id,
           effectiveIdempotencyKey,
-          langGraphThreadId,
           session
         );
 
@@ -316,6 +309,7 @@ export class ConversationsService {
               artefactId: conversation.artefact.toString(),
               userId,
               specialty: Specialty.GP.toString(),
+              langGraphThreadId: run.langGraphThreadId,
             },
           },
           session
@@ -356,7 +350,7 @@ export class ConversationsService {
     const node = activeRun.currentQuestion.node as InterruptNode;
 
     // 3. Verify graph is actually paused at this node
-    const pausedNode = await this.portfolioGraphService.getPausedNode(convIdStr);
+    const pausedNode = await this.portfolioGraphService.getPausedNode(activeRun.langGraphThreadId);
     if (!pausedNode) throw new ConflictException('Analysis is not paused at any node');
     if (pausedNode !== node)
       throw new ConflictException(`Analysis is paused at "${pausedNode}", not "${node}"`);
@@ -496,6 +490,7 @@ export class ConversationsService {
               conversationId: convIdStr,
               node,
               resumeValue,
+              langGraphThreadId: activeRun.langGraphThreadId,
             },
           },
           session

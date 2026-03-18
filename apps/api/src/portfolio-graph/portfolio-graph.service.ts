@@ -30,6 +30,7 @@ import {
   PDP_GOALS_REPOSITORY,
 } from '../pdp-goals/pdp-goals.repository.interface';
 import { buildPortfolioGraph } from './portfolio-graph.builder';
+import type { PortfolioStateType } from './portfolio-graph.state';
 
 /**
  * Maps each interrupt node to its expected resume value type.
@@ -108,17 +109,20 @@ export class PortfolioGraphService implements OnModuleInit {
    * Start a new graph execution for a conversation.
    * Returns the interrupt node name if the graph paused, null if it completed.
    * No side effects (message creation) — the handler is responsible for those.
+   *
+   * threadId is the LangGraph thread namespace (e.g. `${conversationId}:${runNumber}`).
    */
   async startGraph(params: {
     conversationId: string;
     artefactId: string;
     userId: string;
     specialty: string;
+    threadId: string;
   }): Promise<InterruptNode | null> {
-    const { conversationId } = params;
-    const config = { configurable: { thread_id: conversationId } };
+    const { threadId } = params;
+    const config = { configurable: { thread_id: threadId } };
 
-    this.logger.log(`Starting portfolio graph for conversation ${conversationId}`);
+    this.logger.log(`Starting portfolio graph for conversation ${params.conversationId} (thread: ${threadId})`);
 
     await this.graph.invoke(
       {
@@ -132,7 +136,7 @@ export class PortfolioGraphService implements OnModuleInit {
 
     // graph.invoke() returns normally when a node calls interrupt() —
     // it does NOT throw. Check the checkpoint for a pending interrupt.
-    return this.getPausedNode(conversationId);
+    return this.getPausedNode(threadId);
   }
 
   /**
@@ -140,25 +144,26 @@ export class PortfolioGraphService implements OnModuleInit {
    * Returns the interrupt node name if the graph paused again, null if it completed.
    * No side effects (message creation) — the handler is responsible for those.
    *
+   * threadId is the LangGraph thread namespace (e.g. `${conversationId}:${runNumber}`).
    * Type-safe: each interrupt node declares its resume value shape in GraphResumeMap.
    * Nodes that resume with just a signal (e.g. ask_followup) take no resumeValue arg.
    */
   async resumeGraph<N extends InterruptNode>(
-    conversationId: string,
+    threadId: string,
     node: N,
     ...args: GraphResumeMap[N] extends true ? [] : [resumeValue: GraphResumeMap[N]]
   ): Promise<InterruptNode | null> {
-    const config = { configurable: { thread_id: conversationId } };
+    const config = { configurable: { thread_id: threadId } };
     const resumeValue = args.length > 0 ? args[0] : true;
 
     this.logger.log(
-      `Resuming portfolio graph for conversation ${conversationId} at node "${node}"`
+      `Resuming portfolio graph at node "${node}" (thread: ${threadId})`
     );
 
     await this.graph.invoke(new Command({ resume: resumeValue }), config);
 
     // The resumed graph may hit another interrupt (e.g. follow-up after classification).
-    return this.getPausedNode(conversationId);
+    return this.getPausedNode(threadId);
   }
 
   /**
@@ -186,8 +191,8 @@ export class PortfolioGraphService implements OnModuleInit {
    * Returns the interrupt node name if paused at a known interrupt point,
    * or null if the graph is not paused at an interrupt node.
    */
-  async getPausedNode(conversationId: string): Promise<InterruptNode | null> {
-    const config = { configurable: { thread_id: conversationId } };
+  async getPausedNode(threadId: string): Promise<InterruptNode | null> {
+    const config = { configurable: { thread_id: threadId } };
     const state = await this.graph.getState(config);
 
     if (!state?.next?.length) return null;
@@ -204,6 +209,20 @@ export class PortfolioGraphService implements OnModuleInit {
     }
 
     return null;
+  }
+
+  /**
+   * Read the completed graph's state from the checkpoint.
+   * Pure read, no side effects, safe to call any number of times.
+   * Used by handlers to extract final state for saving artefact + PDP goals.
+   */
+  async getFinalState(threadId: string): Promise<PortfolioStateType> {
+    const config = { configurable: { thread_id: threadId } };
+    const snapshot = await this.graph.getState(config);
+    if (!snapshot?.values?.conversationId) {
+      throw new Error(`No graph state found for thread ${threadId}`);
+    }
+    return snapshot.values as PortfolioStateType;
   }
 
   /**

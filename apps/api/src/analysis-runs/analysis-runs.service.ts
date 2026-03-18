@@ -18,11 +18,14 @@ export class AnalysisRunsService {
   /**
    * Create a new analysis run or return an existing one if the idempotency key matches.
    * Returns { run, created } to distinguish between new and existing runs.
+   *
+   * The langGraphThreadId is derived internally as `${conversationId}:${runNumber}`.
+   * Each run gets its own LangGraph thread namespace, allowing restart after FAILED
+   * without stale checkpoints blocking the new run.
    */
   async createRun(
     conversationId: Types.ObjectId,
     idempotencyKey: string,
-    langGraphThreadId: string,
     session?: ClientSession
   ): Promise<{ run: AnalysisRun; created: boolean }> {
     // Check for existing run with same idempotency key
@@ -44,6 +47,7 @@ export class AnalysisRunsService {
       throw new Error(maxResult.error.message);
     }
     const runNumber = maxResult.value + 1;
+    const langGraphThreadId = `${conversationId.toString()}:${runNumber}`;
 
     const createResult = await this.repository.createRun(
       {

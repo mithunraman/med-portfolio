@@ -1,12 +1,20 @@
-import { AnalysisRunStatus } from '@acme/shared';
+import { AnalysisRunStatus, ArtefactStatus } from '@acme/shared';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { AnalysisRunsService } from '../../analysis-runs/analysis-runs.service';
+import {
+  ARTEFACTS_REPOSITORY,
+  IArtefactsRepository,
+} from '../../artefacts/artefacts.repository.interface';
 import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from '../../conversations/conversations.repository.interface';
 import { TransactionService } from '../../database/transaction.service';
+import {
+  IPdpGoalsRepository,
+  PDP_GOALS_REPOSITORY,
+} from '../../pdp-goals/pdp-goals.repository.interface';
 import { PortfolioGraphService } from '../../portfolio-graph/portfolio-graph.service';
 import type { OutboxHandler } from '../outbox.consumer';
 
@@ -16,6 +24,7 @@ export interface AnalysisStartPayload {
   artefactId: string;
   userId: string;
   specialty: string;
+  langGraphThreadId: string;
 }
 
 @Injectable()
@@ -29,11 +38,16 @@ export class AnalysisStartHandler implements OutboxHandler {
     private readonly transactionService: TransactionService,
     @Inject(CONVERSATIONS_REPOSITORY)
     private readonly conversationsRepository: IConversationsRepository,
+    @Inject(ARTEFACTS_REPOSITORY)
+    private readonly artefactsRepository: IArtefactsRepository,
+    @Inject(PDP_GOALS_REPOSITORY)
+    private readonly pdpGoalsRepository: IPdpGoalsRepository,
   ) {}
 
   async handle(payload: Record<string, unknown>): Promise<void> {
     const data = payload as unknown as AnalysisStartPayload;
     const runId = new Types.ObjectId(data.analysisRunId);
+    const threadId = data.langGraphThreadId;
 
     // Early exit: if run is already terminal, skip — prevents wasted retries
     const run = await this.analysisRunsService.findRunById(runId);
@@ -61,75 +75,13 @@ export class AnalysisStartHandler implements OutboxHandler {
         artefactId: data.artefactId,
         userId: data.userId,
         specialty: data.specialty,
+        threadId,
       });
 
       if (pausedNode) {
-        const interruptPayload = await this.portfolioGraphService.getInterruptPayload(
-          data.conversationId,
-        );
-        if (!interruptPayload) {
-          throw new Error(`Graph paused at ${pausedNode} but no interrupt payload found`);
-        }
-
-        // Check-before-create (idempotency): if message already exists from a
-        // previous attempt, just transition status without creating a duplicate.
-        const userOid = new Types.ObjectId(data.userId);
-        const existingResult =
-          await this.conversationsRepository.findMessageByIdempotencyKey(
-            userOid,
-            interruptPayload.idempotencyKey,
-          );
-
-        if (existingResult.ok && existingResult.value) {
-          this.logger.log(
-            `Idempotent hit for interrupt message (key: ${interruptPayload.idempotencyKey}), reusing existing`,
-          );
-          await this.analysisRunsService.transitionStatus(
-            runId,
-            AnalysisRunStatus.RUNNING,
-            AnalysisRunStatus.AWAITING_INPUT,
-            {
-              currentQuestion: {
-                messageId: existingResult.value._id,
-                node: interruptPayload.pausedNode,
-                questionType: interruptPayload.questionType,
-              },
-              currentStep: null,
-            },
-          );
-        } else {
-          // Atomic: create message + transition status in one transaction
-          await this.transactionService.withTransaction(async (session) => {
-            const msgResult = await this.conversationsRepository.createMessage(
-              interruptPayload.messageData,
-              session,
-            );
-            if (!msgResult.ok) throw new Error(msgResult.error.message);
-
-            await this.analysisRunsService.transitionStatus(
-              runId,
-              AnalysisRunStatus.RUNNING,
-              AnalysisRunStatus.AWAITING_INPUT,
-              {
-                currentQuestion: {
-                  messageId: msgResult.value._id,
-                  node: interruptPayload.pausedNode,
-                  questionType: interruptPayload.questionType,
-                },
-                currentStep: null,
-              },
-              session,
-            );
-          }, { context: 'start-handler-interrupt' });
-        }
+        await this.handleInterrupt(data, runId, threadId);
       } else {
-        // Graph completed (no interrupt hit)
-        await this.analysisRunsService.transitionStatus(
-          runId,
-          AnalysisRunStatus.RUNNING,
-          AnalysisRunStatus.COMPLETED,
-          { currentStep: null },
-        );
+        await this.handleCompletion(runId, threadId);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -150,5 +102,134 @@ export class AnalysisStartHandler implements OutboxHandler {
 
       throw error; // Re-throw so the outbox consumer handles retry
     }
+  }
+
+  /**
+   * Handle graph pausing at an interrupt: create ASSISTANT question message
+   * and transition to AWAITING_INPUT atomically.
+   */
+  private async handleInterrupt(
+    data: AnalysisStartPayload,
+    runId: Types.ObjectId,
+    threadId: string,
+  ): Promise<void> {
+    const interruptPayload = await this.portfolioGraphService.getInterruptPayload(threadId);
+    if (!interruptPayload) {
+      throw new Error(`Graph paused but no interrupt payload found`);
+    }
+
+    // Check-before-create (idempotency)
+    const userOid = new Types.ObjectId(data.userId);
+    const existingResult =
+      await this.conversationsRepository.findMessageByIdempotencyKey(
+        userOid,
+        interruptPayload.idempotencyKey,
+      );
+
+    if (existingResult.ok && existingResult.value) {
+      this.logger.log(
+        `Idempotent hit for interrupt message (key: ${interruptPayload.idempotencyKey}), reusing existing`,
+      );
+      await this.analysisRunsService.transitionStatus(
+        runId,
+        AnalysisRunStatus.RUNNING,
+        AnalysisRunStatus.AWAITING_INPUT,
+        {
+          currentQuestion: {
+            messageId: existingResult.value._id,
+            node: interruptPayload.pausedNode,
+            questionType: interruptPayload.questionType,
+          },
+          currentStep: null,
+        },
+      );
+    } else {
+      // Atomic: create message + transition status in one transaction
+      await this.transactionService.withTransaction(async (session) => {
+        const msgResult = await this.conversationsRepository.createMessage(
+          interruptPayload.messageData,
+          session,
+        );
+        if (!msgResult.ok) throw new Error(msgResult.error.message);
+
+        await this.analysisRunsService.transitionStatus(
+          runId,
+          AnalysisRunStatus.RUNNING,
+          AnalysisRunStatus.AWAITING_INPUT,
+          {
+            currentQuestion: {
+              messageId: msgResult.value._id,
+              node: interruptPayload.pausedNode,
+              questionType: interruptPayload.questionType,
+            },
+            currentStep: null,
+          },
+          session,
+        );
+      }, { context: 'start-handler-interrupt' });
+    }
+  }
+
+  /**
+   * Handle graph completion: save artefact + PDP goals + transition to COMPLETED
+   * in a single transaction. Idempotent via delete-then-create for PDP goals
+   * and overwrite for artefact update.
+   */
+  private async handleCompletion(
+    runId: Types.ObjectId,
+    threadId: string,
+  ): Promise<void> {
+    const finalState = await this.portfolioGraphService.getFinalState(threadId);
+
+    await this.transactionService.withTransaction(async (session) => {
+      const artefactOid = new Types.ObjectId(finalState.artefactId);
+      const userOid = new Types.ObjectId(finalState.userId);
+
+      // Artefact update (idempotent — overwrites same doc)
+      const artefactResult = await this.artefactsRepository.updateArtefactById(
+        artefactOid,
+        {
+          artefactType: finalState.entryType,
+          title: finalState.title,
+          reflection: finalState.reflection,
+          capabilities: finalState.capabilities.map((c) => ({
+            code: c.code,
+            evidence: c.reasoning,
+          })),
+          status: ArtefactStatus.IN_REVIEW,
+        },
+        session,
+      );
+      if (!artefactResult.ok) throw new Error(artefactResult.error.message);
+
+      // Delete-then-create for PDP goals (idempotent on replay)
+      const deleteResult = await this.pdpGoalsRepository.deleteByArtefactId(artefactOid, session);
+      if (!deleteResult.ok) throw new Error(deleteResult.error.message);
+
+      if (finalState.pdpGoals.length > 0) {
+        const pdpResult = await this.pdpGoalsRepository.create(
+          finalState.pdpGoals.map((g) => ({
+            userId: userOid,
+            artefactId: artefactOid,
+            goal: g.goal,
+            actions: g.actions.map((a) => ({
+              action: a.action,
+              intendedEvidence: a.intendedEvidence,
+            })),
+          })),
+          session,
+        );
+        if (!pdpResult.ok) throw new Error(pdpResult.error.message);
+      }
+
+      // Status transition in same transaction
+      await this.analysisRunsService.transitionStatus(
+        runId,
+        AnalysisRunStatus.RUNNING,
+        AnalysisRunStatus.COMPLETED,
+        { currentStep: null },
+        session,
+      );
+    }, { context: 'start-handler-completion' });
   }
 }

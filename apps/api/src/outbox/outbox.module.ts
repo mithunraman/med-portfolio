@@ -1,8 +1,10 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AnalysisRunsModule } from '../analysis-runs';
+import { ArtefactsModule } from '../artefacts/artefacts.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { DatabaseModule } from '../database';
+import { PdpGoalsModule } from '../pdp-goals/pdp-goals.module';
 import { PortfolioGraphModule } from '../portfolio-graph';
 import { AnalysisResumeHandler } from './handlers/analysis-resume.handler';
 import { AnalysisStartHandler } from './handlers/analysis-start.handler';
@@ -18,7 +20,9 @@ import { OutboxEntry, OutboxEntrySchema } from './schemas/outbox.schema';
       { name: OutboxEntry.name, schema: OutboxEntrySchema },
     ]),
     AnalysisRunsModule,
+    ArtefactsModule,
     DatabaseModule,
+    PdpGoalsModule,
     forwardRef(() => ConversationsModule),
     forwardRef(() => PortfolioGraphModule),
   ],

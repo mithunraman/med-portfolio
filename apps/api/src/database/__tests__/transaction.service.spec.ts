@@ -52,7 +52,8 @@ describe('TransactionService', () => {
 
     const service = createService(() => sessions[attempt++]);
 
-    const fn = jest.fn()
+    const fn = jest
+      .fn()
       .mockRejectedValueOnce(makeTransientError('write conflict'))
       .mockResolvedValueOnce('recovered');
 
@@ -73,9 +74,9 @@ describe('TransactionService', () => {
 
     const fn = jest.fn().mockRejectedValue(makeNonTransientError('constraint violation'));
 
-    await expect(
-      service.withTransaction(fn, { context: 'non-transient' }),
-    ).rejects.toThrow('constraint violation');
+    await expect(service.withTransaction(fn, { context: 'non-transient' })).rejects.toThrow(
+      'constraint violation'
+    );
 
     expect(fn).toHaveBeenCalledTimes(1);
     expect(session.abortTransaction).toHaveBeenCalled();
@@ -91,9 +92,9 @@ describe('TransactionService', () => {
     const transientError = makeTransientError('persistent conflict');
     const fn = jest.fn().mockRejectedValue(transientError);
 
-    await expect(
-      service.withTransaction(fn, { context: 'exhausted' }),
-    ).rejects.toThrow('persistent conflict');
+    await expect(service.withTransaction(fn, { context: 'exhausted' })).rejects.toThrow(
+      'persistent conflict'
+    );
 
     // 1 initial + 2 retries = 3 attempts
     expect(fn).toHaveBeenCalledTimes(3);
@@ -107,7 +108,9 @@ describe('TransactionService', () => {
     const service = createService(() => session);
 
     await expect(
-      service.withTransaction(async () => { throw new Error('boom'); }),
+      service.withTransaction(async () => {
+        throw new Error('boom');
+      })
     ).rejects.toThrow('boom');
 
     expect(session.endSession).toHaveBeenCalledTimes(1);

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
-import { Connection, ClientSession } from 'mongoose';
+import { ClientSession, Connection } from 'mongoose';
 
 export interface TransactionOptions {
   context?: string;
@@ -16,7 +16,7 @@ export class TransactionService {
 
   async withTransaction<T>(
     fn: (session: ClientSession) => Promise<T>,
-    options?: TransactionOptions,
+    options?: TransactionOptions
   ): Promise<T> {
     const context = options?.context || 'unknown';
 
@@ -46,7 +46,7 @@ export class TransactionService {
 
         if (isTransient && attempt < MAX_TRANSIENT_RETRIES) {
           this.logger.warn(
-            `Transient transaction error (${context}), retry ${attempt + 1}/${MAX_TRANSIENT_RETRIES}`,
+            `Transient transaction error (${context}), retry ${attempt + 1}/${MAX_TRANSIENT_RETRIES}`
           );
           continue;
         }

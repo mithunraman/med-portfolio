@@ -19,12 +19,12 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   constructor(
     @InjectModel(AnalysisRun.name)
-    private analysisRunModel: Model<AnalysisRunDocument>,
+    private analysisRunModel: Model<AnalysisRunDocument>
   ) {}
 
   async createRun(
     data: CreateAnalysisRunData,
-    session?: ClientSession,
+    session?: ClientSession
   ): Promise<Result<AnalysisRun, DBError>> {
     try {
       const [run] = await this.analysisRunModel.create(
@@ -37,10 +37,17 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
             snapshotRange: data.snapshotRange ?? { fromMessageId: null, toMessageId: null },
           },
         ],
-        { session },
+        { session }
       );
       return ok(run);
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        this.logger.warn(`Duplicate analysis run rejected for conversation ${data.conversationId}`);
+        return err({
+          code: 'DUPLICATE_ACTIVE_RUN',
+          message: 'An active run already exists for this conversation',
+        });
+      }
       this.logger.error('Failed to create analysis run', error);
       return err({ code: 'DB_ERROR', message: 'Failed to create analysis run' });
     }
@@ -48,7 +55,7 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async findRunByXid(
     xid: string,
-    session?: ClientSession,
+    session?: ClientSession
   ): Promise<Result<AnalysisRun | null, DBError>> {
     try {
       const run = await this.analysisRunModel
@@ -64,7 +71,7 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async findRunById(
     runId: Types.ObjectId,
-    session?: ClientSession,
+    session?: ClientSession
   ): Promise<Result<AnalysisRun | null, DBError>> {
     try {
       const run = await this.analysisRunModel
@@ -81,7 +88,7 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
   async findRunByIdempotencyKey(
     conversationId: Types.ObjectId,
     idempotencyKey: string,
-    session?: ClientSession,
+    session?: ClientSession
   ): Promise<Result<AnalysisRun | null, DBError>> {
     try {
       const run = await this.analysisRunModel
@@ -97,7 +104,7 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async findActiveRun(
     conversationId: Types.ObjectId,
-    session?: ClientSession,
+    session?: ClientSession
   ): Promise<Result<AnalysisRun | null, DBError>> {
     try {
       const run = await this.analysisRunModel
@@ -117,7 +124,7 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async findLatestRun(
     conversationId: Types.ObjectId,
-    session?: ClientSession,
+    session?: ClientSession
   ): Promise<Result<AnalysisRun | null, DBError>> {
     try {
       const run = await this.analysisRunModel
@@ -136,15 +143,11 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
     runId: Types.ObjectId,
     expectedStatus: AnalysisRunStatus,
     updates: UpdateAnalysisRunData,
-    session?: ClientSession,
+    session?: ClientSession
   ): Promise<Result<AnalysisRun | null, DBError>> {
     try {
       const run = await this.analysisRunModel
-        .findOneAndUpdate(
-          { _id: runId, status: expectedStatus },
-          { $set: updates },
-          { new: true },
-        )
+        .findOneAndUpdate({ _id: runId, status: expectedStatus }, { $set: updates }, { new: true })
         .lean()
         .session(session || null);
       return ok(run);
@@ -156,7 +159,7 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async getMaxRunNumber(
     conversationId: Types.ObjectId,
-    session?: ClientSession,
+    session?: ClientSession
   ): Promise<Result<number, DBError>> {
     try {
       const run = await this.analysisRunModel
@@ -174,14 +177,14 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async updateCurrentStep(
     conversationId: Types.ObjectId,
-    step: string,
+    step: string
   ): Promise<Result<AnalysisRun | null, DBError>> {
     try {
       const run = await this.analysisRunModel
         .findOneAndUpdate(
           { conversationId, status: { $nin: TERMINAL_STATUSES } },
           { $set: { currentStep: step } },
-          { new: true, sort: { createdAt: -1 } },
+          { new: true, sort: { createdAt: -1 } }
         )
         .lean();
       return ok(run);
@@ -193,7 +196,7 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async listRuns(
     conversationId: Types.ObjectId,
-    session?: ClientSession,
+    session?: ClientSession
   ): Promise<Result<AnalysisRun[], DBError>> {
     try {
       const runs = await this.analysisRunModel

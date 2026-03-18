@@ -1,5 +1,5 @@
 import { AnalysisRunStatus } from '@acme/shared';
-import { Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { ClientSession, Types } from 'mongoose';
 import {
   ANALYSIS_RUNS_REPOSITORY,
@@ -59,6 +59,9 @@ export class AnalysisRunsService {
       session
     );
     if (!createResult.ok) {
+      if (createResult.error.code === 'DUPLICATE_ACTIVE_RUN') {
+        throw new ConflictException(createResult.error.message);
+      }
       throw new Error(createResult.error.message);
     }
 

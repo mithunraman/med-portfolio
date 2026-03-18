@@ -87,3 +87,17 @@ AnalysisRunSchema.index({ conversationId: 1, idempotencyKey: 1 }, { unique: true
 
 // Unique run number per conversation
 AnalysisRunSchema.index({ conversationId: 1, runNumber: 1 }, { unique: true });
+
+// At most one active (non-terminal) run per conversation — prevents race condition
+// where concurrent requests both pass the application-level findActiveRun() check.
+AnalysisRunSchema.index(
+  { conversationId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: {
+        $in: [AnalysisRunStatus.PENDING, AnalysisRunStatus.RUNNING, AnalysisRunStatus.AWAITING_INPUT],
+      },
+    },
+  },
+);

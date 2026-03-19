@@ -1,19 +1,23 @@
-import type { LoginRequest, LoginResponse, AuthUser, RegisterRequest } from '@acme/shared';
+import type { LoginResponse, AuthUser, OtpSendRequest, OtpVerifyRequest, OtpClaimRequest } from '@acme/shared';
 import { BaseApiClient } from '../core/api-client';
 
 export class AuthClient {
-  constructor(private readonly client: BaseApiClient) { }
+  constructor(private readonly client: BaseApiClient) {}
 
-  async login(credentials: LoginRequest): Promise<LoginResponse> {
-    return this.client.post<LoginResponse>('/auth/login', credentials, {
+  async otpSend(data: OtpSendRequest): Promise<{ message: string }> {
+    return this.client.post<{ message: string }>('/auth/otp/send', data, {
       authenticated: false,
     });
   }
 
-  async register(data: RegisterRequest): Promise<LoginResponse> {
-    return this.client.post<LoginResponse>('/auth/register', data, {
+  async otpVerify(data: OtpVerifyRequest): Promise<LoginResponse> {
+    return this.client.post<LoginResponse>('/auth/otp/verify', data, {
       authenticated: false,
     });
+  }
+
+  async claimGuest(data: OtpClaimRequest): Promise<LoginResponse> {
+    return this.client.post<LoginResponse>('/auth/claim', data);
   }
 
   async registerGuest(): Promise<LoginResponse> {
@@ -24,10 +28,6 @@ export class AuthClient {
 
   async logout(): Promise<void> {
     return this.client.post<void>('/auth/logout', {}, { skipUnauthorizedCallback: true });
-  }
-
-  async refreshToken(): Promise<{ accessToken: string }> {
-    return this.client.post<{ accessToken: string }>('/auth/refresh', {});
   }
 
   async me(): Promise<AuthUser> {

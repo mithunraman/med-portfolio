@@ -5,12 +5,10 @@ import type { AuthUser } from '@acme/shared';
 const storageLogger = logger.createScope('SecureStorage');
 
 /**
- * Stored user session with credentials for seamless re-auth.
+ * Stored user session metadata.
  */
 export interface StoredUserSession {
   user: AuthUser;
-  email: string;
-  password: string;
   isGuest: boolean;
   lastLoginAt: number;
 }

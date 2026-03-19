@@ -42,7 +42,7 @@ export default function WelcomeScreen() {
         {/* Welcome Text */}
         <Text style={[styles.title, { color: colors.text }]}>Ready to get started?</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Create an account to save your progress, or explore the app first.
+          Sign in with your email, or explore the app first.
         </Text>
 
         {/* Error message */}
@@ -84,17 +84,6 @@ export default function WelcomeScreen() {
           <Text style={[styles.secondaryButtonText, { color: colors.text }]}>Sign in</Text>
         </TouchableOpacity>
 
-        {/* Create account link */}
-        <View style={styles.createAccountRow}>
-          <Text style={[styles.createAccountText, { color: colors.textSecondary }]}>
-            New here?{' '}
-          </Text>
-          <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-            <Text style={[styles.createAccountLink, { color: colors.primary }]}>
-              Create an account
-            </Text>
-          </TouchableOpacity>
-        </View>
       </View>
     </View>
   );
@@ -171,18 +160,6 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     fontSize: 18,
-    fontWeight: '600',
-  },
-  createAccountRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 16,
-  },
-  createAccountText: {
-    fontSize: 14,
-  },
-  createAccountLink: {
-    fontSize: 14,
     fontWeight: '600',
   },
 });

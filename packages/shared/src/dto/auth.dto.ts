@@ -28,16 +28,9 @@ export type AuthUser = z.infer<typeof AuthUserSchema>;
 export const LoginResponseSchema = z.object({
   accessToken: z.string(),
   user: AuthUserSchema,
-  password: z.string().optional(),
 });
 
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
-
-export const RefreshTokenResponseSchema = z.object({
-  accessToken: z.string(),
-});
-
-export type RefreshTokenResponse = z.infer<typeof RefreshTokenResponseSchema>;
 
 // ── OTP ──
 

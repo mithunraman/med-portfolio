@@ -30,7 +30,7 @@ export class Artefact {
   @Prop({ required: true, unique: true, index: true, default: () => nanoidAlphanumeric() })
   xid!: string;
 
-  @Prop({ required: true, unique: true, index: true })
+  @Prop({ required: true, unique: true })
   artefactId!: string; // Format: {userId}_{clientGeneratedId}
 
   @Prop({ required: true, type: Types.ObjectId, index: true })

@@ -93,6 +93,12 @@ export class BaseApiClient {
       );
     }
 
+    // Sliding token refresh: update stored token if backend issued a new one
+    const refreshedToken = response.headers['x-refreshed-token'];
+    if (refreshedToken && authenticated) {
+      this.config.tokenProvider.setAccessToken(refreshedToken);
+    }
+
     return response.data as T;
   }
 

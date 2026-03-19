@@ -1,7 +1,8 @@
 import { ErrorBoundary } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
-import { initializeAuth, loadNudgeState, loadOnboardingState, store } from '@/store';
+import { initializeAuth, loadNudgeState, loadOnboardingState, setUnauthenticated, store } from '@/store';
 import { ThemeProvider, useTheme } from '@/theme';
+import { setOnUnauthorized } from '@/api/client';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -39,6 +40,11 @@ function RootLayoutNav() {
     dispatch(initializeAuth());
     dispatch(loadOnboardingState());
     dispatch(loadNudgeState());
+
+    // On 401, clear auth state so user is redirected to login
+    setOnUnauthorized(() => {
+      dispatch(setUnauthenticated());
+    });
   }, [dispatch]);
 
   const isLoading = authStatus === 'idle' || authStatus === 'loading' || !onboardingInitialized;
@@ -85,8 +91,6 @@ function RootLayoutNav() {
       } else {
         if (parsed.path === 'login') {
           router.push('/(auth)/login');
-        } else if (parsed.path === 'register') {
-          router.push('/(auth)/register');
         }
       }
     }

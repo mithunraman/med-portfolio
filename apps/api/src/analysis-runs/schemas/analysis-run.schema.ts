@@ -41,7 +41,7 @@ export class AnalysisRun {
   @Prop({ required: true, unique: true, index: true, default: () => nanoidAlphanumeric() })
   xid!: string;
 
-  @Prop({ required: true, type: Types.ObjectId, ref: Conversation.name, index: true })
+  @Prop({ required: true, type: Types.ObjectId, ref: Conversation.name })
   conversationId!: Types.ObjectId;
 
   @Prop({ required: true, type: Number })

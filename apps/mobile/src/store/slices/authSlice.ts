@@ -1,4 +1,4 @@
-import type { AuthUser, LoginRequest, RegisterRequest } from '@acme/shared';
+import type { AuthUser } from '@acme/shared';
 import { UserRole } from '@acme/shared';
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { api } from '../../api/client';
@@ -28,14 +28,12 @@ const initialState: AuthState = {
 export const initializeAuth = createAsyncThunk('auth/initialize', async () => {
   authLogger.debug('Initializing auth');
 
-  // Check for existing token
   const token = await AppSecureStorage.get('accessToken');
   if (!token) {
     authLogger.debug('No existing token');
     return { status: 'unauthenticated' as const, user: null };
   }
 
-  // Try to restore session
   try {
     const currentUser = await api.auth.me();
     const storedSession = await AppSecureStorage.get('user');
@@ -47,7 +45,7 @@ export const initializeAuth = createAsyncThunk('auth/initialize', async () => {
       status: (isGuest ? 'guest' : 'authenticated') as AuthStatus,
       user: currentUser,
     };
-  } catch (error) {
+  } catch {
     authLogger.warn('Session invalid, clearing');
     await AppSecureStorage.clearSession();
     return { status: 'unauthenticated' as const, user: null };
@@ -55,74 +53,53 @@ export const initializeAuth = createAsyncThunk('auth/initialize', async () => {
 });
 
 /**
- * Login with email/password.
+ * Send OTP to email address.
  */
-export const login = createAsyncThunk(
-  'auth/login',
-  async (credentials: LoginRequest, { rejectWithValue }) => {
-    authLogger.info('Login attempt', { email: credentials.email });
+export const otpSend = createAsyncThunk(
+  'auth/otpSend',
+  async (email: string, { rejectWithValue }) => {
+    authLogger.info('Sending OTP', { email });
 
     try {
-      const response = await api.auth.login(credentials);
-
-      // Store token and session
-      await AppSecureStorage.set('accessToken', response.accessToken);
-      await AppSecureStorage.set('user', {
-        user: response.user,
-        email: credentials.email,
-        password: credentials.password,
-        isGuest: false,
-        lastLoginAt: Date.now(),
-      });
-
-      // Save account hint for reinstall detection
-      await AppStorage.set('accountHint', {
-        email: credentials.email,
-        userId: response.user.id,
-        lastLoginAt: Date.now(),
-      });
-
-      authLogger.info('Login successful', { userId: response.user.id });
-      return response.user;
+      await api.auth.otpSend({ email });
+      return email;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Login failed';
-      authLogger.error('Login failed', { error: message });
+      const message = error instanceof Error ? error.message : 'Failed to send OTP';
+      authLogger.error('OTP send failed', { error: message });
       return rejectWithValue(message);
     }
   }
 );
 
 /**
- * Register new account.
+ * Verify OTP and authenticate.
  */
-export const register = createAsyncThunk(
-  'auth/register',
-  async (data: RegisterRequest & { password: string }, { rejectWithValue }) => {
-    authLogger.info('Registration attempt', { email: data.email });
+export const otpVerify = createAsyncThunk(
+  'auth/otpVerify',
+  async ({ email, code }: { email: string; code: string }, { rejectWithValue }) => {
+    authLogger.info('Verifying OTP', { email });
 
     try {
-      const response = await api.auth.register(data);
+      const response = await api.auth.otpVerify({ email, code });
 
       await AppSecureStorage.set('accessToken', response.accessToken);
       await AppSecureStorage.set('user', {
         user: response.user,
-        email: data.email,
-        password: data.password,
         isGuest: false,
         lastLoginAt: Date.now(),
       });
 
       await AppStorage.set('accountHint', {
-        email: data.email,
+        email,
         userId: response.user.id,
         lastLoginAt: Date.now(),
       });
 
-      authLogger.info('Registration successful', { userId: response.user.id });
+      authLogger.info('OTP verification successful', { userId: response.user.id });
       return response.user;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Registration failed';
-      authLogger.error('Registration failed', { error: message });
+      const message = error instanceof Error ? error.message : 'Invalid OTP';
+      authLogger.error('OTP verification failed', { error: message });
       return rejectWithValue(message);
     }
   }
@@ -142,8 +119,6 @@ export const registerGuest = createAsyncThunk(
       await AppSecureStorage.set('accessToken', response.accessToken);
       await AppSecureStorage.set('user', {
         user: response.user,
-        email: response.user.email,
-        password: response.password ?? '',
         isGuest: true,
         lastLoginAt: Date.now(),
       });
@@ -174,42 +149,6 @@ export const logout = createAsyncThunk('auth/logout', async () => {
   authLogger.info('Logout completed');
 });
 
-/**
- * Re-authenticate using stored credentials (when token expires).
- */
-export const reAuthenticate = createAsyncThunk(
-  'auth/reAuthenticate',
-  async (_, { rejectWithValue }) => {
-    authLogger.info('Re-authentication attempt');
-
-    const storedSession = await AppSecureStorage.get('user');
-    if (!storedSession) {
-      return rejectWithValue('No stored session');
-    }
-
-    try {
-      const response = await api.auth.login({
-        email: storedSession.email,
-        password: storedSession.password,
-      });
-
-      await AppSecureStorage.set('accessToken', response.accessToken);
-      await AppSecureStorage.set('user', {
-        ...storedSession,
-        user: response.user,
-        lastLoginAt: Date.now(),
-      });
-
-      authLogger.info('Re-authentication successful');
-      return response.user;
-    } catch (error) {
-      authLogger.error('Re-authentication failed');
-      await AppSecureStorage.clearSession();
-      return rejectWithValue('Re-authentication failed');
-    }
-  }
-);
-
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -238,32 +177,25 @@ const authSlice = createSlice({
         state.user = null;
       })
 
-      // Login
-      .addCase(login.pending, (state) => {
-        state.status = 'loading';
+      // OTP Send
+      .addCase(otpSend.pending, (state) => {
         state.error = null;
       })
-      .addCase(login.fulfilled, (state, action) => {
-        state.status = 'authenticated';
-        state.user = action.payload;
-        state.error = null;
-      })
-      .addCase(login.rejected, (state, action) => {
-        state.status = 'unauthenticated';
+      .addCase(otpSend.rejected, (state, action) => {
         state.error = action.payload as string;
       })
 
-      // Register
-      .addCase(register.pending, (state) => {
+      // OTP Verify
+      .addCase(otpVerify.pending, (state) => {
         state.status = 'loading';
         state.error = null;
       })
-      .addCase(register.fulfilled, (state, action) => {
+      .addCase(otpVerify.fulfilled, (state, action) => {
         state.status = 'authenticated';
         state.user = action.payload;
         state.error = null;
       })
-      .addCase(register.rejected, (state, action) => {
+      .addCase(otpVerify.rejected, (state, action) => {
         state.status = 'unauthenticated';
         state.error = action.payload as string;
       })
@@ -288,16 +220,6 @@ const authSlice = createSlice({
         state.status = 'unauthenticated';
         state.user = null;
         state.error = null;
-      })
-
-      // Re-authenticate
-      .addCase(reAuthenticate.fulfilled, (state, action) => {
-        state.user = action.payload;
-        state.error = null;
-      })
-      .addCase(reAuthenticate.rejected, (state) => {
-        state.status = 'unauthenticated';
-        state.user = null;
       });
   },
 });

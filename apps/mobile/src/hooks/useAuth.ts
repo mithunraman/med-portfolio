@@ -1,9 +1,8 @@
-import type { LoginRequest, RegisterRequest } from '@acme/shared';
 import { useCallback } from 'react';
 import {
-  login as loginAction,
   logout as logoutAction,
-  register as registerAction,
+  otpSend as otpSendAction,
+  otpVerify as otpVerifyAction,
   registerGuest as registerGuestAction,
 } from '../store';
 import { useAppDispatch } from './useAppDispatch';
@@ -17,20 +16,20 @@ export function useAuth() {
   const dispatch = useAppDispatch();
   const { status, user, error } = useAppSelector((state) => state.auth);
 
-  const login = useCallback(
-    async (credentials: LoginRequest) => {
-      const result = await dispatch(loginAction(credentials));
-      if (loginAction.rejected.match(result)) {
+  const otpSend = useCallback(
+    async (email: string) => {
+      const result = await dispatch(otpSendAction(email));
+      if (otpSendAction.rejected.match(result)) {
         throw new Error(result.payload as string);
       }
     },
     [dispatch]
   );
 
-  const register = useCallback(
-    async (data: RegisterRequest & { password: string }) => {
-      const result = await dispatch(registerAction(data));
-      if (registerAction.rejected.match(result)) {
+  const otpVerify = useCallback(
+    async (email: string, code: string) => {
+      const result = await dispatch(otpVerifyAction({ email, code }));
+      if (otpVerifyAction.rejected.match(result)) {
         throw new Error(result.payload as string);
       }
     },
@@ -59,8 +58,8 @@ export function useAuth() {
     isLoggedIn: status === 'authenticated' || status === 'guest',
 
     // Actions
-    login,
-    register,
+    otpSend,
+    otpVerify,
     registerGuest,
     logout,
   };

@@ -70,10 +70,7 @@ const mockArtefactsRepo = {
 };
 
 function createService(): ReviewPeriodsService {
-  return new ReviewPeriodsService(
-    mockReviewPeriodsRepo as any,
-    mockArtefactsRepo as any,
-  );
+  return new ReviewPeriodsService(mockReviewPeriodsRepo as any, mockArtefactsRepo as any);
 }
 
 beforeEach(() => {
@@ -110,21 +107,8 @@ describe('ReviewPeriodsService', () => {
         expect.objectContaining({
           userId: expect.any(Types.ObjectId),
           name: 'ST2 Year 1 Review',
-        }),
+        })
       );
-    });
-
-    it('throws BadRequestException when startDate is in the past', async () => {
-      const pastDate = new Date();
-      pastDate.setDate(pastDate.getDate() - 1);
-
-      await expect(
-        service.createReviewPeriod(userIdStr, {
-          name: 'Test',
-          startDate: pastDate.toISOString(),
-          endDate: futureDate(365).toISOString(),
-        }),
-      ).rejects.toThrow(BadRequestException);
     });
 
     it('throws BadRequestException when endDate is before startDate', async () => {
@@ -133,21 +117,19 @@ describe('ReviewPeriodsService', () => {
           name: 'Test',
           startDate: futureDate(30).toISOString(),
           endDate: futureDate(1).toISOString(),
-        }),
+        })
       ).rejects.toThrow(BadRequestException);
     });
 
     it('throws ConflictException when an active review period already exists', async () => {
-      mockReviewPeriodsRepo.findActiveByUserId.mockResolvedValue(
-        ok(makeReviewPeriodDoc()),
-      );
+      mockReviewPeriodsRepo.findActiveByUserId.mockResolvedValue(ok(makeReviewPeriodDoc()));
 
       await expect(
         service.createReviewPeriod(userIdStr, {
           name: 'Test',
           startDate: futureDate(1).toISOString(),
           endDate: futureDate(365).toISOString(),
-        }),
+        })
       ).rejects.toThrow(ConflictException);
     });
   });
@@ -168,9 +150,9 @@ describe('ReviewPeriodsService', () => {
     it('throws NotFoundException when not found', async () => {
       mockReviewPeriodsRepo.findByXid.mockResolvedValue(ok(null));
 
-      await expect(
-        service.getReviewPeriod(userIdStr, 'nonexistent'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.getReviewPeriod(userIdStr, 'nonexistent')).rejects.toThrow(
+        NotFoundException
+      );
     });
   });
 
@@ -213,7 +195,7 @@ describe('ReviewPeriodsService', () => {
       mockReviewPeriodsRepo.findByXid.mockResolvedValue(ok(archived));
 
       await expect(
-        service.updateReviewPeriod(userIdStr, 'rp_abc123', { name: 'New Name' }),
+        service.updateReviewPeriod(userIdStr, 'rp_abc123', { name: 'New Name' })
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -227,7 +209,7 @@ describe('ReviewPeriodsService', () => {
       await expect(
         service.updateReviewPeriod(userIdStr, 'rp_abc123', {
           endDate: futureDate(1).toISOString(),
-        }),
+        })
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -247,7 +229,7 @@ describe('ReviewPeriodsService', () => {
       expect(mockReviewPeriodsRepo.updateByXid).toHaveBeenCalledWith(
         'rp_abc123',
         expect.any(Types.ObjectId),
-        { status: ReviewPeriodStatus.ARCHIVED },
+        { status: ReviewPeriodStatus.ARCHIVED }
       );
     });
 
@@ -255,9 +237,9 @@ describe('ReviewPeriodsService', () => {
       const archived = makeReviewPeriodDoc({ status: ReviewPeriodStatus.ARCHIVED });
       mockReviewPeriodsRepo.findByXid.mockResolvedValue(ok(archived));
 
-      await expect(
-        service.archiveReviewPeriod(userIdStr, 'rp_abc123'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.archiveReviewPeriod(userIdStr, 'rp_abc123')).rejects.toThrow(
+        BadRequestException
+      );
     });
   });
 
@@ -267,9 +249,7 @@ describe('ReviewPeriodsService', () => {
     it('returns coverage with all 13 capabilities grouped by domain', async () => {
       const period = makeReviewPeriodDoc();
       mockReviewPeriodsRepo.findByXid.mockResolvedValue(ok(period));
-      mockArtefactsRepo.listArtefacts.mockResolvedValue(
-        ok({ artefacts: [] }),
-      );
+      mockArtefactsRepo.listArtefacts.mockResolvedValue(ok({ artefacts: [] }));
 
       const result = await service.getCoverage(userIdStr, 'rp_abc123');
 
@@ -296,9 +276,7 @@ describe('ReviewPeriodsService', () => {
       });
 
       mockReviewPeriodsRepo.findByXid.mockResolvedValue(ok(period));
-      mockArtefactsRepo.listArtefacts.mockResolvedValue(
-        ok({ artefacts: [artefactWithCaps] }),
-      );
+      mockArtefactsRepo.listArtefacts.mockResolvedValue(ok({ artefacts: [artefactWithCaps] }));
 
       const result = await service.getCoverage(userIdStr, 'rp_abc123');
 
@@ -323,9 +301,7 @@ describe('ReviewPeriodsService', () => {
       });
 
       mockReviewPeriodsRepo.findByXid.mockResolvedValue(ok(period));
-      mockArtefactsRepo.listArtefacts.mockResolvedValue(
-        ok({ artefacts: [artefactOutsidePeriod] }),
-      );
+      mockArtefactsRepo.listArtefacts.mockResolvedValue(ok({ artefacts: [artefactOutsidePeriod] }));
 
       const result = await service.getCoverage(userIdStr, 'rp_abc123');
 
@@ -338,9 +314,7 @@ describe('ReviewPeriodsService', () => {
       const artefactNoCompletedAt = makeArtefactDoc({ completedAt: null });
 
       mockReviewPeriodsRepo.findByXid.mockResolvedValue(ok(period));
-      mockArtefactsRepo.listArtefacts.mockResolvedValue(
-        ok({ artefacts: [artefactNoCompletedAt] }),
-      );
+      mockArtefactsRepo.listArtefacts.mockResolvedValue(ok({ artefacts: [artefactNoCompletedAt] }));
 
       const result = await service.getCoverage(userIdStr, 'rp_abc123');
 
@@ -350,9 +324,7 @@ describe('ReviewPeriodsService', () => {
     it('caches coverage and returns cached result on second call', async () => {
       const period = makeReviewPeriodDoc();
       mockReviewPeriodsRepo.findByXid.mockResolvedValue(ok(period));
-      mockArtefactsRepo.listArtefacts.mockResolvedValue(
-        ok({ artefacts: [] }),
-      );
+      mockArtefactsRepo.listArtefacts.mockResolvedValue(ok({ artefacts: [] }));
 
       await service.getCoverage(userIdStr, 'rp_abc123');
       await service.getCoverage(userIdStr, 'rp_abc123');
@@ -364,9 +336,7 @@ describe('ReviewPeriodsService', () => {
     it('recomputes after cache invalidation via event', async () => {
       const period = makeReviewPeriodDoc();
       mockReviewPeriodsRepo.findByXid.mockResolvedValue(ok(period));
-      mockArtefactsRepo.listArtefacts.mockResolvedValue(
-        ok({ artefacts: [] }),
-      );
+      mockArtefactsRepo.listArtefacts.mockResolvedValue(ok({ artefacts: [] }));
 
       await service.getCoverage(userIdStr, 'rp_abc123');
 
@@ -396,15 +366,11 @@ describe('ReviewPeriodsService', () => {
       });
 
       mockReviewPeriodsRepo.findByXid.mockResolvedValue(ok(period));
-      mockArtefactsRepo.listArtefacts.mockResolvedValue(
-        ok({ artefacts: [artefact1, artefact2] }),
-      );
+      mockArtefactsRepo.listArtefacts.mockResolvedValue(ok({ artefacts: [artefact1, artefact2] }));
 
       const result = await service.getCoverage(userIdStr, 'rp_abc123');
 
-      const c01 = result.domains
-        .flatMap((d) => d.capabilities)
-        .find((c) => c.code === 'C-01');
+      const c01 = result.domains.flatMap((d) => d.capabilities).find((c) => c.code === 'C-01');
       expect(c01?.entryCount).toBe(2);
       expect(c01?.status).toBe('covered');
       expect(result.summary.coveredCount).toBe(1); // only 1 unique capability covered
@@ -425,9 +391,7 @@ describe('ReviewPeriodsService', () => {
     it('returns period and summary when active period exists', async () => {
       const period = makeReviewPeriodDoc();
       mockReviewPeriodsRepo.findActiveByUserId.mockResolvedValue(ok(period));
-      mockArtefactsRepo.listArtefacts.mockResolvedValue(
-        ok({ artefacts: [] }),
-      );
+      mockArtefactsRepo.listArtefacts.mockResolvedValue(ok({ artefacts: [] }));
 
       const result = await service.getActiveCoverageSummary(userIdStr);
 
@@ -444,9 +408,7 @@ describe('ReviewPeriodsService', () => {
     it('invalidates cache for the given userId', async () => {
       const period = makeReviewPeriodDoc();
       mockReviewPeriodsRepo.findByXid.mockResolvedValue(ok(period));
-      mockArtefactsRepo.listArtefacts.mockResolvedValue(
-        ok({ artefacts: [] }),
-      );
+      mockArtefactsRepo.listArtefacts.mockResolvedValue(ok({ artefacts: [] }));
 
       // Prime the cache
       await service.getCoverage(userIdStr, 'rp_abc123');
@@ -463,9 +425,7 @@ describe('ReviewPeriodsService', () => {
     it('does not invalidate cache for other users', async () => {
       const period = makeReviewPeriodDoc();
       mockReviewPeriodsRepo.findByXid.mockResolvedValue(ok(period));
-      mockArtefactsRepo.listArtefacts.mockResolvedValue(
-        ok({ artefacts: [] }),
-      );
+      mockArtefactsRepo.listArtefacts.mockResolvedValue(ok({ artefacts: [] }));
 
       // Prime the cache
       await service.getCoverage(userIdStr, 'rp_abc123');

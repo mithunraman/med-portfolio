@@ -1,6 +1,6 @@
+import { UserRole } from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { UserRole } from '@acme/shared';
 
 @Schema({
   collection: 'users',
@@ -26,6 +26,9 @@ export class User {
 
   @Prop({ type: Date, default: null })
   lockedUntil!: Date | null;
+
+  @Prop({ type: Number, default: 0 })
+  tokenVersion!: number;
 
   createdAt!: Date;
   updatedAt!: Date;

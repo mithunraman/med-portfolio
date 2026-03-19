@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ConfigModule } from './config';
 import { DatabaseModule } from './database';
@@ -17,6 +17,7 @@ import { OutboxModule } from './outbox';
 import { ReviewPeriodsModule } from './review-periods/review-periods.module';
 import { OtpModule } from './otp';
 import { JwtAuthGuard, RolesGuard } from './common/guards';
+import { TokenRefreshInterceptor } from './common/interceptors';
 
 @Module({
   imports: [
@@ -45,6 +46,10 @@ import { JwtAuthGuard, RolesGuard } from './common/guards';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TokenRefreshInterceptor,
     },
   ],
 })

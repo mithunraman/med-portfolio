@@ -1,0 +1,281 @@
+import { UserRole } from '@acme/shared';
+import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { Types } from 'mongoose';
+import { AuthService } from '../auth.service';
+
+// ── Helpers ──
+
+const oid = () => new Types.ObjectId();
+const userId = oid();
+const userIdStr = userId.toString();
+
+function makeUserDoc(overrides: Record<string, unknown> = {}) {
+  return {
+    _id: userId,
+    name: 'Test User',
+    email: 'user@example.com',
+    passwordHash: 'hashed',
+    role: UserRole.USER,
+    failedLoginAttempts: 0,
+    lockedUntil: null,
+    tokenVersion: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    save: jest.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+function makeGuestDoc(overrides: Record<string, unknown> = {}) {
+  return makeUserDoc({
+    name: 'Guest',
+    email: 'guest_abc@guest.local',
+    role: UserRole.USER_GUEST,
+    ...overrides,
+  });
+}
+
+// ── Mocks ──
+
+const mockUserModel = {
+  findOne: jest.fn(),
+  findById: jest.fn(),
+  create: jest.fn(),
+  updateOne: jest.fn(),
+};
+
+const mockJwtService = {
+  sign: jest.fn().mockReturnValue('mock.jwt.token'),
+};
+
+const mockOtpService = {
+  sendOtp: jest.fn(),
+  verifyOtp: jest.fn(),
+};
+
+function createService(): AuthService {
+  return new AuthService(mockUserModel as any, mockJwtService as any, mockOtpService as any);
+}
+
+// ── Tests ──
+
+describe('AuthService', () => {
+  let service: AuthService;
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    mockJwtService.sign.mockReturnValue('mock.jwt.token');
+    service = createService();
+  });
+
+  // ─── otpSend ───
+
+  describe('otpSend', () => {
+    it('should delegate to OtpService.sendOtp', async () => {
+      mockOtpService.sendOtp.mockResolvedValue({ message: 'OTP sent successfully' });
+
+      const result = await service.otpSend('user@example.com');
+
+      expect(result).toEqual({ message: 'OTP sent successfully' });
+      expect(mockOtpService.sendOtp).toHaveBeenCalledWith('user@example.com');
+    });
+  });
+
+  // ─── otpVerifyAndLogin ───
+
+  describe('otpVerifyAndLogin', () => {
+    it('should login existing user after OTP verification', async () => {
+      mockOtpService.verifyOtp.mockResolvedValue({ email: 'user@example.com', valid: true });
+      mockUserModel.findOne.mockResolvedValue(makeUserDoc());
+
+      const result = await service.otpVerifyAndLogin('user@example.com', '123456');
+
+      expect(mockOtpService.verifyOtp).toHaveBeenCalledWith('user@example.com', '123456');
+      expect(result.accessToken).toBe('mock.jwt.token');
+      expect(result.user.email).toBe('user@example.com');
+      expect(mockUserModel.create).not.toHaveBeenCalled();
+    });
+
+    it('should create new user if email not found', async () => {
+      mockOtpService.verifyOtp.mockResolvedValue({ email: 'new@example.com', valid: true });
+      mockUserModel.findOne.mockResolvedValue(null);
+      const newUser = makeUserDoc({ email: 'new@example.com', name: 'new' });
+      mockUserModel.create.mockResolvedValue(newUser);
+
+      const result = await service.otpVerifyAndLogin('new@example.com', '123456');
+
+      expect(mockUserModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'new@example.com',
+          role: UserRole.USER,
+          tokenVersion: 0,
+        })
+      );
+      expect(result.accessToken).toBe('mock.jwt.token');
+    });
+
+    it('should propagate OTP verification errors', async () => {
+      mockOtpService.verifyOtp.mockRejectedValue(new BadRequestException('Invalid OTP code.'));
+
+      await expect(service.otpVerifyAndLogin('user@example.com', '000000')).rejects.toThrow(
+        BadRequestException
+      );
+
+      expect(mockUserModel.findOne).not.toHaveBeenCalled();
+    });
+
+    it('should include tokenVersion in JWT payload', async () => {
+      const userDoc = makeUserDoc({ tokenVersion: 3 });
+      mockOtpService.verifyOtp.mockResolvedValue({ email: 'user@example.com', valid: true });
+      mockUserModel.findOne.mockResolvedValue(userDoc);
+
+      await service.otpVerifyAndLogin('user@example.com', '123456');
+
+      expect(mockJwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ tokenVersion: 3 })
+      );
+    });
+  });
+
+  // ─── claimGuestAccount ───
+
+  describe('claimGuestAccount', () => {
+    it('should upgrade guest to registered user', async () => {
+      mockOtpService.verifyOtp.mockResolvedValue({ email: 'real@example.com', valid: true });
+      mockUserModel.findOne.mockResolvedValue(null); // email not taken
+      const guestDoc = makeGuestDoc();
+      mockUserModel.findById.mockResolvedValue(guestDoc);
+
+      const result = await service.claimGuestAccount(
+        userIdStr,
+        'real@example.com',
+        '123456',
+        'Real Name'
+      );
+
+      expect(guestDoc.save).toHaveBeenCalled();
+      expect(guestDoc.email).toBe('real@example.com');
+      expect(guestDoc.role).toBe(UserRole.USER);
+      expect(guestDoc.name).toBe('Real Name');
+      expect(guestDoc.tokenVersion).toBe(1);
+      expect(result.accessToken).toBe('mock.jwt.token');
+    });
+
+    it('should throw ConflictException if email already taken', async () => {
+      mockOtpService.verifyOtp.mockResolvedValue({ email: 'taken@example.com', valid: true });
+      mockUserModel.findOne.mockResolvedValue(makeUserDoc({ email: 'taken@example.com' }));
+
+      await expect(
+        service.claimGuestAccount(userIdStr, 'taken@example.com', '123456')
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should throw BadRequestException if guest not found', async () => {
+      mockOtpService.verifyOtp.mockResolvedValue({ email: 'real@example.com', valid: true });
+      mockUserModel.findOne.mockResolvedValue(null);
+      mockUserModel.findById.mockResolvedValue(null);
+
+      await expect(
+        service.claimGuestAccount(userIdStr, 'real@example.com', '123456')
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if user is not a guest', async () => {
+      mockOtpService.verifyOtp.mockResolvedValue({ email: 'real@example.com', valid: true });
+      mockUserModel.findOne.mockResolvedValue(null);
+      mockUserModel.findById.mockResolvedValue(makeUserDoc()); // role: USER, not GUEST
+
+      await expect(
+        service.claimGuestAccount(userIdStr, 'real@example.com', '123456')
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should keep existing name if no name provided', async () => {
+      mockOtpService.verifyOtp.mockResolvedValue({ email: 'real@example.com', valid: true });
+      mockUserModel.findOne.mockResolvedValue(null);
+      const guestDoc = makeGuestDoc();
+      mockUserModel.findById.mockResolvedValue(guestDoc);
+
+      await service.claimGuestAccount(userIdStr, 'real@example.com', '123456');
+
+      expect(guestDoc.name).toBe('Guest'); // unchanged
+    });
+
+    it('should bump tokenVersion to invalidate old guest tokens', async () => {
+      mockOtpService.verifyOtp.mockResolvedValue({ email: 'real@example.com', valid: true });
+      mockUserModel.findOne.mockResolvedValue(null);
+      const guestDoc = makeGuestDoc({ tokenVersion: 2 });
+      mockUserModel.findById.mockResolvedValue(guestDoc);
+
+      await service.claimGuestAccount(userIdStr, 'real@example.com', '123456');
+
+      expect(guestDoc.tokenVersion).toBe(3);
+    });
+  });
+
+  // ─── logoutAll ───
+
+  describe('logoutAll', () => {
+    it('should increment tokenVersion', async () => {
+      mockUserModel.updateOne.mockResolvedValue({ modifiedCount: 1 });
+
+      const result = await service.logoutAll(userIdStr);
+
+      expect(mockUserModel.updateOne).toHaveBeenCalledWith(
+        { _id: userIdStr },
+        { $inc: { tokenVersion: 1 } }
+      );
+      expect(result).toEqual({ message: 'All sessions invalidated' });
+    });
+  });
+
+  // ─── getCurrentUser ───
+
+  describe('getCurrentUser', () => {
+    it('should return auth user', async () => {
+      mockUserModel.findById.mockResolvedValue(makeUserDoc());
+
+      const result = await service.getCurrentUser(userIdStr);
+
+      expect(result).toEqual({
+        id: userIdStr,
+        email: 'user@example.com',
+        name: 'Test User',
+        role: UserRole.USER,
+      });
+    });
+
+    it('should throw UnauthorizedException if user not found', async () => {
+      mockUserModel.findById.mockResolvedValue(null);
+
+      await expect(service.getCurrentUser(userIdStr)).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  // ─── generateToken ───
+
+  describe('generateToken', () => {
+    it('should include tokenVersion in payload', () => {
+      const userDoc = makeUserDoc({ tokenVersion: 5 });
+
+      service.generateToken(userDoc as any);
+
+      expect(mockJwtService.sign).toHaveBeenCalledWith({
+        sub: userIdStr,
+        email: 'user@example.com',
+        role: UserRole.USER,
+        tokenVersion: 5,
+      });
+    });
+
+    it('should default tokenVersion to 0 if undefined', () => {
+      const userDoc = makeUserDoc({ tokenVersion: undefined });
+
+      service.generateToken(userDoc as any);
+
+      expect(mockJwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ tokenVersion: 0 })
+      );
+    });
+  });
+});

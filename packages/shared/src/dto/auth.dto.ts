@@ -38,3 +38,26 @@ export const RefreshTokenResponseSchema = z.object({
 });
 
 export type RefreshTokenResponse = z.infer<typeof RefreshTokenResponseSchema>;
+
+// ── OTP ──
+
+export const OtpSendRequestSchema = z.object({
+  email: z.string().email('Invalid email address'),
+});
+
+export type OtpSendRequest = z.infer<typeof OtpSendRequestSchema>;
+
+export const OtpVerifyRequestSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  code: z.string().length(6, 'OTP must be exactly 6 digits'),
+});
+
+export type OtpVerifyRequest = z.infer<typeof OtpVerifyRequestSchema>;
+
+export const OtpClaimRequestSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  code: z.string().length(6, 'OTP must be exactly 6 digits'),
+  name: z.string().min(2, 'Name must be at least 2 characters').optional(),
+});
+
+export type OtpClaimRequest = z.infer<typeof OtpClaimRequestSchema>;

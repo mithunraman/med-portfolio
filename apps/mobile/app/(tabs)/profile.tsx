@@ -78,7 +78,7 @@ export default function ProfileScreen() {
   };
 
   const handleCreateAccount = () => {
-    router.push('/(auth)/register');
+    router.push('/claim-account');
   };
 
   return (

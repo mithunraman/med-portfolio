@@ -134,6 +134,44 @@ export const registerGuest = createAsyncThunk(
 );
 
 /**
+ * Claim guest account by verifying email via OTP.
+ * Upgrades the current guest user to a full account in place.
+ */
+export const claimGuest = createAsyncThunk(
+  'auth/claimGuest',
+  async (
+    { email, code, name }: { email: string; code: string; name?: string },
+    { rejectWithValue }
+  ) => {
+    authLogger.info('Claiming guest account', { email });
+
+    try {
+      const response = await api.auth.claimGuest({ email, code, name });
+
+      await AppSecureStorage.set('accessToken', response.accessToken);
+      await AppSecureStorage.set('user', {
+        user: response.user,
+        isGuest: false,
+        lastLoginAt: Date.now(),
+      });
+
+      await AppStorage.set('accountHint', {
+        email,
+        userId: response.user.id,
+        lastLoginAt: Date.now(),
+      });
+
+      authLogger.info('Guest account claimed', { userId: response.user.id });
+      return response.user;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to claim account';
+      authLogger.error('Guest claim failed', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
  * Logout and clear session.
  */
 export const logout = createAsyncThunk('auth/logout', async () => {
@@ -212,6 +250,21 @@ const authSlice = createSlice({
       })
       .addCase(registerGuest.rejected, (state, action) => {
         state.status = 'unauthenticated';
+        state.error = action.payload as string;
+      })
+
+      // Claim Guest
+      .addCase(claimGuest.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addCase(claimGuest.fulfilled, (state, action) => {
+        state.status = 'authenticated';
+        state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(claimGuest.rejected, (state, action) => {
+        state.status = 'guest';
         state.error = action.payload as string;
       })
 

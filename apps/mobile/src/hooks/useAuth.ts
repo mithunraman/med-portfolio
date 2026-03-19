@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import {
+  claimGuest as claimGuestAction,
   logout as logoutAction,
   otpSend as otpSendAction,
   otpVerify as otpVerifyAction,
@@ -36,6 +37,16 @@ export function useAuth() {
     [dispatch]
   );
 
+  const claimGuest = useCallback(
+    async (email: string, code: string, name?: string) => {
+      const result = await dispatch(claimGuestAction({ email, code, name }));
+      if (claimGuestAction.rejected.match(result)) {
+        throw new Error(result.payload as string);
+      }
+    },
+    [dispatch]
+  );
+
   const registerGuest = useCallback(async () => {
     const result = await dispatch(registerGuestAction());
     if (registerGuestAction.rejected.match(result)) {
@@ -60,6 +71,7 @@ export function useAuth() {
     // Actions
     otpSend,
     otpVerify,
+    claimGuest,
     registerGuest,
     logout,
   };

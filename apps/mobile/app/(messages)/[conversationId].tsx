@@ -279,18 +279,18 @@ export default function ChatScreen() {
     [optimisticMessages, dispatch]
   );
 
-  // Phase-aware flags derived from server context
-  const canSendMessage = context?.actions.sendMessage.allowed ?? true;
-  const canSendAudio = context?.actions.sendAudio.allowed ?? true;
-  const canStartAnalysis = context?.actions.startAnalysis.allowed ?? false;
-  const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
-  const phase = context?.phase;
+  // Optimistic flag — gives instant feedback while the HTTP call is in flight
+  const [pendingAnalysis, setPendingAnalysis] = useState(false);
 
   // Track whether voice recorder is open — hides ActionBar to avoid overlap
   const [isRecording, setIsRecording] = useState(false);
 
-  // Optimistic flag — gives instant feedback while the HTTP call is in flight
-  const [pendingAnalysis, setPendingAnalysis] = useState(false);
+  // Phase-aware flags derived from server context
+  const canSendMessage = (context?.actions.sendMessage.allowed ?? true) && !pendingAnalysis;
+  const canSendAudio = (context?.actions.sendAudio.allowed ?? true) && !pendingAnalysis;
+  const canStartAnalysis = context?.actions.startAnalysis.allowed ?? false;
+  const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
+  const phase = context?.phase;
 
   // Clear the flag once the server confirms the phase change
   useEffect(() => {
@@ -449,7 +449,7 @@ export default function ChatScreen() {
               isSending={sendingMessage}
               canSendMessage={canSendMessage}
               canSendAudio={canSendAudio}
-              phase={phase}
+              phase={pendingAnalysis ? 'analysing' : phase}
               onRecordingChange={setIsRecording}
             />
           </>

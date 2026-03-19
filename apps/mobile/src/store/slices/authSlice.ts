@@ -233,7 +233,6 @@ const authSlice = createSlice({
 
       // OTP Verify
       .addCase(otpVerify.pending, (state) => {
-        state.status = 'loading';
         state.error = null;
       })
       .addCase(otpVerify.fulfilled, (state, action) => {
@@ -248,7 +247,6 @@ const authSlice = createSlice({
 
       // Register Guest
       .addCase(registerGuest.pending, (state) => {
-        state.status = 'loading';
         state.error = null;
       })
       .addCase(registerGuest.fulfilled, (state, action) => {
@@ -263,7 +261,6 @@ const authSlice = createSlice({
 
       // Claim Guest
       .addCase(claimGuest.pending, (state) => {
-        state.status = 'loading';
         state.error = null;
       })
       .addCase(claimGuest.fulfilled, (state, action) => {

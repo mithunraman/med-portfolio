@@ -10,6 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -71,9 +72,7 @@ export default function ClaimAccountScreen() {
     setIsVerifying(true);
     try {
       await claimGuest(email, code, name.trim());
-      Alert.alert('Account Created', 'Your account has been set up successfully.', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      router.back();
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to create account');
       setCode('');
@@ -113,7 +112,11 @@ export default function ClaimAccountScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        bounces={false}
+      >
         <Text style={[styles.title, { color: colors.text }]}>
           {step === 'email' ? 'Create your account' : 'Enter code'}
         </Text>
@@ -146,6 +149,8 @@ export default function ClaimAccountScreen() {
                     placeholder="you@example.com"
                     placeholderTextColor={colors.textSecondary}
                     keyboardType="email-address"
+                    textContentType="emailAddress"
+                    autoComplete="email"
                     autoCapitalize="none"
                     autoCorrect={false}
                     autoFocus
@@ -245,7 +250,7 @@ export default function ClaimAccountScreen() {
             </TouchableOpacity>
           </View>
         )}
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -268,9 +273,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
+    paddingBottom: 32,
   },
   title: {
     fontSize: 28,

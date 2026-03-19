@@ -7,6 +7,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -101,7 +102,11 @@ export default function OtpLoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <View style={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        bounces={false}
+      >
         <Text style={[styles.title, { color: colors.text }]}>
           {step === 'email' ? 'Sign in' : 'Enter code'}
         </Text>
@@ -134,6 +139,8 @@ export default function OtpLoginScreen() {
                     placeholder="you@example.com"
                     placeholderTextColor={colors.textSecondary}
                     keyboardType="email-address"
+                    textContentType="emailAddress"
+                    autoComplete="email"
                     autoCapitalize="none"
                     autoCorrect={false}
                     autoFocus
@@ -233,7 +240,7 @@ export default function OtpLoginScreen() {
             </TouchableOpacity>
           </View>
         )}
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -243,9 +250,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
+    paddingBottom: 32,
   },
   title: {
     fontSize: 28,

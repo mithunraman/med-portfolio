@@ -1,4 +1,4 @@
-import type { AuthUser, LoginResponse } from '@acme/shared';
+import type { AuthUser, LoginResponse, OtpSendResponse } from '@acme/shared';
 import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -12,7 +12,7 @@ export class AuthController {
   @Public()
   @Post('otp/send')
   @HttpCode(HttpStatus.OK)
-  async otpSend(@Body() dto: OtpSendDto): Promise<{ message: string }> {
+  async otpSend(@Body() dto: OtpSendDto): Promise<OtpSendResponse> {
     return this.authService.otpSend(dto.email);
   }
 
@@ -20,7 +20,7 @@ export class AuthController {
   @Post('otp/verify')
   @HttpCode(HttpStatus.OK)
   async otpVerify(@Body() dto: OtpVerifyDto): Promise<LoginResponse> {
-    return this.authService.otpVerifyAndLogin(dto.email, dto.code);
+    return this.authService.otpVerifyAndLogin(dto.email, dto.code, dto.name);
   }
 
   @Post('claim')

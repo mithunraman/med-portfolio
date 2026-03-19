@@ -15,7 +15,7 @@ import { useAppSelector } from './useAppSelector';
  */
 export function useAuth() {
   const dispatch = useAppDispatch();
-  const { status, user, error } = useAppSelector((state) => state.auth);
+  const { status, user, error, isNewUser, devOtp } = useAppSelector((state) => state.auth);
 
   const otpSend = useCallback(
     async (email: string) => {
@@ -28,8 +28,8 @@ export function useAuth() {
   );
 
   const otpVerify = useCallback(
-    async (email: string, code: string) => {
-      const result = await dispatch(otpVerifyAction({ email, code }));
+    async (email: string, code: string, name?: string) => {
+      const result = await dispatch(otpVerifyAction({ email, code, name }));
       if (otpVerifyAction.rejected.match(result)) {
         throw new Error(result.payload as string);
       }
@@ -38,7 +38,7 @@ export function useAuth() {
   );
 
   const claimGuest = useCallback(
-    async (email: string, code: string, name?: string) => {
+    async (email: string, code: string, name: string) => {
       const result = await dispatch(claimGuestAction({ email, code, name }));
       if (claimGuestAction.rejected.match(result)) {
         throw new Error(result.payload as string);
@@ -63,6 +63,8 @@ export function useAuth() {
     user,
     status,
     error,
+    isNewUser,
+    devOtp,
     isLoading: status === 'loading',
     isAuthenticated: status === 'authenticated',
     isGuest: status === 'guest',

@@ -13,7 +13,13 @@ interface SettingsItemProps {
   showChevron?: boolean;
 }
 
-function SettingsItem({ icon, label, onPress, rightElement, showChevron = true }: SettingsItemProps) {
+function SettingsItem({
+  icon,
+  label,
+  onPress,
+  rightElement,
+  showChevron = true,
+}: SettingsItemProps) {
   const { colors } = useTheme();
 
   return (
@@ -29,9 +35,10 @@ function SettingsItem({ icon, label, onPress, rightElement, showChevron = true }
         <Ionicons name={icon} size={22} color={colors.textSecondary} style={styles.settingsIcon} />
         <Text style={[styles.settingsLabel, { color: colors.text }]}>{label}</Text>
       </View>
-      {rightElement || (showChevron && onPress && (
-        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-      ))}
+      {rightElement ||
+        (showChevron && onPress && (
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+        ))}
     </TouchableOpacity>
   );
 }
@@ -47,9 +54,7 @@ function SettingsSection({ title, children }: SettingsSectionProps) {
   return (
     <View style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{title}</Text>
-      <View style={[styles.sectionContent, { backgroundColor: colors.surface }]}>
-        {children}
-      </View>
+      <View style={[styles.sectionContent, { backgroundColor: colors.surface }]}>{children}</View>
     </View>
   );
 }
@@ -82,7 +87,9 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+    <View
+      style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}
+    >
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 24 }}
@@ -96,9 +103,7 @@ export default function ProfileScreen() {
         <SettingsSection title="Account">
           <View style={[styles.accountInfo, { borderBottomColor: colors.border }]}>
             <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-              <Text style={styles.avatarText}>
-                {user?.name?.charAt(0).toUpperCase() || 'G'}
-              </Text>
+              <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase() || 'G'}</Text>
             </View>
             <View style={styles.accountDetails}>
               <Text style={[styles.accountName, { color: colors.text }]}>

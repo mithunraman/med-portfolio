@@ -122,6 +122,37 @@ describe('OtpService', () => {
       await expect(service.sendOtp(TEST_EMAIL)).rejects.toThrow(InternalServerErrorException);
     });
 
+    it('should include devOtp in non-production mode', async () => {
+      mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
+      mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
+
+      const result = await service.sendOtp(TEST_EMAIL);
+
+      expect(result.devOtp).toBeDefined();
+      expect(result.devOtp).toMatch(/^\d{6}$/);
+    });
+
+    it('should NOT include devOtp in production mode', async () => {
+      mockConfigService.get.mockImplementation((key: string, defaultValue?: unknown) => {
+        const config: Record<string, unknown> = {
+          'app.otp.expiryMinutes': 5,
+          'app.otp.maxAttempts': 3,
+          'app.otp.rateLimitMax': 3,
+          'app.otp.rateLimitWindowMinutes': 10,
+          NODE_ENV: 'production',
+        };
+        return config[key] ?? defaultValue;
+      });
+      // Re-create service so constructor reads fresh config
+      const prodService = createService();
+      mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
+      mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
+
+      const result = await prodService.sendOtp(TEST_EMAIL);
+
+      expect(result.devOtp).toBeUndefined();
+    });
+
     it('should set correct expiry based on config', async () => {
       mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
       mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));

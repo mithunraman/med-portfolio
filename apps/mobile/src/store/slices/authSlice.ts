@@ -13,12 +13,16 @@ export interface AuthState {
   status: AuthStatus;
   user: AuthUser | null;
   error: string | null;
+  isNewUser: boolean | null;
+  devOtp: string | null;
 }
 
 const initialState: AuthState = {
   status: 'idle',
   user: null,
   error: null,
+  isNewUser: null,
+  devOtp: null,
 };
 
 /**
@@ -61,8 +65,8 @@ export const otpSend = createAsyncThunk(
     authLogger.info('Sending OTP', { email });
 
     try {
-      await api.auth.otpSend({ email });
-      return email;
+      const response = await api.auth.otpSend({ email });
+      return { email, isNewUser: response.isNewUser, devOtp: response.devOtp };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to send OTP';
       authLogger.error('OTP send failed', { error: message });
@@ -76,11 +80,11 @@ export const otpSend = createAsyncThunk(
  */
 export const otpVerify = createAsyncThunk(
   'auth/otpVerify',
-  async ({ email, code }: { email: string; code: string }, { rejectWithValue }) => {
+  async ({ email, code, name }: { email: string; code: string; name?: string }, { rejectWithValue }) => {
     authLogger.info('Verifying OTP', { email });
 
     try {
-      const response = await api.auth.otpVerify({ email, code });
+      const response = await api.auth.otpVerify({ email, code, name });
 
       await AppSecureStorage.set('accessToken', response.accessToken);
       await AppSecureStorage.set('user', {
@@ -140,7 +144,7 @@ export const registerGuest = createAsyncThunk(
 export const claimGuest = createAsyncThunk(
   'auth/claimGuest',
   async (
-    { email, code, name }: { email: string; code: string; name?: string },
+    { email, code, name }: { email: string; code: string; name: string },
     { rejectWithValue }
   ) => {
     authLogger.info('Claiming guest account', { email });
@@ -218,6 +222,10 @@ const authSlice = createSlice({
       // OTP Send
       .addCase(otpSend.pending, (state) => {
         state.error = null;
+      })
+      .addCase(otpSend.fulfilled, (state, action) => {
+        state.isNewUser = action.payload.isNewUser;
+        state.devOtp = action.payload.devOtp ?? null;
       })
       .addCase(otpSend.rejected, (state, action) => {
         state.error = action.payload as string;

@@ -1,4 +1,4 @@
-import { UserRole, type AuthUser, type LoginResponse } from '@acme/shared';
+import { UserRole, type AuthUser, type LoginResponse, type OtpSendResponse } from '@acme/shared';
 import {
   BadRequestException,
   ConflictException,
@@ -25,11 +25,19 @@ export class AuthService {
 
   // ── OTP-based auth ──
 
-  async otpSend(email: string): Promise<{ message: string }> {
-    return this.otpService.sendOtp(email);
+  async otpSend(email: string): Promise<OtpSendResponse> {
+    const result = await this.otpService.sendOtp(email);
+    const normalizedEmail = email.toLowerCase();
+    const existingUser = await this.userModel.findOne({ email: normalizedEmail });
+
+    return {
+      message: result.message,
+      isNewUser: !existingUser,
+      ...(result.devOtp && { devOtp: result.devOtp }),
+    };
   }
 
-  async otpVerifyAndLogin(email: string, code: string): Promise<LoginResponse> {
+  async otpVerifyAndLogin(email: string, code: string, name?: string): Promise<LoginResponse> {
     await this.otpService.verifyOtp(email, code);
 
     const normalizedEmail = email.toLowerCase();
@@ -37,7 +45,7 @@ export class AuthService {
 
     if (!user) {
       user = await this.userModel.create({
-        name: normalizedEmail.split('@')[0],
+        name: name || normalizedEmail.split('@')[0],
         email: normalizedEmail,
         role: UserRole.USER,
         tokenVersion: 0,
@@ -58,7 +66,7 @@ export class AuthService {
     guestUserId: string,
     email: string,
     code: string,
-    name?: string
+    name: string
   ): Promise<LoginResponse> {
     await this.otpService.verifyOtp(email, code);
 
@@ -83,9 +91,7 @@ export class AuthService {
     // Upgrade in place — all data stays linked to the same _id
     guestUser.email = normalizedEmail;
     guestUser.role = UserRole.USER;
-    if (name) {
-      guestUser.name = name;
-    }
+    guestUser.name = name;
     guestUser.tokenVersion = (guestUser.tokenVersion ?? 0) + 1;
     await guestUser.save();
 

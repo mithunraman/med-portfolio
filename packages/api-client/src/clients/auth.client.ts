@@ -1,11 +1,11 @@
-import type { LoginResponse, AuthUser, OtpSendRequest, OtpVerifyRequest, OtpClaimRequest } from '@acme/shared';
+import type { LoginResponse, AuthUser, OtpSendRequest, OtpSendResponse, OtpVerifyRequest, OtpClaimRequest } from '@acme/shared';
 import { BaseApiClient } from '../core/api-client';
 
 export class AuthClient {
   constructor(private readonly client: BaseApiClient) {}
 
-  async otpSend(data: OtpSendRequest): Promise<{ message: string }> {
-    return this.client.post<{ message: string }>('/auth/otp/send', data, {
+  async otpSend(data: OtpSendRequest): Promise<OtpSendResponse> {
+    return this.client.post<OtpSendResponse>('/auth/otp/send', data, {
       authenticated: false,
     });
   }

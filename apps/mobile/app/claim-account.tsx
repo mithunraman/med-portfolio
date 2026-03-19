@@ -1,3 +1,5 @@
+import { useAuth } from '@/hooks';
+import { useTheme } from '@/theme';
 import { OtpSendRequestSchema } from '@acme/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
@@ -15,23 +17,23 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '@/hooks';
-import { useTheme } from '@/theme';
 
 type Step = 'email' | 'code';
 
 export default function ClaimAccountScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { otpSend, claimGuest } = useAuth();
+  const { otpSend, claimGuest, devOtp } = useAuth();
   const { colors } = useTheme();
 
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
+  const [name, setName] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const codeInputRef = useRef<TextInput>(null);
+  const nameInputRef = useRef<TextInput>(null);
 
   const {
     control,
@@ -49,7 +51,7 @@ export default function ClaimAccountScreen() {
         await otpSend(data.email);
         setEmail(data.email);
         setStep('code');
-        setTimeout(() => codeInputRef.current?.focus(), 100);
+        setTimeout(() => nameInputRef.current?.focus(), 100);
       } catch (error) {
         Alert.alert('Error', error instanceof Error ? error.message : 'Failed to send code');
       } finally {
@@ -61,10 +63,14 @@ export default function ClaimAccountScreen() {
 
   const handleVerify = useCallback(async () => {
     if (code.length !== 6) return;
+    if (name.trim().length < 2) {
+      Alert.alert('Name required', 'Please enter your name (at least 2 characters).');
+      return;
+    }
 
     setIsVerifying(true);
     try {
-      await claimGuest(email, code);
+      await claimGuest(email, code, name.trim());
       Alert.alert('Account Created', 'Your account has been set up successfully.', [
         { text: 'OK', onPress: () => router.back() },
       ]);
@@ -74,7 +80,7 @@ export default function ClaimAccountScreen() {
     } finally {
       setIsVerifying(false);
     }
-  }, [claimGuest, email, code, router]);
+  }, [claimGuest, email, code, name, router]);
 
   const handleResend = useCallback(async () => {
     setIsSending(true);
@@ -91,6 +97,7 @@ export default function ClaimAccountScreen() {
   const handleChangeEmail = useCallback(() => {
     setStep('email');
     setCode('');
+    setName('');
   }, []);
 
   const isLoading = isSending || isVerifying;
@@ -100,7 +107,7 @@ export default function ClaimAccountScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
           <Text style={[styles.closeText, { color: colors.primary }]}>Cancel</Text>
         </TouchableOpacity>
@@ -115,6 +122,12 @@ export default function ClaimAccountScreen() {
             ? 'Verify your email to save your data and access it from any device.'
             : `We sent a 6-digit code to ${email}`}
         </Text>
+
+        {step === 'code' && devOtp && (
+          <Text style={[styles.devOtp, { color: colors.error }]}>
+            [DEV] OTP: {devOtp}
+          </Text>
+        )}
 
         {step === 'email' ? (
           <View style={styles.form}>
@@ -151,7 +164,11 @@ export default function ClaimAccountScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.button, { backgroundColor: colors.primary }, isLoading && styles.buttonDisabled]}
+              style={[
+                styles.button,
+                { backgroundColor: colors.primary },
+                isLoading && styles.buttonDisabled,
+              ]}
               onPress={handleSubmit(handleSendOtp)}
               disabled={isLoading}
             >
@@ -164,6 +181,23 @@ export default function ClaimAccountScreen() {
           </View>
         ) : (
           <View style={styles.form}>
+            <View style={styles.inputContainer}>
+              <Text style={[styles.label, { color: colors.text }]}>Your name</Text>
+              <TextInput
+                ref={nameInputRef}
+                style={[styles.input, { borderColor: colors.border, color: colors.text }]}
+                placeholder="Jane Doe"
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="words"
+                autoCorrect={false}
+                value={name}
+                onChangeText={setName}
+                editable={!isLoading}
+                returnKeyType="next"
+                onSubmitEditing={() => codeInputRef.current?.focus()}
+              />
+            </View>
+
             <View style={styles.inputContainer}>
               <Text style={[styles.label, { color: colors.text }]}>Verification code</Text>
               <TextInput
@@ -183,10 +217,10 @@ export default function ClaimAccountScreen() {
               style={[
                 styles.button,
                 { backgroundColor: colors.primary },
-                (isLoading || code.length !== 6) && styles.buttonDisabled,
+                (isLoading || code.length !== 6 || name.trim().length < 2) && styles.buttonDisabled,
               ]}
               onPress={handleVerify}
-              disabled={isLoading || code.length !== 6}
+              disabled={isLoading || code.length !== 6 || name.trim().length < 2}
             >
               {isVerifying ? (
                 <ActivityIndicator color="#fff" />
@@ -251,6 +285,12 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     paddingHorizontal: 16,
   },
+  devOtp: {
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
   form: {
     gap: 16,
   },
@@ -271,10 +311,10 @@ const styles = StyleSheet.create({
   codeInput: {
     borderWidth: 1,
     borderRadius: 8,
-    padding: 16,
-    fontSize: 24,
+    padding: 12,
+    fontSize: 18,
     textAlign: 'center',
-    letterSpacing: 8,
+    letterSpacing: 6,
   },
   errorText: {
     fontSize: 12,

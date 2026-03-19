@@ -19,15 +19,17 @@ import { useTheme } from '@/theme';
 type Step = 'email' | 'code';
 
 export default function OtpLoginScreen() {
-  const { otpSend, otpVerify } = useAuth();
+  const { otpSend, otpVerify, isNewUser, devOtp } = useAuth();
   const { colors } = useTheme();
 
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
+  const [name, setName] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const codeInputRef = useRef<TextInput>(null);
+  const nameInputRef = useRef<TextInput>(null);
 
   const {
     control,
@@ -45,7 +47,7 @@ export default function OtpLoginScreen() {
         await otpSend(data.email);
         setEmail(data.email);
         setStep('code');
-        setTimeout(() => codeInputRef.current?.focus(), 100);
+        // Focus handled via autoFocus on name field (new user) or code field (returning user)
       } catch (error) {
         Alert.alert('Error', error instanceof Error ? error.message : 'Failed to send code');
       } finally {
@@ -57,10 +59,14 @@ export default function OtpLoginScreen() {
 
   const handleVerifyOtp = useCallback(async () => {
     if (code.length !== 6) return;
+    if (isNewUser && name.trim().length < 2) {
+      Alert.alert('Name required', 'Please enter your name (at least 2 characters).');
+      return;
+    }
 
     setIsVerifying(true);
     try {
-      await otpVerify(email, code);
+      await otpVerify(email, code, isNewUser ? name.trim() : undefined);
       // Navigation happens automatically via RootLayoutNav when status changes
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Invalid code');
@@ -68,7 +74,7 @@ export default function OtpLoginScreen() {
     } finally {
       setIsVerifying(false);
     }
-  }, [otpVerify, email, code]);
+  }, [otpVerify, email, code, name, isNewUser]);
 
   const handleResend = useCallback(async () => {
     setIsSending(true);
@@ -85,6 +91,7 @@ export default function OtpLoginScreen() {
   const handleChangeEmail = useCallback(() => {
     setStep('email');
     setCode('');
+    setName('');
   }, []);
 
   const isLoading = isSending || isVerifying;
@@ -103,6 +110,12 @@ export default function OtpLoginScreen() {
             ? "We'll send a verification code to your email"
             : `We sent a 6-digit code to ${email}`}
         </Text>
+
+        {step === 'code' && devOtp && (
+          <Text style={[styles.devOtp, { color: colors.error }]}>
+            [DEV] OTP: {devOtp}
+          </Text>
+        )}
 
         {step === 'email' ? (
           <View style={styles.form}>
@@ -152,6 +165,26 @@ export default function OtpLoginScreen() {
           </View>
         ) : (
           <View style={styles.form}>
+            {isNewUser && (
+              <View style={styles.inputContainer}>
+                <Text style={[styles.label, { color: colors.text }]}>Your name</Text>
+                <TextInput
+                  ref={nameInputRef}
+                  style={[styles.input, { borderColor: colors.border, color: colors.text }]}
+                  placeholder="Jane Doe"
+                  placeholderTextColor={colors.textSecondary}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  autoFocus
+                  value={name}
+                  onChangeText={setName}
+                  editable={!isLoading}
+                  returnKeyType="next"
+                  onSubmitEditing={() => codeInputRef.current?.focus()}
+                />
+              </View>
+            )}
+
             <View style={styles.inputContainer}>
               <Text style={[styles.label, { color: colors.text }]}>Verification code</Text>
               <TextInput
@@ -160,6 +193,7 @@ export default function OtpLoginScreen() {
                 placeholder="000000"
                 placeholderTextColor={colors.textSecondary}
                 keyboardType="number-pad"
+                autoFocus={!isNewUser}
                 maxLength={6}
                 value={code}
                 onChangeText={setCode}
@@ -171,10 +205,10 @@ export default function OtpLoginScreen() {
               style={[
                 styles.button,
                 { backgroundColor: colors.primary },
-                (isLoading || code.length !== 6) && styles.buttonDisabled,
+                (isLoading || code.length !== 6 || (isNewUser && name.trim().length < 2)) && styles.buttonDisabled,
               ]}
               onPress={handleVerifyOtp}
-              disabled={isLoading || code.length !== 6}
+              disabled={isLoading || code.length !== 6 || (isNewUser === true && name.trim().length < 2)}
             >
               {isVerifying ? (
                 <ActivityIndicator color="#fff" />
@@ -225,6 +259,12 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     lineHeight: 22,
   },
+  devOtp: {
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
   form: {
     gap: 16,
   },
@@ -245,10 +285,10 @@ const styles = StyleSheet.create({
   codeInput: {
     borderWidth: 1,
     borderRadius: 8,
-    padding: 16,
-    fontSize: 24,
+    padding: 12,
+    fontSize: 18,
     textAlign: 'center',
-    letterSpacing: 8,
+    letterSpacing: 6,
   },
   errorText: {
     fontSize: 12,

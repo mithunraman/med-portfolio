@@ -12,6 +12,7 @@ import { IOtpRepository, OTP_REPOSITORY } from './otp.repository.interface';
 
 export interface SendOtpResult {
   message: string;
+  devOtp?: string;
 }
 
 export interface VerifyOtpResult {
@@ -62,8 +63,14 @@ export class OtpService {
     // TODO: Integrate email service (e.g., Resend) to send OTP via email
     this.logger.log(`OTP generated for ${normalizedEmail}`);
 
+    const isDev = this.configService.get<string>('NODE_ENV') !== 'production';
+    if (isDev) {
+      this.logger.warn(`[DEV] OTP for ${normalizedEmail}: ${code}`);
+    }
+
     return {
       message: 'OTP sent successfully',
+      ...(isDev && { devOtp: code }),
     };
   }
 

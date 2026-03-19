@@ -106,19 +106,19 @@ export default function ClaimAccountScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <View style={[styles.header, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
           <Text style={[styles.closeText, { color: colors.primary }]}>Cancel</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 24) }]}
         keyboardShouldPersistTaps="handled"
         bounces={false}
       >
         <Text style={[styles.title, { color: colors.text }]}>
-          {step === 'email' ? 'Create your account' : 'Enter code'}
+          {step === 'email' ? 'Create your account' : 'Almost there'}
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           {step === 'email'
@@ -127,14 +127,12 @@ export default function ClaimAccountScreen() {
         </Text>
 
         {step === 'code' && devOtp && (
-          <Text style={[styles.devOtp, { color: colors.error }]}>
-            [DEV] OTP: {devOtp}
-          </Text>
+          <Text style={[styles.devOtp, { color: colors.error }]}>[DEV] OTP: {devOtp}</Text>
         )}
 
         {step === 'email' ? (
           <View style={styles.form}>
-            <View style={styles.inputContainer}>
+            <View>
               <Text style={[styles.label, { color: colors.text }]}>Email</Text>
               <Controller
                 control={control}
@@ -186,7 +184,7 @@ export default function ClaimAccountScreen() {
           </View>
         ) : (
           <View style={styles.form}>
-            <View style={styles.inputContainer}>
+            <View>
               <Text style={[styles.label, { color: colors.text }]}>Your name</Text>
               <TextInput
                 ref={nameInputRef}
@@ -203,7 +201,7 @@ export default function ClaimAccountScreen() {
               />
             </View>
 
-            <View style={styles.inputContainer}>
+            <View>
               <Text style={[styles.label, { color: colors.text }]}>Verification code</Text>
               <TextInput
                 ref={codeInputRef}
@@ -234,7 +232,7 @@ export default function ClaimAccountScreen() {
               )}
             </TouchableOpacity>
 
-            <View style={styles.resendRow}>
+            <View style={styles.linkRow}>
               <Text style={[styles.resendText, { color: colors.textSecondary }]}>
                 Didn't receive a code?{' '}
               </Text>
@@ -243,11 +241,13 @@ export default function ClaimAccountScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity onPress={handleChangeEmail} disabled={isLoading}>
-              <Text style={[styles.changeEmailLink, { color: colors.primary }]}>
-                Use a different email
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.linkRow}>
+              <TouchableOpacity onPress={handleChangeEmail} disabled={isLoading}>
+                <Text style={[styles.changeEmailLink, { color: colors.primary }]}>
+                  Use a different email
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -263,20 +263,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-start',
     paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 8,
   },
   closeButton: {
-    padding: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
   },
   closeText: {
     fontSize: 16,
     fontWeight: '500',
   },
   content: {
-    flexGrow: 1,
-    justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingBottom: 32,
+    paddingTop: 24,
   },
   title: {
     fontSize: 28,
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
     lineHeight: 22,
     paddingHorizontal: 16,
   },
@@ -298,15 +298,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   form: {
-    gap: 16,
-  },
-  inputContainer: {
-    marginBottom: 8,
+    gap: 20,
   },
   label: {
     fontSize: 14,
     fontWeight: '500',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   input: {
     borderWidth: 1,
@@ -339,10 +336,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  resendRow: {
+  linkRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 8,
+    alignItems: 'center',
+    paddingVertical: 12,
+    minHeight: 44,
   },
   resendText: {
     fontSize: 14,
@@ -355,6 +354,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     textAlign: 'center',
-    marginTop: 4,
   },
 });

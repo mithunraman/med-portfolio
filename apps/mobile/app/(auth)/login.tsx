@@ -1,3 +1,5 @@
+import { useAuth } from '@/hooks';
+import { useTheme } from '@/theme';
 import { OtpSendRequestSchema } from '@acme/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useRef, useState } from 'react';
@@ -14,14 +16,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useAuth } from '@/hooks';
-import { useTheme } from '@/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Step = 'email' | 'code';
 
 export default function OtpLoginScreen() {
   const { otpSend, otpVerify, isNewUser, devOtp } = useAuth();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
@@ -103,8 +105,9 @@ export default function OtpLoginScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 32) }]}
         keyboardShouldPersistTaps="handled"
+
         bounces={false}
       >
         <Text style={[styles.title, { color: colors.text }]}>
@@ -117,14 +120,12 @@ export default function OtpLoginScreen() {
         </Text>
 
         {step === 'code' && devOtp && (
-          <Text style={[styles.devOtp, { color: colors.error }]}>
-            [DEV] OTP: {devOtp}
-          </Text>
+          <Text style={[styles.devOtp, { color: colors.error }]}>[DEV] OTP: {devOtp}</Text>
         )}
 
         {step === 'email' ? (
           <View style={styles.form}>
-            <View style={styles.inputContainer}>
+            <View>
               <Text style={[styles.label, { color: colors.text }]}>Email</Text>
               <Controller
                 control={control}
@@ -159,7 +160,11 @@ export default function OtpLoginScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.button, { backgroundColor: colors.primary }, isLoading && styles.buttonDisabled]}
+              style={[
+                styles.button,
+                { backgroundColor: colors.primary },
+                isLoading && styles.buttonDisabled,
+              ]}
               onPress={handleSubmit(handleSendOtp)}
               disabled={isLoading}
             >
@@ -173,7 +178,7 @@ export default function OtpLoginScreen() {
         ) : (
           <View style={styles.form}>
             {isNewUser && (
-              <View style={styles.inputContainer}>
+              <View>
                 <Text style={[styles.label, { color: colors.text }]}>Your name</Text>
                 <TextInput
                   ref={nameInputRef}
@@ -192,7 +197,7 @@ export default function OtpLoginScreen() {
               </View>
             )}
 
-            <View style={styles.inputContainer}>
+            <View>
               <Text style={[styles.label, { color: colors.text }]}>Verification code</Text>
               <TextInput
                 ref={codeInputRef}
@@ -212,10 +217,13 @@ export default function OtpLoginScreen() {
               style={[
                 styles.button,
                 { backgroundColor: colors.primary },
-                (isLoading || code.length !== 6 || (isNewUser && name.trim().length < 2)) && styles.buttonDisabled,
+                (isLoading || code.length !== 6 || (isNewUser && name.trim().length < 2)) &&
+                  styles.buttonDisabled,
               ]}
               onPress={handleVerifyOtp}
-              disabled={isLoading || code.length !== 6 || (isNewUser === true && name.trim().length < 2)}
+              disabled={
+                isLoading || code.length !== 6 || (isNewUser === true && name.trim().length < 2)
+              }
             >
               {isVerifying ? (
                 <ActivityIndicator color="#fff" />
@@ -224,7 +232,7 @@ export default function OtpLoginScreen() {
               )}
             </TouchableOpacity>
 
-            <View style={styles.resendRow}>
+            <View style={styles.linkRow}>
               <Text style={[styles.resendText, { color: colors.textSecondary }]}>
                 Didn't receive a code?{' '}
               </Text>
@@ -233,11 +241,13 @@ export default function OtpLoginScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity onPress={handleChangeEmail} disabled={isLoading}>
-              <Text style={[styles.changeEmailLink, { color: colors.primary }]}>
-                Use a different email
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.linkRow}>
+              <TouchableOpacity onPress={handleChangeEmail} disabled={isLoading}>
+                <Text style={[styles.changeEmailLink, { color: colors.primary }]}>
+                  Use a different email
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -250,10 +260,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flexGrow: 1,
-    justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingBottom: 32,
+    paddingTop: 24,
   },
   title: {
     fontSize: 28,
@@ -264,8 +272,9 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
     lineHeight: 22,
+    paddingHorizontal: 16,
   },
   devOtp: {
     fontSize: 14,
@@ -274,15 +283,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   form: {
-    gap: 16,
-  },
-  inputContainer: {
-    marginBottom: 8,
+    gap: 20,
   },
   label: {
     fontSize: 14,
     fontWeight: '500',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   input: {
     borderWidth: 1,
@@ -315,10 +321,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  resendRow: {
+  linkRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 8,
+    alignItems: 'center',
+    paddingVertical: 12,
+    minHeight: 44,
   },
   resendText: {
     fontSize: 14,
@@ -331,6 +339,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     textAlign: 'center',
-    marginTop: 4,
   },
 });

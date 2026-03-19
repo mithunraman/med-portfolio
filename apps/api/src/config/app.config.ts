@@ -46,6 +46,28 @@ export const envSchema = z.object({
   ASSEMBLYAI_API_KEY: z
     .string({ required_error: 'ASSEMBLYAI_API_KEY is required' })
     .min(1, 'ASSEMBLYAI_API_KEY cannot be empty'),
+
+  // OTP
+  OTP_EXPIRY_MINUTES: z
+    .string()
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().int().min(1).max(60))
+    .default('5'),
+  OTP_MAX_ATTEMPTS: z
+    .string()
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().int().min(1).max(10))
+    .default('3'),
+  OTP_RATE_LIMIT_MAX: z
+    .string()
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().int().min(1).max(20))
+    .default('3'),
+  OTP_RATE_LIMIT_WINDOW_MINUTES: z
+    .string()
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().int().min(1).max(60))
+    .default('10'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
@@ -110,6 +132,12 @@ export const appConfig = registerAs('app', () => {
     },
     assemblyai: {
       apiKey: env.ASSEMBLYAI_API_KEY,
+    },
+    otp: {
+      expiryMinutes: env.OTP_EXPIRY_MINUTES,
+      maxAttempts: env.OTP_MAX_ATTEMPTS,
+      rateLimitMax: env.OTP_RATE_LIMIT_MAX,
+      rateLimitWindowMinutes: env.OTP_RATE_LIMIT_WINDOW_MINUTES,
     },
   };
 });

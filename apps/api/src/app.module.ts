@@ -15,6 +15,7 @@ import { ProcessingModule } from './processing';
 import { AnalysisRunsModule } from './analysis-runs';
 import { OutboxModule } from './outbox';
 import { ReviewPeriodsModule } from './review-periods/review-periods.module';
+import { OtpModule } from './otp';
 import { JwtAuthGuard, RolesGuard } from './common/guards';
 
 @Module({
@@ -34,6 +35,7 @@ import { JwtAuthGuard, RolesGuard } from './common/guards';
     AnalysisRunsModule,
     OutboxModule,
     ReviewPeriodsModule,
+    OtpModule,
   ],
   providers: [
     {

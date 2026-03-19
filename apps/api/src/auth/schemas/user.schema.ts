@@ -15,17 +15,8 @@ export class User {
   @Prop({ required: true, unique: true, index: true })
   email!: string;
 
-  @Prop({ required: true })
-  passwordHash!: string;
-
   @Prop({ required: true, type: Number, default: UserRole.USER })
   role!: UserRole;
-
-  @Prop({ type: Number, default: 0 })
-  failedLoginAttempts!: number;
-
-  @Prop({ type: Date, default: null })
-  lockedUntil!: Date | null;
 
   @Prop({ type: Number, default: 0 })
   tokenVersion!: number;

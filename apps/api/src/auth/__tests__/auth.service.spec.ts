@@ -14,10 +14,7 @@ function makeUserDoc(overrides: Record<string, unknown> = {}) {
     _id: userId,
     name: 'Test User',
     email: 'user@example.com',
-    passwordHash: 'hashed',
     role: UserRole.USER,
-    failedLoginAttempts: 0,
-    lockedUntil: null,
     tokenVersion: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -111,6 +108,9 @@ describe('AuthService', () => {
           tokenVersion: 0,
         })
       );
+      expect(mockUserModel.create).toHaveBeenCalledWith(
+        expect.not.objectContaining({ passwordHash: expect.anything() })
+      );
       expect(result.accessToken).toBe('mock.jwt.token');
     });
 
@@ -134,6 +134,40 @@ describe('AuthService', () => {
       expect(mockJwtService.sign).toHaveBeenCalledWith(
         expect.objectContaining({ tokenVersion: 3 })
       );
+    });
+  });
+
+  // ─── registerGuest ───
+
+  describe('registerGuest', () => {
+    it('should create a guest user without password', async () => {
+      const guestDoc = makeGuestDoc();
+      mockUserModel.create.mockResolvedValue(guestDoc);
+
+      const result = await service.registerGuest();
+
+      expect(mockUserModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Guest',
+          role: UserRole.USER_GUEST,
+          tokenVersion: 0,
+        })
+      );
+      expect(mockUserModel.create).toHaveBeenCalledWith(
+        expect.not.objectContaining({ passwordHash: expect.anything() })
+      );
+      expect(result.accessToken).toBe('mock.jwt.token');
+      expect(result.user.role).toBe(UserRole.USER_GUEST);
+    });
+
+    it('should generate a unique guest email', async () => {
+      const guestDoc = makeGuestDoc();
+      mockUserModel.create.mockResolvedValue(guestDoc);
+
+      await service.registerGuest();
+
+      const createArg = mockUserModel.create.mock.calls[0][0];
+      expect(createArg.email).toMatch(/^guest_.+@guest\.local$/);
     });
   });
 

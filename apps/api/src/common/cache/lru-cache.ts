@@ -21,7 +21,7 @@ export interface AppLruCacheOptions {
   ttlMs?: number;
 }
 
-export class AppLruCache<K extends {}, V extends {}> {
+export class AppLruCache<K extends NonNullable<unknown>, V extends NonNullable<unknown>> {
   private readonly cache: LRUCache<K, V>;
 
   constructor(options: AppLruCacheOptions) {

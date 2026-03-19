@@ -1,15 +1,13 @@
-import { Controller, Post, Get, Body, HttpCode, HttpStatus } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { LoginDto, RegisterDto, OtpSendDto, OtpVerifyDto, OtpClaimDto } from './dto';
-import { Public } from '../common/decorators/public.decorator';
+import type { AuthUser, LoginResponse } from '@acme/shared';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
-import type { LoginResponse, AuthUser } from '@acme/shared';
+import { Public } from '../common/decorators/public.decorator';
+import { AuthService } from './auth.service';
+import { OtpClaimDto, OtpSendDto, OtpVerifyDto } from './dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
-
-  // ── OTP-based auth ──
 
   @Public()
   @Post('otp/send')
@@ -29,37 +27,15 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async claimGuest(
     @CurrentUser() user: CurrentUserPayload,
-    @Body() dto: OtpClaimDto,
+    @Body() dto: OtpClaimDto
   ): Promise<LoginResponse> {
-    return this.authService.claimGuestAccount(
-      user.userId,
-      dto.email,
-      dto.code,
-      dto.name,
-    );
+    return this.authService.claimGuestAccount(user.userId, dto.email, dto.code, dto.name);
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(
-    @CurrentUser() user: CurrentUserPayload,
-  ): Promise<{ message: string }> {
+  async logout(@CurrentUser() user: CurrentUserPayload): Promise<{ message: string }> {
     return this.authService.logoutAll(user.userId);
-  }
-
-  // ── Legacy (to be removed in Phase 3) ──
-
-  @Public()
-  @Post('register')
-  async register(@Body() dto: RegisterDto): Promise<LoginResponse> {
-    return this.authService.register(dto);
-  }
-
-  @Public()
-  @Post('login')
-  @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: LoginDto): Promise<LoginResponse> {
-    return this.authService.login(dto);
   }
 
   @Public()

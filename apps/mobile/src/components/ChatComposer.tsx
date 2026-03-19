@@ -54,6 +54,8 @@ interface ChatComposerProps {
   canSendMessage?: boolean;
   canSendAudio?: boolean;
   phase?: ConversationPhase;
+  /** Called when the voice recorder visibility changes */
+  onRecordingChange?: (isRecording: boolean) => void;
 }
 
 // ============================================================================
@@ -72,6 +74,7 @@ export function ChatComposer({
   canSendMessage = true,
   canSendAudio = true,
   phase,
+  onRecordingChange,
 }: ChatComposerProps) {
   const { colors, isDark } = useTheme();
   const [text, setText] = useState('');
@@ -90,19 +93,22 @@ export function ChatComposer({
   // Voice recorder handlers
   const handleMicPress = useCallback(() => {
     setShowVoiceRecorder(true);
-  }, []);
+    onRecordingChange?.(true);
+  }, [onRecordingChange]);
 
   const handleVoiceRecorderDiscard = useCallback(() => {
     setShowVoiceRecorder(false);
-  }, []);
+    onRecordingChange?.(false);
+  }, [onRecordingChange]);
 
   const handleVoiceRecorderSend = useCallback(
     (result: AudioRecordingResult) => {
       setShowVoiceRecorder(false);
+      onRecordingChange?.(false);
       _logger.info('Voice recorder send', result);
       onSendVoiceNote?.(result);
     },
-    [onSendVoiceNote]
+    [onSendVoiceNote, onRecordingChange]
   );
 
   const handleFocus = useCallback(() => {

@@ -286,6 +286,9 @@ export default function ChatScreen() {
   const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
 
+  // Track whether voice recorder is open — hides ActionBar to avoid overlap
+  const [isRecording, setIsRecording] = useState(false);
+
   // Optimistic flag — gives instant feedback while the HTTP call is in flight
   const [pendingAnalysis, setPendingAnalysis] = useState(false);
 
@@ -438,7 +441,7 @@ export default function ChatScreen() {
           />
         ) : (
           <>
-            {actionBarState && <ActionBar state={actionBarState} />}
+            {actionBarState && !isRecording && <ActionBar state={actionBarState} />}
 
             <ChatComposer
               onSend={handleSend}
@@ -447,6 +450,7 @@ export default function ChatScreen() {
               canSendMessage={canSendMessage}
               canSendAudio={canSendAudio}
               phase={phase}
+              onRecordingChange={setIsRecording}
             />
           </>
         )}

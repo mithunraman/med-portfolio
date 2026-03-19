@@ -29,7 +29,6 @@ const SPACING = {
   iconSize: 22,
   dotSize: 4,
   dotGap: 8,
-  bottomPadding: 24,
 } as const;
 
 // ============================================================================
@@ -230,7 +229,7 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
       styles.container,
       {
         backgroundColor: isDark ? colors.surface : colors.background,
-        paddingBottom: safeAreaBottomInset + SPACING.containerPadding + SPACING.bottomPadding,
+        paddingBottom: safeAreaBottomInset + SPACING.containerPadding,
         borderTopColor: colors.border,
       },
       style,
@@ -315,10 +314,6 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     paddingTop: SPACING.containerPadding,
     paddingHorizontal: SPACING.containerPadding,
     borderTopWidth: StyleSheet.hairlineWidth,

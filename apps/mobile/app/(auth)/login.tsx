@@ -1,7 +1,9 @@
 import { useAuth } from '@/hooks';
 import { useTheme } from '@/theme';
 import { OtpSendRequestSchema } from '@acme/shared';
+import { Ionicons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
@@ -24,6 +26,7 @@ export default function OtpLoginScreen() {
   const { otpSend, otpVerify, isNewUser, devOtp } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
@@ -105,11 +108,18 @@ export default function OtpLoginScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 32) }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: Math.max(insets.top, 24), paddingBottom: Math.max(insets.bottom, 32) },
+        ]}
         keyboardShouldPersistTaps="handled"
 
         bounces={false}
       >
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+
         <Text style={[styles.title, { color: colors.text }]}>
           {step === 'email' ? 'Sign in' : 'Enter code'}
         </Text>
@@ -259,9 +269,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  backButton: {
+    marginBottom: 16,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+  },
   content: {
     paddingHorizontal: 24,
-    paddingTop: 24,
   },
   title: {
     fontSize: 28,

@@ -7,9 +7,9 @@
 
 ## Summary of Biggest Risks
 
-1. **No password reset flow** — users who forget their password are completely locked out.
+1. ~~**No password reset flow**~~ — **N/A.** App uses OTP-based passwordless auth; no passwords exist.
 2. ~~**The `(review-period)` route group is not registered in the root Stack**~~ — **FIXED.**
-3. **SignupNudgeModal is exported but never rendered** — the nudge system is wired up in the store but the modal is never mounted in any layout.
+3. ~~**SignupNudgeModal is exported but never rendered**~~ — **REMOVED.** Dead code deleted.
 4. **Privacy Policy and Help links are placeholder alerts** — a legal liability for production.
 5. **Login/Register screens have hardcoded white backgrounds** — broken in dark mode.
 
@@ -21,12 +21,9 @@
 
 - **Status:** Resolved. Added `<Stack.Screen name="(review-period)" options={{ presentation: 'card' }} />` to the root layout.
 
-### 2. No password reset / forgot password flow
+### ~~2. No password reset / forgot password flow~~ — N/A
 
-- **What's missing:** No "Forgot password?" link on `login.tsx`, no reset screen, no backend endpoint referenced.
-- **Why it matters:** Users who forget their password are permanently locked out. This is a basic auth expectation.
-- **Fix:** Add "Forgot password?" link on login screen, build a reset-password screen (email input + confirmation), and wire to a backend reset endpoint.
-- **Impact:** Customer support blocker; users will churn.
+- **Status:** Not applicable. The app uses OTP-based passwordless authentication — there are no passwords to reset.
 
 ### 3. Privacy Policy is a placeholder alert
 
@@ -46,19 +43,13 @@
 
 ## HIGH (Significant user-facing issues)
 
-### 5. Login & Register screens break in dark mode
+### ~~5. Login & Register screens break in dark mode~~ — FIXED
 
-- **What's missing:** `login.tsx` and `register.tsx` hardcode `backgroundColor: '#fff'`. Labels use `color: '#333'`, inputs use `borderColor: '#ddd'`.
-- **Why it matters:** White background + dark theme = invisible text, broken visual experience.
-- **Fix:** Replace hardcoded colors with `colors.background`, `colors.text`, `colors.border` from `useTheme()`.
-- **Impact:** ~50% of iOS users use dark mode; these screens will look broken for them.
+- **Status:** Resolved. `register.tsx` no longer exists (replaced by OTP auth). All auth screens (`login.tsx`, `welcome.tsx`, `intro.tsx`, `claim-account.tsx`) use `useTheme()` with dynamic `colors.background`, `colors.text`, `colors.border`, etc.
 
-### 6. SignupNudgeModal is never mounted
+### ~~6. SignupNudgeModal is never mounted~~ — REMOVED
 
-- **What's missing:** `SignupNudgeModal` is built and exported from `components/index.ts`, the store has a `nudge` slice with `loadNudgeState` dispatched in `_layout.tsx`, but the modal component is **never rendered** in any layout file.
-- **Why it matters:** Guest users will never be prompted to create an account — the entire nudge system is dead code.
-- **Fix:** Render `<SignupNudgeModal />` in the `RootLayoutNav` component (after the Stack, before StatusBar).
-- **Impact:** Guest-to-registered conversion rate will be near zero.
+- **Status:** Resolved. The entire nudge system was dead code (component never mounted, action tracking never dispatched, navigation target `/(auth)/register` no longer exists). Deleted `SignupNudgeModal.tsx`, `nudgeSlice.ts`, and all references. Guest-to-account conversion is handled by the `claim-account` screen.
 
 ### 7. No network error handling / offline state
 
@@ -162,10 +153,9 @@
 
 - Home screen uses `ScrollView` (not `FlatList`), so there's no `RefreshControl`. User can't manually refresh dashboard data.
 
-### 22. Accessibility: close buttons use "X" text
+### ~~22. Accessibility: close buttons use "X" text~~ — REMOVED
 
-- `SignupNudgeModal.tsx` uses `<Text>X</Text>` for close button with no `accessibilityLabel`.
-- Should use an Ionicons `close` icon with proper accessibility label.
+- `SignupNudgeModal.tsx` has been deleted. No longer applicable.
 
 ### 23. No Terms of Service link
 
@@ -177,7 +167,7 @@
 
 | Flow | Evidence | Status |
 |------|----------|--------|
-| **Password reset** | Login screen has no "Forgot password?" | Not implemented |
+| ~~**Password reset**~~ | ~~Login screen has no "Forgot password?"~~ | N/A — OTP passwordless auth |
 | **Account deletion** | Profile has no "Delete Account" | Not implemented |
 | **Push notifications** | No notification permissions, no token registration | Not implemented |
 | **Onboarding questions** | Store has `onboarding` slice, initialized in root layout, but no onboarding screens exist | Wired but no UI |
@@ -195,10 +185,10 @@
 
 ### **Needs significant work**
 
-The app has a solid feature set and well-structured code, but **4 critical items** block production release:
+The app has a solid feature set and well-structured code, but **2 critical items** block production release:
 
 1. ~~**`(review-period)` route crash**~~ — **FIXED**
-2. **No password reset** — requires backend + frontend work, ~1-2 days
+2. ~~**No password reset**~~ — **N/A** (OTP passwordless auth)
 3. **No privacy policy** — needs legal content + hosting, ~1 day
 4. **No account deletion** — requires backend + frontend, ~1 day
 

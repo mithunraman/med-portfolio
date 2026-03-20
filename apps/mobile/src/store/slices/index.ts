@@ -13,9 +13,6 @@ export { messagesReducer } from './messages';
 export * from './onboardingSlice';
 export { default as onboardingReducer } from './onboardingSlice';
 
-export * from './nudgeSlice';
-export { default as nudgeReducer } from './nudgeSlice';
-
 export * from './dashboard';
 export { dashboardReducer } from './dashboard';
 

@@ -1,6 +1,6 @@
 import { ErrorBoundary } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
-import { initializeAuth, loadNudgeState, loadOnboardingState, setUnauthenticated, store } from '@/store';
+import { initializeAuth, loadOnboardingState, setUnauthenticated, store } from '@/store';
 import { ThemeProvider, useTheme } from '@/theme';
 import { setOnUnauthorized } from '@/api/client';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
@@ -39,7 +39,6 @@ function RootLayoutNav() {
   useEffect(() => {
     dispatch(initializeAuth());
     dispatch(loadOnboardingState());
-    dispatch(loadNudgeState());
 
     // On 401, clear auth state so user is redirected to login
     setOnUnauthorized(() => {

@@ -21,16 +21,6 @@ export interface OnboardingState {
 }
 
 /**
- * Nudge rate limiting state.
- */
-export interface NudgeState {
-  lastNudgeTimestamp: number | null;
-  nudgeCount: number;
-  meaningfulActionsCount: number;
-  dismissedBanners: string[];
-}
-
-/**
  * User preferences state.
  */
 export interface UserPreferences {
@@ -44,7 +34,6 @@ export interface UserPreferences {
 export interface StorageSchema {
   accountHint: AccountHint;
   onboarding: OnboardingState;
-  nudge: NudgeState;
   preferences: UserPreferences;
 }
 
@@ -105,7 +94,7 @@ class AppStorageService {
    * Clear all non-sensitive app data.
    */
   async clearAll(): Promise<void> {
-    const keys: StorageKey[] = ['accountHint', 'onboarding', 'nudge', 'preferences'];
+    const keys: StorageKey[] = ['accountHint', 'onboarding', 'preferences'];
     await Promise.all(keys.map((key) => this.remove(key)));
     storageLogger.info('All storage cleared');
   }

@@ -1,7 +1,7 @@
 import { logger } from '@/utils/logger';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { ConversationPhase } from '@acme/shared';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -59,28 +59,49 @@ interface ChatComposerProps {
 }
 
 // ============================================================================
+// PUBLIC HANDLE
+// ============================================================================
+
+export interface ChatComposerHandle {
+  /** Pre-fill the input with text and focus it. */
+  prefill: (value: string) => void;
+}
+
+// ============================================================================
 // CHAT COMPOSER COMPONENT
 // ============================================================================
 
-export function ChatComposer({
-  onSend,
-  onOpenAttachments,
-  onOpenCamera,
-  onToggleStickers,
-  onSendVoiceNote,
-  isSending = false,
-  safeAreaBottomInset = 0,
-  style,
-  canSendMessage = true,
-  canSendAudio = true,
-  phase,
-  onRecordingChange,
-}: ChatComposerProps) {
+export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
+  function ChatComposer(
+    {
+      onSend,
+      onOpenAttachments,
+      onOpenCamera,
+      onToggleStickers,
+      onSendVoiceNote,
+      isSending = false,
+      safeAreaBottomInset = 0,
+      style,
+      canSendMessage = true,
+      canSendAudio = true,
+      phase,
+      onRecordingChange,
+    },
+    ref
+  ) {
   const { colors, isDark } = useTheme();
   const [text, setText] = useState('');
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<TextInputType>(null);
+
+  useImperativeHandle(ref, () => ({
+    prefill(value: string) {
+      setText(value);
+      // Small delay so the TextInput re-renders with the new value before focusing
+      setTimeout(() => inputRef.current?.focus(), 50);
+    },
+  }));
 
   const handleSend = useCallback(() => {
     const trimmedText = text.trim();
@@ -286,7 +307,7 @@ export function ChatComposer({
       </View>
     </View>
   );
-}
+});
 
 // ============================================================================
 // STYLES

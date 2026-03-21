@@ -2,6 +2,7 @@ export { Button } from './Button';
 export { CoverageRing } from './CoverageRing';
 export { MessageList } from './chat';
 export { ChatComposer } from './ChatComposer';
+export { ChatEmptyState } from './ChatEmptyState';
 export { EditableReflectionSection } from './EditableReflectionSection';
 export { EditableTitle } from './EditableTitle';
 export { EmptyState } from './EmptyState';

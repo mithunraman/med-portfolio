@@ -30,7 +30,8 @@ function useRotatingText(words: string[], intervalMs = 2500): string {
 
 export type ActionBarState =
   | { mode: 'status'; reason: string }
-  | { mode: 'action'; variant: 'start' | 'continue'; onPress: () => void };
+  | { mode: 'action'; variant: 'start' | 'continue'; onPress: () => void }
+  | { mode: 'progress'; wordCount: number; threshold: number };
 
 interface ActionBarProps {
   state: ActionBarState;
@@ -53,6 +54,8 @@ export const ActionBar = memo(function ActionBar({ state }: ActionBarProps) {
     >
       {state.mode === 'status' ? (
         <StatusBar reason={state.reason} colors={colors} />
+      ) : state.mode === 'progress' ? (
+        <ProgressBar wordCount={state.wordCount} threshold={state.threshold} colors={colors} />
       ) : (
         <ActionButton variant={state.variant} onPress={state.onPress} />
       )}
@@ -70,6 +73,36 @@ function StatusBar({ reason, colors }: { reason: string; colors: { textSecondary
       <Text style={styles.thinkingLabel}>{thinkingWord}...</Text>
       <Text style={[styles.reasonLabel, { color: colors.textSecondary }]} numberOfLines={1}>
         {reason}
+      </Text>
+    </View>
+  );
+}
+
+// --- Progress mode ---
+
+function ProgressBar({
+  wordCount,
+  threshold,
+  colors,
+}: {
+  wordCount: number;
+  threshold: number;
+  colors: { textSecondary: string; primary: string; border: string };
+}) {
+  const ratio = Math.min(wordCount / threshold, 1);
+
+  return (
+    <View style={styles.progressRow}>
+      <View style={styles.progressBarTrack}>
+        <View
+          style={[
+            styles.progressBarFill,
+            { width: `${ratio * 100}%`, backgroundColor: colors.primary },
+          ]}
+        />
+      </View>
+      <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
+        {wordCount} / {threshold} words — keep going
       </Text>
     </View>
   );
@@ -130,6 +163,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
     flexShrink: 1,
+  },
+  // Progress mode
+  progressRow: {
+    height: INNER_HEIGHT,
+    justifyContent: 'center',
+    gap: 8,
+  },
+  progressBarTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(128, 128, 128, 0.15)',
+    overflow: 'hidden' as const,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  progressLabel: {
+    fontSize: 13,
+    fontWeight: '500' as const,
+    textAlign: 'center' as const,
   },
   // Action mode
   button: {

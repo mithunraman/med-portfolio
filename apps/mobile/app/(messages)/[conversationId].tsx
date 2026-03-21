@@ -1,5 +1,6 @@
 import { ChatComposer, MessageList } from '@/components';
 import { type ActionBarState, ActionBar } from '@/components/ActionBar';
+import { ChatEmptyState } from '@/components/ChatEmptyState';
 import { CompletionCard } from '@/components/CompletionCard';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
@@ -23,6 +24,7 @@ import {
   type MultiSelectQuestion,
   type SingleSelectQuestion,
   MessageProcessingStatus,
+  MessageRole,
   ThinkingStep,
 } from '@acme/shared';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -36,6 +38,11 @@ import { shallowEqual } from 'react-redux';
 
 // Stable empty array — prevents a new reference on every render for unseen conversations
 const EMPTY_IDS: string[] = [];
+
+/** Minimum user words before "Start Analysis" is available */
+const INITIAL_WORD_THRESHOLD = 60;
+/** Minimum user words (since the question) before "Continue Analysis" is available */
+const FOLLOWUP_WORD_THRESHOLD = 30;
 
 const TERMINAL_STATUSES = new Set([
   MessageProcessingStatus.COMPLETE,
@@ -150,6 +157,20 @@ export default function ChatScreen() {
   }, [serverMessages, optimisticMessages]);
 
   const hasUnsentMessages = optimisticMessages.length > 0;
+
+  // Count user words in the current segment (since the last assistant question, or all if none).
+  // mergedMessages is sorted newest-first, so we walk forward until we hit an assistant message.
+  const segmentWordCount = useMemo(() => {
+    let count = 0;
+    for (const m of mergedMessages) {
+      // Stop at the first assistant message — that's the segment boundary
+      if (m.role === MessageRole.ASSISTANT) break;
+      if (m.role === MessageRole.USER && m.content) {
+        count += m.content.split(/\s+/).filter(Boolean).length;
+      }
+    }
+    return count;
+  }, [mergedMessages]);
 
   // Fetch messages for existing conversations (not newly created ones)
   useEffect(() => {
@@ -380,10 +401,35 @@ export default function ChatScreen() {
       return { mode: 'status', reason };
     }
 
-    // Action buttons — always enabled when visible, driven by server context
+    // Word count gate — composing phase uses initial threshold
+    if (phase === 'composing' && segmentWordCount < INITIAL_WORD_THRESHOLD) {
+      if (segmentWordCount > 0) {
+        return { mode: 'progress', wordCount: segmentWordCount, threshold: INITIAL_WORD_THRESHOLD };
+      }
+      return null;
+    }
+
+    // Action buttons — only shown once word threshold is met
     if (canStartAnalysis) {
       return { mode: 'action', variant: 'start', onPress: handleStartAnalysis };
     }
+
+    // Word count gate — free_text follow-ups use follow-up threshold
+    if (
+      canResumeAnalysis &&
+      context?.activeQuestion?.questionType === 'free_text' &&
+      segmentWordCount < FOLLOWUP_WORD_THRESHOLD
+    ) {
+      if (segmentWordCount > 0) {
+        return {
+          mode: 'progress',
+          wordCount: segmentWordCount,
+          threshold: FOLLOWUP_WORD_THRESHOLD,
+        };
+      }
+      return null;
+    }
+
     // Only show "Continue Analysis" for free_text — select questions resume via the inline card
     if (canResumeAnalysis && context?.activeQuestion?.questionType === 'free_text') {
       return { mode: 'action', variant: 'continue', onPress: () => handleResumeAnalysis() };
@@ -397,6 +443,7 @@ export default function ChatScreen() {
     hasProcessingMessages,
     pendingAnalysis,
     phase,
+    segmentWordCount,
     canStartAnalysis,
     canResumeAnalysis,
     handleStartAnalysis,
@@ -406,6 +453,7 @@ export default function ChatScreen() {
   const activeQuestionMessageId = context?.activeQuestion?.messageId;
 
   const isLoading = loadingMessages && mergedMessages.length === 0 && isNew !== 'true';
+  const showEmptyState = mergedMessages.length === 0 && !isLoading && !context;
   const composerBg = isDark ? colors.surface : colors.background;
 
   return (
@@ -416,14 +464,18 @@ export default function ChatScreen() {
         keyboardVerticalOffset={headerHeight}
       >
         <View style={phase === 'completed' ? styles.dimmed : styles.flex}>
-          <MessageList
-            messages={mergedMessages}
-            currentUserId={user?.id ?? ''}
-            isLoading={isLoading}
-            activeQuestionMessageId={activeQuestionMessageId}
-            onAnswerQuestion={handleAnswerQuestion}
-            onRetry={handleRetry}
-          />
+          {showEmptyState ? (
+            <ChatEmptyState />
+          ) : (
+            <MessageList
+              messages={mergedMessages}
+              currentUserId={user?.id ?? ''}
+              isLoading={isLoading}
+              activeQuestionMessageId={activeQuestionMessageId}
+              onAnswerQuestion={handleAnswerQuestion}
+              onRetry={handleRetry}
+            />
+          )}
         </View>
 
         {phase === 'completed' ? (

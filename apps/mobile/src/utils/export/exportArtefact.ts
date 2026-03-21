@@ -3,6 +3,7 @@ import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import { Alert } from 'react-native';
 import type { Artefact } from '@acme/shared';
+import { PdpGoalStatus } from '@acme/shared';
 import { buildExportHtml } from './buildExportHtml';
 
 function buildPlainText(artefact: Artefact): string {
@@ -31,18 +32,19 @@ function buildPlainText(artefact: Artefact): string {
     lines.push('CAPABILITIES');
     lines.push('-'.repeat(20));
     for (const c of artefact.capabilities) {
-      lines.push(`\n[${c.code}] ${c.name}`);
+      lines.push(`\n${c.name}`);
       lines.push(`Evidence: ${c.evidence}`);
     }
     lines.push('');
   }
 
-  if (artefact.pdpGoals?.length) {
+  const nonArchivedGoals = artefact.pdpGoals?.filter((g) => g.status !== PdpGoalStatus.ARCHIVED);
+  if (nonArchivedGoals?.length) {
     lines.push('PDP GOALS');
     lines.push('-'.repeat(20));
-    for (const g of artefact.pdpGoals) {
+    for (const g of nonArchivedGoals) {
       lines.push(`\n• ${g.goal}`);
-      for (const a of g.actions) {
+      for (const a of g.actions.filter((a) => a.status !== PdpGoalStatus.ARCHIVED)) {
         lines.push(`  - ${a.action}`);
       }
     }

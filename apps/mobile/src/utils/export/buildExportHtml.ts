@@ -52,7 +52,6 @@ function buildCapabilitiesHtml(artefact: Artefact): string {
     .map(
       (c) => `
       <tr>
-        <td class="cap-code">${escapeHtml(c.code)}</td>
         <td class="cap-name">${escapeHtml(c.name)}</td>
         <td>${escapeHtml(c.evidence)}</td>
       </tr>`
@@ -63,18 +62,20 @@ function buildCapabilitiesHtml(artefact: Artefact): string {
     <div class="block">
       <h2>Capabilities</h2>
       <table>
-        <thead><tr><th>Code</th><th>Capability</th><th>Evidence</th></tr></thead>
+        <thead><tr><th>Capability</th><th>Evidence</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
 }
 
 function buildPdpGoalsHtml(artefact: Artefact): string {
-  if (!artefact.pdpGoals?.length) return '';
+  const nonArchived = artefact.pdpGoals?.filter((g) => g.status !== PdpGoalStatus.ARCHIVED);
+  if (!nonArchived?.length) return '';
 
-  const goals = artefact.pdpGoals
+  const goals = nonArchived
     .map((g) => {
       const actions = g.actions
+        .filter((a) => a.status !== PdpGoalStatus.ARCHIVED)
         .map(
           (a) => `
           <li>

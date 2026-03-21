@@ -2,6 +2,7 @@ import { Specialty } from '@acme/shared';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
+import { OpenAIModels } from '../../llm/llm.service';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PortfolioStateType } from '../portfolio-graph.state';
@@ -144,7 +145,10 @@ export function createReflectNode(deps: GraphDeps) {
   return async function reflectNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'reflect' });
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
+      conversationId: state.conversationId,
+      step: 'reflect',
+    });
     logger.log(
       `Generating reflection for conversation ${state.conversationId} (type: ${state.entryType})`
     );
@@ -181,7 +185,7 @@ export function createReflectNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       reflectResponseSchema,
-      { temperature: 0.4, maxTokens }
+      { model: OpenAIModels.GPT_5_4, temperature: 0.4, maxTokens }
     );
 
     const wordCount = response.sections.reduce(

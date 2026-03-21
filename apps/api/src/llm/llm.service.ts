@@ -8,6 +8,8 @@ import { z } from 'zod';
 import { MEDICAL_KEYTERMS, NHS_NUMBER_PATTERN, TRANSCRIPTION_TIMEOUT_MS } from './medical-keyterms';
 
 export const OpenAIModels = {
+  GPT_5_4: 'gpt-5.4',
+  GPT_5_4_NANO: 'gpt-5.4-nano',
   GPT_4_1: 'gpt-4.1',
   GPT_4_1_MINI: 'gpt-4.1-mini',
 } as const;

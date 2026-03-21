@@ -53,7 +53,7 @@ export function ExportSheet({ visible, onClose, artefact }: ExportSheetProps) {
             <View style={styles.optionText}>
               <Text style={[styles.optionTitle, { color: colors.text }]}>Share as PDF</Text>
               <Text style={[styles.optionDesc, { color: colors.textSecondary }]}>
-                Save to Files, AirDrop, WhatsApp, Email, or Print.
+                Save to Files, WhatsApp, Email, AirDrop or Print.
               </Text>
             </View>
             <Feather name="chevron-right" size={18} color={colors.textSecondary} />

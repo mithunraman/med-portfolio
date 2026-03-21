@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { LLMService } from '../../llm/llm.service';
+import { LLMService, OpenAIModels } from '../../llm/llm.service';
 import { CLEANING_PROMPT } from '../prompts/cleaning.prompt';
 import { IProcessingStage, StageContext, StageResult } from './stage.interface';
 
@@ -22,7 +22,7 @@ export class CleaningStage implements IProcessingStage {
 
     const response = await this.llmService.invokeStructured(messages, cleaningResponseSchema, {
       temperature: 0.1,
-      model: 'gpt-4.1-mini',
+      model: OpenAIModels.GPT_5_4_NANO,
     });
 
     return {

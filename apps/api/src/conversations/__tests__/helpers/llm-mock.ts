@@ -78,7 +78,8 @@ export class SequentialLLMMock {
         }
 
         const data = this.responses[this.callIndex++] as T;
-        return { data, model: OpenAIModels.GPT_4_1_MINI, tokensUsed: null };
+        const model = (options as Record<string, unknown>).model ?? OpenAIModels.GPT_4_1_MINI;
+        return { data, model, tokensUsed: null } as StructuredResponse<T>;
       },
       transcribeAudio: async () => {
         throw new Error('LLM mock: transcribeAudio() is not implemented');

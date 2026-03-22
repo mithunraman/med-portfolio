@@ -1,5 +1,5 @@
-import { selectIsOffline } from '@/store/slices/networkSlice';
-import { useAppSelector } from '@/hooks';
+import { selectIsOffline, setBannerVisible } from '@/store/slices/networkSlice';
+import { useAppDispatch, useAppSelector } from '@/hooks';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text } from 'react-native';
@@ -9,6 +9,7 @@ export const OFFLINE_BANNER_HEIGHT = 36;
 const BACK_ONLINE_DURATION_MS = 2000;
 
 export function OfflineBanner() {
+  const dispatch = useAppDispatch();
   const isOffline = useAppSelector(selectIsOffline);
   const insets = useSafeAreaInsets();
   const [showBackOnline, setShowBackOnline] = useState(false);
@@ -28,6 +29,11 @@ export function OfflineBanner() {
       return () => clearTimeout(timer);
     }
   }, [isOffline]);
+
+  // Keep Redux in sync with actual banner visibility
+  useEffect(() => {
+    dispatch(setBannerVisible(visible));
+  }, [visible, dispatch]);
 
   // Animate 0 → 1 (visible) or 1 → 0 (hidden)
   useEffect(() => {

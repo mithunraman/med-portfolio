@@ -7,17 +7,18 @@ const STEPS = [
   {
     number: '1',
     title: 'Describe what happened',
-    detail: 'Send as many messages as you need — text, voice, or both',
+    detail:
+      'A challenging interaction, a procedure, something you learned — send as many messages as you need, text or voice',
   },
   {
     number: '2',
     title: 'Start analysis',
-    detail: 'Available once you\u2019ve written enough (~60 words)',
+    detail: 'Available once you\u2019ve shared enough detail',
   },
   {
     number: '3',
     title: 'Review & refine',
-    detail: 'The AI will ask follow-up questions to complete your entry',
+    detail: 'The AI will ask questions to refine your portfolio entry',
   },
 ];
 
@@ -27,24 +28,13 @@ export const ChatEmptyState = memo(function ChatEmptyState() {
   return (
     <View style={styles.container}>
       <View style={styles.hero}>
-        <Feather
-          name="message-circle"
-          size={48}
-          color={colors.textSecondary}
-          style={styles.icon}
-        />
+        <Feather name="message-circle" size={48} color={colors.textSecondary} style={styles.icon} />
         <Text style={[styles.title, { color: colors.text }]}>
           What would you like to reflect on?
         </Text>
-        <Text style={[styles.description, { color: colors.textSecondary }]}>
-          A challenging interaction, a procedure, something you learned — describe any clinical
-          experience.
-        </Text>
       </View>
 
-      <View
-        style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      >
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {STEPS.map((step, index) => (
           <View key={step.number}>
             <View style={styles.row}>
@@ -65,6 +55,13 @@ export const ChatEmptyState = memo(function ChatEmptyState() {
             )}
           </View>
         ))}
+      </View>
+
+      <View style={[styles.notice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Feather name="shield" size={15} color={colors.error} />
+        <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
+          Do not include patient names or identifiable information
+        </Text>
       </View>
 
       <View style={styles.hint}>
@@ -152,6 +149,22 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
+  },
+  notice: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 24,
+    width: '100%' as const,
+  },
+  noticeText: {
+    fontSize: 13,
+    fontWeight: '500' as const,
+    flex: 1,
   },
   hint: {
     flexDirection: 'row',

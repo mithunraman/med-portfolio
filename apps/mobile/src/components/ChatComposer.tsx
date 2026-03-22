@@ -157,7 +157,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
       case 'awaiting_input':
         return canSendMessage ? 'Message' : 'Select an option above';
       default:
-        return 'Message';
+        return 'Describe what happened (no patient identifiers)';
     }
   }, [phase, canSendMessage]);
 

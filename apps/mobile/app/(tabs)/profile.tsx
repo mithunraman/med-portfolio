@@ -3,7 +3,7 @@ import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 
 interface SettingsItemProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -60,7 +60,7 @@ function SettingsSection({ title, children }: SettingsSectionProps) {
 }
 
 export default function ProfileScreen() {
-  const insets = useSafeAreaInsets();
+  const insets = useOfflineAwareInsets();
   const router = useRouter();
   const { colors, isDark, toggleMode } = useTheme();
   const { user, isGuest, logout } = useAuth();

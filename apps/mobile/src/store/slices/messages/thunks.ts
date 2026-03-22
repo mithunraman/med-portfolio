@@ -1,8 +1,8 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { ApiError, NetworkError } from '@acme/api-client';
 import { MediaType } from '@acme/shared';
 import { api } from '../../../api/client';
 import { logger } from '../../../utils/logger';
+import { retryWrite } from '../../../utils/retry';
 import {
   addOptimisticMessage,
   updateOptimisticStatus,
@@ -10,31 +10,6 @@ import {
 } from './slice';
 
 const messagesLogger = logger.createScope('MessagesThunks');
-
-// ── Retry helpers ──
-
-const MAX_RETRIES = 3;
-const BASE_DELAY_MS = 1000;
-const MAX_DELAY_MS = 5000;
-const JITTER_MAX_MS = 500;
-
-function isRetryableError(error: unknown): boolean {
-  if (error instanceof NetworkError) return true;
-  if (error instanceof ApiError) {
-    return error.status >= 500 || error.status === 408 || error.status === 429;
-  }
-  return false;
-}
-
-function getRetryDelay(attempt: number): number {
-  const exponential = Math.min(BASE_DELAY_MS * Math.pow(2, attempt), MAX_DELAY_MS);
-  const jitter = Math.random() * JITTER_MAX_MS;
-  return exponential + jitter;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /**
  * Fetch all messages + conversation context for a conversation.
@@ -91,7 +66,7 @@ export const sendMessage = createAsyncThunk(
  *
  * Flow:
  * 1. Generate localId + idempotencyKey, dispatch optimistic message immediately
- * 2. POST to server with retry loop (exponential backoff + jitter)
+ * 2. POST to server with retry (exponential backoff + jitter)
  * 3. On success: remove optimistic message (server message appears via next poll)
  * 4. On final failure: mark optimistic message as 'failed' for tap-to-retry
  */
@@ -120,45 +95,21 @@ export const sendMessageWithRetry = createAsyncThunk(
     };
     dispatch(addOptimisticMessage(optimistic));
 
-    // 2. Retry loop
-    let lastError: unknown;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
+    // 2. Retry with exponential backoff
+    try {
+      const response = await retryWrite(() => {
         const body = { content, idempotencyKey };
-        const response = await api.conversations.sendMessage(conversationId, body);
-        messagesLogger.info('Message sent (with retry)', {
-          messageId: response.id,
-          attempt,
-        });
-
-        // 3. Success — keep optimistic entry visible until poll brings the
-        //    server message and reconciliation removes it via idempotencyKey.
-        return response;
-      } catch (error) {
-        lastError = error;
-
-        // Non-retryable error — fail immediately
-        if (!isRetryableError(error)) {
-          messagesLogger.error('Non-retryable error, failing immediately', {
-            error: error instanceof Error ? error.message : 'Unknown',
-          });
-          break;
-        }
-
-        // Last attempt — don't sleep, fall through to failure
-        if (attempt < MAX_RETRIES) {
-          const delay = getRetryDelay(attempt);
-          messagesLogger.info(`Retry attempt ${attempt + 1}/${MAX_RETRIES} in ${Math.round(delay)}ms`);
-          await sleep(delay);
-        }
-      }
+        return api.conversations.sendMessage(conversationId, body);
+      });
+      messagesLogger.info('Message sent (with retry)', { messageId: response.id });
+      return response;
+    } catch (error) {
+      // All retries exhausted or non-retryable error
+      const errorMsg = error instanceof Error ? error.message : 'Failed to send message';
+      messagesLogger.error('Message send failed after retries', { localId, error: errorMsg });
+      dispatch(updateOptimisticStatus({ localId, status: 'failed', error: errorMsg }));
+      return rejectWithValue(errorMsg);
     }
-
-    // 4. All retries exhausted or non-retryable error
-    const errorMsg = lastError instanceof Error ? lastError.message : 'Failed to send message';
-    messagesLogger.error('Message send failed after retries', { localId, error: errorMsg });
-    dispatch(updateOptimisticStatus({ localId, status: 'failed', error: errorMsg }));
-    return rejectWithValue(errorMsg);
   }
 );
 
@@ -176,27 +127,18 @@ export const retryFailedMessage = createAsyncThunk(
     // Reset status to sending
     dispatch(updateOptimisticStatus({ localId, status: 'sending' }));
 
-    // Retry loop (same as sendMessageWithRetry)
-    let lastError: unknown;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
+    try {
+      const response = await retryWrite(() => {
         const body = { content, idempotencyKey };
-        const response = await api.conversations.sendMessage(conversationId, body);
-        messagesLogger.info('Retry succeeded', { messageId: response.id, attempt });
-        // Keep optimistic entry — poll reconciliation removes it via idempotencyKey
-        return response;
-      } catch (error) {
-        lastError = error;
-        if (!isRetryableError(error)) break;
-        if (attempt < MAX_RETRIES) {
-          await sleep(getRetryDelay(attempt));
-        }
-      }
+        return api.conversations.sendMessage(conversationId, body);
+      });
+      messagesLogger.info('Retry succeeded', { messageId: response.id });
+      return response;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to send message';
+      dispatch(updateOptimisticStatus({ localId, status: 'failed', error: errorMsg }));
+      return rejectWithValue(errorMsg);
     }
-
-    const errorMsg = lastError instanceof Error ? lastError.message : 'Failed to send message';
-    dispatch(updateOptimisticStatus({ localId, status: 'failed', error: errorMsg }));
-    return rejectWithValue(errorMsg);
   }
 );
 
@@ -206,7 +148,7 @@ export const retryFailedMessage = createAsyncThunk(
  * Flow:
  * 1. Add optimistic bubble immediately (before S3 upload)
  * 2. Upload to S3 via presigned URL
- * 3. POST to server with retry loop
+ * 3. POST to server with retry
  * 4. On failure at any step: mark failed
  */
 export const sendVoiceNoteWithRetry = createAsyncThunk(
@@ -237,11 +179,9 @@ export const sendVoiceNoteWithRetry = createAsyncThunk(
     };
     dispatch(addOptimisticMessage(optimistic));
 
-    let lastError: unknown;
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        // 2. Initiate upload + S3 PUT (re-done on each retry in case presigned URL expired)
+    try {
+      const response = await retryWrite(async () => {
+        // Initiate upload + S3 PUT (re-done on each retry in case presigned URL expired)
         const { mediaId, uploadUrl } = await api.media.initiateUpload({
           mediaType: MediaType.AUDIO,
           mimeType: recordingMime,
@@ -255,25 +195,18 @@ export const sendVoiceNoteWithRetry = createAsyncThunk(
           body: blob,
         });
 
-        // 3. Send message with mediaId
+        // Send message with mediaId
         const body = { mediaId, idempotencyKey };
-        const response = await api.conversations.sendMessage(conversationId, body);
-        messagesLogger.info('Voice note sent', { messageId: response.id, attempt });
-        // Keep optimistic entry — poll reconciliation removes it via idempotencyKey
-        return response;
-      } catch (error) {
-        lastError = error;
-        if (!isRetryableError(error) && !(error instanceof TypeError)) break;
-        if (attempt < MAX_RETRIES) {
-          await sleep(getRetryDelay(attempt));
-        }
-      }
+        return api.conversations.sendMessage(conversationId, body);
+      });
+      messagesLogger.info('Voice note sent', { messageId: response.id });
+      return response;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to send voice note';
+      messagesLogger.error('Voice note send failed after retries', { localId, error: errorMsg });
+      dispatch(updateOptimisticStatus({ localId, status: 'failed', error: errorMsg }));
+      return rejectWithValue(errorMsg);
     }
-
-    const errorMsg = lastError instanceof Error ? lastError.message : 'Failed to send voice note';
-    messagesLogger.error('Voice note send failed after retries', { localId, error: errorMsg });
-    dispatch(updateOptimisticStatus({ localId, status: 'failed', error: errorMsg }));
-    return rejectWithValue(errorMsg);
   }
 );
 
@@ -311,34 +244,22 @@ export const resumeAnalysisWithOptimistic = createAsyncThunk(
     };
     dispatch(addOptimisticMessage(optimistic));
 
-    // Retry loop for the resume call
-    let lastError: unknown;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const context = await api.conversations.analysis(conversationId, {
+    try {
+      const context = await retryWrite(() =>
+        api.conversations.analysis(conversationId, {
           type: 'resume',
           messageId,
           value: { ...value, idempotencyKey },
-        });
-        messagesLogger.info('Resume analysis succeeded', { conversationId, attempt });
-
-        // Don't remove optimistic — wait for poll to bring the server message
-        // Just mark delivery as successful by keeping status as 'sending'
-        // The poll reconciliation will remove it when server message arrives
-        return { conversationId, context };
-      } catch (error) {
-        lastError = error;
-        if (!isRetryableError(error)) break;
-        if (attempt < MAX_RETRIES) {
-          await sleep(getRetryDelay(attempt));
-        }
-      }
+        })
+      );
+      messagesLogger.info('Resume analysis succeeded', { conversationId });
+      return { conversationId, context };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to resume analysis';
+      messagesLogger.error('Resume analysis failed after retries', { localId, error: errorMsg });
+      dispatch(updateOptimisticStatus({ localId, status: 'failed', error: errorMsg }));
+      return rejectWithValue(errorMsg);
     }
-
-    const errorMsg = lastError instanceof Error ? lastError.message : 'Failed to resume analysis';
-    messagesLogger.error('Resume analysis failed after retries', { localId, error: errorMsg });
-    dispatch(updateOptimisticStatus({ localId, status: 'failed', error: errorMsg }));
-    return rejectWithValue(errorMsg);
   }
 );
 

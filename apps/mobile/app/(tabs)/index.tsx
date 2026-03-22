@@ -1,5 +1,6 @@
 import { CoverageRing, SectionHeader, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
+import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { fetchDashboard } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
@@ -10,7 +11,7 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -369,7 +370,7 @@ function ReviewPeriodCoverageModule({
 // ─── Home Screen ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
-  const insets = useSafeAreaInsets();
+  const insets = useOfflineAwareInsets();
   const router = useRouter();
   const { colors } = useTheme();
 
@@ -388,6 +389,9 @@ export default function HomeScreen() {
   useEffect(() => {
     dispatch(fetchDashboard());
   }, [dispatch]);
+
+  // Refetch dashboard when connectivity returns
+  useNetworkRecovery(useCallback(() => dispatch(fetchDashboard()), [dispatch]));
 
   const handleStartNew = useCallback(() => {
     const newConversationId = randomUUID();

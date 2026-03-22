@@ -3,6 +3,7 @@ import { ArtefactStatus } from '@acme/shared';
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { api } from '../../../api/client';
 import { logger } from '../../../utils/logger';
+import { retryRead } from '../../../utils/retry';
 
 const artefactsLogger = logger.createScope('ArtefactsThunks');
 
@@ -43,7 +44,7 @@ export const fetchArtefacts = createAsyncThunk(
     artefactsLogger.info('Fetching artefacts', params);
 
     try {
-      const response = await api.artefacts.listArtefacts(params);
+      const response = await retryRead(() => api.artefacts.listArtefacts(params));
       artefactsLogger.info('Fetched artefacts', { count: response.artefacts.length });
       return response;
     } catch (error) {
@@ -63,7 +64,7 @@ export const fetchArtefact = createAsyncThunk(
     artefactsLogger.info('Fetching artefact', { artefactId: params.artefactId });
 
     try {
-      const response = await api.artefacts.getArtefact(params.artefactId);
+      const response = await retryRead(() => api.artefacts.getArtefact(params.artefactId));
       artefactsLogger.info('Fetched artefact', { artefactId: response.id });
       return response;
     } catch (error) {

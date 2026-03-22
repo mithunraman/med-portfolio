@@ -21,3 +21,6 @@ export { pdpGoalsReducer } from './pdpGoals';
 
 export * from './reviewPeriods';
 export { reviewPeriodsReducer } from './reviewPeriods';
+
+export * from './networkSlice';
+export { default as networkReducer } from './networkSlice';

@@ -1,6 +1,7 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { api } from '../../../api/client';
 import { logger } from '../../../utils/logger';
+import { retryRead } from '../../../utils/retry';
 
 const conversationsLogger = logger.createScope('ConversationsThunks');
 
@@ -13,7 +14,7 @@ export const fetchConversations = createAsyncThunk(
     conversationsLogger.info('Fetching conversations', params);
 
     try {
-      const response = await api.conversations.listConversations(params);
+      const response = await retryRead(() => api.conversations.listConversations(params));
       conversationsLogger.info('Fetched conversations', { count: response.conversations.length });
       return response;
     } catch (error) {

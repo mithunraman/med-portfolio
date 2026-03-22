@@ -1,5 +1,6 @@
 import { FloatingActionButton } from '@/components/FloatingActionButton';
 import { useAppDispatch, useAppSelector } from '@/hooks';
+import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { conversationSelectors, fetchConversations } from '@/store';
 import { useTheme } from '@/theme';
 import { Conversation } from '@acme/shared';
@@ -36,6 +37,9 @@ export default function ConversationsListScreen() {
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
+
+  // Refetch conversations when connectivity returns
+  useNetworkRecovery(loadConversations);
 
   const handleNewConversation = useCallback(() => {
     const localId = randomUUID();

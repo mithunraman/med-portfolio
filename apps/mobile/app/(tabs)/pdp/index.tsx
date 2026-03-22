@@ -1,6 +1,7 @@
 import { EmptyState, StatusPill } from '@/components';
 import type { StatusVariant } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
+import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { fetchPdpGoals, selectAllPdpGoals } from '@/store';
 import { useTheme } from '@/theme';
 import { PdpGoalStatus, type PdpGoalResponse } from '@acme/shared';
@@ -15,7 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -80,7 +81,7 @@ function GoalListItem({ item, onPress }: { item: PdpGoalResponse; onPress: () =>
 }
 
 export default function PdpScreen() {
-  const insets = useSafeAreaInsets();
+  const insets = useOfflineAwareInsets();
   const { colors } = useTheme();
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -95,6 +96,9 @@ export default function PdpScreen() {
   useEffect(() => {
     dispatch(fetchPdpGoals());
   }, [dispatch]);
+
+  // Refetch goals when connectivity returns
+  useNetworkRecovery(useCallback(() => dispatch(fetchPdpGoals()), [dispatch]));
 
   const filteredGoals = useMemo(() => {
     if (activeFilter === null) return goals;

@@ -2,6 +2,7 @@ import type { CreateReviewPeriodRequest, UpdateReviewPeriodRequest } from '@acme
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { api } from '../../../api/client';
 import { logger } from '../../../utils/logger';
+import { retryRead } from '../../../utils/retry';
 
 const reviewPeriodsLogger = logger.createScope('ReviewPeriodsThunks');
 
@@ -10,7 +11,7 @@ export const fetchReviewPeriods = createAsyncThunk(
   async (_: void, { rejectWithValue }) => {
     reviewPeriodsLogger.info('Fetching review periods');
     try {
-      const response = await api.reviewPeriods.listReviewPeriods();
+      const response = await retryRead(() => api.reviewPeriods.listReviewPeriods());
       reviewPeriodsLogger.info('Fetched review periods', {
         count: response.reviewPeriods.length,
       });
@@ -77,7 +78,7 @@ export const fetchCoverage = createAsyncThunk(
   async (xid: string, { rejectWithValue }) => {
     reviewPeriodsLogger.info('Fetching coverage', { xid });
     try {
-      const response = await api.reviewPeriods.getCoverage(xid);
+      const response = await retryRead(() => api.reviewPeriods.getCoverage(xid));
       reviewPeriodsLogger.info('Fetched coverage', {
         xid,
         coveragePercent: response.summary.coveragePercent,

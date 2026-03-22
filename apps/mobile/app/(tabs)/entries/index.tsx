@@ -1,5 +1,6 @@
 import { EmptyState, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
+import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { fetchArtefacts, selectAllArtefacts } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
@@ -15,7 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 
 // Status filter options — using null to mean "All"
 const STATUS_FILTERS: { label: string; value: ArtefactStatus | null }[] = [
@@ -68,7 +69,7 @@ function EntryListItem({ item, onPress }: { item: Artefact; onPress: () => void 
 }
 
 export default function EntriesScreen() {
-  const insets = useSafeAreaInsets();
+  const insets = useOfflineAwareInsets();
   const { colors } = useTheme();
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -83,6 +84,9 @@ export default function EntriesScreen() {
   useEffect(() => {
     dispatch(fetchArtefacts());
   }, [dispatch]);
+
+  // Refetch entries when connectivity returns
+  useNetworkRecovery(useCallback(() => dispatch(fetchArtefacts()), [dispatch]));
 
   const filteredArtefacts = useMemo(() => {
     if (activeFilter === null) return artefacts;

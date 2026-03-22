@@ -1,6 +1,7 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { api } from '../../../api/client';
 import { logger } from '../../../utils/logger';
+import { retryRead } from '../../../utils/retry';
 
 const dashboardLogger = logger.createScope('DashboardThunks');
 
@@ -10,7 +11,7 @@ export const fetchDashboard = createAsyncThunk(
     dashboardLogger.info('Fetching dashboard');
 
     try {
-      const response = await api.dashboard.getDashboard();
+      const response = await retryRead(() => api.dashboard.getDashboard());
       dashboardLogger.info('Dashboard fetched', {
         recentEntries: response.recentEntries.items.length,
         pdpGoals: response.pdpGoalsDue.items.length,

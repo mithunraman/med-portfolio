@@ -7,6 +7,7 @@ import type {
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { api } from '../../../api/client';
 import { logger } from '../../../utils/logger';
+import { retryRead } from '../../../utils/retry';
 
 const pdpGoalsLogger = logger.createScope('PdpGoalsThunks');
 
@@ -15,7 +16,7 @@ export const fetchPdpGoals = createAsyncThunk(
   async (params: { statuses?: PdpGoalStatus[] } | undefined, { rejectWithValue }) => {
     pdpGoalsLogger.info('Fetching PDP goals');
     try {
-      const response = await api.pdpGoals.listGoals(params?.statuses);
+      const response = await retryRead(() => api.pdpGoals.listGoals(params?.statuses));
       pdpGoalsLogger.info('Fetched PDP goals', { count: response.goals.length });
       return response;
     } catch (error) {
@@ -31,7 +32,7 @@ export const fetchPdpGoal = createAsyncThunk(
   async (params: { goalId: string }, { rejectWithValue }) => {
     pdpGoalsLogger.info('Fetching PDP goal', { goalId: params.goalId });
     try {
-      const response = await api.pdpGoals.getGoal(params.goalId);
+      const response = await retryRead(() => api.pdpGoals.getGoal(params.goalId));
       return response;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch PDP goal';

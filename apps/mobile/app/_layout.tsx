@@ -1,5 +1,7 @@
 import { ErrorBoundary } from '@/components';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import { useAppDispatch, useAppSelector } from '@/hooks';
+import { useNetworkListener } from '@/hooks/useNetworkListener';
 import { initializeAuth, loadOnboardingState, setUnauthenticated, store } from '@/store';
 import { ThemeProvider, useTheme } from '@/theme';
 import { setOnUnauthorized } from '@/api/client';
@@ -34,6 +36,9 @@ function RootLayoutNav() {
 
   const authStatus = useAppSelector((state) => state.auth.status);
   const onboardingInitialized = useAppSelector((state) => state.onboarding.isInitialized);
+
+  // Subscribe to network state changes
+  useNetworkListener();
 
   // Initialize app state on mount
   useEffect(() => {
@@ -123,6 +128,7 @@ function RootLayoutNav() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <OfflineBanner />
       <Stack
         screenOptions={{
           headerShown: false,

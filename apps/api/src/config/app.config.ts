@@ -11,6 +11,9 @@ export const envSchema = z.object({
     .transform((val) => parseInt(val, 10))
     .pipe(z.number().int().min(1).max(65535)),
   NODE_ENV: z.enum(['development', 'production', 'test']),
+  LOG_LEVEL: z
+    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
+    .default('info'),
 
   // Database
   MONGODB_URI: z
@@ -113,6 +116,7 @@ export const appConfig = registerAs('app', () => {
   return {
     port: env.PORT,
     nodeEnv: env.NODE_ENV,
+    logLevel: env.LOG_LEVEL,
     mongodb: {
       uri: env.MONGODB_URI,
     },

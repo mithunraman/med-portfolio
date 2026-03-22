@@ -1,6 +1,9 @@
+import { randomUUID } from 'crypto';
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { LoggerModule } from 'nestjs-pino';
 import { ConfigModule } from './config';
 import { DatabaseModule } from './database';
 import { AuthModule } from './auth/auth.module';
@@ -24,6 +27,37 @@ import { TokenRefreshInterceptor } from './common/interceptors';
     ConfigModule,
     DatabaseModule,
     EventEmitterModule.forRoot(),
+    LoggerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        pinoHttp: {
+          level: config.get('app.logLevel'),
+          transport:
+            config.get('app.nodeEnv') === 'development'
+              ? { target: 'pino-pretty', options: { colorize: true, singleLine: true } }
+              : undefined,
+          // Phase 3: Correlation IDs — honour client X-Request-Id, else generate UUID
+          genReqId: (req: Record<string, any>) =>
+            req.headers['x-request-id'] ?? randomUUID(),
+          // Phase 2: HTTP request logging
+          customProps: (req: Record<string, any>, res: Record<string, any>) => {
+            // Return X-Request-Id in response so clients can correlate
+            if (req.id && !res.headersSent) {
+              res.setHeader('X-Request-Id', req.id);
+            }
+            return { userId: req['user']?.userId };
+          },
+          redact: ['req.headers.authorization', 'req.headers.cookie'],
+          customSuccessMessage: (req: Record<string, any>, res: Record<string, any>) =>
+            `${req.method} ${req.url} ${res.statusCode}`,
+          customErrorMessage: (req: Record<string, any>, res: Record<string, any>) =>
+            `${req.method} ${req.url} ${res.statusCode}`,
+          autoLogging: {
+            ignore: (req: Record<string, any>) => req.url === '/api/health',
+          },
+        },
+      }),
+    }),
     AuthModule,
     ItemsModule,
     StorageModule,

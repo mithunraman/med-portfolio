@@ -1,3 +1,5 @@
+import { useTheme } from '@/theme';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
@@ -12,7 +14,6 @@ import {
   type ViewToken,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '@/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -20,33 +21,35 @@ interface Slide {
   id: string;
   title: string;
   description: string;
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
 }
 
 const SLIDES: Slide[] = [
   {
     id: '1',
-    title: 'Welcome',
-    description: 'Discover a better way to manage your tasks and stay organized.',
-    icon: '1',
+    title: 'Just Talk',
+    description: 'Describe your clinical experience in your own words. We\u2019ll handle the rest.',
+    icon: 'mic-outline',
   },
   {
     id: '2',
-    title: 'Stay Organized',
-    description: 'Keep track of everything in one place. Never miss a deadline again.',
-    icon: '2',
+    title: 'Portfolio-Ready in Minutes',
+    description:
+      'Your words become structured reflections, mapped to your curriculum capabilities.',
+    icon: 'document-text-outline',
   },
   {
     id: '3',
-    title: 'Collaborate',
-    description: 'Work together with your team seamlessly and efficiently.',
-    icon: '3',
+    title: 'Track Your Progress',
+    description:
+      'See which capabilities you\u2019ve evidenced and where the gaps are before your ARCP.',
+    icon: 'analytics-outline',
   },
   {
     id: '4',
     title: 'Get Started',
-    description: 'Create a free account or try the app first. Your data will be saved.',
-    icon: '4',
+    description: 'Create an account or try it first \u2014 your entries are saved either way.',
+    icon: 'rocket-outline',
   },
 ];
 
@@ -92,7 +95,7 @@ export default function IntroScreen() {
     ({ item }) => (
       <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
         <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.iconText, { color: colors.primary }]}>{item.icon}</Text>
+          <Ionicons name={item.icon} size={48} color={colors.primary} />
         </View>
         <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
         <Text style={[styles.description, { color: colors.textSecondary }]}>
@@ -202,10 +205,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 40,
-  },
-  iconText: {
-    fontSize: 48,
-    fontWeight: 'bold',
   },
   title: {
     fontSize: 28,

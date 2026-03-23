@@ -87,7 +87,7 @@ const THINKING_STEP_LABELS: Record<string, string> = {
   [ThinkingStep.PRESENT_CAPABILITIES]: 'Reviewing capabilities...',
   [ThinkingStep.CHECK_COMPLETENESS]: 'Checking completeness...',
   [ThinkingStep.REFLECT]: 'Reflecting on analysis...',
-  [ThinkingStep.GENERATE_PDP]: 'Generating development plan...',
+  [ThinkingStep.GENERATE_PDP]: 'Suggesting development goals...',
   [ThinkingStep.SAVE]: 'Saving results...',
 };
 

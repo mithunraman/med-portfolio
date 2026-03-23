@@ -1,8 +1,19 @@
+import { useState } from 'react';
 import { useAuth } from '@/hooks';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 
 interface SettingsItemProps {
@@ -64,6 +75,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { colors, isDark, toggleMode } = useTheme();
   const { user, isGuest, logout } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = () => {
     Alert.alert(
@@ -76,7 +88,10 @@ export default function ProfileScreen() {
         {
           text: isGuest ? 'Exit' : 'Sign Out',
           style: 'destructive',
-          onPress: logout,
+          onPress: async () => {
+            setIsLoggingOut(true);
+            await logout();
+          },
         },
       ]
     );
@@ -200,6 +215,18 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Full-screen blocking overlay during logout */}
+      <Modal visible={isLoggingOut} transparent animationType="fade">
+        <View style={styles.overlay}>
+          <View style={[styles.overlayContent, { backgroundColor: colors.surface }]}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.overlayText, { color: colors.text }]}>
+              {isGuest ? 'Exiting guest mode...' : 'Signing out...'}
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -314,5 +341,22 @@ const styles = StyleSheet.create({
   logoutButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overlayContent: {
+    paddingHorizontal: 40,
+    paddingVertical: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    gap: 16,
+  },
+  overlayText: {
+    fontSize: 16,
+    fontWeight: '500',
   },
 });

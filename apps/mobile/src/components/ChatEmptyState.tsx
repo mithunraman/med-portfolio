@@ -18,7 +18,7 @@ const STEPS = [
   {
     number: '3',
     title: 'Review & refine',
-    detail: 'The AI will ask questions to refine your portfolio entry',
+    detail: 'The AI will ask questions to help you complete your reflection',
   },
 ];
 

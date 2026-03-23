@@ -36,7 +36,7 @@ const SLIDES: Slide[] = [
   {
     id: '1',
     title: 'Just Talk',
-    description: 'Describe your clinical experience in your own words. We\u2019ll handle the rest.',
+    description: 'Describe your clinical experience in your own words. We\u2019ll do the paperwork.',
     icon: 'mic-outline',
   },
   {

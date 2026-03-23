@@ -1,9 +1,18 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/hooks';
 import { useTheme } from '@/theme';
+
+/** Convert a hex colour to rgba with the given alpha (0–1). */
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -33,16 +42,21 @@ export default function WelcomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.content, { paddingTop: insets.top + 60 }]}>
-        {/* Logo / Icon */}
-        <View style={[styles.logoContainer, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.logoText, { color: colors.primary }]}>App</Text>
+      {/* Centred content block */}
+      <View style={styles.content}>
+        {/* Logo — double-ring icon, matching intro screen */}
+        <View style={[styles.logoRing, { backgroundColor: hexToRgba(colors.primary, 0.06) }]}>
+          <View
+            style={[styles.logoContainer, { backgroundColor: hexToRgba(colors.primary, 0.12) }]}
+          >
+            <Ionicons name="briefcase-outline" size={48} color={colors.primary} />
+          </View>
         </View>
 
-        {/* Welcome Text */}
-        <Text style={[styles.title, { color: colors.text }]}>Ready to get started?</Text>
+        {/* Welcome text */}
+        <Text style={[styles.title, { color: colors.text }]}>Your portfolio, simplified</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Sign in with your email, or explore the app first.
+          Speak about your clinical experiences. We'll do the paperwork.
         </Text>
 
         {/* Error message */}
@@ -69,21 +83,17 @@ export default function WelcomeScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Helper text */}
-        <Text style={[styles.helperText, { color: colors.textSecondary }]}>
-          You can explore first without creating an account
-        </Text>
-
-        {/* Secondary: Sign in */}
+        {/* Secondary: Sign in — text link style */}
         <TouchableOpacity
-          style={[styles.secondaryButton, { borderColor: colors.border }]}
+          style={styles.secondaryButton}
           onPress={handleSignIn}
           disabled={isLoading}
           activeOpacity={0.8}
         >
-          <Text style={[styles.secondaryButtonText, { color: colors.text }]}>Sign in</Text>
+          <Text style={[styles.secondaryButtonText, { color: colors.textSecondary }]}>
+            Already have an account? <Text style={{ color: colors.primary }}>Sign in</Text>
+          </Text>
         </TouchableOpacity>
-
       </View>
     </View>
   );
@@ -96,19 +106,23 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 24,
   },
-  logoContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 24,
+  logoRing: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 32,
+    marginBottom: 40,
   },
-  logoText: {
-    fontSize: 32,
-    fontWeight: 'bold',
+  logoContainer: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontSize: 28,
@@ -134,7 +148,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 24,
-    gap: 12,
+    gap: 16,
   },
   primaryButton: {
     paddingVertical: 16,
@@ -146,20 +160,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
-  helperText: {
-    fontSize: 13,
-    textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 8,
-  },
   secondaryButton: {
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: 12,
     alignItems: 'center',
-    borderWidth: 1,
   },
   secondaryButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '500',
   },
 });

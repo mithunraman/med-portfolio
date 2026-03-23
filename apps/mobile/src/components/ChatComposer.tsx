@@ -1,7 +1,7 @@
 import { logger } from '@/utils/logger';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { ConversationPhase } from '@acme/shared';
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -95,11 +95,20 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<TextInputType>(null);
 
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    };
+  }, []);
+
   useImperativeHandle(ref, () => ({
     prefill(value: string) {
       setText(value);
       // Small delay so the TextInput re-renders with the new value before focusing
-      setTimeout(() => inputRef.current?.focus(), 50);
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+      focusTimerRef.current = setTimeout(() => inputRef.current?.focus(), 50);
     },
   }));
 

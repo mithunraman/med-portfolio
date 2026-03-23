@@ -1,13 +1,9 @@
-import { createAsyncThunk } from '@reduxjs/toolkit';
 import { MediaType } from '@acme/shared';
+import { createAsyncThunk } from '@reduxjs/toolkit';
 import { api } from '../../../api/client';
 import { logger } from '../../../utils/logger';
 import { retryWrite } from '../../../utils/retry';
-import {
-  addOptimisticMessage,
-  updateOptimisticStatus,
-  type OptimisticMessage,
-} from './slice';
+import { addOptimisticMessage, updateOptimisticStatus, type OptimisticMessage } from './slice';
 
 const messagesLogger = logger.createScope('MessagesThunks');
 

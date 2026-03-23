@@ -93,6 +93,11 @@ export default function PdpScreen() {
   const [activeFilter, setActiveFilter] = useState<PdpGoalStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  const listContentStyle = useMemo(
+    () => [styles.listContent, { paddingBottom: insets.bottom + 16 }],
+    [insets.bottom],
+  );
+
   useEffect(() => {
     dispatch(fetchPdpGoals());
   }, [dispatch]);
@@ -197,7 +202,7 @@ export default function PdpScreen() {
           data={filteredGoals}
           keyExtractor={keyExtractor}
           renderItem={renderItem}
-          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}
+          contentContainerStyle={listContentStyle}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

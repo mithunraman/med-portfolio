@@ -1,26 +1,96 @@
-export * from './artefacts';
+// ── Reducers (consumed by store/index.ts) ──
 export { artefactsReducer } from './artefacts';
-
-export * from './authSlice';
 export { default as authReducer } from './authSlice';
-
-export * from './conversations';
 export { conversationsReducer } from './conversations';
-
-export * from './messages';
 export { messagesReducer } from './messages';
-
-export * from './onboardingSlice';
 export { default as onboardingReducer } from './onboardingSlice';
-
-export * from './dashboard';
 export { dashboardReducer } from './dashboard';
-
-export * from './pdpGoals';
 export { pdpGoalsReducer } from './pdpGoals';
-
-export * from './reviewPeriods';
 export { reviewPeriodsReducer } from './reviewPeriods';
-
-export * from './networkSlice';
 export { default as networkReducer } from './networkSlice';
+
+// ── Artefacts ──
+export {
+  createArtefact,
+  fetchArtefact,
+  fetchArtefacts,
+  updateArtefactStatus,
+  duplicateToReview,
+  editArtefact,
+  fetchVersionHistory,
+  restoreVersion,
+  finaliseArtefact,
+  selectAllArtefacts,
+  selectArtefactById,
+} from './artefacts';
+
+// ── Auth ──
+export {
+  initializeAuth,
+  otpSend,
+  otpVerify,
+  registerGuest,
+  claimGuest,
+  logout,
+  clearError,
+  setUnauthenticated,
+  clearNewRegistration,
+} from './authSlice';
+export type { AuthStatus, AuthState } from './authSlice';
+
+// ── Conversations ──
+export { fetchConversations, conversationSelectors } from './conversations';
+
+// ── Messages ──
+export {
+  fetchMessages,
+  sendMessage,
+  sendMessageWithRetry,
+  retryFailedMessage,
+  sendVoiceNoteWithRetry,
+  resumeAnalysisWithOptimistic,
+  pollConversation,
+  startAnalysis,
+  resumeAnalysis,
+  clearMessagesError,
+  clearAnalysisError,
+  clearMessages,
+  upsertMessage,
+  addOptimisticMessage,
+  updateOptimisticStatus,
+  removeOptimisticMessage,
+  messageSelectors,
+  toRenderableMessage,
+} from './messages';
+export type { DeliveryStatus, OptimisticMessage, RenderableMessage } from './messages';
+
+// ── Onboarding ──
+export { loadOnboardingState } from './onboardingSlice';
+
+// ── Dashboard ──
+export { fetchDashboard, clearDashboard } from './dashboard';
+
+// ── PDP Goals ──
+export {
+  fetchPdpGoals,
+  fetchPdpGoal,
+  updatePdpGoal,
+  addPdpGoalAction,
+  updatePdpGoalAction,
+  selectAllPdpGoals,
+  selectPdpGoalById,
+} from './pdpGoals';
+
+// ── Review Periods ──
+export {
+  fetchReviewPeriods,
+  createReviewPeriod,
+  updateReviewPeriod,
+  archiveReviewPeriod,
+  fetchCoverage,
+  selectAllReviewPeriods,
+  selectReviewPeriodById,
+} from './reviewPeriods';
+
+// ── Network ──
+export { setNetworkStatus, setBannerVisible, selectIsOffline, selectBannerVisible } from './networkSlice';

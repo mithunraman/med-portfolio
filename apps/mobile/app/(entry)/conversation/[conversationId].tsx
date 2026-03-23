@@ -37,11 +37,7 @@ export default function ConversationViewScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <MessageList
-        messages={messages}
-        currentUserId={user?.id ?? ''}
-        isLoading={isLoading}
-      />
+      <MessageList messages={messages} currentUserId={user?.id ?? ''} isLoading={isLoading} />
     </View>
   );
 }

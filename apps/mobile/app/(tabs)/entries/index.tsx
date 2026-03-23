@@ -81,6 +81,11 @@ export default function EntriesScreen() {
   const [activeFilter, setActiveFilter] = useState<ArtefactStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  const listContentStyle = useMemo(
+    () => [styles.listContent, { paddingBottom: insets.bottom + 16 }],
+    [insets.bottom],
+  );
+
   useEffect(() => {
     dispatch(fetchArtefacts());
   }, [dispatch]);
@@ -190,7 +195,7 @@ export default function EntriesScreen() {
           data={filteredArtefacts}
           keyExtractor={keyExtractor}
           renderItem={renderItem}
-          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}
+          contentContainerStyle={listContentStyle}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

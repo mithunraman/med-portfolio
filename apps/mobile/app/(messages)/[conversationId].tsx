@@ -16,6 +16,13 @@ import {
   startAnalysis,
 } from '@/store';
 import { type RenderableMessage, toRenderableMessage } from '@/store/slices/messages/slice';
+import {
+  makeSelectOptimisticMessages,
+  makeSelectServerMessages,
+  selectContextByConversation,
+  selectMessagesLoading,
+  selectMessagesSending,
+} from '@/store/slices/messages/selectors';
 import { useTheme } from '@/theme';
 import { generateIdempotencyKey } from '@/utils/idempotency';
 import { logger } from '@/utils/logger';
@@ -34,11 +41,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { shallowEqual } from 'react-redux';
-
-// Stable empty array — prevents a new reference on every render for unseen conversations
-const EMPTY_IDS: string[] = [];
-
 /** Minimum user words before "Start Analysis" is available */
 const INITIAL_WORD_THRESHOLD = 60;
 /** Minimum user words (since the question) before "Continue Analysis" is available */
@@ -119,33 +121,27 @@ export default function ChatScreen() {
   // Use real conversation ID if available, otherwise use URL param
   const effectiveConversationId = realConversationId ?? conversationId ?? '';
 
-  const loadingMessages = useAppSelector((state) => state.messages.loading);
-  const sendingMessage = useAppSelector((state) => state.messages.sending);
+  const loadingMessages = useAppSelector(selectMessagesLoading);
+  const sendingMessage = useAppSelector(selectMessagesSending);
   // Conversation context — server-driven action state
   const context = useAppSelector(
-    (state) => state.messages.contextByConversation[effectiveConversationId]
+    (state) => selectContextByConversation(state, effectiveConversationId)
   );
 
   // Artefact ID comes from the server-driven context (reliable across all flows)
   const artefactId = context?.artefactId ?? artefactIdRef.current;
 
-  // Step 1: stable ID list — only changes when this conversation's message list changes
-  const messageIds = useAppSelector(
-    (state) => state.messages.idsByConversation[effectiveConversationId] ?? EMPTY_IDS
-  );
+  // Per-component selector instances — stable across renders, memoize per conversationId
+  const selectServerMessages = useMemo(() => makeSelectServerMessages(), []);
+  const selectOptimisticMessages = useMemo(() => makeSelectOptimisticMessages(), []);
 
-  // Step 2: map IDs → entities — shallowEqual means re-render only when a message
-  // object in THIS conversation changes, not when any other conversation is updated
   const serverMessages = useAppSelector(
-    (state) => messageIds.map((id) => state.messages.entities[id]).filter(Boolean) as Message[],
-    shallowEqual
-  );
+    (state) => selectServerMessages(state, effectiveConversationId)
+  ) as Message[];
 
-  // Optimistic messages for this conversation
-  const optimisticMessages = useAppSelector((state) => {
-    const all = state.messages.optimisticMessages;
-    return Object.values(all).filter((m) => m.conversationId === effectiveConversationId);
-  }, shallowEqual);
+  const optimisticMessages = useAppSelector(
+    (state) => selectOptimisticMessages(state, effectiveConversationId)
+  );
 
   // Merge server messages + optimistic messages, sorted newest first
   const mergedMessages: RenderableMessage[] = useMemo(() => {
@@ -186,7 +182,9 @@ export default function ChatScreen() {
   const pollIntervalMs = getPollInterval(context?.phase, hasProcessingMessages, hasUnsentMessages);
 
   useEffect(() => {
-    if (!effectiveConversationId || isPendingConversation || pollIntervalMs === null) return;
+    if (!effectiveConversationId || isPendingConversation || pollIntervalMs === null) {
+      return undefined;
+    }
 
     let intervalId: ReturnType<typeof setInterval> | null = null;
 

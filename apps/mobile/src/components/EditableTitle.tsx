@@ -1,6 +1,6 @@
 import { useTheme } from '@/theme';
 import { Feather } from '@expo/vector-icons';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 interface EditableTitleProps {
@@ -13,11 +13,19 @@ export function EditableTitle({ value, onChange, editable }: EditableTitleProps)
   const { colors } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    };
+  }, []);
 
   const handlePress = useCallback(() => {
     if (!editable) return;
     setIsEditing(true);
-    setTimeout(() => inputRef.current?.focus(), 50);
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    focusTimerRef.current = setTimeout(() => inputRef.current?.focus(), 50);
   }, [editable]);
 
   const handleBlur = useCallback(() => {

@@ -392,6 +392,11 @@ export default function HomeScreen() {
   // True on first load when no data exists yet (not on subsequent refreshes)
   const isInitialLoad = dashboardLoading && !dashboardData;
 
+  const scrollContentStyle = useMemo(
+    () => [styles.scrollContent, { paddingTop: 16, paddingBottom: insets.bottom + 24 }],
+    [insets.bottom],
+  );
+
   // Randomise prompt on each screen focus (not just mount)
   const [prompt, setPrompt] = useState(() => PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
   useFocusEffect(
@@ -465,10 +470,7 @@ export default function HomeScreen() {
     >
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: 16, paddingBottom: insets.bottom + 24 },
-        ]}
+        contentContainerStyle={scrollContentStyle}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}

@@ -97,8 +97,14 @@ export default function PdpScreen() {
     dispatch(fetchPdpGoals());
   }, [dispatch]);
 
-  // Refetch goals when connectivity returns
-  useNetworkRecovery(useCallback(() => dispatch(fetchPdpGoals()), [dispatch]));
+  // Refetch goals when connectivity returns, only if data is missing or errored
+  useNetworkRecovery(
+    useCallback(() => {
+      if (!loading && (goals.length === 0 || error)) {
+        dispatch(fetchPdpGoals());
+      }
+    }, [dispatch, loading, goals.length, error])
+  );
 
   const filteredGoals = useMemo(() => {
     if (activeFilter === null) return goals;

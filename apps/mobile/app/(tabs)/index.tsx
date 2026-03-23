@@ -377,6 +377,8 @@ export default function HomeScreen() {
   const dispatch = useAppDispatch();
 
   const dashboardData = useAppSelector((state) => state.dashboard.data);
+  const dashboardLoading = useAppSelector((state) => state.dashboard.loading);
+  const dashboardError = useAppSelector((state) => state.dashboard.error);
 
   // Randomise prompt on each screen focus (not just mount)
   const [prompt, setPrompt] = useState(() => PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
@@ -390,8 +392,14 @@ export default function HomeScreen() {
     dispatch(fetchDashboard());
   }, [dispatch]);
 
-  // Refetch dashboard when connectivity returns
-  useNetworkRecovery(useCallback(() => dispatch(fetchDashboard()), [dispatch]));
+  // Refetch dashboard when connectivity returns, only if data is missing or errored
+  useNetworkRecovery(
+    useCallback(() => {
+      if (!dashboardLoading && (!dashboardData || dashboardError)) {
+        dispatch(fetchDashboard());
+      }
+    }, [dispatch, dashboardLoading, dashboardData, dashboardError])
+  );
 
   const handleStartNew = useCallback(() => {
     const newConversationId = randomUUID();

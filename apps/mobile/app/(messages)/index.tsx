@@ -38,8 +38,14 @@ export default function ConversationsListScreen() {
     loadConversations();
   }, [loadConversations]);
 
-  // Refetch conversations when connectivity returns
-  useNetworkRecovery(loadConversations);
+  // Refetch conversations when connectivity returns, only if data is missing or errored
+  useNetworkRecovery(
+    useCallback(() => {
+      if (!loading && (conversations.length === 0 || error)) {
+        loadConversations();
+      }
+    }, [loading, conversations.length, error, loadConversations])
+  );
 
   const handleNewConversation = useCallback(() => {
     const localId = randomUUID();

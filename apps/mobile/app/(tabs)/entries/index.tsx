@@ -85,8 +85,14 @@ export default function EntriesScreen() {
     dispatch(fetchArtefacts());
   }, [dispatch]);
 
-  // Refetch entries when connectivity returns
-  useNetworkRecovery(useCallback(() => dispatch(fetchArtefacts()), [dispatch]));
+  // Refetch entries when connectivity returns, only if data is missing or errored
+  useNetworkRecovery(
+    useCallback(() => {
+      if (!loading && (artefacts.length === 0 || error)) {
+        dispatch(fetchArtefacts());
+      }
+    }, [dispatch, loading, artefacts.length, error])
+  );
 
   const filteredArtefacts = useMemo(() => {
     if (activeFilter === null) return artefacts;

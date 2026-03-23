@@ -17,6 +17,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+/** Convert a hex colour to rgba with the given alpha (0–1). */
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 interface Slide {
   id: string;
   title: string;
@@ -94,13 +102,24 @@ export default function IntroScreen() {
   const renderSlide: ListRenderItem<Slide> = useCallback(
     ({ item }) => (
       <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
-        <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
-          <Ionicons name={item.icon} size={48} color={colors.primary} />
+        {/* Icon zone — upper half */}
+        <View style={styles.iconZone}>
+          <View style={[styles.iconRing, { backgroundColor: hexToRgba(colors.primary, 0.06) }]}>
+            <View
+              style={[styles.iconContainer, { backgroundColor: hexToRgba(colors.primary, 0.12) }]}
+            >
+              <Ionicons name={item.icon} size={56} color={colors.primary} />
+            </View>
+          </View>
         </View>
-        <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
-        <Text style={[styles.description, { color: colors.textSecondary }]}>
-          {item.description}
-        </Text>
+
+        {/* Text zone — lower half */}
+        <View style={styles.textZone}>
+          <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
+          <Text style={[styles.description, { color: colors.textSecondary }]}>
+            {item.description}
+          </Text>
+        </View>
       </View>
     ),
     [colors]
@@ -194,17 +213,33 @@ const styles = StyleSheet.create({
   },
   slide: {
     flex: 1,
+    width: SCREEN_WIDTH,
+  },
+  iconZone: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 40,
+  },
+  iconRing: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
   },
   iconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 40,
+  },
+  textZone: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingTop: 8,
   },
   title: {
     fontSize: 28,

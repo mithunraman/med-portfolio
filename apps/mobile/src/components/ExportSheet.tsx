@@ -4,6 +4,7 @@ import type { Artefact } from '@acme/shared';
 import { Feather } from '@expo/vector-icons';
 import { useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ExportSheetProps {
   visible: boolean;
@@ -13,6 +14,7 @@ interface ExportSheetProps {
 
 export function ExportSheet({ visible, onClose, artefact }: ExportSheetProps) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [exporting, setExporting] = useState(false);
 
   const handleSharePdf = async () => {
@@ -35,7 +37,7 @@ export function ExportSheet({ visible, onClose, artefact }: ExportSheetProps) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={[styles.container, { backgroundColor: colors.background }]}>
+        <Pressable style={[styles.container, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
           <Text style={[styles.title, { color: colors.text }]}>Export Entry</Text>
@@ -92,7 +94,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    paddingBottom: 40,
+    paddingBottom: 24,
   },
   handle: {
     width: 36,

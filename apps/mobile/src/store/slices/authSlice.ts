@@ -2,7 +2,7 @@ import type { AuthUser } from '@acme/shared';
 import { UserRole } from '@acme/shared';
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { api } from '../../api/client';
-import { AppSecureStorage, AppStorage } from '../../services';
+import { AppSecureStorage } from '../../services';
 import { logger } from '../../utils/logger';
 
 const authLogger = logger.createScope('AuthSlice');
@@ -93,12 +93,6 @@ export const otpVerify = createAsyncThunk(
         lastLoginAt: Date.now(),
       });
 
-      await AppStorage.set('accountHint', {
-        email,
-        userId: response.user.id,
-        lastLoginAt: Date.now(),
-      });
-
       authLogger.info('OTP verification successful', { userId: response.user.id });
       return response.user;
     } catch (error) {
@@ -156,12 +150,6 @@ export const claimGuest = createAsyncThunk(
       await AppSecureStorage.set('user', {
         user: response.user,
         isGuest: false,
-        lastLoginAt: Date.now(),
-      });
-
-      await AppStorage.set('accountHint', {
-        email,
-        userId: response.user.id,
         lastLoginAt: Date.now(),
       });
 

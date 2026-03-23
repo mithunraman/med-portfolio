@@ -13,7 +13,6 @@ export { OfflineBanner } from './OfflineBanner';
 export { FullScreenSectionEditor } from './FullScreenTextEditor';
 export { MultiSelect, type MultiSelectOption } from './MultiSelect';
 export { PdpGoalSelector, type GoalSelectionState } from './PdpGoalSelector';
-export { RestoreAccountBanner } from './RestoreAccountBanner';
 export { SectionHeader } from './SectionHeader';
 export { SingleSelect, type SingleSelectOption } from './SingleSelect';
 export { StatusPill, type StatusVariant } from './StatusPill';

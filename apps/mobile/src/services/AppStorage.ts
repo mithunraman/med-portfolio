@@ -4,15 +4,6 @@ import { logger } from '../utils/logger';
 const storageLogger = logger.createScope('Storage');
 
 /**
- * Account hint for reinstall detection (non-sensitive).
- */
-export interface AccountHint {
-  email: string;
-  userId: string;
-  lastLoginAt: number;
-}
-
-/**
  * Onboarding state.
  * Note: We no longer track hasCompletedIntro - onboarding shows until user registers.
  */
@@ -32,7 +23,6 @@ export interface UserPreferences {
  * Non-sensitive app state belongs here.
  */
 export interface StorageSchema {
-  accountHint: AccountHint;
   onboarding: OnboardingState;
   preferences: UserPreferences;
 }
@@ -94,7 +84,7 @@ class AppStorageService {
    * Clear all non-sensitive app data.
    */
   async clearAll(): Promise<void> {
-    const keys: StorageKey[] = ['accountHint', 'onboarding', 'preferences'];
+    const keys: StorageKey[] = ['onboarding', 'preferences'];
     await Promise.all(keys.map((key) => this.remove(key)));
     storageLogger.info('All storage cleared');
   }

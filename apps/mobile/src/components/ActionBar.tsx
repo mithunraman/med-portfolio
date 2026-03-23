@@ -3,7 +3,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme';
 
-const ACCENT_COLOR = '#00a884';
+
 
 const THINKING_WORDS = ['Thinking', 'Analysing', 'Processing', 'Working', 'Evaluating'];
 
@@ -57,7 +57,7 @@ export const ActionBar = memo(function ActionBar({ state }: ActionBarProps) {
       ) : state.mode === 'progress' ? (
         <ProgressBar wordCount={state.wordCount} threshold={state.threshold} colors={colors} />
       ) : (
-        <ActionButton variant={state.variant} onPress={state.onPress} />
+        <ActionButton variant={state.variant} onPress={state.onPress} colors={colors} />
       )}
     </View>
   );
@@ -65,12 +65,12 @@ export const ActionBar = memo(function ActionBar({ state }: ActionBarProps) {
 
 // --- Status mode ---
 
-function StatusBar({ reason, colors }: { reason: string; colors: { textSecondary: string } }) {
+function StatusBar({ reason, colors }: { reason: string; colors: { textSecondary: string; accent: string } }) {
   const thinkingWord = useRotatingText(THINKING_WORDS);
 
   return (
     <View style={styles.statusRow}>
-      <Text style={styles.thinkingLabel}>{thinkingWord}...</Text>
+      <Text style={[styles.thinkingLabel, { color: colors.accent }]}>{thinkingWord}...</Text>
       <Text style={[styles.reasonLabel, { color: colors.textSecondary }]} numberOfLines={1}>
         {reason}
       </Text>
@@ -113,9 +113,11 @@ function ProgressBar({
 function ActionButton({
   variant,
   onPress,
+  colors,
 }: {
   variant: 'start' | 'continue';
   onPress: () => void;
+  colors: { accent: string };
 }) {
   const label = variant === 'start' ? 'Start Analysis' : 'Continue Analysis';
   const icon = variant === 'start' ? 'play-circle' : 'arrow-right-circle';
@@ -125,7 +127,7 @@ function ActionButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        { backgroundColor: ACCENT_COLOR, opacity: pressed ? 0.85 : 1 },
+        { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
       ]}
       accessibilityLabel={label}
       accessibilityRole="button"
@@ -157,7 +159,6 @@ const styles = StyleSheet.create({
   thinkingLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: ACCENT_COLOR,
   },
   reasonLabel: {
     fontSize: 13,

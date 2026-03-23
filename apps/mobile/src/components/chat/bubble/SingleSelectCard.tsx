@@ -1,10 +1,7 @@
 import type { SingleSelectAnswer, SingleSelectQuestion } from '@acme/shared';
-import { memo, useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '../../../theme';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { SingleSelect, type SingleSelectOption } from '../../SingleSelect';
-
-const ACCENT_COLOR = '#00a884';
+import { SelectionCardShell } from './SelectionCardShell';
 
 interface Props {
   question: SingleSelectQuestion;
@@ -19,7 +16,6 @@ export const SingleSelectCard = memo(function SingleSelectCard({
   isActive,
   onAnswer,
 }: Props) {
-  const { colors } = useTheme();
   const [localKey, setLocalKey] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const isAnswered = answer !== null || confirmed;
@@ -41,16 +37,26 @@ export const SingleSelectCard = memo(function SingleSelectCard({
     }
   }, [localKey, onAnswer]);
 
-  const options: SingleSelectOption[] = question.options.map((o) => ({
-    key: o.key,
-    label: o.label,
-    confidence: o.confidence,
-    reasoning: o.reasoning,
-  }));
+  const options: SingleSelectOption[] = useMemo(
+    () =>
+      question.options.map((o) => ({
+        key: o.key,
+        label: o.label,
+        confidence: o.confidence,
+        reasoning: o.reasoning,
+      })),
+    [question.options]
+  );
 
   return (
-    <View style={styles.container}>
-      <Text style={[styles.heading, { color: colors.textSecondary }]}>Select one</Text>
+    <SelectionCardShell
+      heading="Select one"
+      hasSelection={localKey !== null}
+      isAnswered={isAnswered}
+      isActive={isActive}
+      confirmLabel="Confirm"
+      onConfirm={handleConfirm}
+    >
       <SingleSelect
         options={options}
         selectedKey={selectedKey}
@@ -58,48 +64,6 @@ export const SingleSelectCard = memo(function SingleSelectCard({
         disabled={isAnswered || !isActive}
         suggestedKey={question.suggestedKey}
       />
-      {!isAnswered && isActive && (
-        <Pressable
-          onPress={handleConfirm}
-          disabled={!localKey}
-          style={[
-            styles.confirmButton,
-            {
-              backgroundColor: localKey ? ACCENT_COLOR : colors.border,
-            },
-          ]}
-          accessibilityLabel="Confirm selection"
-        >
-          <Text
-            style={[styles.confirmText, { color: localKey ? '#ffffff' : colors.textSecondary }]}
-          >
-            Confirm
-          </Text>
-        </Pressable>
-      )}
-    </View>
+    </SelectionCardShell>
   );
-});
-
-const styles = StyleSheet.create({
-  container: {
-    marginTop: 8,
-    gap: 6,
-  },
-  heading: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  confirmButton: {
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  confirmText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
 });

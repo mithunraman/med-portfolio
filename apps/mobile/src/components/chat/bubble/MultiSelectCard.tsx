@@ -1,10 +1,7 @@
 import type { MultiSelectAnswer, MultiSelectQuestion } from '@acme/shared';
-import { memo, useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '../../../theme';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { MultiSelect, type MultiSelectOption } from '../../MultiSelect';
-
-const ACCENT_COLOR = '#00a884';
+import { SelectionCardShell } from './SelectionCardShell';
 
 interface Props {
   question: MultiSelectQuestion;
@@ -19,17 +16,17 @@ export const MultiSelectCard = memo(function MultiSelectCard({
   isActive,
   onAnswer,
 }: Props) {
-  const { colors } = useTheme();
   const [localKeys, setLocalKeys] = useState<string[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const isAnswered = answer !== null || confirmed;
-
   const displayKeys = answer?.selectedKeys ?? localKeys;
 
   const handleToggle = useCallback(
     (key: string) => {
       if (isAnswered || !isActive) return;
-      setLocalKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+      setLocalKeys((prev) =>
+        prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+      );
     },
     [isAnswered, isActive]
   );
@@ -41,67 +38,32 @@ export const MultiSelectCard = memo(function MultiSelectCard({
     }
   }, [localKeys, onAnswer]);
 
-  const options: MultiSelectOption[] = question.options.map((o) => ({
-    key: o.key,
-    label: o.label,
-    confidence: o.confidence,
-    reasoning: o.reasoning,
-  }));
+  const options: MultiSelectOption[] = useMemo(
+    () =>
+      question.options.map((o) => ({
+        key: o.key,
+        label: o.label,
+        confidence: o.confidence,
+        reasoning: o.reasoning,
+      })),
+    [question.options]
+  );
 
   return (
-    <View style={styles.container}>
-      <Text style={[styles.heading, { color: colors.textSecondary }]}>Select all that apply</Text>
+    <SelectionCardShell
+      heading="Select all that apply"
+      hasSelection={localKeys.length > 0}
+      isAnswered={isAnswered}
+      isActive={isActive}
+      confirmLabel={`Confirm (${localKeys.length})`}
+      onConfirm={handleConfirm}
+    >
       <MultiSelect
         options={options}
         selectedKeys={displayKeys}
         onToggle={handleToggle}
         disabled={isAnswered || !isActive}
       />
-      {!isAnswered && isActive && (
-        <Pressable
-          onPress={handleConfirm}
-          disabled={localKeys.length === 0}
-          style={[
-            styles.confirmButton,
-            {
-              backgroundColor: localKeys.length > 0 ? ACCENT_COLOR : colors.border,
-            },
-          ]}
-          accessibilityLabel="Confirm selection"
-        >
-          <Text
-            style={[
-              styles.confirmText,
-              { color: localKeys.length > 0 ? '#ffffff' : colors.textSecondary },
-            ]}
-          >
-            Confirm ({localKeys.length})
-          </Text>
-        </Pressable>
-      )}
-    </View>
+    </SelectionCardShell>
   );
-});
-
-const styles = StyleSheet.create({
-  container: {
-    marginTop: 8,
-    gap: 6,
-  },
-  heading: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  confirmButton: {
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  confirmText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
 });

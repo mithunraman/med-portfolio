@@ -6,6 +6,7 @@ export interface ThemeColors {
   primary: string;
   border: string;
   error: string;
+  accent: string;
 }
 
 export type ThemeName = 'gmail' | 'linear' | 'spotify' | 'notion' | 'stripe' | 'forest' | 'sunset';
@@ -20,6 +21,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       primary: '#c5221f',
       border: '#dadce0',
       error: '#d93025',
+      accent: '#00a884',
     },
     dark: {
       background: '#202124',
@@ -29,6 +31,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       primary: '#f28b82',
       border: '#3c4043',
       error: '#f28b82',
+      accent: '#00a884',
     },
   },
 
@@ -41,6 +44,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       primary: '#5e6ad2',
       border: '#e6e6e6',
       error: '#eb5757',
+      accent: '#00a884',
     },
     dark: {
       background: '#0d0d0d',
@@ -50,6 +54,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       primary: '#8b8fea',
       border: '#2a2a2a',
       error: '#f27878',
+      accent: '#00a884',
     },
   },
 
@@ -62,6 +67,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       primary: '#1db954',
       border: '#e1e1e1',
       error: '#e22134',
+      accent: '#00a884',
     },
     dark: {
       background: '#121212',
@@ -71,6 +77,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       primary: '#1ed760',
       border: '#282828',
       error: '#f15e6c',
+      accent: '#00a884',
     },
   },
 
@@ -83,6 +90,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       primary: '#2eaadc',
       border: '#e9e9e7',
       error: '#e03e3e',
+      accent: '#00a884',
     },
     dark: {
       background: '#191919',
@@ -92,6 +100,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       primary: '#529cca',
       border: '#2f2f2f',
       error: '#ff7369',
+      accent: '#00a884',
     },
   },
 
@@ -104,6 +113,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       primary: '#635bff',
       border: '#e3e8ee',
       error: '#df1b41',
+      accent: '#00a884',
     },
     dark: {
       background: '#0a2540',
@@ -113,6 +123,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       primary: '#7a73ff',
       border: '#1a4971',
       error: '#fe87a1',
+      accent: '#00a884',
     },
   },
 
@@ -125,6 +136,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       primary: '#2d6a4f',
       border: '#dde3da',
       error: '#c1403d',
+      accent: '#00a884',
     },
     dark: {
       background: '#1a1d1a',
@@ -134,6 +146,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       primary: '#52b788',
       border: '#3a423a',
       error: '#e87c79',
+      accent: '#00a884',
     },
   },
 
@@ -146,6 +159,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       primary: '#f97316',
       border: '#e7e5e4',
       error: '#dc2626',
+      accent: '#00a884',
     },
     dark: {
       background: '#1c1917',
@@ -155,6 +169,7 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       primary: '#fb923c',
       border: '#3d3836',
       error: '#f87171',
+      accent: '#00a884',
     },
   },
 };

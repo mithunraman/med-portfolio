@@ -23,7 +23,7 @@ const _logger = logger.createScope('ChatComposer');
 // ============================================================================
 
 // Fixed accent color (consistent across themes)
-const ACCENT_COLOR = '#00a884';
+
 
 const SPACING = {
   toolbarPadding: 8,
@@ -287,7 +287,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
             icon={sendButtonIcon}
             onPress={handleSend}
             accessibilityLabel="Send message"
-            style={styles.sendButton}
+            style={[styles.sendButton, { backgroundColor: colors.accent }]}
             disabled={isSending || isInputDisabled}
           />
         ) : (
@@ -346,9 +346,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
   },
-  sendButton: {
-    backgroundColor: ACCENT_COLOR,
-  },
+  sendButton: {},
 });
 
 export default ChatComposer;

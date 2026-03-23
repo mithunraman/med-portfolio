@@ -2,7 +2,7 @@ import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme';
 
-const ACCENT_COLOR = '#00a884';
+
 
 interface CompletionCardProps {
   icon: ReactNode;
@@ -36,7 +36,7 @@ export const CompletionCard = memo(function CompletionCard({
       ]}
     >
       <View style={styles.header}>
-        <View style={[styles.iconCircle, { backgroundColor: ACCENT_COLOR }]}>{icon}</View>
+        <View style={[styles.iconCircle, { backgroundColor: colors.accent }]}>{icon}</View>
         <View style={styles.headerText}>
           <Text style={[styles.heading, { color: colors.text }]}>{heading}</Text>
           <Text style={[styles.supportText, { color: colors.textSecondary }]}>{supportText}</Text>
@@ -52,7 +52,7 @@ export const CompletionCard = memo(function CompletionCard({
         onPress={onPress}
         style={({ pressed }) => [
           styles.button,
-          { backgroundColor: ACCENT_COLOR, opacity: pressed ? 0.85 : 1 },
+          { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
         ]}
         accessibilityLabel={buttonLabel}
         accessibilityRole="button"

@@ -14,6 +14,7 @@ export interface AuthState {
   user: AuthUser | null;
   error: string | null;
   isNewUser: boolean | null;
+  isNewRegistration: boolean;
   devOtp: string | null;
 }
 
@@ -22,12 +23,15 @@ const initialState: AuthState = {
   user: null,
   error: null,
   isNewUser: null,
+  isNewRegistration: false,
   devOtp: null,
 };
 
 /**
  * Initialize auth state on app launch.
- * Checks for existing session and restores if valid.
+ * Restores session from local secure storage — no network call.
+ * Token validity is verified on the first API request (e.g. dashboard fetch);
+ * if the token was revoked, the global onUnauthorized handler redirects to login.
  */
 export const initializeAuth = createAsyncThunk('auth/initialize', async () => {
   authLogger.debug('Initializing auth');
@@ -38,22 +42,20 @@ export const initializeAuth = createAsyncThunk('auth/initialize', async () => {
     return { status: 'unauthenticated' as const, user: null };
   }
 
-  try {
-    const currentUser = await api.auth.me();
-    const storedSession = await AppSecureStorage.get('user');
-    const isGuest = storedSession?.isGuest ?? currentUser.role === UserRole.USER_GUEST;
-
-    authLogger.info('Session restored', { userId: currentUser.id, isGuest });
-
-    return {
-      status: (isGuest ? 'guest' : 'authenticated') as AuthStatus,
-      user: currentUser,
-    };
-  } catch {
-    authLogger.warn('Session invalid, clearing');
+  const storedSession = await AppSecureStorage.get('user');
+  if (!storedSession?.user) {
+    authLogger.warn('Token exists but no stored user, clearing session');
     await AppSecureStorage.clearSession();
     return { status: 'unauthenticated' as const, user: null };
   }
+
+  const isGuest = storedSession.isGuest ?? storedSession.user.role === UserRole.USER_GUEST;
+  authLogger.info('Session restored', { userId: storedSession.user.id, isGuest });
+
+  return {
+    status: (isGuest ? 'guest' : 'authenticated') as AuthStatus,
+    user: storedSession.user,
+  };
 });
 
 /**
@@ -80,7 +82,10 @@ export const otpSend = createAsyncThunk(
  */
 export const otpVerify = createAsyncThunk(
   'auth/otpVerify',
-  async ({ email, code, name }: { email: string; code: string; name?: string }, { rejectWithValue }) => {
+  async (
+    { email, code, name }: { email: string; code: string; name?: string },
+    { rejectWithValue }
+  ) => {
     authLogger.info('Verifying OTP', { email });
 
     try {
@@ -190,6 +195,9 @@ const authSlice = createSlice({
       state.status = 'unauthenticated';
       state.user = null;
     },
+    clearNewRegistration(state) {
+      state.isNewRegistration = false;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -241,6 +249,7 @@ const authSlice = createSlice({
         state.status = 'guest';
         state.user = action.payload;
         state.error = null;
+        state.isNewRegistration = true;
       })
       .addCase(registerGuest.rejected, (state, action) => {
         state.status = 'unauthenticated';
@@ -270,5 +279,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, setUnauthenticated } = authSlice.actions;
+export const { clearError, setUnauthenticated, clearNewRegistration } = authSlice.actions;
 export default authSlice.reducer;

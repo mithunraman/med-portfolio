@@ -1,7 +1,7 @@
 import { CoverageRing, SectionHeader, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
-import { fetchDashboard } from '@/store';
+import { clearNewRegistration, fetchDashboard } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
 import { ArtefactStatus, type ActiveReviewPeriodSummary, type Artefact, type PdpGoal } from '@acme/shared';
@@ -10,7 +10,15 @@ import { randomUUID } from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -379,6 +387,10 @@ export default function HomeScreen() {
   const dashboardData = useAppSelector((state) => state.dashboard.data);
   const dashboardLoading = useAppSelector((state) => state.dashboard.loading);
   const dashboardError = useAppSelector((state) => state.dashboard.error);
+  const isNewRegistration = useAppSelector((state) => state.auth.isNewRegistration);
+
+  // True on first load when no data exists yet (not on subsequent refreshes)
+  const isInitialLoad = dashboardLoading && !dashboardData;
 
   // Randomise prompt on each screen focus (not just mount)
   const [prompt, setPrompt] = useState(() => PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
@@ -389,8 +401,14 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
+    if (isNewRegistration) {
+      // New guest has no data — skip the fetch, show empty states immediately.
+      // Clear the flag so subsequent visits (after creating entries) will fetch.
+      dispatch(clearNewRegistration());
+      return;
+    }
     dispatch(fetchDashboard());
-  }, [dispatch]);
+  }, [dispatch, isNewRegistration]);
 
   // Refetch dashboard when connectivity returns, only if data is missing or errored
   useNetworkRecovery(
@@ -466,28 +484,37 @@ export default function HomeScreen() {
           prompt={prompt}
         />
 
-        {/* Module B: Review Period Coverage (high priority — ARCP tracking) */}
-        <ReviewPeriodCoverageModule
-          data={dashboardData?.activeReviewPeriod ?? null}
-          onPress={handleReviewPeriodPress}
-          onSetup={handleSetupReviewPeriod}
-          onSeeAll={handleSeeAllReviewPeriods}
-        />
+        {/* Modules B–D: show loading spinner on initial fetch, data once available */}
+        {isInitialLoad ? (
+          <View style={styles.initialLoading}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : (
+          <>
+            {/* Module B: Review Period Coverage (high priority — ARCP tracking) */}
+            <ReviewPeriodCoverageModule
+              data={dashboardData?.activeReviewPeriod ?? null}
+              onPress={handleReviewPeriodPress}
+              onSetup={handleSetupReviewPeriod}
+              onSeeAll={handleSeeAllReviewPeriods}
+            />
 
-        {/* Module C: Recent Entries */}
-        <RecentEntriesModule
-          items={dashboardData?.recentEntries.items ?? []}
-          total={dashboardData?.recentEntries.total ?? 0}
-          onEntryPress={handleEntryPress}
-          onSeeAll={handleSeeAllEntries}
-        />
+            {/* Module C: Recent Entries */}
+            <RecentEntriesModule
+              items={dashboardData?.recentEntries.items ?? []}
+              total={dashboardData?.recentEntries.total ?? 0}
+              onEntryPress={handleEntryPress}
+              onSeeAll={handleSeeAllEntries}
+            />
 
-        {/* Module D: PDP Goals Due Soon */}
-        <PdpDueSoonModule
-          items={dashboardData?.pdpGoalsDue.items ?? []}
-          total={dashboardData?.pdpGoalsDue.total ?? 0}
-          onGoalPress={handleGoalPress}
-        />
+            {/* Module D: PDP Goals Due Soon */}
+            <PdpDueSoonModule
+              items={dashboardData?.pdpGoalsDue.items ?? []}
+              total={dashboardData?.pdpGoalsDue.total ?? 0}
+              onGoalPress={handleGoalPress}
+            />
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -504,6 +531,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     gap: 8,
+  },
+  initialLoading: {
+    paddingVertical: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Header

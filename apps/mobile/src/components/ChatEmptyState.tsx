@@ -57,18 +57,13 @@ export const ChatEmptyState = memo(function ChatEmptyState() {
         ))}
       </View>
 
-      <View style={[styles.notice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Feather name="shield" size={15} color={colors.error} />
+      <View
+        style={[styles.notice, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      >
+        <Feather name="shield" size={32} color={colors.error} />
         <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
           Do not include patient names or identifiable information
         </Text>
-      </View>
-
-      <View style={styles.hint}>
-        <Feather name="type" size={16} color={colors.textSecondary} />
-        <Text style={[styles.hintText, { color: colors.textSecondary }]}>Type or tap</Text>
-        <Feather name="mic" size={16} color={colors.textSecondary} />
-        <Text style={[styles.hintText, { color: colors.textSecondary }]}>to start</Text>
       </View>
     </View>
   );
@@ -162,17 +157,8 @@ const styles = StyleSheet.create({
     width: '100%' as const,
   },
   noticeText: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '500' as const,
     flex: 1,
-  },
-  hint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  hintText: {
-    fontSize: 14,
-    fontWeight: '500',
   },
 });

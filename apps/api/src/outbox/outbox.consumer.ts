@@ -16,18 +16,19 @@ export interface OutboxHandler {
 
 export const OUTBOX_HANDLERS = Symbol('OUTBOX_HANDLERS');
 
-/** Default polling interval: 2 seconds */
+/** Default polling interval: 1 second */
 const DEFAULT_POLL_INTERVAL_MS = 1000;
 
-/** Default batch size per poll */
-const DEFAULT_BATCH_SIZE = 5;
+/** Maximum number of jobs running concurrently */
+const MAX_CONCURRENCY = 5;
 
 @Injectable()
 export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OutboxConsumer.name);
   private readonly handlers = new Map<string, OutboxHandler>();
   private pollTimer: ReturnType<typeof setInterval> | null = null;
-  private isProcessing = false;
+  private activeJobs = 0;
+  private isPolling = false;
 
   constructor(
     private readonly outboxService: OutboxService,
@@ -65,7 +66,7 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
 
   private startPolling(): void {
     this.logger.log(
-      `Polling outbox every ${DEFAULT_POLL_INTERVAL_MS}ms (batch size: ${DEFAULT_BATCH_SIZE})`
+      `Polling outbox every ${DEFAULT_POLL_INTERVAL_MS}ms (max concurrency: ${MAX_CONCURRENCY})`
     );
     this.pollTimer = setInterval(() => this.poll(), DEFAULT_POLL_INTERVAL_MS);
   }
@@ -79,35 +80,32 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
   }
 
   private async poll(): Promise<void> {
-    if (this.isProcessing) return; // Skip if previous batch is still running
-    this.isProcessing = true;
+    if (this.isPolling) return;
+    const freeSlots = MAX_CONCURRENCY - this.activeJobs;
+    if (freeSlots <= 0) return;
 
+    this.isPolling = true;
     try {
       // Reset stale locks first (handles crashed consumers)
       await this.outboxService.resetStaleLocks();
 
-      // Claim a batch of jobs
-      const entries = await this.outboxService.claimBatch(DEFAULT_BATCH_SIZE);
+      // Claim only as many jobs as we have capacity for
+      const entries = await this.outboxService.claimBatch(freeSlots);
       if (entries.length === 0) return;
 
-      this.logger.debug(`Claimed ${entries.length} outbox entries`);
+      this.logger.debug(`Claimed ${entries.length} outbox entries (active: ${this.activeJobs})`);
 
-      // Process all claimed jobs in parallel
-      const results = await Promise.allSettled(entries.map((entry) => this.processEntry(entry)));
-
-      // Log any unexpected errors
-      for (let i = 0; i < results.length; i++) {
-        if (results[i].status === 'rejected') {
-          this.logger.error(
-            `Unexpected error processing outbox entry ${entries[i]._id}`,
-            (results[i] as PromiseRejectedResult).reason
-          );
-        }
+      // Launch each job independently — no waiting for siblings
+      for (const entry of entries) {
+        this.activeJobs++;
+        this.processEntry(entry).finally(() => {
+          this.activeJobs--;
+        });
       }
     } catch (error) {
       this.logger.error('Error during outbox poll cycle', error);
     } finally {
-      this.isProcessing = false;
+      this.isPolling = false;
     }
   }
 

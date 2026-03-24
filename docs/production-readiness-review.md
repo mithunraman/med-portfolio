@@ -1,6 +1,6 @@
 # Production Readiness Review
 
-**Date:** 2026-03-18
+**Date:** 2026-03-18 (updated 2026-03-24)
 **Scope:** All screens in the React Native (Expo) mobile app
 
 ---
@@ -10,8 +10,9 @@
 1. ~~**No password reset flow**~~ — **N/A.** App uses OTP-based passwordless auth; no passwords exist.
 2. ~~**The `(review-period)` route group is not registered in the root Stack**~~ — **FIXED.**
 3. ~~**SignupNudgeModal is exported but never rendered**~~ — **REMOVED.** Dead code deleted.
-4. **Privacy Policy and Help links are placeholder alerts** — a legal liability for production.
-5. **Login/Register screens have hardcoded white backgrounds** — broken in dark mode.
+4. **Privacy Policy is a placeholder alert** — a legal liability for production.
+5. ~~**Login/Register screens have hardcoded white backgrounds**~~ — **FIXED.** Dynamic theming applied.
+6. **No account deletion flow** — App Store rejection risk.
 
 ---
 
@@ -51,19 +52,13 @@
 
 - **Status:** Resolved. The entire nudge system was dead code (component never mounted, action tracking never dispatched, navigation target `/(auth)/register` no longer exists). Deleted `SignupNudgeModal.tsx`, `nudgeSlice.ts`, and all references. Guest-to-account conversion is handled by the `claim-account` screen.
 
-### 7. No network error handling / offline state
+### ~~7. No network error handling / offline state~~ — FIXED
 
-- **What's missing:** No global network status indicator. API calls fail silently in many flows (dashboard fetch, artefact fetch). No retry banners or offline mode indication.
-- **Why it matters:** Mobile users frequently lose connectivity. The app will appear frozen or empty with no feedback.
-- **Fix:** Add a `NetInfo` listener with a global "No internet connection" banner. Add retry logic to critical fetches (dashboard, messages, artefacts).
-- **Impact:** Poor UX on unreliable connections (common in clinical settings).
+- **Status:** Resolved. Implemented `expo-network` with `useNetworkListener` hook, Redux `networkSlice`, `OfflineBanner` component (red "No internet" / green "Back online" with animations), and `useNetworkRecovery` hook for auto-refetch on reconnect.
 
-### 8. Intro screen slide icons are just numbers
+### ~~8. Intro screen slide icons are just numbers~~ — FIXED
 
-- **What's missing:** `intro.tsx` uses `icon: '1'`, `icon: '2'`, etc., rendering plain text numbers instead of actual illustrations or icons.
-- **Why it matters:** First impression screen looks unfinished/placeholder.
-- **Fix:** Replace with actual illustrations (SVG/Lottie) or at minimum use Ionicons/vector icons that represent each concept.
-- **Impact:** App looks unprofessional on first launch.
+- **Status:** Resolved. `intro.tsx` now uses proper Ionicons (`mic-outline`, `document-text-outline`, `analytics-outline`, `rocket-outline`) rendered in styled concentric rings.
 
 ### 9. Help & Feedback links to placeholder email
 
@@ -83,12 +78,9 @@
 - **Fix:** Integrate `react-native-toast-message` or similar. Replace `Alert.alert('Saved', ...)` with a toast.
 - **Impact:** UX polish; feels like a web app wrapped in native.
 
-### 11. ExportSheet safe area gap
+### ~~11. ExportSheet safe area gap~~ — FIXED
 
-- **What's missing:** `ExportSheet.tsx` uses hardcoded `paddingBottom: 40` instead of `insets.bottom`.
-- **Why it matters:** On newer iPhones with larger home indicators, the cancel button may be partially obscured. On older devices, excess padding.
-- **Fix:** Use `useSafeAreaInsets()` for bottom padding.
-- **Impact:** Minor layout issue on specific devices.
+- **Status:** Resolved. `ExportSheet.tsx` now uses `useSafeAreaInsets()` with `Math.max(insets.bottom, 24)` instead of hardcoded `paddingBottom: 40`.
 
 ### 12. No loading/skeleton states for dashboard modules
 
@@ -104,12 +96,9 @@
 - **Fix:** Add `useFocusEffect` to re-fetch conversations (same pattern used in the Home screen's prompt randomization).
 - **Impact:** Confusing stale data.
 
-### 14. Entry detail navigation hidden during edits with no explanation
+### ~~14. Entry detail navigation hidden during edits with no explanation~~ — FIXED
 
-- **What's missing:** Entry detail hides navigation links and finalise button when `hasChanges` is true. This is intentional to force save, but there's no visual hint explaining why they disappeared.
-- **Why it matters:** User makes a title edit, then wonders where the "Finalise" button went.
-- **Fix:** Either keep navigation links visible (just disable them with a tooltip), or add a small text hint like "Save or discard changes to continue."
-- **Impact:** Confusion for users in the review flow.
+- **Status:** Resolved. A sticky save/discard bar now appears at the bottom of the screen when `hasChanges` is true, with a red discard button and green "Save changes" button, clearly explaining why navigation is hidden.
 
 ### 15. No haptic feedback on key interactions
 
@@ -118,12 +107,9 @@
 - **Fix:** Add `Haptics.impactAsync()` from `expo-haptics` on key interactions (recording start, action toggle, finalise).
 - **Impact:** Polish.
 
-### 16. Welcome screen logo is placeholder text
+### ~~16. Welcome screen logo is placeholder text~~ — FIXED
 
-- **What's missing:** `welcome.tsx` renders `<Text>App</Text>` as the logo.
-- **Why it matters:** Looks unfinished.
-- **Fix:** Replace with actual app logo/icon image.
-- **Impact:** Brand perception.
+- **Status:** Resolved. `welcome.tsx` now displays an Ionicons briefcase icon in a double-ring design with themed colours instead of `<Text>App</Text>`.
 
 ### 17. Version history shows no diff/comparison
 
@@ -136,22 +122,22 @@
 
 ## LOW (Nice-to-have before launch)
 
-### 18. Entries list does not refresh on focus
+### ~~18. Entries list does not refresh on focus~~ — FIXED
 
-- Same issue as conversations list — only fetches on mount. Completing a conversation and navigating to entries tab shows stale data.
+- **Status:** Resolved. Uses `useNetworkRecovery` for auto-refetch on connectivity restore, plus `RefreshControl` for manual pull-to-refresh.
 
-### 19. PDP goals list does not refresh on focus
+### ~~19. PDP goals list does not refresh on focus~~ — FIXED
 
-- Same pattern. Finalising an entry with new goals won't appear until pull-to-refresh.
+- **Status:** Resolved. Same pattern as entries — `useNetworkRecovery` + `RefreshControl`.
 
 ### 20. Deep linking is limited
 
 - `_layout.tsx` only handles `entries`, `pdp`, `profile`, `home`. No deep links for specific entries (`/entry/:id`), conversations, or PDP goals.
 - Matters for push notifications or shared links.
 
-### 21. No pull-to-refresh on Home screen
+### 21. No pull-to-refresh on Home screen — PARTIALLY FIXED
 
-- Home screen uses `ScrollView` (not `FlatList`), so there's no `RefreshControl`. User can't manually refresh dashboard data.
+- Home screen auto-refetches via `useFocusEffect` and `useNetworkRecovery`, but still uses a plain `ScrollView` without `RefreshControl`. Users cannot manually pull-to-refresh.
 
 ### ~~22. Accessibility: close buttons use "X" text~~ — REMOVED
 
@@ -183,15 +169,22 @@
 
 ## Final Recommendation
 
-### **Needs significant work**
+### **Getting closer — 10 items remain**
 
-The app has a solid feature set and well-structured code, but **2 critical items** block production release:
+Since the initial review, **9 of 18 open items have been fixed** (network handling, intro icons, ExportSheet safe area, entry detail UX, welcome logo, entries/PDP refresh, and more). Good progress.
 
-1. ~~**`(review-period)` route crash**~~ — **FIXED**
-2. ~~**No password reset**~~ — **N/A** (OTP passwordless auth)
-3. **No privacy policy** — needs legal content + hosting, ~1 day
-4. **No account deletion** — requires backend + frontend, ~1 day
+**2 critical items** still block production release:
 
-The **high-priority items** (dark mode on auth screens, mounting the nudge modal, placeholder content) are each individually fast fixes (~30 min each) but collectively essential for a polished first impression.
+1. **No privacy policy** — needs legal content + hosting
+2. **No account deletion** — requires backend `DELETE /api/users/me` + frontend confirmation flow
 
-**Estimated effort to reach minimum viable production release: 3-5 days** for critical + high items.
+**Remaining open items (by priority):**
+
+| Priority | Count | Items |
+|----------|-------|-------|
+| Critical | 2 | #3 Privacy Policy, #4 Account deletion |
+| High | 1 | #9 Help & Feedback placeholder email |
+| Medium | 4 | #10 Toast system, #12 Dashboard skeletons, #13 Conversations refresh on focus, #15 Haptic feedback, #17 Version diff |
+| Low | 3 | #20 Deep linking, #21 Home pull-to-refresh, #23 Terms of Service |
+
+**Estimated effort to reach minimum viable production release: 1-2 days** for critical + high items.

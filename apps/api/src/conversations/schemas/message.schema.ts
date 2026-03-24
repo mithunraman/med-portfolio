@@ -1,9 +1,4 @@
-import {
-  type Question,
-  MessageProcessingStatus,
-  MessageRole,
-  MessageType,
-} from '@acme/shared';
+import { type Question, MessageProcessingStatus, MessageRole, MessageType } from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';

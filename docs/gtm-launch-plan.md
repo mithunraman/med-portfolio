@@ -326,6 +326,7 @@ This captures everything: activation (they created an entry), retention (they're
 | 8 | **Negative Reddit reception** — "another AI grift", "this is what's wrong with medicine" | Medium | Medium — Reddit is your primary channel, a bad launch post could poison the well | Be genuine. Be helpful in the community for weeks before launching. Free tier. Respond to every comment. Accept criticism gracefully. Don't oversell | Needs community preparation |
 | 9 | **OpenAI/AssemblyAI dependency** — pricing increases, policy changes, service disruption | Low | Medium | LLM service layer already abstracted. Evaluate alternatives (Anthropic Claude, self-hosted Whisper) as backup | Architecturally mitigated |
 | 10 | **Data breach at sub-processor** — OpenAI or AssemblyAI compromised | Very low | Very high | DPAs in place. PII redaction on audio. Privacy policy discloses sub-processors. Consider EU/UK data residency options for sensitive data | DPAs needed |
+| 11 | **PII at rest in MongoDB** — `rawContent` and `cleanedContent` fields store unredacted text permanently. GDPR Article 5(1)(e) (storage limitation) requires PII to be kept only as long as necessary | Medium | High — ICO finding, GDPR fine, user trust damage | Implement a scheduled cron job that runs every N hours and nullifies `rawContent` and `cleanedContent` on all messages older than 7 days, regardless of processing status. 7-day window allows debugging pipeline failures. Document retention period in privacy policy. Log each cleanup run for audit trail | Not started |
 
 ---
 

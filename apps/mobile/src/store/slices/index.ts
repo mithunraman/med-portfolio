@@ -59,6 +59,7 @@ export {
   addOptimisticMessage,
   updateOptimisticStatus,
   removeOptimisticMessage,
+  rekeyOptimisticMessages,
   messageSelectors,
   toRenderableMessage,
 } from './messages';

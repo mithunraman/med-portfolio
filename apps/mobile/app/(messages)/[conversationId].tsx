@@ -5,9 +5,9 @@ import { CompletionCard } from '@/components/CompletionCard';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
 import {
-  createArtefact,
   fetchMessages,
   pollConversation,
+  rekeyOptimisticMessages,
   resumeAnalysis,
   resumeAnalysisWithOptimistic,
   retryFailedMessage,
@@ -25,7 +25,6 @@ import {
 } from '@/store/slices/messages/selectors';
 import { useTheme } from '@/theme';
 import { generateIdempotencyKey } from '@/utils/idempotency';
-import { logger } from '@/utils/logger';
 import {
   type Message,
   type MultiSelectQuestion,
@@ -97,8 +96,6 @@ function thinkingStepLabel(step?: string | null): string | null {
   if (!step) return null;
   return THINKING_STEP_LABELS[step] ?? null;
 }
-
-const chatLogger = logger.createScope('ChatScreen');
 
 export default function ChatScreen() {
   const { conversationId, isNew } = useLocalSearchParams<{
@@ -219,83 +216,99 @@ export default function ChatScreen() {
     };
   }, [effectiveConversationId, isPendingConversation, pollIntervalMs, dispatch]);
 
+  /**
+   * Update refs/state when a thunk creates a new conversation.
+   * Called from fulfilled results of sendMessageWithRetry / sendVoiceNoteWithRetry.
+   *
+   * Dispatches rekeyOptimisticMessages AND setRealConversationId in the same
+   * synchronous block so React batches both into one render — avoids a flash
+   * where the selector can't find the rekeyed message under the old ID.
+   */
+  const applyNewConversationIds = useCallback(
+    (result: { conversationId: string; artefactXid?: string }) => {
+      if (result.conversationId !== effectiveConversationId) {
+        dispatch(
+          rekeyOptimisticMessages({
+            oldConversationId: effectiveConversationId,
+            newConversationId: result.conversationId,
+          }),
+        );
+        realConversationIdRef.current = result.conversationId;
+        setRealConversationId(result.conversationId);
+      }
+      if (result.artefactXid) {
+        artefactIdRef.current = result.artefactXid;
+      }
+    },
+    [effectiveConversationId, dispatch],
+  );
+
   const handleSendVoiceNote = useCallback(
     async (recording: AudioRecordingResult) => {
       if (!conversationId) return;
 
-      // For new conversations, create artefact first
-      let targetConversationId = realConversationIdRef.current;
-      if (!targetConversationId && isNew === 'true') {
-        try {
-          const artefact = await dispatch(createArtefact({ artefactId: conversationId })).unwrap();
-          targetConversationId = artefact.conversation.id;
-          realConversationIdRef.current = targetConversationId;
-          setRealConversationId(targetConversationId);
-          artefactIdRef.current = artefact.id;
-        } catch (error) {
-          chatLogger.error('Failed to create conversation for voice note', { error });
-          return;
-        }
-      }
-
-      dispatch(
+      const result = await dispatch(
         sendVoiceNoteWithRetry({
-          conversationId: targetConversationId ?? conversationId,
+          conversationId: effectiveConversationId,
           localId: generateLocalId(),
           idempotencyKey: generateIdempotencyKey(),
           recordingUri: recording.uri,
           recordingMime: recording.mime,
+          isNewConversation: isPendingConversation,
+          artefactId: isPendingConversation ? conversationId : undefined,
         })
       );
+
+      if (sendVoiceNoteWithRetry.fulfilled.match(result)) {
+        applyNewConversationIds(result.payload);
+      }
     },
-    [conversationId, isNew, dispatch]
+    [conversationId, effectiveConversationId, isPendingConversation, dispatch, applyNewConversationIds]
   );
 
   const handleSend = useCallback(
     async (text: string) => {
       if (!conversationId || !text.trim()) return;
 
-      // For new conversations, create artefact first to get real conversation ID
-      let targetConversationId = effectiveConversationId;
-      if (isPendingConversation) {
-        try {
-          const artefact = await dispatch(createArtefact({ artefactId: conversationId })).unwrap();
-          targetConversationId = artefact.conversation.id;
-          realConversationIdRef.current = targetConversationId;
-          setRealConversationId(targetConversationId);
-          artefactIdRef.current = artefact.id;
-        } catch (error) {
-          chatLogger.error('Failed to create conversation', { error });
-          return;
-        }
-      }
-
-      dispatch(
+      const result = await dispatch(
         sendMessageWithRetry({
-          conversationId: targetConversationId,
+          conversationId: effectiveConversationId,
           content: text.trim(),
           localId: generateLocalId(),
           idempotencyKey: generateIdempotencyKey(),
+          isNewConversation: isPendingConversation,
+          artefactId: isPendingConversation ? conversationId : undefined,
         })
       );
+
+      if (sendMessageWithRetry.fulfilled.match(result)) {
+        applyNewConversationIds(result.payload);
+      }
     },
-    [conversationId, effectiveConversationId, isPendingConversation, dispatch]
+    [conversationId, effectiveConversationId, isPendingConversation, dispatch, applyNewConversationIds]
   );
 
   const handleRetry = useCallback(
-    (localId: string) => {
+    async (localId: string) => {
       const opt = optimisticMessages.find((m) => m.localId === localId);
       if (!opt || !opt.content) return;
-      dispatch(
+
+      const resultAction = await dispatch(
         retryFailedMessage({
           localId: opt.localId,
           conversationId: opt.conversationId,
           content: opt.content,
           idempotencyKey: opt.idempotencyKey,
+          isNewConversation: opt.isNewConversation,
+          artefactId: opt.artefactId,
         })
       );
+
+      if (retryFailedMessage.fulfilled.match(resultAction)) {
+        applyNewConversationIds(resultAction.payload);
+      }
     },
-    [optimisticMessages, dispatch]
+    [optimisticMessages, dispatch, applyNewConversationIds]
   );
 
   // Optimistic flag — gives instant feedback while the HTTP call is in flight

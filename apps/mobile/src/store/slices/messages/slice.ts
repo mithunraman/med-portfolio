@@ -32,6 +32,9 @@ export interface OptimisticMessage {
   /** For voice notes — local recording URI for retry */
   recordingUri?: string;
   recordingMime?: string;
+  /** For retry — if the artefact was never created, retry needs these to re-attempt */
+  isNewConversation?: boolean;
+  artefactId?: string;
 }
 
 /**
@@ -169,6 +172,28 @@ const messagesSlice = createSlice({
     removeOptimisticMessage(state, action: PayloadAction<string>) {
       delete state.optimisticMessages[action.payload];
     },
+    /**
+     * Re-key ALL optimistic messages from one conversationId to another.
+     * Used when a new conversation is created — optimistic messages were keyed to a
+     * temporary ID and need to switch to the real server-assigned ID.
+     *
+     * Must be dispatched in the same synchronous block as setRealConversationId
+     * so React batches both into one render (avoids empty-state flash).
+     */
+    rekeyOptimisticMessages(
+      state,
+      action: PayloadAction<{ oldConversationId: string; newConversationId: string }>,
+    ) {
+      const { oldConversationId, newConversationId } = action.payload;
+      for (const opt of Object.values(state.optimisticMessages)) {
+        if (opt && opt.conversationId === oldConversationId) {
+          opt.conversationId = newConversationId;
+          // Artefact was created — clear flags so retry doesn't re-create
+          opt.isNewConversation = undefined;
+          opt.artefactId = undefined;
+        }
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -257,6 +282,7 @@ export const {
   addOptimisticMessage,
   updateOptimisticStatus,
   removeOptimisticMessage,
+  rekeyOptimisticMessages,
 } = messagesSlice.actions;
 
 // Unbound selectors — pass the messages slice state directly.

@@ -10,6 +10,7 @@ export {
   addOptimisticMessage,
   updateOptimisticStatus,
   removeOptimisticMessage,
+  rekeyOptimisticMessages,
 } from './slice';
 
 // Selectors (unbound)

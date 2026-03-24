@@ -13,7 +13,7 @@ import { PdpGoalStatus, type PdpGoalResponse } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -288,6 +288,14 @@ export default function PdpGoalDetailScreen() {
   const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, PdpGoalStatus>>({});
   const [pendingActionIds, setPendingActionIds] = useState<Set<string>>(new Set());
 
+  const visibleActions = useMemo(
+    () =>
+      goal?.actions.filter(
+        (a) => (optimisticStatuses[a.id] ?? a.status) !== PdpGoalStatus.ARCHIVED,
+      ) ?? [],
+    [goal?.actions, optimisticStatuses],
+  );
+
   const handleSetReviewDate = useCallback(
     (isoDate: string) => {
       if (!goalId) return;
@@ -485,11 +493,8 @@ export default function PdpGoalDetailScreen() {
   const isActive = goal.status === PdpGoalStatus.STARTED;
   const isCompleted = goal.status === PdpGoalStatus.COMPLETED;
   const isArchived = goal.status === PdpGoalStatus.ARCHIVED;
-  const visibleActions = goal.actions.filter(
-    (a) => (optimisticStatuses[a.id] ?? a.status) !== PdpGoalStatus.ARCHIVED
-  );
   const completedActionCount = visibleActions.filter(
-    (a) => (optimisticStatuses[a.id] ?? a.status) === PdpGoalStatus.COMPLETED
+    (a) => (optimisticStatuses[a.id] ?? a.status) === PdpGoalStatus.COMPLETED,
   ).length;
   const allActionsDone =
     visibleActions.length === 0 || completedActionCount === visibleActions.length;
@@ -586,7 +591,7 @@ export default function PdpGoalDetailScreen() {
             {visibleActions.length === 0 ? (
               <EmptyState
                 variant="compact"
-                icon="checkmark-square-outline"
+                icon="checkmark-outline"
                 title="No actions yet"
                 description={isActive ? 'Add actions to track progress toward this goal.' : undefined}
               />

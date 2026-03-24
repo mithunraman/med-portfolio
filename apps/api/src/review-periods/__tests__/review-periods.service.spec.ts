@@ -69,8 +69,18 @@ const mockArtefactsRepo = {
   countByUser: jest.fn(),
 };
 
+const mockUserModel = {
+  findById: jest.fn().mockReturnValue({
+    lean: jest.fn().mockResolvedValue({ specialty: 100, trainingStage: 'ST1' }),
+  }),
+};
+
 function createService(): ReviewPeriodsService {
-  return new ReviewPeriodsService(mockReviewPeriodsRepo as any, mockArtefactsRepo as any);
+  return new ReviewPeriodsService(
+    mockReviewPeriodsRepo as any,
+    mockArtefactsRepo as any,
+    mockUserModel as any,
+  );
 }
 
 beforeEach(() => {

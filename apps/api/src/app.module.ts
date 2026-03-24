@@ -19,6 +19,7 @@ import { AnalysisRunsModule } from './analysis-runs';
 import { OutboxModule } from './outbox';
 import { ReviewPeriodsModule } from './review-periods/review-periods.module';
 import { OtpModule } from './otp';
+import { SpecialtiesModule } from './specialties/specialties.module';
 import { JwtAuthGuard, RolesGuard } from './common/guards';
 import { TokenRefreshInterceptor } from './common/interceptors';
 
@@ -71,6 +72,7 @@ import { TokenRefreshInterceptor } from './common/interceptors';
     OutboxModule,
     ReviewPeriodsModule,
     OtpModule,
+    SpecialtiesModule,
   ],
   providers: [
     {

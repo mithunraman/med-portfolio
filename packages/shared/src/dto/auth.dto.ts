@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Specialty } from '../enums/specialty.enum';
 import { UserRole } from '../enums/user-role.enum';
 
 export const LoginRequestSchema = z.object({
@@ -21,9 +22,18 @@ export const AuthUserSchema = z.object({
   email: z.string().email(),
   name: z.string(),
   role: z.nativeEnum(UserRole),
+  specialty: z.nativeEnum(Specialty).nullable(),
+  trainingStage: z.string().nullable(),
 });
 
 export type AuthUser = z.infer<typeof AuthUserSchema>;
+
+export const UpdateProfileRequestSchema = z.object({
+  specialty: z.nativeEnum(Specialty),
+  trainingStage: z.string(),
+});
+
+export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequestSchema>;
 
 export const LoginResponseSchema = z.object({
   accessToken: z.string(),

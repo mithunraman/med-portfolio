@@ -23,6 +23,19 @@ export class ArtefactsRepository implements IArtefactsRepository {
     private artefactModel: Model<ArtefactDocument>
   ) {}
 
+  async findById(
+    id: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<Artefact | null, DBError>> {
+    try {
+      const artefact = await this.artefactModel.findById(id).session(session ?? null).lean();
+      return ok(artefact);
+    } catch (error) {
+      this.logger.error('Failed to find artefact by id', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find artefact by id' });
+    }
+  }
+
   async upsertArtefact(
     data: UpsertArtefactData,
     session?: ClientSession
@@ -36,6 +49,7 @@ export class ArtefactsRepository implements IArtefactsRepository {
               artefactId: data.artefactId,
               userId: data.userId,
               specialty: data.specialty,
+              trainingStage: data.trainingStage,
               status: ArtefactStatus.IN_CONVERSATION,
               title: data.title,
             },

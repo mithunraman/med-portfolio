@@ -62,6 +62,7 @@ export const ArtefactSchema = z.object({
   id: z.string(),
   artefactId: z.string(),
   specialty: z.nativeEnum(Specialty),
+  trainingStage: z.string(),
   status: z.nativeEnum(ArtefactStatus),
   artefactType: z.string().nullable(),
   artefactTypeLabel: z.string().nullable(),

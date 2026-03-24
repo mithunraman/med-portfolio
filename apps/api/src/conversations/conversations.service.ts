@@ -15,7 +15,6 @@ import {
   MessageProcessingStatus,
   MessageRole,
   MessageType,
-  Specialty,
 } from '@acme/shared';
 import {
   BadRequestException,
@@ -28,6 +27,10 @@ import {
 } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { AnalysisRunsService } from '../analysis-runs/analysis-runs.service';
+import {
+  ARTEFACTS_REPOSITORY,
+  IArtefactsRepository,
+} from '../artefacts/artefacts.repository.interface';
 import { generateXid, nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { isErr } from '../common/utils/result.util';
 import { TransactionService } from '../database';
@@ -55,6 +58,8 @@ export class ConversationsService {
   constructor(
     @Inject(CONVERSATIONS_REPOSITORY)
     private readonly conversationsRepository: IConversationsRepository,
+    @Inject(ARTEFACTS_REPOSITORY)
+    private readonly artefactsRepository: IArtefactsRepository,
     @Inject(MEDIA_REPOSITORY)
     private readonly mediaRepository: IMediaRepository,
     private readonly mediaService: MediaService,
@@ -290,6 +295,13 @@ export class ConversationsService {
 
     const effectiveIdempotencyKey = idempotencyKey || generateXid();
 
+    // Look up artefact to get specialty + trainingStage for the graph
+    const artefactResult = await this.artefactsRepository.findById(conversation.artefact);
+    if (isErr(artefactResult) || !artefactResult.value) {
+      throw new InternalServerErrorException('Artefact not found for conversation');
+    }
+    const artefact = artefactResult.value;
+
     // Transactional: create analysis_run + outbox entry atomically.
     // threadId is derived internally by createRun as `${conversationId}:${runNumber}`.
     await this.transactionService.withTransaction(
@@ -308,7 +320,8 @@ export class ConversationsService {
               conversationId: convIdStr,
               artefactId: conversation.artefact.toString(),
               userId,
-              specialty: Specialty.GP.toString(),
+              specialty: artefact.specialty.toString(),
+              trainingStage: artefact.trainingStage ?? '',
               langGraphThreadId: run.langGraphThreadId,
             },
           },

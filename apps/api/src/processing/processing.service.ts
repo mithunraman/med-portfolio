@@ -1,6 +1,10 @@
-import { MediaType, MessageProcessingStatus, Specialty } from '@acme/shared';
+import { MediaType, MessageProcessingStatus } from '@acme/shared';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
+import {
+  ARTEFACTS_REPOSITORY,
+  IArtefactsRepository,
+} from '../artefacts/artefacts.repository.interface';
 import { isErr } from '../common/utils/result.util';
 import {
   CONVERSATIONS_REPOSITORY,
@@ -20,6 +24,8 @@ export class ProcessingService {
   constructor(
     @Inject(CONVERSATIONS_REPOSITORY)
     private readonly conversationsRepository: IConversationsRepository,
+    @Inject(ARTEFACTS_REPOSITORY)
+    private readonly artefactsRepository: IArtefactsRepository,
     private readonly mediaService: MediaService,
     private readonly transcriptionStage: TranscriptionStage,
     private readonly cleaningStage: CleaningStage
@@ -47,11 +53,26 @@ export class ProcessingService {
       return;
     }
 
+    // Look up artefact via conversation to get specialty
+    const convResult = await this.conversationsRepository.findConversationById(message.conversation);
+    if (isErr(convResult) || !convResult.value) {
+      this.logger.error(`Conversation not found for message ${messageId}`);
+      await this.markFailed(messageId, 'Conversation not found');
+      return;
+    }
+    const artefactResult = await this.artefactsRepository.findById(convResult.value.artefact);
+    if (isErr(artefactResult) || !artefactResult.value) {
+      this.logger.error(`Artefact not found for message ${messageId}`);
+      await this.markFailed(messageId, 'Artefact not found');
+      return;
+    }
+    const specialty = artefactResult.value.specialty;
+
     // Build context
     const context: StageContext = {
       messageId: message._id,
       conversationId: message.conversation,
-      specialty: Specialty.GP, // Default for now, could get from user
+      specialty,
       mediaType: message.media ? (message.media as unknown as Media).mediaType : null,
     };
 

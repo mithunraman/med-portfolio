@@ -1,4 +1,4 @@
-import { UserRole } from '@acme/shared';
+import { Specialty, UserRole } from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
@@ -17,6 +17,12 @@ export class User {
 
   @Prop({ required: true, type: Number, default: UserRole.USER })
   role!: UserRole;
+
+  @Prop({ type: Number, default: null })
+  specialty!: Specialty | null;
+
+  @Prop({ type: String, default: null })
+  trainingStage!: string | null;
 
   @Prop({ type: Number, default: 0 })
   tokenVersion!: number;

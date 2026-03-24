@@ -1,4 +1,4 @@
-import type { LoginResponse, AuthUser, OtpSendRequest, OtpSendResponse, OtpVerifyRequest, OtpClaimRequest } from '@acme/shared';
+import type { LoginResponse, AuthUser, OtpSendRequest, OtpSendResponse, OtpVerifyRequest, OtpClaimRequest, UpdateProfileRequest } from '@acme/shared';
 import { BaseApiClient } from '../core/api-client';
 
 export class AuthClient {
@@ -32,5 +32,9 @@ export class AuthClient {
 
   async me(): Promise<AuthUser> {
     return this.client.get<AuthUser>('/auth/me');
+  }
+
+  async updateProfile(data: UpdateProfileRequest): Promise<AuthUser> {
+    return this.client.patch<AuthUser>('/auth/me', data);
   }
 }

@@ -1,4 +1,4 @@
-import { UserRole } from '@acme/shared';
+import { Specialty, UserRole } from '@acme/shared';
 import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { AuthService } from '../auth.service';
@@ -37,6 +37,7 @@ function makeGuestDoc(overrides: Record<string, unknown> = {}) {
 const mockUserModel = {
   findOne: jest.fn(),
   findById: jest.fn(),
+  findByIdAndUpdate: jest.fn(),
   create: jest.fn(),
   updateOne: jest.fn(),
 };
@@ -294,6 +295,8 @@ describe('AuthService', () => {
         email: 'user@example.com',
         name: 'Test User',
         role: UserRole.USER,
+        specialty: null,
+        trainingStage: null,
       });
     });
 
@@ -328,6 +331,94 @@ describe('AuthService', () => {
       expect(mockJwtService.sign).toHaveBeenCalledWith(
         expect.objectContaining({ tokenVersion: 0 })
       );
+    });
+  });
+
+  // ─── updateProfile ───
+
+  describe('updateProfile', () => {
+    it('should update specialty and training stage', async () => {
+      const updatedDoc = makeUserDoc({
+        specialty: Specialty.GP,
+        trainingStage: 'ST2',
+      });
+      mockUserModel.findByIdAndUpdate.mockResolvedValue(updatedDoc);
+
+      const result = await service.updateProfile(userIdStr, {
+        specialty: Specialty.GP,
+        trainingStage: 'ST2',
+      });
+
+      expect(mockUserModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        userIdStr,
+        { specialty: Specialty.GP, trainingStage: 'ST2' },
+        { new: true }
+      );
+      expect(result.specialty).toBe(Specialty.GP);
+      expect(result.trainingStage).toBe('ST2');
+    });
+
+    it('should reject invalid training stage for specialty', async () => {
+      await expect(
+        service.updateProfile(userIdStr, {
+          specialty: Specialty.GP,
+          trainingStage: 'CT1', // Psychiatry stage, not GP
+        })
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockUserModel.findByIdAndUpdate).not.toHaveBeenCalled();
+    });
+
+    it('should reject invalid training stage code', async () => {
+      await expect(
+        service.updateProfile(userIdStr, {
+          specialty: Specialty.GP,
+          trainingStage: 'INVALID',
+        })
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw UnauthorizedException if user not found', async () => {
+      mockUserModel.findByIdAndUpdate.mockResolvedValue(null);
+
+      await expect(
+        service.updateProfile(userIdStr, {
+          specialty: Specialty.PSYCHIATRY,
+          trainingStage: 'CT1',
+        })
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should accept valid Psychiatry stage', async () => {
+      const updatedDoc = makeUserDoc({
+        specialty: Specialty.PSYCHIATRY,
+        trainingStage: 'ST6',
+      });
+      mockUserModel.findByIdAndUpdate.mockResolvedValue(updatedDoc);
+
+      const result = await service.updateProfile(userIdStr, {
+        specialty: Specialty.PSYCHIATRY,
+        trainingStage: 'ST6',
+      });
+
+      expect(result.specialty).toBe(Specialty.PSYCHIATRY);
+      expect(result.trainingStage).toBe('ST6');
+    });
+
+    it('should accept valid Internal Medicine stage', async () => {
+      const updatedDoc = makeUserDoc({
+        specialty: Specialty.INTERNAL_MEDICINE,
+        trainingStage: 'IMY2',
+      });
+      mockUserModel.findByIdAndUpdate.mockResolvedValue(updatedDoc);
+
+      const result = await service.updateProfile(userIdStr, {
+        specialty: Specialty.INTERNAL_MEDICINE,
+        trainingStage: 'IMY2',
+      });
+
+      expect(result.specialty).toBe(Specialty.INTERNAL_MEDICINE);
+      expect(result.trainingStage).toBe('IMY2');
     });
   });
 });

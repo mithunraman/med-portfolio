@@ -1,6 +1,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AnalysisRunsModule } from '../analysis-runs';
+import { ArtefactsModule } from '../artefacts/artefacts.module';
 import { DatabaseModule } from '../database';
 import { MediaModule } from '../media';
 import { OutboxModule } from '../outbox';
@@ -24,6 +25,7 @@ import { Message, MessageSchema } from './schemas/message.schema';
     MediaModule,
     AnalysisRunsModule,
     OutboxModule,
+    forwardRef(() => ArtefactsModule),
     forwardRef(() => ProcessingModule),
     forwardRef(() => PortfolioGraphModule),
   ],

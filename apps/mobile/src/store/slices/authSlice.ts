@@ -1,4 +1,4 @@
-import type { AuthUser } from '@acme/shared';
+import type { AuthUser, SpecialtyOption, UpdateProfileRequest } from '@acme/shared';
 import { UserRole } from '@acme/shared';
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { api } from '../../api/client';
@@ -16,6 +16,7 @@ export interface AuthState {
   isNewUser: boolean | null;
   isNewRegistration: boolean;
   devOtp: string | null;
+  specialties: SpecialtyOption[];
 }
 
 const initialState: AuthState = {
@@ -25,6 +26,7 @@ const initialState: AuthState = {
   isNewUser: null,
   isNewRegistration: false,
   devOtp: null,
+  specialties: [],
 };
 
 /**
@@ -169,6 +171,51 @@ export const claimGuest = createAsyncThunk(
 );
 
 /**
+ * Fetch available specialties and training stages from the backend.
+ * Public endpoint — no auth required.
+ */
+export const fetchSpecialties = createAsyncThunk(
+  'auth/fetchSpecialties',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.specialties.getSpecialties();
+      return response;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load specialties';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
+ * Update user's specialty and training stage.
+ * Persists to backend and updates local state.
+ */
+export const updateProfile = createAsyncThunk(
+  'auth/updateProfile',
+  async (data: UpdateProfileRequest, { rejectWithValue }) => {
+    authLogger.info('Updating profile', { specialty: data.specialty, stage: data.trainingStage });
+
+    try {
+      const user = await api.auth.updateProfile(data);
+
+      // Update stored user in SecureStore
+      const storedSession = await AppSecureStorage.get('user');
+      if (storedSession) {
+        await AppSecureStorage.set('user', { ...storedSession, user });
+      }
+
+      authLogger.info('Profile updated', { userId: user.id });
+      return user;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update profile';
+      authLogger.error('Profile update failed', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
  * Logout and clear session.
  */
 export const logout = createAsyncThunk('auth/logout', async () => {
@@ -275,6 +322,17 @@ const authSlice = createSlice({
         state.status = 'unauthenticated';
         state.user = null;
         state.error = null;
+        state.specialties = [];
+      })
+
+      // Fetch Specialties
+      .addCase(fetchSpecialties.fulfilled, (state, action) => {
+        state.specialties = action.payload.specialties;
+      })
+
+      // Update Profile
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.user = action.payload;
       });
   },
 });

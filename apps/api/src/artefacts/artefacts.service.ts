@@ -7,7 +7,7 @@ import type {
   RestoreArtefactVersionRequest,
   UpdateArtefactStatusRequest,
 } from '@acme/shared';
-import { ArtefactStatus, MessageProcessingStatus, PdpGoalStatus, Specialty } from '@acme/shared';
+import { ArtefactStatus, MessageProcessingStatus, PdpGoalStatus } from '@acme/shared';
 import {
   BadRequestException,
   Inject,
@@ -16,8 +16,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { InjectModel } from '@nestjs/mongoose';
 import { format } from 'date-fns';
-import { ClientSession, Types } from 'mongoose';
+import { ClientSession, Model, Types } from 'mongoose';
 import { ARTEFACT_STATE_CHANGED, type ArtefactStateChangedEvent } from '../common/events';
 import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { isErr } from '../common/utils/result.util';
@@ -33,6 +34,7 @@ import {
   PDP_GOALS_REPOSITORY,
   UpdatePdpGoalActionData,
 } from '../pdp-goals/pdp-goals.repository.interface';
+import { User, UserDocument } from '../auth/schemas/user.schema';
 import { VersionHistoryService } from '../version-history';
 import { ARTEFACTS_REPOSITORY, IArtefactsRepository } from './artefacts.repository.interface';
 import { CreateArtefactDto, ListArtefactsDto } from './dto';
@@ -55,6 +57,8 @@ export class ArtefactsService {
     private readonly conversationsRepository: IConversationsRepository,
     @Inject(PDP_GOALS_REPOSITORY)
     private readonly pdpGoalsRepository: IPdpGoalsRepository,
+    @InjectModel(User.name)
+    private readonly userModel: Model<UserDocument>,
     private readonly transactionService: TransactionService,
     private readonly versionHistoryService: VersionHistoryService,
     private readonly eventEmitter: EventEmitter2
@@ -62,6 +66,15 @@ export class ArtefactsService {
 
   async createArtefact(userId: string, dto: CreateArtefactDto): Promise<Artefact> {
     const artefactId = createInternalArtefactId(userId, dto.artefactId);
+
+    // Look up user to get specialty and training stage
+    const user = await this.userModel.findById(new Types.ObjectId(userId)).lean();
+    if (!user) throw new NotFoundException('User not found');
+    if (!user.specialty || !user.trainingStage) {
+      throw new BadRequestException('User must complete onboarding before creating entries');
+    }
+
+    const { specialty, trainingStage } = user;
 
     return this.transactionService.withTransaction(
       async (session) => {
@@ -72,8 +85,9 @@ export class ArtefactsService {
           {
             artefactId,
             userId: new Types.ObjectId(userId),
-            specialty: Specialty.GP, // Hardcoded for now
+            specialty,
             title: defaultTitle,
+            trainingStage,
           },
           session
         );
@@ -557,6 +571,7 @@ export class ArtefactsService {
             artefactId: createInternalArtefactId(userId, nanoidAlphanumeric()),
             userId: new Types.ObjectId(userId),
             specialty: sourceArtefact.specialty,
+            trainingStage: sourceArtefact.trainingStage ?? '',
             title: `Copy of ${sourceArtefact.title}`,
           },
           session

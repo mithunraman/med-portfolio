@@ -1,5 +1,6 @@
 export enum Specialty {
   GP = 100,
+  INTERNAL_MEDICINE = 150,
   DERMATOLOGY = 200,
   EMERGENCY_MEDICINE = 300,
   PSYCHIATRY = 400,

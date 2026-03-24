@@ -2,6 +2,7 @@ import { Specialty } from '@acme/shared';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
+import { getStageContext } from '../../specialties/stage-context';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { ClassificationAlternative, PortfolioStateType } from '../portfolio-graph.state';
@@ -62,6 +63,10 @@ const classificationPrompt = ChatPromptTemplate.fromMessages([
     `You are a UK medical portfolio classifier for {specialtyName} trainees.
 
 Your task: given a transcript of one or more dictated messages from a trainee, determine which portfolio entry type best fits the content.
+
+## Trainee Context
+
+{trainingStageContext}
 
 ## Entry Types
 
@@ -185,6 +190,7 @@ export function createClassifyNode(deps: GraphDeps) {
     // Format the prompt template with runtime data
     const messages = await classificationPrompt.formatMessages({
       specialtyName: config.name,
+      trainingStageContext: getStageContext(specialty, state.trainingStage),
       entryTypeBlock: formatEntryTypeBlock(specialty),
       transcript: state.fullTranscript,
     });

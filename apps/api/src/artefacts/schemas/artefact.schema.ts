@@ -39,6 +39,9 @@ export class Artefact {
   @Prop({ required: true, type: Number, default: Specialty.GP })
   specialty!: Specialty;
 
+  @Prop({ required: true, type: String, default: '' })
+  trainingStage!: string;
+
   @Prop({ required: true, type: Number, default: ArtefactStatus.IN_CONVERSATION })
   status!: ArtefactStatus;
 

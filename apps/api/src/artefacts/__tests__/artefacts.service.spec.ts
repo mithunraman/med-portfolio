@@ -101,11 +101,18 @@ const mockEventEmitter = {
   emit: jest.fn(),
 };
 
+const mockUserModel = {
+  findById: jest.fn().mockReturnValue({
+    lean: jest.fn().mockResolvedValue({ specialty: 100, trainingStage: 'ST1' }),
+  }),
+};
+
 function createService(): ArtefactsService {
   return new ArtefactsService(
     mockArtefactsRepo as any,
     mockConversationsRepo as any,
     mockPdpGoalsRepo as any,
+    mockUserModel as any,
     mockTransactionService as any,
     mockVersionHistoryService as any,
     mockEventEmitter as any,

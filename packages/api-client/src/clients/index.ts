@@ -6,3 +6,4 @@ export * from './media.client';
 export * from './dashboard.client';
 export * from './pdp-goals.client';
 export * from './review-periods.client';
+export * from './specialties.client';

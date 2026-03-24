@@ -170,6 +170,7 @@ export class PortfolioGraphService implements OnModuleInit {
     artefactId: string;
     userId: string;
     specialty: string;
+    trainingStage: string;
     threadId: string;
   }): Promise<InterruptNode | null> {
     const { threadId } = params;
@@ -185,6 +186,7 @@ export class PortfolioGraphService implements OnModuleInit {
         artefactId: params.artefactId,
         userId: params.userId,
         specialty: params.specialty,
+        trainingStage: params.trainingStage,
       },
       config
     );

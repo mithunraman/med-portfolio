@@ -3,6 +3,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { interrupt } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
+import { getStageContext } from '../../specialties/stage-context';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { MAX_FOLLOWUP_ROUNDS } from '../portfolio-graph.builder';
@@ -32,9 +33,13 @@ const followupQuestionsResponseSchema = z.object({
 const followupPrompt = ChatPromptTemplate.fromMessages([
   [
     'system',
-    `You are a supportive UK GP portfolio assistant helping a trainee complete a {templateName} entry.
+    `You are a supportive UK medical portfolio assistant helping a trainee complete a {templateName} entry.
 
 The trainee has already told you about their experience, but some information is missing. Your job is to ask follow-up questions that feel natural and conversational — not like a checklist.
+
+## Trainee Context
+
+{trainingStageContext}
 
 ## Missing Sections
 
@@ -134,6 +139,7 @@ export function createAskFollowupNode(deps: GraphDeps) {
     try {
       const messages = await followupPrompt.formatMessages({
         templateName: template.name,
+        trainingStageContext: getStageContext(specialty, state.trainingStage),
         missingSectionBlock: formatMissingSectionBlock(missingSectionDefs),
         transcript: state.fullTranscript,
       });

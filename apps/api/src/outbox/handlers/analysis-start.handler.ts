@@ -24,6 +24,7 @@ export interface AnalysisStartPayload {
   artefactId: string;
   userId: string;
   specialty: string;
+  trainingStage: string;
   langGraphThreadId: string;
 }
 
@@ -75,6 +76,7 @@ export class AnalysisStartHandler implements OutboxHandler {
         artefactId: data.artefactId,
         userId: data.userId,
         specialty: data.specialty,
+        trainingStage: data.trainingStage ?? '',
         threadId,
       });
 

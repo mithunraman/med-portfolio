@@ -1,9 +1,9 @@
 import type { AuthUser, LoginResponse, OtpSendResponse } from '@acme/shared';
-import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
-import { OtpClaimDto, OtpSendDto, OtpVerifyDto } from './dto';
+import { OtpClaimDto, OtpSendDto, OtpVerifyDto, UpdateProfileDto } from './dto';
 
 @Controller('auth')
 export class AuthController {
@@ -47,5 +47,13 @@ export class AuthController {
   @Get('me')
   async me(@CurrentUser() user: CurrentUserPayload): Promise<AuthUser> {
     return this.authService.getCurrentUser(user.userId);
+  }
+
+  @Patch('me')
+  async updateProfile(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: UpdateProfileDto
+  ): Promise<AuthUser> {
+    return this.authService.updateProfile(user.userId, dto);
   }
 }

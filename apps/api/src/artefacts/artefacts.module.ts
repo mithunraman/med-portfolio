@@ -7,13 +7,17 @@ import { VersionHistoryModule } from '../version-history';
 import { ArtefactsController } from './artefacts.controller';
 import { ArtefactsRepository } from './artefacts.repository';
 import { ARTEFACTS_REPOSITORY } from './artefacts.repository.interface';
+import { User, UserSchema } from '../auth/schemas/user.schema';
 import { ArtefactsService } from './artefacts.service';
 import { Artefact, ArtefactSchema } from './schemas/artefact.schema';
 
 @Module({
   imports: [
     DatabaseModule,
-    MongooseModule.forFeature([{ name: Artefact.name, schema: ArtefactSchema }]),
+    MongooseModule.forFeature([
+      { name: Artefact.name, schema: ArtefactSchema },
+      { name: User.name, schema: UserSchema },
+    ]),
     PdpGoalsModule,
     VersionHistoryModule,
     forwardRef(() => ConversationsModule),

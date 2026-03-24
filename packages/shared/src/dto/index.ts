@@ -6,3 +6,4 @@ export * from './media.dto';
 export * from './dashboard.dto';
 export * from './pdp-goal.dto';
 export * from './review-period.dto';
+export * from './specialty.dto';

@@ -15,6 +15,7 @@ export interface UpsertArtefactData {
   artefactId: string;
   userId: Types.ObjectId;
   specialty: Specialty;
+  trainingStage: string;
   title: string;
 }
 
@@ -45,6 +46,11 @@ export interface CountByUserFilter {
 }
 
 export interface IArtefactsRepository {
+  findById(
+    id: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<Artefact | null, DBError>>;
+
   upsertArtefact(
     data: UpsertArtefactData,
     session?: ClientSession

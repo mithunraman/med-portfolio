@@ -35,6 +35,7 @@ export function toArtefactDto(
     id: artefact.xid,
     artefactId: extractArtefactClientId(artefact.artefactId),
     specialty: artefact.specialty,
+    trainingStage: artefact.trainingStage ?? '',
     status: artefact.status,
     artefactType: artefact.artefactType,
     artefactTypeLabel: entryTypeDef?.label ?? artefact.artefactType,

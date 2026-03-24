@@ -35,6 +35,7 @@ function RootLayoutNav() {
   const { colors, isDark } = useTheme();
 
   const authStatus = useAppSelector((state) => state.auth.status);
+  const user = useAppSelector((state) => state.auth.user);
   const onboardingInitialized = useAppSelector((state) => state.onboarding.isInitialized);
 
   // Subscribe to network state changes
@@ -108,19 +109,26 @@ function RootLayoutNav() {
   }, [isLoading]);
 
   // Handle auth-based routing
+  const needsSpecialty = isLoggedIn && user && !user.specialty;
+
   useEffect(() => {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const onSpecialtyScreen =
+      segments[1] === 'select-specialty' || segments[1] === 'select-stage';
 
-    if (isLoggedIn && inAuthGroup) {
-      // Redirect to tabs if logged in but on auth screens
+    if (isLoggedIn && inAuthGroup && !needsSpecialty) {
+      // Logged in with specialty set — go to main app
       router.replace('/(tabs)');
+    } else if (isLoggedIn && needsSpecialty && !onSpecialtyScreen) {
+      // Logged in but no specialty — go to specialty selection
+      router.replace('/(auth)/select-specialty');
     } else if (!isLoggedIn && !inAuthGroup) {
-      // Redirect to auth if not logged in and not on auth screens
+      // Not logged in — go to auth
       router.replace('/(auth)/intro');
     }
-  }, [isLoggedIn, segments, isLoading, router]);
+  }, [isLoggedIn, needsSpecialty, segments, isLoading, router]);
 
   if (isLoading) {
     return <LoadingScreen />;

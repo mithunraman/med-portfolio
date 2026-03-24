@@ -1,4 +1,10 @@
-import { UserRole, type AuthUser, type LoginResponse, type OtpSendResponse } from '@acme/shared';
+import {
+  UserRole,
+  type AuthUser,
+  type LoginResponse,
+  type OtpSendResponse,
+  type UpdateProfileRequest,
+} from '@acme/shared';
 import {
   BadRequestException,
   ConflictException,
@@ -6,6 +12,7 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import { isValidTrainingStage } from '../specialties/specialty.registry';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import * as crypto from 'crypto';
@@ -128,6 +135,27 @@ export class AuthService {
     };
   }
 
+  async updateProfile(userId: string, dto: UpdateProfileRequest): Promise<AuthUser> {
+    if (!isValidTrainingStage(dto.specialty, dto.trainingStage)) {
+      throw new BadRequestException(
+        `Training stage "${dto.trainingStage}" is not valid for specialty ${dto.specialty}`
+      );
+    }
+
+    const user = await this.userModel.findByIdAndUpdate(
+      userId,
+      { specialty: dto.specialty, trainingStage: dto.trainingStage },
+      { new: true }
+    );
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    this.logger.log(`Profile updated for user ${userId}: specialty=${dto.specialty}, stage=${dto.trainingStage}`);
+    return this.toAuthUser(user);
+  }
+
   // ── Common ──
 
   async getCurrentUser(userId: string): Promise<AuthUser> {
@@ -154,6 +182,8 @@ export class AuthService {
       email: user.email,
       name: user.name,
       role: user.role,
+      specialty: user.specialty ?? null,
+      trainingStage: user.trainingStage ?? null,
     };
   }
 }

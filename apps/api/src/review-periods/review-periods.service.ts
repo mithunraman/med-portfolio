@@ -5,7 +5,8 @@ import type {
   ReviewPeriod as ReviewPeriodDto,
   ReviewPeriodListResponse,
 } from '@acme/shared';
-import { ArtefactStatus, ReviewPeriodStatus, Specialty } from '@acme/shared';
+import { ArtefactStatus, ReviewPeriodStatus } from '@acme/shared';
+import { InjectModel } from '@nestjs/mongoose';
 import {
   BadRequestException,
   ConflictException,
@@ -16,7 +17,8 @@ import {
 } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { startOfDay } from 'date-fns';
-import { Types } from 'mongoose';
+import { Model, Types } from 'mongoose';
+import { User, UserDocument } from '../auth/schemas/user.schema';
 import {
   ARTEFACTS_REPOSITORY,
   IArtefactsRepository,
@@ -41,7 +43,9 @@ export class ReviewPeriodsService {
     @Inject(REVIEW_PERIODS_REPOSITORY)
     private readonly reviewPeriodsRepository: IReviewPeriodsRepository,
     @Inject(ARTEFACTS_REPOSITORY)
-    private readonly artefactsRepository: IArtefactsRepository
+    private readonly artefactsRepository: IArtefactsRepository,
+    @InjectModel(User.name)
+    private readonly userModel: Model<UserDocument>
   ) {}
 
   async createReviewPeriod(
@@ -240,8 +244,12 @@ export class ReviewPeriodsService {
   }
 
   private async computeCoverage(userId: string, period: ReviewPeriod): Promise<CoverageResponse> {
-    // Hardcoded to GP for now — matches artefact creation pattern
-    const config = getSpecialtyConfig(Specialty.GP);
+    // Look up user's specialty to get the correct config
+    const user = await this.userModel.findById(new Types.ObjectId(userId)).lean();
+    if (!user?.specialty) {
+      throw new InternalServerErrorException('User has no specialty set');
+    }
+    const config = getSpecialtyConfig(user.specialty);
 
     // Query completed artefacts within the review period date range
     const result = await this.artefactsRepository.listArtefacts({

@@ -3,6 +3,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { OpenAIModels } from '../../llm/llm.service';
+import { getStageContext } from '../../specialties/stage-context';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PdpGoal, PortfolioStateType } from '../portfolio-graph.state';
@@ -74,6 +75,10 @@ const generatePdpPrompt = ChatPromptTemplate.fromMessages([
     `You are a UK {specialtyName} training PDP (Personal Development Plan) generator.
 
 Your task: given a trainee's reflection for a {entryType} entry and the capabilities it demonstrates, generate 1-${MAX_GOALS} PDP goals, each with 1-${MAX_ACTIONS_PER_GOAL} SMART actions.
+
+## Trainee Context
+
+{trainingStageContext}
 
 ## Tagged Capabilities
 
@@ -188,6 +193,7 @@ export function createGeneratePdpNode(deps: GraphDeps) {
     // ── Build and send prompt ──
     const messages = await generatePdpPrompt.formatMessages({
       specialtyName: config.name,
+      trainingStageContext: getStageContext(specialty, state.trainingStage),
       entryType: state.entryType ?? 'unknown',
       capabilityBlock: formatCapabilityBlock(state.capabilities),
       reflection: reflectionText,

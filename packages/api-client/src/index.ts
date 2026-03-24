@@ -8,6 +8,7 @@ import { MediaClient } from './clients/media.client';
 import { DashboardClient } from './clients/dashboard.client';
 import { PdpGoalsClient } from './clients/pdp-goals.client';
 import { ReviewPeriodsClient } from './clients/review-periods.client';
+import { SpecialtiesClient } from './clients/specialties.client';
 
 // Re-export types and adapters
 export * from './adapters/types';
@@ -31,6 +32,7 @@ export function createApiClient(config: ApiClientConfig) {
     dashboard: new DashboardClient(baseClient),
     pdpGoals: new PdpGoalsClient(baseClient),
     reviewPeriods: new ReviewPeriodsClient(baseClient),
+    specialties: new SpecialtiesClient(baseClient),
   };
 }
 

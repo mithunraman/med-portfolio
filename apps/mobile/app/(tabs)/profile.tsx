@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/hooks';
+import { useAppDispatch, useAppSelector } from '@/hooks';
+import { fetchSpecialties } from '@/store/slices/authSlice';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -19,6 +21,7 @@ import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 interface SettingsItemProps {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
+  value?: string;
   onPress?: () => void;
   rightElement?: React.ReactNode;
   showChevron?: boolean;
@@ -27,6 +30,7 @@ interface SettingsItemProps {
 function SettingsItem({
   icon,
   label,
+  value,
   onPress,
   rightElement,
   showChevron = true,
@@ -44,7 +48,12 @@ function SettingsItem({
     >
       <View style={styles.settingsItemLeft}>
         <Ionicons name={icon} size={22} color={colors.textSecondary} style={styles.settingsIcon} />
-        <Text style={[styles.settingsLabel, { color: colors.text }]}>{label}</Text>
+        <View>
+          <Text style={[styles.settingsLabel, { color: colors.text }]}>{label}</Text>
+          {value && (
+            <Text style={[styles.settingsValue, { color: colors.textSecondary }]}>{value}</Text>
+          )}
+        </View>
       </View>
       {rightElement ||
         (showChevron && onPress && (
@@ -73,9 +82,28 @@ function SettingsSection({ title, children }: SettingsSectionProps) {
 export default function ProfileScreen() {
   const insets = useOfflineAwareInsets();
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const { colors, isDark, toggleMode } = useTheme();
   const { user, isGuest, logout } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const specialties = useAppSelector((s) => s.auth.specialties);
+
+  useEffect(() => {
+    if (specialties.length === 0) {
+      dispatch(fetchSpecialties());
+    }
+  }, [dispatch, specialties.length]);
+
+  // Resolve display labels for specialty and training stage
+  const specialtyConfig = specialties.find((s) => s.specialty === user?.specialty);
+  const specialtyLabel = specialtyConfig?.name ?? null;
+  const stageLabel = specialtyConfig?.trainingStages.find(
+    (s) => s.code === user?.trainingStage
+  )?.label ?? user?.trainingStage ?? null;
+
+  const handleChangeSpecialty = useCallback(() => {
+    router.push('/(auth)/select-specialty');
+  }, [router]);
 
   const handleLogout = () => {
     Alert.alert(
@@ -145,6 +173,26 @@ export default function ProfileScreen() {
             />
           )}
         </SettingsSection>
+
+        {/* Training */}
+        {specialtyLabel && (
+          <SettingsSection title="Training">
+            <SettingsItem
+              icon="medical-outline"
+              label="Specialty"
+              value={specialtyLabel}
+              onPress={handleChangeSpecialty}
+            />
+            {stageLabel && (
+              <SettingsItem
+                icon="school-outline"
+                label="Training Stage"
+                value={stageLabel}
+                onPress={handleChangeSpecialty}
+              />
+            )}
+          </SettingsSection>
+        )}
 
         {/* Preferences */}
         <SettingsSection title="Preferences">
@@ -321,6 +369,10 @@ const styles = StyleSheet.create({
   },
   settingsLabel: {
     fontSize: 16,
+  },
+  settingsValue: {
+    fontSize: 13,
+    marginTop: 2,
   },
   versionText: {
     fontSize: 16,

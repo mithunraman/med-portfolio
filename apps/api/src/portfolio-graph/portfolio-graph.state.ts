@@ -53,6 +53,10 @@ export const PortfolioState = Annotation.Root({
   artefactId: Annotation<string>,
   userId: Annotation<string>,
   specialty: Annotation<string>,
+  trainingStage: Annotation<string>({
+    reducer: (_, next) => next,
+    default: () => '',
+  }),
 
   // ── Accumulated content ──
   /** All cleaned user messages concatenated — the full transcript */

@@ -3,6 +3,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { OpenAIModels } from '../../llm/llm.service';
+import { getStageContext } from '../../specialties/stage-context';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PortfolioStateType } from '../portfolio-graph.state';
@@ -60,6 +61,10 @@ const reflectPrompt = ChatPromptTemplate.fromMessages([
     `You are an educational writing assistant for {specialtyName} portfolio reflections.
 
 Your task: generate a structured {templateName} reflection based on the trainee's transcript. The reflection should read as if written by the trainee — authentic, specific, and professionally honest. Also generate a concise title summarising the artefact for list views.
+
+## Trainee Context
+
+{trainingStageContext}
 
 ## Sections
 
@@ -174,6 +179,7 @@ export function createReflectNode(deps: GraphDeps) {
     // ── Build and send prompt ──
     const messages = await reflectPrompt.formatMessages({
       specialtyName: config.name,
+      trainingStageContext: getStageContext(specialty, state.trainingStage),
       templateName: template.name,
       wordMin: template.wordCountRange.min.toString(),
       wordMax: template.wordCountRange.max.toString(),

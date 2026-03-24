@@ -2,6 +2,7 @@ import { Specialty } from '@acme/shared';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
+import { getStageContext } from '../../specialties/stage-context';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PortfolioStateType, SectionCoverage } from '../portfolio-graph.state';
@@ -35,7 +36,11 @@ const completenessResponseSchema = z.object({
 const completenessPrompt = ChatPromptTemplate.fromMessages([
   [
     'system',
-    `You are a UK medical portfolio assistant assessing whether a GP trainee's transcript contains enough information for each section of a {templateName} entry.
+    `You are a UK medical portfolio assistant assessing whether a trainee's transcript contains enough information for each section of a {templateName} entry.
+
+## Trainee Context
+
+{trainingStageContext}
 
 ## Sections to Assess
 
@@ -122,6 +127,7 @@ export function createCheckCompletenessNode(deps: GraphDeps) {
     // ── Build and send prompt ──
     const messages = await completenessPrompt.formatMessages({
       templateName: template.name,
+      trainingStageContext: getStageContext(specialty, state.trainingStage),
       sectionBlock: formatSectionBlock(assessableSections),
       transcript: state.fullTranscript,
     });

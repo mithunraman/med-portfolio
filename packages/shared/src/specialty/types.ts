@@ -72,6 +72,30 @@ export interface CapabilityDefinition {
 }
 
 /**
+ * A training stage within a specialty's programme.
+ * Used to drive stage-appropriate AI coaching and to populate
+ * the specialty/stage picker on the mobile client.
+ */
+export interface TrainingStageDefinition {
+  /** Short code used as the stored value (e.g., "CT1", "ST3") */
+  code: string;
+  /** Human-readable label (e.g., "Core Training Year 1") */
+  label: string;
+  /** Description of this stage — what the trainee is doing, used as helper text in UI */
+  description: string;
+}
+
+/**
+ * Shape returned by GET /api/specialties — one per supported specialty.
+ * Drives the mobile onboarding picker without hardcoding lists on the client.
+ */
+export interface SpecialtyOption {
+  specialty: Specialty;
+  name: string;
+  trainingStages: TrainingStageDefinition[];
+}
+
+/**
  * Complete configuration for a medical training specialty.
  * This is the "fuel" that drives the specialty-agnostic processing graph.
  * Each specialty (GP, Emergency Medicine, Psychiatry, etc.) provides one of these.
@@ -89,4 +113,6 @@ export interface SpecialtyConfig {
   entryTypeToTemplate: Record<string, string>;
   /** All capabilities in the curriculum framework */
   capabilities: CapabilityDefinition[];
+  /** Training stages for this specialty (e.g., ST1-ST3 for GP, CT1-CT3 + ST4-ST6 for Psychiatry) */
+  trainingStages: TrainingStageDefinition[];
 }

@@ -54,7 +54,7 @@ const UK_PII_POLICIES: PiiPolicy[] = [
   'phone_number', // Phone numbers
   'email_address', // Email addresses
   'location', // Addresses, specific locations
-  'organization', // Hospital names, GP surgery names
+  // 'organization', // Hospital names, GP surgery names
   'date', // Specific dates that could identify patient
   'drivers_license', // ID numbers
   'healthcare_number', // NHS numbers and medical IDs

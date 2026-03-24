@@ -25,6 +25,8 @@ export interface OptimisticMessage {
   conversationId: string;
   content: string | null;
   mediaId: string | null;
+  /** Explicit type so the renderer never has to guess from mediaId */
+  messageType: MessageType;
   deliveryStatus: DeliveryStatus;
   idempotencyKey: string;
   createdAt: string;
@@ -48,7 +50,7 @@ export function toRenderableMessage(opt: OptimisticMessage): RenderableMessage {
     id: opt.localId,
     conversationId: opt.conversationId,
     role: MessageRole.USER,
-    messageType: opt.mediaId ? MessageType.AUDIO : MessageType.TEXT,
+    messageType: opt.messageType,
     processingStatus: MessageProcessingStatus.PENDING,
     content: opt.content,
     media: null,

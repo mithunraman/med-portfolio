@@ -1,4 +1,4 @@
-import { MediaType } from '@acme/shared';
+import { MediaType, MessageType } from '@acme/shared';
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { api } from '../../../api/client';
 import { logger } from '../../../utils/logger';
@@ -119,6 +119,7 @@ export const sendMessageWithRetry = createAsyncThunk(
       conversationId,
       content,
       mediaId: null,
+      messageType: MessageType.TEXT,
       deliveryStatus: 'sending',
       idempotencyKey,
       createdAt: new Date().toISOString(),
@@ -224,6 +225,7 @@ export const sendVoiceNoteWithRetry = createAsyncThunk(
       conversationId,
       content: null,
       mediaId: null,
+      messageType: MessageType.AUDIO,
       deliveryStatus: 'sending',
       idempotencyKey,
       createdAt: new Date().toISOString(),
@@ -298,6 +300,7 @@ export const resumeAnalysisWithOptimistic = createAsyncThunk(
       conversationId,
       content: optimisticContent,
       mediaId: null,
+      messageType: MessageType.TEXT,
       deliveryStatus: 'sending',
       idempotencyKey,
       createdAt: new Date().toISOString(),

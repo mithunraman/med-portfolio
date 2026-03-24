@@ -17,17 +17,6 @@ export default function MessagesLayout() {
       }}
     >
       <Stack.Screen
-        name="index"
-        options={{
-          title: 'Messages',
-          headerLeft: () => (
-            <Pressable onPress={() => router.back()} hitSlop={8}>
-              <Feather name="arrow-left" size={24} color={colors.text} />
-            </Pressable>
-          ),
-        }}
-      />
-      <Stack.Screen
         name="[conversationId]"
         options={{
           title: 'Chat',

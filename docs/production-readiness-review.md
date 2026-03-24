@@ -71,52 +71,45 @@
 
 ## MEDIUM (Quality / polish issues)
 
-### 10. No toast/snackbar feedback system
+### ~~10. No toast/snackbar feedback system~~ — DEFERRED (post-MVP)
 
+- **Status:** Deferred. Will be implemented after MVP launch.
 - **What's missing:** Success operations use `Alert.alert()` (e.g., "Saved" in entry detail). There's no toast system for lightweight, non-blocking feedback.
-- **Why it matters:** Native alerts are disruptive for confirmations like "Copied to clipboard" or "Changes saved". They break user flow.
 - **Fix:** Integrate `react-native-toast-message` or similar. Replace `Alert.alert('Saved', ...)` with a toast.
-- **Impact:** UX polish; feels like a web app wrapped in native.
 
 ### ~~11. ExportSheet safe area gap~~ — FIXED
 
 - **Status:** Resolved. `ExportSheet.tsx` now uses `useSafeAreaInsets()` with `Math.max(insets.bottom, 24)` instead of hardcoded `paddingBottom: 40`.
 
-### 12. No loading/skeleton states for dashboard modules
+### ~~12. No loading/skeleton states for dashboard modules~~ — DEFERRED (post-MVP)
 
+- **Status:** Deferred. Will be implemented after MVP launch.
 - **What's missing:** Home screen renders empty modules immediately while `fetchDashboard()` is in flight. No skeleton loaders or shimmer placeholders.
-- **Why it matters:** First load shows empty "No entries yet" / "No goals due" messages briefly before data appears, causing content flash.
 - **Fix:** Add a `dashboardLoading` state and show skeleton placeholders while loading.
-- **Impact:** Perceived performance and polish.
 
-### 13. Conversation list screen doesn't refresh on focus
+### ~~13. Conversation list screen doesn't refresh on focus~~ — REMOVED
 
-- **What's missing:** Conversations list only fetches on mount (`useEffect`), not on focus. After creating a new conversation and going back, the list may be stale.
-- **Why it matters:** User creates an entry, goes back to conversations — their new conversation doesn't appear until manual pull-to-refresh.
-- **Fix:** Add `useFocusEffect` to re-fetch conversations (same pattern used in the Home screen's prompt randomization).
-- **Impact:** Confusing stale data.
+- **Status:** Resolved. The conversations list screen (`(messages)/index.tsx`) was dead code — no navigation path in the app ever reached it. Users always navigate directly to specific conversations from the Home or Entries screens. Removed the screen, its layout registration, and the unused `FloatingActionButton` component.
 
 ### ~~14. Entry detail navigation hidden during edits with no explanation~~ — FIXED
 
 - **Status:** Resolved. A sticky save/discard bar now appears at the bottom of the screen when `hasChanges` is true, with a red discard button and green "Save changes" button, clearly explaining why navigation is hidden.
 
-### 15. No haptic feedback on key interactions
+### ~~15. No haptic feedback on key interactions~~ — DEFERRED (post-MVP)
 
+- **Status:** Deferred. Will be implemented after MVP launch.
 - **What's missing:** Voice recording start/stop, completing a PDP action, finalising an entry — no haptic feedback anywhere.
-- **Why it matters:** Standard iOS/Android convention for confirming tactile actions. Feels hollow without it.
 - **Fix:** Add `Haptics.impactAsync()` from `expo-haptics` on key interactions (recording start, action toggle, finalise).
-- **Impact:** Polish.
 
 ### ~~16. Welcome screen logo is placeholder text~~ — FIXED
 
 - **Status:** Resolved. `welcome.tsx` now displays an Ionicons briefcase icon in a double-ring design with themed colours instead of `<Text>App</Text>`.
 
-### 17. Version history shows no diff/comparison
+### ~~17. Version history shows no diff/comparison~~ — DEFERRED (post-MVP)
 
+- **Status:** Deferred. Will be implemented after MVP launch.
 - **What's missing:** The version preview modal shows the version's content but doesn't compare it with the current version.
-- **Why it matters:** Users can't tell what changed between versions without manually comparing.
 - **Fix:** Add a simple text-diff view or at minimum show "Changed fields" indicators.
-- **Impact:** Utility of the version history feature.
 
 ---
 
@@ -169,22 +162,28 @@
 
 ## Final Recommendation
 
-### **Getting closer — 10 items remain**
+### **Getting closer — 5 items remain for MVP**
 
-Since the initial review, **9 of 18 open items have been fixed** (network handling, intro icons, ExportSheet safe area, entry detail UX, welcome logo, entries/PDP refresh, and more). Good progress.
+Since the initial review, **10 of 18 open items have been fixed/removed** and **4 have been deferred to post-MVP** (#10 Toast system, #12 Dashboard skeletons, #15 Haptic feedback, #17 Version diff).
 
 **2 critical items** still block production release:
 
 1. **No privacy policy** — needs legal content + hosting
 2. **No account deletion** — requires backend `DELETE /api/users/me` + frontend confirmation flow
 
-**Remaining open items (by priority):**
+**Remaining open items for MVP (by priority):**
 
 | Priority | Count | Items |
 |----------|-------|-------|
 | Critical | 2 | #3 Privacy Policy, #4 Account deletion |
 | High | 1 | #9 Help & Feedback placeholder email |
-| Medium | 4 | #10 Toast system, #12 Dashboard skeletons, #13 Conversations refresh on focus, #15 Haptic feedback, #17 Version diff |
+| Medium | 0 | — |
 | Low | 3 | #20 Deep linking, #21 Home pull-to-refresh, #23 Terms of Service |
+
+**Deferred to post-MVP:**
+
+| Items |
+|-------|
+| #10 Toast/snackbar system, #12 Dashboard skeletons, #15 Haptic feedback, #17 Version diff |
 
 **Estimated effort to reach minimum viable production release: 1-2 days** for critical + high items.

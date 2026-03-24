@@ -1,6 +1,10 @@
 {
   "enabledPlugins": {
     "react-native-best-practices@callstack-agent-skills": true,
-    "upgrading-react-native@callstack-agent-skills": true
+    "upgrading-react-native@callstack-agent-skills": true,
+    "pm-product-discovery@pm-skills": true,
+    "pm-market-research@pm-skills": true,
+    "pm-product-strategy@pm-skills": true,
+    "pm-go-to-market@pm-skills": true
   }
 }

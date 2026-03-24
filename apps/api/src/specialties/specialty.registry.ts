@@ -1,8 +1,10 @@
 import { Specialty, SpecialtyConfig } from '@acme/shared';
 import { GP_SPECIALTY_CONFIG } from './gp';
+import { PSYCHIATRY_SPECIALTY_CONFIG } from './psychiatry';
 
 const SPECIALTY_CONFIGS: Partial<Record<Specialty, SpecialtyConfig>> = {
   [Specialty.GP]: GP_SPECIALTY_CONFIG,
+  [Specialty.PSYCHIATRY]: PSYCHIATRY_SPECIALTY_CONFIG,
 };
 
 export function getSpecialtyConfig(specialty: Specialty): SpecialtyConfig {

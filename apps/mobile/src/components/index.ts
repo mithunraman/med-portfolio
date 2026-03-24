@@ -1,5 +1,7 @@
 export { Button } from './Button';
 export { CoverageRing } from './CoverageRing';
+export { ErrorBanner } from './ErrorBanner';
+export { StepIndicator } from './StepIndicator';
 export { MessageList } from './chat';
 export { ChatComposer } from './ChatComposer';
 export { ChatEmptyState } from './ChatEmptyState';

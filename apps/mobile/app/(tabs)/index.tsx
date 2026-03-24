@@ -1,14 +1,20 @@
 import { CoverageRing, SectionHeader, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
+import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 import { clearNewRegistration, fetchDashboard } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
-import { ArtefactStatus, type ActiveReviewPeriodSummary, type Artefact, type PdpGoal } from '@acme/shared';
+import {
+  ArtefactStatus,
+  type ActiveReviewPeriodSummary,
+  type Artefact,
+  type PdpGoal,
+} from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { randomUUID } from 'expo-crypto';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,7 +25,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -44,6 +49,45 @@ function formatDate(): string {
     day: 'numeric',
     month: 'long',
   });
+}
+
+// ─── Welcome Module (first-run only) ─────────────────────────────────────────
+
+const HOW_IT_WORKS = [
+  { step: '1', text: 'Talk about your clinical experience' },
+  { step: '2', text: 'We structure it into a portfolio entry' },
+  { step: '3', text: 'Track your curriculum coverage over time' },
+];
+
+function WelcomeModule({
+  specialtyLabel,
+  stageLabel,
+}: {
+  specialtyLabel: string | null;
+  stageLabel: string | null;
+}) {
+  const { colors } = useTheme();
+  const setupLine =
+    specialtyLabel && stageLabel ? `You're set up for ${specialtyLabel}, ${stageLabel}.` : null;
+
+  return (
+    <View style={styles.welcomeContainer}>
+      <Text style={[styles.welcomeHeading, { color: colors.text }]}>Here's how it works</Text>
+      {setupLine && (
+        <Text style={[styles.welcomeSetup, { color: colors.textSecondary }]}>{setupLine}</Text>
+      )}
+      <View style={styles.welcomeSteps}>
+        {HOW_IT_WORKS.map((item) => (
+          <View key={item.step} style={styles.welcomeStepRow}>
+            <View style={[styles.welcomeStepCircle, { backgroundColor: colors.primary + '1F' }]}>
+              <Text style={[styles.welcomeStepNumber, { color: colors.primary }]}>{item.step}</Text>
+            </View>
+            <Text style={[styles.welcomeStepText, { color: colors.text }]}>{item.text}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
 }
 
 // ─── Module A: Start New Entry ────────────────────────────────────────────────
@@ -84,7 +128,7 @@ function StartNewEntryCard({
           <Text style={[styles.captureHelper, { color: colors.textSecondary }]}>{recency}</Text>
         ) : null}
         <Text style={[styles.captureHelper, { color: colors.textSecondary }]}>
-          Takes under a minute — just speak naturally.
+          Just talk about your case - we'll handle the rest.
         </Text>
       </View>
       <View style={[styles.micCircle, { backgroundColor: colors.primary }]}>
@@ -170,7 +214,9 @@ function RecentEntriesModule({
 
 const WARNING_COLOR = '#f59e0b';
 
-function getNextDueDate(goal: PdpGoal): { label: string; isOverdue: boolean; timestamp: number } | null {
+function getNextDueDate(
+  goal: PdpGoal
+): { label: string; isOverdue: boolean; timestamp: number } | null {
   const now = Date.now();
 
   // Collect all due dates: goal reviewDate + action dueDates
@@ -271,7 +317,10 @@ function PdpDueSoonModule({
                 </Text>
                 {dueInfo && (
                   <>
-                    <Text style={[styles.pdpActionMetaDot, { color: colors.textSecondary }]}> · </Text>
+                    <Text style={[styles.pdpActionMetaDot, { color: colors.textSecondary }]}>
+                      {' '}
+                      ·{' '}
+                    </Text>
                     <Text
                       style={[
                         styles.pdpActionMeta,
@@ -388,13 +437,24 @@ export default function HomeScreen() {
   const dashboardLoading = useAppSelector((state) => state.dashboard.loading);
   const dashboardError = useAppSelector((state) => state.dashboard.error);
   const isNewRegistration = useAppSelector((state) => state.auth.isNewRegistration);
+  const user = useAppSelector((state) => state.auth.user);
+  const specialties = useAppSelector((state) => state.auth.specialties);
+
+  // Capture on mount so it survives clearNewRegistration() in the useEffect below
+  const [isFirstRun] = useState(() => isNewRegistration);
+
+  // Derive specialty/stage labels for the welcome module
+  const specialtyOption = specialties.find((s) => s.specialty === user?.specialty);
+  const specialtyLabel = specialtyOption?.name ?? null;
+  const stageLabel =
+    specialtyOption?.trainingStages.find((s) => s.code === user?.trainingStage)?.label ?? null;
 
   // True on first load when no data exists yet (not on subsequent refreshes)
   const isInitialLoad = dashboardLoading && !dashboardData;
 
   const scrollContentStyle = useMemo(
     () => [styles.scrollContent, { paddingTop: 16, paddingBottom: insets.bottom + 24 }],
-    [insets.bottom],
+    [insets.bottom]
   );
 
   // Randomise prompt on each screen focus (not just mount)
@@ -475,7 +535,9 @@ export default function HomeScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>Home</Text>
+          <Text style={[styles.title, { color: colors.text }]}>
+            {isFirstRun ? 'Welcome to your portfolio' : 'Home'}
+          </Text>
           <Text style={[styles.dateText, { color: colors.textSecondary }]}>{formatDate()}</Text>
         </View>
 
@@ -486,8 +548,10 @@ export default function HomeScreen() {
           prompt={prompt}
         />
 
-        {/* Modules B–D: show loading spinner on initial fetch, data once available */}
-        {isInitialLoad ? (
+        {/* First-run: welcome explainer only. Returning: full dashboard modules. */}
+        {isFirstRun ? (
+          <WelcomeModule specialtyLabel={specialtyLabel} stageLabel={stageLabel} />
+        ) : isInitialLoad ? (
           <View style={styles.initialLoading}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
@@ -501,20 +565,32 @@ export default function HomeScreen() {
               onSeeAll={handleSeeAllReviewPeriods}
             />
 
-            {/* Module C: Recent Entries */}
-            <RecentEntriesModule
-              items={dashboardData?.recentEntries.items ?? []}
-              total={dashboardData?.recentEntries.total ?? 0}
-              onEntryPress={handleEntryPress}
-              onSeeAll={handleSeeAllEntries}
-            />
-
-            {/* Module D: PDP Goals Due Soon */}
-            <PdpDueSoonModule
-              items={dashboardData?.pdpGoalsDue.items ?? []}
-              total={dashboardData?.pdpGoalsDue.total ?? 0}
-              onGoalPress={handleGoalPress}
-            />
+            {/* Modules C+D: combined empty card when both are empty, individual modules otherwise */}
+            {(dashboardData?.recentEntries.items.length ?? 0) === 0 &&
+            (dashboardData?.pdpGoalsDue.items.length ?? 0) === 0 ? (
+              <View style={styles.moduleContainer}>
+                <View style={[styles.combinedEmptyCard, { backgroundColor: colors.surface }]}>
+                  <Ionicons name="layers-outline" size={24} color={colors.textSecondary} />
+                  <Text style={[styles.combinedEmptyText, { color: colors.textSecondary }]}>
+                    Your entries and PDP goals will appear here.
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <>
+                <RecentEntriesModule
+                  items={dashboardData?.recentEntries.items ?? []}
+                  total={dashboardData?.recentEntries.total ?? 0}
+                  onEntryPress={handleEntryPress}
+                  onSeeAll={handleSeeAllEntries}
+                />
+                <PdpDueSoonModule
+                  items={dashboardData?.pdpGoalsDue.items ?? []}
+                  total={dashboardData?.pdpGoalsDue.total ?? 0}
+                  onGoalPress={handleGoalPress}
+                />
+              </>
+            )}
           </>
         )}
       </ScrollView>
@@ -717,5 +793,60 @@ const styles = StyleSheet.create({
   coverageCardDates: {
     fontSize: 12,
     lineHeight: 16,
+  },
+
+  // Welcome Module (first-run)
+  welcomeContainer: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    gap: 8,
+  },
+  welcomeHeading: {
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  welcomeSetup: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  welcomeSteps: {
+    marginTop: 4,
+    gap: 12,
+  },
+  welcomeStepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  welcomeStepCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  welcomeStepNumber: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  welcomeStepText: {
+    fontSize: 15,
+    lineHeight: 20,
+    flex: 1,
+  },
+
+  // Combined empty state (entries + PDP goals both empty)
+  combinedEmptyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  combinedEmptyText: {
+    fontSize: 14,
+    flex: 1,
+    lineHeight: 20,
   },
 });

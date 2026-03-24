@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
+  Animated,
   FlatList,
   StyleSheet,
   Text,
@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button, ErrorBanner, StepIndicator } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { updateProfile } from '@/store/slices/authSlice';
 import { useTheme } from '@/theme';
@@ -30,82 +31,145 @@ export default function SelectStageScreen() {
   const specialtyConfig = specialties.find((s) => s.specialty.toString() === specialty);
   const stages = specialtyConfig?.trainingStages ?? [];
 
+  const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSelect = useCallback(
-    async (stage: TrainingStageDefinition) => {
-      setIsSubmitting(true);
-      setError(null);
+  // Animate the confirm button sliding up when a selection is made
+  const buttonAnim = useRef(new Animated.Value(0)).current;
 
-      try {
-        await dispatch(
-          updateProfile({
-            specialty: Number(specialty) as Specialty,
-            trainingStage: stage.code,
-          })
-        ).unwrap();
-        // Navigation happens automatically via the auth guard in _layout.tsx
-        // when user.specialty becomes non-null
-        router.replace('/(tabs)');
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
-      } finally {
-        setIsSubmitting(false);
-      }
-    },
-    [dispatch, specialty, router]
-  );
+  useEffect(() => {
+    Animated.timing(buttonAnim, {
+      toValue: selectedCode ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [buttonAnim, selectedCode]);
+
+  const buttonTranslateY = buttonAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [80, 0],
+  });
+
+  const buttonOpacity = buttonAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  const handleSelect = useCallback((stage: TrainingStageDefinition) => {
+    setSelectedCode(stage.code);
+    setError(null);
+  }, []);
+
+  const handleConfirm = useCallback(async () => {
+    if (!selectedCode) return;
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      await dispatch(
+        updateProfile({
+          specialty: Number(specialty) as Specialty,
+          trainingStage: selectedCode,
+        })
+      ).unwrap();
+      router.replace('/(tabs)');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [dispatch, specialty, router, selectedCode]);
 
   const renderItem = useCallback(
-    ({ item }: { item: TrainingStageDefinition }) => (
-      <TouchableOpacity
-        style={[styles.optionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onPress={() => handleSelect(item)}
-        disabled={isSubmitting}
-        activeOpacity={0.7}
-      >
-        <View style={styles.optionContent}>
-          <Text style={[styles.optionLabel, { color: colors.text }]}>{item.label}</Text>
-          <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
-            {item.description}
-          </Text>
-        </View>
-        {isSubmitting ? (
-          <ActivityIndicator size="small" color={colors.primary} />
-        ) : (
-          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-        )}
-      </TouchableOpacity>
-    ),
-    [colors, handleSelect, isSubmitting]
+    ({ item }: { item: TrainingStageDefinition }) => {
+      const isSelected = selectedCode === item.code;
+
+      return (
+        <TouchableOpacity
+          style={[
+            styles.optionCard,
+            {
+              backgroundColor: isSelected ? colors.primary + '0F' : colors.surface,
+              borderColor: isSelected ? colors.primary : colors.border,
+              borderWidth: isSelected ? 1.5 : 1,
+            },
+          ]}
+          onPress={() => handleSelect(item)}
+          disabled={isSubmitting}
+          activeOpacity={0.7}
+          accessibilityRole="radio"
+          accessibilityState={{ selected: isSelected }}
+          accessibilityLabel={`${item.label}. ${item.description}`}
+        >
+          <View style={styles.optionContent}>
+            <Text style={[styles.optionLabel, { color: colors.text }]}>{item.label}</Text>
+          </View>
+          {isSelected ? (
+            <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+          ) : (
+            <View style={[styles.radioOuter, { borderColor: colors.border }]} />
+          )}
+        </TouchableOpacity>
+      );
+    },
+    [colors, handleSelect, isSubmitting, selectedCode]
   );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top + 16 }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>What year are you in?</Text>
+        <StepIndicator currentStep={2} totalSteps={2} />
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {specialtyName} training stages
+          {specialtyName}
         </Text>
+        <Text style={[styles.title, { color: colors.text }]}>What year are you in?</Text>
       </View>
 
       {error && (
-        <View style={[styles.errorContainer, { backgroundColor: colors.error + '20' }]}>
-          <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-        </View>
+        <ErrorBanner
+          message={error}
+          onRetry={() => setError(null)}
+        />
       )}
 
       <FlatList
         data={stages}
         keyExtractor={(item) => item.code}
         renderItem={renderItem}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: selectedCode ? 120 : 24 }]}
         showsVerticalScrollIndicator={false}
       />
+
+      {/* Sticky confirm button */}
+      <Animated.View
+        style={[
+          styles.footer,
+          {
+            paddingBottom: insets.bottom + 24,
+            backgroundColor: colors.background,
+            transform: [{ translateY: buttonTranslateY }],
+            opacity: buttonOpacity,
+          },
+        ]}
+        pointerEvents={selectedCode ? 'auto' : 'none'}
+      >
+        <Button
+          label="Continue"
+          onPress={handleConfirm}
+          loading={isSubmitting}
+          disabled={!selectedCode}
+        />
+      </Animated.View>
     </View>
   );
 }
@@ -119,42 +183,31 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   backButton: {
-    marginBottom: 16,
+    marginBottom: 12,
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  subtitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    marginTop: 12,
+    marginBottom: 4,
+  },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  errorContainer: {
-    marginHorizontal: 24,
-    marginBottom: 16,
-    padding: 12,
-    borderRadius: 8,
-  },
-  errorText: {
-    fontSize: 14,
-    textAlign: 'center',
   },
   list: {
     paddingHorizontal: 24,
     gap: 12,
-    paddingBottom: 24,
   },
   optionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 20,
     borderRadius: 12,
-    borderWidth: 1,
   },
   optionContent: {
     flex: 1,
@@ -165,8 +218,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 6,
   },
-  optionDescription: {
-    fontSize: 14,
-    lineHeight: 20,
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.05)',
   },
 });

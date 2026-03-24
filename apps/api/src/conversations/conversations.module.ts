@@ -6,7 +6,6 @@ import { DatabaseModule } from '../database';
 import { MediaModule } from '../media';
 import { OutboxModule } from '../outbox';
 import { PortfolioGraphModule } from '../portfolio-graph';
-import { ProcessingModule } from '../processing';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsRepository } from './conversations.repository';
 import { CONVERSATIONS_REPOSITORY } from './conversations.repository.interface';
@@ -26,7 +25,6 @@ import { Message, MessageSchema } from './schemas/message.schema';
     AnalysisRunsModule,
     OutboxModule,
     forwardRef(() => ArtefactsModule),
-    forwardRef(() => ProcessingModule),
     forwardRef(() => PortfolioGraphModule),
   ],
   controllers: [ConversationsController],

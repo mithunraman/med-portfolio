@@ -1,4 +1,4 @@
-Using the information already provided, break the work into clear implementation phases.
+Based on the conversation, break the work into clear implementation phases.
 
 For each phase, include:
 

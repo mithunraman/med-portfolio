@@ -6,8 +6,10 @@ import { ConversationsModule } from '../conversations/conversations.module';
 import { DatabaseModule } from '../database';
 import { PdpGoalsModule } from '../pdp-goals/pdp-goals.module';
 import { PortfolioGraphModule } from '../portfolio-graph';
+import { ProcessingModule } from '../processing';
 import { AnalysisResumeHandler } from './handlers/analysis-resume.handler';
 import { AnalysisStartHandler } from './handlers/analysis-start.handler';
+import { MessageProcessingHandler } from './handlers/message-processing.handler';
 import { OutboxConsumer, OUTBOX_HANDLERS } from './outbox.consumer';
 import { OutboxRepository } from './outbox.repository';
 import { OUTBOX_REPOSITORY } from './outbox.repository.interface';
@@ -25,12 +27,14 @@ import { OutboxEntry, OutboxEntrySchema } from './schemas/outbox.schema';
     PdpGoalsModule,
     forwardRef(() => ConversationsModule),
     forwardRef(() => PortfolioGraphModule),
+    ProcessingModule,
   ],
   providers: [
     OutboxService,
     OutboxConsumer,
     AnalysisStartHandler,
     AnalysisResumeHandler,
+    MessageProcessingHandler,
     {
       provide: OUTBOX_REPOSITORY,
       useClass: OutboxRepository,
@@ -40,8 +44,9 @@ import { OutboxEntry, OutboxEntrySchema } from './schemas/outbox.schema';
       useFactory: (
         startHandler: AnalysisStartHandler,
         resumeHandler: AnalysisResumeHandler,
-      ) => [startHandler, resumeHandler],
-      inject: [AnalysisStartHandler, AnalysisResumeHandler],
+        processingHandler: MessageProcessingHandler,
+      ) => [startHandler, resumeHandler, processingHandler],
+      inject: [AnalysisStartHandler, AnalysisResumeHandler, MessageProcessingHandler],
     },
   ],
   exports: [OutboxService, OutboxConsumer],

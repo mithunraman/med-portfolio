@@ -55,8 +55,19 @@ export class ProcessingService {
       return;
     }
 
+    // Idempotency guard: skip if already in a terminal state (safe for outbox retry)
+    if (
+      message.processingStatus === MessageProcessingStatus.COMPLETE ||
+      message.processingStatus === MessageProcessingStatus.FAILED
+    ) {
+      this.logger.log(`Message ${messageId} already ${message.processingStatus}, skipping`);
+      return;
+    }
+
     // Look up artefact via conversation to get specialty
-    const convResult = await this.conversationsRepository.findConversationById(message.conversation);
+    const convResult = await this.conversationsRepository.findConversationById(
+      message.conversation
+    );
     if (isErr(convResult) || !convResult.value) {
       this.logger.error(`Conversation not found for message ${messageId}`);
       await this.markFailed(messageId, 'Conversation not found');
@@ -97,10 +108,7 @@ export class ProcessingService {
   /**
    * Process audio message: Transcribe → Clean → Redact PII
    */
-  private async processAudioMessage(
-    message: Message,
-    context: StageContext
-  ): Promise<void> {
+  private async processAudioMessage(message: Message, context: StageContext): Promise<void> {
     const messageId = message._id;
     const media = message.media as unknown as Media;
 

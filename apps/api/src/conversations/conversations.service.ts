@@ -41,7 +41,6 @@ import {
   type InterruptNode,
   PortfolioGraphService,
 } from '../portfolio-graph/portfolio-graph.service';
-import { ProcessingService } from '../processing/processing.service';
 import { ConversationContextService } from './conversation-context.service';
 import {
   CONVERSATIONS_REPOSITORY,
@@ -64,7 +63,6 @@ export class ConversationsService {
     private readonly mediaRepository: IMediaRepository,
     private readonly mediaService: MediaService,
     private readonly transactionService: TransactionService,
-    private readonly processingService: ProcessingService,
     private readonly portfolioGraphService: PortfolioGraphService,
     private readonly analysisRunsService: AnalysisRunsService,
     private readonly outboxService: OutboxService,
@@ -172,16 +170,20 @@ export class ConversationsService {
             throw new InternalServerErrorException(updateResult.error.message);
         }
 
+        // Enqueue processing job in same transaction (outbox pattern)
+        await this.outboxService.enqueue(
+          {
+            type: 'message.process',
+            payload: { messageId: createdMessage._id.toString() },
+            maxAttempts: 3,
+          },
+          session
+        );
+
         return createdMessage;
       },
       { context: `sendMessage:${conversationId}` }
     );
-
-    // Phase 3: Post-transaction (async processing)
-    // TODO: Replace with BullMQ job queue for production
-    this.processingService.processMessage(message._id).catch((err) => {
-      this.logger.error(`Processing failed for message ${message.xid}: ${err.message}`);
-    });
 
     // Build media data from validated media info (no presigned URL — audio is still PENDING)
     const mediaData = validatedMedia

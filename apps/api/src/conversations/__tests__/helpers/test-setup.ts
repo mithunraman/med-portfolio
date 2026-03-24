@@ -39,6 +39,7 @@ import {
   PdpGoalSchema as PdpGoalMongooseSchema,
 } from '../../../pdp-goals/schemas/pdp-goal.schema';
 import { PortfolioGraphService } from '../../../portfolio-graph/portfolio-graph.service';
+import { MessageProcessingHandler } from '../../../outbox/handlers/message-processing.handler';
 import { ProcessingService } from '../../../processing/processing.service';
 import { ConversationContextService } from '../../conversation-context.service';
 import { ConversationsRepository } from '../../conversations.repository';
@@ -130,10 +131,15 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
       },
       AnalysisStartHandler,
       AnalysisResumeHandler,
+      MessageProcessingHandler,
       {
         provide: OUTBOX_HANDLERS,
-        useFactory: (start: AnalysisStartHandler, resume: AnalysisResumeHandler) => [start, resume],
-        inject: [AnalysisStartHandler, AnalysisResumeHandler],
+        useFactory: (
+          start: AnalysisStartHandler,
+          resume: AnalysisResumeHandler,
+          processing: MessageProcessingHandler,
+        ) => [start, resume, processing],
+        inject: [AnalysisStartHandler, AnalysisResumeHandler, MessageProcessingHandler],
       },
       OutboxConsumer,
 

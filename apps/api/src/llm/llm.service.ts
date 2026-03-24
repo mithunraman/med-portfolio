@@ -2,10 +2,10 @@ import { BaseMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AssemblyAI, PiiPolicy, SpeechModel } from 'assemblyai';
+import { AssemblyAI, SpeechModel } from 'assemblyai';
 import { backOff } from 'exponential-backoff';
 import { z } from 'zod';
-import { MEDICAL_KEYTERMS, NHS_NUMBER_PATTERN, TRANSCRIPTION_TIMEOUT_MS } from './medical-keyterms';
+import { MEDICAL_KEYTERMS, TRANSCRIPTION_TIMEOUT_MS } from './medical-keyterms';
 
 export const OpenAIModels = {
   GPT_5_4: 'gpt-5.4',
@@ -42,25 +42,6 @@ export interface TranscriptionResult {
   audioDurationMs: number | null;
   wordCount: number;
 }
-
-/**
- * UK-compliant PII policies for medical portfolio entries
- * Redacts identifiers while preserving clinical content
- * Covers GDPR, UK Data Protection Act 2018, and NHS guidelines
- */
-const UK_PII_POLICIES: PiiPolicy[] = [
-  'person_name', // Patient/relative/staff names
-  'date_of_birth', // Date of birth
-  'phone_number', // Phone numbers
-  'email_address', // Email addresses
-  'location', // Addresses, specific locations
-  // 'organization', // Hospital names, GP surgery names
-  'date', // Specific dates that could identify patient
-  'drivers_license', // ID numbers
-  'healthcare_number', // NHS numbers and medical IDs
-  'credit_card_number', // Financial info
-  'banking_information', // Financial info
-];
 
 @Injectable()
 export class LLMService {
@@ -165,10 +146,6 @@ export class LLMService {
           language_code: 'en_uk',
           // Medical keyterms for improved accuracy
           keyterms_prompt: MEDICAL_KEYTERMS,
-          // PII redaction
-          redact_pii: true,
-          redact_pii_policies: UK_PII_POLICIES,
-          redact_pii_sub: 'entity_name', // Replace with entity type e.g. [PERSON_NAME]
         });
 
         // Apply timeout (2 minutes for max 5-minute audio)
@@ -185,9 +162,6 @@ export class LLMService {
           throw new Error(`Transcription failed: ${transcript.error}`);
         }
 
-        // Post-process: catch any NHS numbers that slipped through PII redaction
-        const sanitizedText = transcript.text?.replace(NHS_NUMBER_PATTERN, '[NHS_NUMBER]') ?? '';
-
         const wordCount = transcript.words?.length ?? 0;
         const confidence = transcript.confidence ?? null;
         const audioDurationMs = transcript.audio_duration
@@ -199,7 +173,7 @@ export class LLMService {
         );
 
         return {
-          text: sanitizedText,
+          text: transcript.text ?? '',
           confidence,
           audioDurationMs,
           wordCount,

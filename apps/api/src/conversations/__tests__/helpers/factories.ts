@@ -52,6 +52,7 @@ export async function createTestArtefact(
     specialty: Specialty;
     status: ArtefactStatus;
     title: string;
+    trainingStage: string;
   }> = {}
 ): Promise<ArtefactDocument> {
   const userId = overrides.userId ?? TEST_USER_ID;
@@ -62,6 +63,7 @@ export async function createTestArtefact(
       artefactId: `${userId.toString()}_test-${id.toString().slice(-6)}`,
       userId,
       specialty: overrides.specialty ?? Specialty.GP,
+      trainingStage: overrides.trainingStage ?? 'ST1',
       status: overrides.status ?? ArtefactStatus.IN_CONVERSATION,
       title: overrides.title ?? 'Test Artefact',
     },

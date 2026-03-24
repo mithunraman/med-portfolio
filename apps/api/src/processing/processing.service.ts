@@ -14,6 +14,7 @@ import { Message } from '../conversations/schemas/message.schema';
 import { MediaService } from '../media/media.service';
 import { Media } from '../media/schemas/media.schema';
 import { CleaningStage } from './stages/cleaning.stage';
+import { RedactionStage } from './stages/redaction.stage';
 import { StageContext } from './stages/stage.interface';
 import { TranscriptionStage, TranscriptionStageResult } from './stages/transcription.stage';
 
@@ -28,7 +29,8 @@ export class ProcessingService {
     private readonly artefactsRepository: IArtefactsRepository,
     private readonly mediaService: MediaService,
     private readonly transcriptionStage: TranscriptionStage,
-    private readonly cleaningStage: CleaningStage
+    private readonly cleaningStage: CleaningStage,
+    private readonly redactionStage: RedactionStage
   ) {}
 
   /**
@@ -93,8 +95,7 @@ export class ProcessingService {
   }
 
   /**
-   * Process audio message: Transcribe → Clean
-   * Note: PII redaction is handled by AssemblyAI during transcription
+   * Process audio message: Transcribe → Clean → Redact PII
    */
   private async processAudioMessage(
     message: Message,
@@ -109,7 +110,7 @@ export class ProcessingService {
     // Get presigned URL for the audio
     const audioUrl = await this.mediaService.getPresignedUrl(media.xid);
 
-    // Stage 1: Transcription (with PII redaction via AssemblyAI)
+    // Stage 1: Transcription
     this.logger.log(`Transcribing audio for message ${message.xid}`);
     const transcriptionResult: TranscriptionStageResult = await this.transcriptionStage.execute(
       audioUrl,
@@ -127,10 +128,18 @@ export class ProcessingService {
     this.logger.log(`Cleaning transcript for message ${message.xid}`);
     const cleaningResult = await this.cleaningStage.execute(transcriptionResult.text, context);
 
-    // Update with cleaned content (final)
+    // Update with cleaned content
     await this.conversationsRepository.updateMessage(messageId, {
       cleanedContent: cleaningResult.text,
-      content: cleaningResult.text, // Final content
+      processingStatus: MessageProcessingStatus.DEIDENTIFYING,
+    });
+
+    // Stage 3: PII Redaction (regex + LLM)
+    const redactedContent = await this.redactPii(cleaningResult.text, context);
+
+    // Update with final redacted content
+    await this.conversationsRepository.updateMessage(messageId, {
+      content: redactedContent,
       processingStatus: MessageProcessingStatus.COMPLETE,
     });
 
@@ -138,9 +147,7 @@ export class ProcessingService {
   }
 
   /**
-   * Process text message: Clean only
-   * Note: Text from user input doesn't need transcription or PII redaction
-   * (user is responsible for not including PII in manual text input)
+   * Process text message: Clean → Redact PII
    */
   private async processTextMessage(message: Message, context: StageContext): Promise<void> {
     const messageId = message._id;
@@ -156,14 +163,32 @@ export class ProcessingService {
     }
     const cleaningResult = await this.cleaningStage.execute(message.rawContent, context);
 
-    // Update with cleaned content (final)
+    // Update with cleaned content
     await this.conversationsRepository.updateMessage(messageId, {
       cleanedContent: cleaningResult.text,
-      content: cleaningResult.text, // Final content
+      processingStatus: MessageProcessingStatus.DEIDENTIFYING,
+    });
+
+    // Stage 2: PII Redaction (regex + LLM)
+    const redactedContent = await this.redactPii(cleaningResult.text, context);
+
+    // Update with final redacted content
+    await this.conversationsRepository.updateMessage(messageId, {
+      content: redactedContent,
       processingStatus: MessageProcessingStatus.COMPLETE,
     });
 
     this.logger.log(`Message processing complete for ${message.xid}`);
+  }
+
+  /**
+   * Run PII redaction: regex for structured PII, then LLM for names/orgs/locations.
+   * Shared by both audio and text processing paths.
+   */
+  private async redactPii(text: string, context: StageContext): Promise<string> {
+    this.logger.log(`Redacting PII for message ${context.messageId}`);
+    const redactionResult = await this.redactionStage.execute(text, context);
+    return redactionResult.text;
   }
 
   private async updateStatus(

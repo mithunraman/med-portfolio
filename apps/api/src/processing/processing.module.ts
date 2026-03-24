@@ -5,6 +5,7 @@ import { LLMModule } from '../llm';
 import { MediaModule } from '../media';
 import { ProcessingService } from './processing.service';
 import { CleaningStage } from './stages/cleaning.stage';
+import { RedactionStage } from './stages/redaction.stage';
 import { TranscriptionStage } from './stages/transcription.stage';
 
 @Module({
@@ -14,7 +15,7 @@ import { TranscriptionStage } from './stages/transcription.stage';
     forwardRef(() => ConversationsModule),
     forwardRef(() => ArtefactsModule),
   ],
-  providers: [ProcessingService, TranscriptionStage, CleaningStage],
+  providers: [ProcessingService, TranscriptionStage, CleaningStage, RedactionStage],
   exports: [ProcessingService],
 })
 export class ProcessingModule {}

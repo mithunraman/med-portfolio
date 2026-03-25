@@ -35,11 +35,7 @@ const artefactsSlice = createSlice({
     error: null,
     nextCursor: null,
   }),
-  reducers: {
-    clearArtefactsError(state) {
-      state.error = null;
-    },
-  },
+  reducers: {},
   extraReducers: (builder) => {
     builder
       // createArtefact
@@ -145,8 +141,6 @@ const artefactsSlice = createSlice({
       });
   },
 });
-
-export const { clearArtefactsError } = artefactsSlice.actions;
 
 export const {
   selectAll: selectAllArtefacts,

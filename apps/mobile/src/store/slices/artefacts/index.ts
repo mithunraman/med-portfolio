@@ -1,9 +1,6 @@
 // Reducer
 export { default as artefactsReducer } from './slice';
 
-// Actions
-export { clearArtefactsError } from './slice';
-
 // Selectors
 export { selectAllArtefacts, selectArtefactById } from './slice';
 

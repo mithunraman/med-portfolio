@@ -28,11 +28,7 @@ const reviewPeriodsSlice = createSlice({
     coverageByXid: {},
     coverageLoading: false,
   }),
-  reducers: {
-    clearReviewPeriodsError(state) {
-      state.error = null;
-    },
-  },
+  reducers: {},
   extraReducers: (builder) => {
     builder
       // fetchReviewPeriods
@@ -105,7 +101,6 @@ const reviewPeriodsSlice = createSlice({
   },
 });
 
-export const { clearReviewPeriodsError } = reviewPeriodsSlice.actions;
 
 export const {
   selectAll: selectAllReviewPeriods,

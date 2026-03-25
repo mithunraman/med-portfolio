@@ -1,9 +1,6 @@
 // Reducer
 export { default as reviewPeriodsReducer } from './slice';
 
-// Actions
-export { clearReviewPeriodsError } from './slice';
-
 // Selectors
 export { selectAllReviewPeriods, selectReviewPeriodById } from './slice';
 

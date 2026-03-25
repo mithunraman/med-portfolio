@@ -30,9 +30,6 @@ const conversationsSlice = createSlice({
     setActiveConversation(state, action: PayloadAction<string | null>) {
       state.activeConversationId = action.payload;
     },
-    clearConversationsError(state) {
-      state.error = null;
-    },
     clearConversations(state) {
       conversationsAdapter.removeAll(state);
       state.cursor = null;
@@ -61,8 +58,7 @@ const conversationsSlice = createSlice({
   },
 });
 
-export const { setActiveConversation, clearConversationsError, clearConversations } =
-  conversationsSlice.actions;
+export const { setActiveConversation, clearConversations } = conversationsSlice.actions;
 
 // Unbound selectors — pass the conversations slice state directly.
 // Avoids circular deps with RootState.

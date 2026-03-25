@@ -23,30 +23,13 @@
  * await fetchData();
  * logger.timeEnd('fetchData'); // Output: fetchData completed { durationMs: 142 }
  * ```
- *
- * @example Custom configuration
- * ```typescript
- * import { configureLogger, createRemoteTransport } from '@/utils/logger';
- *
- * configureLogger({
- *   minLevel: 'info',
- *   transports: [
- *     createConsoleTransport(),
- *     createRemoteTransport('https://logs.example.com/ingest'),
- *   ],
- * });
- * ```
  */
 
 // Core logger
-export { logger, getLogger, configureLogger } from './logger';
+export { logger } from './logger';
 
 // Transports
-export {
-  createConsoleTransport,
-  createRemoteTransport,
-  createNoopTransport,
-} from './transports';
+export { createConsoleTransport } from './transports';
 
 // Types
 export type {

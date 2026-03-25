@@ -26,11 +26,7 @@ const pdpGoalsSlice = createSlice({
     error: null,
     total: 0,
   }),
-  reducers: {
-    clearPdpGoalsError(state) {
-      state.error = null;
-    },
-  },
+  reducers: {},
   extraReducers: (builder) => {
     builder
       // fetchPdpGoals
@@ -96,8 +92,6 @@ const pdpGoalsSlice = createSlice({
       });
   },
 });
-
-export const { clearPdpGoalsError } = pdpGoalsSlice.actions;
 
 export const {
   selectAll: selectAllPdpGoals,

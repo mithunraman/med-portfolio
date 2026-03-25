@@ -26,8 +26,9 @@ export function createPresentCapabilitiesNode(deps: GraphDeps) {
   return async function presentCapabilitiesNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'present_capabilities' });
-    logger.log(`Presenting capabilities for conversation ${state.conversationId}`);
+    const cid = state.conversationId;
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: cid, step: 'present_capabilities' });
+    logger.log(`[${cid}] Presenting capabilities`);
 
   // Build options from the LLM-tagged capabilities (already sorted by confidence)
   const options: CapabilityOption[] = state.capabilities.map((cap) => ({
@@ -54,14 +55,14 @@ export function createPresentCapabilitiesNode(deps: GraphDeps) {
     const filteredCapabilities = state.capabilities.filter((cap) => selectedSet.has(cap.code));
 
     logger.log(
-      `User confirmed ${filteredCapabilities.length} capabilities: ${selectedCodes.join(', ')}`
+      `[${cid}] User confirmed ${filteredCapabilities.length} capabilities: ${selectedCodes.join(', ')}`
     );
 
     return { capabilities: filteredCapabilities };
   }
 
   // No valid selections — keep all LLM suggestions
-  logger.warn('No valid capability selections — keeping all LLM suggestions');
+  logger.warn(`[${cid}] No valid capability selections — keeping all LLM suggestions`);
   return {};
   };
 }

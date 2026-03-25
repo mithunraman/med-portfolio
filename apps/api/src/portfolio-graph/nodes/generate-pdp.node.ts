@@ -101,14 +101,16 @@ Each action must be:
 
 ## Instructions
 
-1. Read the reflection carefully. Identify the key learning gaps or development needs.
+The reflection below contains the trainee's own words, organised by section. Generate PDP goals based on learning needs the TRAINEE identified — do not infer gaps the trainee did not mention.
+
+1. Read the reflection carefully. Identify the key learning gaps or development needs that the trainee expressed.
 2. Group related gaps into 1-${MAX_GOALS} goals.
 3. For each goal, generate 1-${MAX_ACTIONS_PER_GOAL} SMART actions that directly address the learning need.
 4. Each action should be a single, focused objective — not a list of sub-tasks.
 5. For each action, specify the intended evidence (e.g. "CBD submitted to portfolio", "reflective log entry", "completed audit report").
 6. Actions should be achievable during normal clinical training (tutorials, clinics, self-directed learning).
 7. Do NOT generate generic actions like "read more about X". Be specific about what to do and how to evidence it.
-8. If the reflection already shows strong learning with no clear gaps, generate ONE goal with ONE action that builds on the strength demonstrated.`,
+8. If the trainee identified no clear learning needs, generate ONE goal based on the strongest capability demonstrated, suggesting how to deepen it.`,
   ],
   ['human', '{reflection}'],
 ]);
@@ -160,33 +162,31 @@ function validateGoals(goals: PdpGoal[]): PdpGoal[] {
 /**
  * Factory that creates the generate-pdp node with injected dependencies.
  *
- * Generates SMART PDP goals from the reflection and tagged capabilities.
- * Uses low temperature (0.2) — PDP actions should be grounded and
- * deterministic, not creative. Higher than extraction (0.1) because
- * the LLM needs some latitude in phrasing actionable objectives.
- *
- * The reflection is used as the human message (not the transcript)
- * because PDP goals should flow from the synthesised learning,
- * not the raw dictation.
+ * Generates SMART PDP goals from the organised reflection and tagged
+ * capabilities. Uses gpt-4.1 at low temperature (0.2) — PDP actions
+ * should be grounded and deterministic, not creative. Goals are based
+ * on learning needs the trainee explicitly identified, not AI-inferred gaps.
  */
 export function createGeneratePdpNode(deps: GraphDeps) {
   return async function generatePdpNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
     deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'generate_pdp' });
-    logger.log(`Generating PDP for conversation ${state.conversationId}`);
+    const cid = state.conversationId;
+    logger.log(`[${cid}] Generating PDP`);
 
     // ── Guard: no reflection ──
     if (!state.reflection || state.reflection.length === 0) {
-      logger.warn('No reflection available — skipping PDP generation');
+      logger.warn(`[${cid}] No reflection available — skipping PDP generation`);
       return { pdpGoals: [] };
     }
 
     const specialty = Number(state.specialty) as Specialty;
     const config = getSpecialtyConfig(specialty);
 
-    // ── Format reflection sections into text for the prompt ──
+    // ── Format covered reflection sections into text for the prompt ──
     const reflectionText = state.reflection
+      .filter((s) => s.covered && s.text.trim().length > 0)
       .map((s) => `## ${s.title}\n${s.text}`)
       .join('\n\n');
 
@@ -202,13 +202,13 @@ export function createGeneratePdpNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       generatePdpResponseSchema,
-      { model: OpenAIModels.GPT_5_4, temperature: 0.2, maxTokens: 1000 }
+      { model: OpenAIModels.GPT_4_1, temperature: 0.2, maxTokens: 1000 }
     );
 
     const pdpGoals = validateGoals(response.goals);
 
     logger.log(
-      `Generated ${pdpGoals.length} PDP goals: ` +
+      `[${cid}] Generated ${pdpGoals.length} PDP goals: ` +
         pdpGoals
           .map(
             (g) =>

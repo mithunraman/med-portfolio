@@ -507,8 +507,9 @@ describe('Conversations Integration Tests', () => {
       await createCompleteUserMessage(conv._id, 'I saw a diabetic patient.');
 
       // LLM calls include ask_followup replay on each resume:
-      // classify → completeness(missing) → followup → followup(replay) → completeness(missing) → followup → followup(replay) → completeness(missing)
-      // After MAX_FOLLOWUP_ROUNDS (2), completenessRouter routes to tag_capabilities
+      // classify → completeness(missing) → followup → followup(replay) → completeness(missing)
+      //   → followup → followup(replay) → completeness(missing) → followup → followup(replay) → completeness(missing)
+      // After MAX_FOLLOWUP_ROUNDS (3), completenessRouter routes to tag_capabilities
       llmMock.enqueue(classifyResponse()); // 1: classify
       llmMock.enqueue(someMissingResponse(['reflection'])); // 2: check_completeness
       llmMock.enqueue(
@@ -528,8 +529,17 @@ describe('Conversations Integration Tests', () => {
         // 7: ask_followup (replay on resume, round 2)
         followupQuestionsResponse([{ sectionId: 'reflection', question: 'Please reflect more.' }])
       );
-      llmMock.enqueue(someMissingResponse(['reflection'])); // 8: check_completeness (still missing, but max rounds)
-      llmMock.enqueue(tagCapabilitiesResponse()); // 9: tag_capabilities
+      llmMock.enqueue(someMissingResponse(['reflection'])); // 8: check_completeness (still missing)
+      llmMock.enqueue(
+        // 9: ask_followup (initial, round 3)
+        followupQuestionsResponse([{ sectionId: 'reflection', question: 'Any final reflections?' }])
+      );
+      llmMock.enqueue(
+        // 10: ask_followup (replay on resume, round 3)
+        followupQuestionsResponse([{ sectionId: 'reflection', question: 'Any final reflections?' }])
+      );
+      llmMock.enqueue(someMissingResponse(['reflection'])); // 11: check_completeness (still missing, but max rounds)
+      llmMock.enqueue(tagCapabilitiesResponse()); // 12: tag_capabilities
 
       // Start → classify → pause
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
@@ -592,9 +602,33 @@ describe('Conversations Integration Tests', () => {
         type: 'resume',
         messageId: followupMsgR2.xid,
       });
+      await waitForRunStable(harness, conv._id, true);
+
+      // Find round 3 followup question message
+      const msgsR3 = await getMessagesForConversation(conv._id);
+      const followupMsgsR3 = msgsR3.filter(
+        (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'free_text'
+      );
+      const followupMsgR3 = followupMsgsR3[followupMsgsR3.length - 1];
+      assertDefined(followupMsgR3);
+
+      // Round 3 answer
+      await harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, {
+        content: 'Final reflections.',
+      });
+      const r3 = await getMessagesForConversation(conv._id);
+      const r3last = r3.filter((m) => m.role === MessageRole.USER).pop();
+      assertDefined(r3last);
+      assertDefined(r3last.rawContent);
+      await markMessageComplete(r3last._id, r3last.rawContent);
+
+      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
+        type: 'resume',
+        messageId: followupMsgR3.xid,
+      });
       const finalStatus = await waitForRunStable(harness, conv._id, true);
 
-      // Graph did NOT pause at ask_followup a third time — proceeded to present_capabilities
+      // Graph did NOT pause at ask_followup a fourth time — proceeded to present_capabilities
       expect(finalStatus).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
     });
   });
@@ -1156,7 +1190,7 @@ describe('Conversations Integration Tests', () => {
         processingStatus: MessageProcessingStatus.COMPLETE,
         question: {
           questionType: 'free_text',
-          prompts: [{ key: 'test', text: 'test question' }],
+          prompts: [{ key: 'test', text: 'test question', hints: { examples: ['example'], reassurance: 'reassurance' } }],
         },
       });
 

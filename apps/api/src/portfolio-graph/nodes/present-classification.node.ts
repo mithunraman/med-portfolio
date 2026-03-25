@@ -26,8 +26,9 @@ export function createPresentClassificationNode(deps: GraphDeps) {
   return async function presentClassificationNode(
     state: PortfolioStateType,
   ): Promise<Partial<PortfolioStateType>> {
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'present_classification' });
-    logger.log(`Presenting classification for conversation ${state.conversationId}`);
+    const cid = state.conversationId;
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: cid, step: 'present_classification' });
+    logger.log(`[${cid}] Presenting classification`);
 
   const specialty = Number(state.specialty) as Specialty;
   const config = getSpecialtyConfig(specialty);
@@ -71,7 +72,7 @@ export function createPresentClassificationNode(deps: GraphDeps) {
   const selectedType = resumeValue?.entryType;
 
   if (selectedType && validCodes.has(selectedType)) {
-    logger.log(`User confirmed entry type: ${selectedType}`);
+    logger.log(`[${cid}] User confirmed entry type: ${selectedType}`);
     return {
       entryType: selectedType,
       classificationConfidence: 1.0,
@@ -81,7 +82,7 @@ export function createPresentClassificationNode(deps: GraphDeps) {
 
   // Invalid or missing selection — keep LLM's suggestion
   logger.warn(
-    `Invalid resume value (entryType: ${selectedType}), keeping LLM suggestion: ${state.entryType}`,
+    `[${cid}] Invalid resume value (entryType: ${selectedType}), keeping LLM suggestion: ${state.entryType}`,
   );
   return {
     classificationSource: 'USER_CONFIRMED',

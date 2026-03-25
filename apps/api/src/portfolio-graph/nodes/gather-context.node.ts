@@ -1,4 +1,9 @@
-import { MessageProcessingStatus, MessageRole } from '@acme/shared';
+import {
+  type FreeTextQuestion,
+  MessageProcessingStatus,
+  MessageRole,
+  type Question,
+} from '@acme/shared';
 import { Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
@@ -7,22 +12,40 @@ import { PortfolioStateType } from '../portfolio-graph.state';
 const logger = new Logger('GatherContextNode');
 
 /**
+ * Format an ASSISTANT follow-up question message as a Q&A prompt header.
+ * For free_text questions, extracts the individual question texts so the
+ * downstream reflect node knows which section each subsequent user answer targets.
+ */
+function formatAssistantQuestion(question: Question): string {
+  if (question.questionType === 'free_text') {
+    const ftq = question as FreeTextQuestion;
+    const questions = ftq.prompts.map((p) => p.text).join('\n');
+    return `AI asked:\n${questions}`;
+  }
+  // single_select / multi_select are classification/capability interrupts —
+  // not conversational follow-ups, so use a generic label.
+  return 'AI asked a clarification question.';
+}
+
+/**
  * Factory that creates the gather_context node with injected dependencies.
  *
- * The node collects all COMPLETE user messages in the conversation and
- * concatenates them into a single transcript string. It re-runs on every
- * graph entry (including after clarification / follow-up responses), so the
- * transcript always reflects the latest set of messages.
+ * The node collects all messages in the conversation and builds a
+ * conversation-aware transcript that preserves Q&A pairs. ASSISTANT
+ * follow-up questions are included so downstream nodes (classify,
+ * check_completeness, reflect) can see which question each user
+ * answer was responding to.
  *
- * Messages are joined with a `---` separator so downstream nodes (classify,
- * check_completeness) can distinguish between separate user utterances.
+ * It re-runs on every graph entry (including after follow-up responses),
+ * so the transcript always reflects the latest set of messages.
  */
 export function createGatherContextNode(deps: GraphDeps) {
   return async function gatherContextNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
     deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'gather_context' });
-    logger.log(`Gathering context for conversation ${state.conversationId}`);
+    const cid = state.conversationId;
+    logger.log(`[${cid}] Gathering context`);
 
     const conversationId = new Types.ObjectId(state.conversationId);
 
@@ -32,31 +55,41 @@ export function createGatherContextNode(deps: GraphDeps) {
     });
 
     if (!result.ok) {
-      logger.error(`Failed to fetch messages: ${result.error.message}`);
+      logger.error(`[${cid}] Failed to fetch messages: ${result.error.message}`);
       return { error: `gather_context: ${result.error.message}` };
     }
 
-    // Filter to completed user messages only.
-    // Skips ASSISTANT messages (system-generated follow-ups) and any
-    // messages still being processed (PENDING, TRANSCRIBING, CLEANING).
-    const userMessages = result.value.messages.filter(
+    // Include both USER and ASSISTANT messages to preserve Q&A context.
+    // Skips messages still being processed (PENDING, TRANSCRIBING, CLEANING).
+    const allMessages = result.value.messages.filter(
       (msg) =>
-        msg.role === MessageRole.USER &&
         msg.processingStatus === MessageProcessingStatus.COMPLETE &&
-        msg.content
+        (msg.role === MessageRole.USER || msg.role === MessageRole.ASSISTANT)
     );
 
     // Reverse to chronological order (repo returns newest-first).
-    userMessages.reverse();
+    allMessages.reverse();
 
-    const fullTranscript = userMessages.map((msg) => (msg.content ?? '').trim()).join('\n\n---\n\n');
+    const transcriptParts: string[] = [];
+    let userMessageCount = 0;
 
-    const messageCount = userMessages.length;
+    for (const msg of allMessages) {
+      if (msg.role === MessageRole.USER && msg.content) {
+        transcriptParts.push(msg.content.trim());
+        userMessageCount++;
+      } else if (msg.role === MessageRole.ASSISTANT && msg.question) {
+        transcriptParts.push(formatAssistantQuestion(msg.question));
+      }
+      // Skip ASSISTANT messages without questions (e.g. thinking status messages)
+    }
+
+    const fullTranscript = transcriptParts.join('\n\n---\n\n');
 
     logger.log(
-      `Gathered ${messageCount} messages, transcript length: ${fullTranscript.length} chars`
+      `[${cid}] Gathered ${userMessageCount} user messages (${allMessages.length} total), ` +
+        `transcript length: ${fullTranscript.length} chars`
     );
 
-    return { fullTranscript, messageCount };
+    return { fullTranscript, messageCount: userMessageCount };
   };
 }

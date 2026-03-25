@@ -10,10 +10,18 @@ export interface ClassificationAlternative {
 }
 
 /**
- * Section coverage result from completeness check.
- * Key = section ID, value = whether the transcript covers it.
+ * Assessment of how thoroughly a section is covered by the transcript.
  */
-export type SectionCoverage = Record<string, boolean>;
+export interface SectionAssessment {
+  covered: boolean;
+  depth: 'rich' | 'adequate' | 'shallow';
+}
+
+/**
+ * Section coverage result from completeness check.
+ * Key = section ID, value = coverage assessment with depth.
+ */
+export type SectionCoverage = Record<string, SectionAssessment>;
 
 /**
  * Capability tag extracted from the transcript.
@@ -23,6 +31,15 @@ export interface CapabilityTag {
   name: string;
   reasoning: string;
   confidence: number;
+}
+
+/**
+ * Capability annotation linking a capability to a section with evidence.
+ */
+export interface CapabilityAnnotation {
+  sectionId: string;
+  capabilityCode: string;
+  evidence: string;
 }
 
 /**
@@ -126,9 +143,18 @@ export const PortfolioState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => null,
   }),
-  reflection: Annotation<Array<{ title: string; text: string }> | null>({
+  reflection: Annotation<Array<{
+    sectionId: string;
+    title: string;
+    text: string;
+    covered: boolean;
+  }> | null>({
     reducer: (_, next) => next,
     default: () => null,
+  }),
+  capabilityAnnotations: Annotation<CapabilityAnnotation[]>({
+    reducer: (_, next) => next,
+    default: () => [],
   }),
 
   // ── PDP ──

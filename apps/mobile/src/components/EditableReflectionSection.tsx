@@ -3,7 +3,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface EditableReflectionSectionProps {
-  section: { title: string; text: string };
+  section: { title: string; text: string; covered?: boolean };
   editable: boolean;
   expanded: boolean;
   onToggleExpand: () => void;
@@ -18,6 +18,7 @@ export function EditableReflectionSection({
   onEdit,
 }: EditableReflectionSectionProps) {
   const { colors } = useTheme();
+  const isEmpty = section.covered === false || section.text.trim().length === 0;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
@@ -40,9 +41,19 @@ export function EditableReflectionSection({
 
       {/* Section Body */}
       {expanded && (
-        <Text style={[styles.cardBody, { color: colors.textSecondary }]}>
-          {section.text}
-        </Text>
+        isEmpty ? (
+          <Pressable onPress={editable ? onEdit : undefined} style={styles.emptyState}>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              {editable
+                ? `Tap to add your thoughts on ${section.title}`
+                : 'No content for this section'}
+            </Text>
+          </Pressable>
+        ) : (
+          <Text style={[styles.cardBody, { color: colors.textSecondary }]}>
+            {section.text}
+          </Text>
+        )
       )}
     </View>
   );
@@ -73,5 +84,13 @@ const styles = StyleSheet.create({
   cardBody: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  emptyState: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    fontStyle: 'italic',
   },
 });

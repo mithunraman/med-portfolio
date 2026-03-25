@@ -16,80 +16,95 @@ const logger = new Logger('ReflectNode');
 
 /**
  * The reflection is returned as a structured array of sections, each with
- * a title and text. This allows the frontend to render sections independently
- * and supports per-section editing.
+ * a sectionId, title, text, and covered flag. Sections with no matching
+ * transcript content have covered: false and text: "".
+ *
+ * Capability annotations are returned as a separate metadata array —
+ * they are NOT embedded in section text.
  */
 const reflectResponseSchema = z.object({
   title: z
     .string()
     .max(100)
-    .describe(
-      'A concise title summarising the artefact for list views (max 100 chars). ' +
-        'e.g. "T2DM Management in Elderly Patient"'
-    ),
+    .describe('A concise title summarising the artefact for list views (max 100 chars)'),
   sections: z
     .array(
       z.object({
-        title: z.string().describe('Section heading, e.g. "Presentation"'),
+        sectionId: z.string().describe('Template section ID, e.g., "clinical_reasoning"'),
+        title: z.string().describe('Section heading, e.g., "Clinical Reasoning"'),
         text: z
           .string()
-          .describe('Section content written in first person, honest and professional'),
+          .describe(
+            "The trainee's own words organised for this section. " +
+              'Empty string if no content maps to this section.'
+          ),
+        covered: z.boolean().describe('Whether the transcript contained content for this section'),
       })
     )
-    .describe('Reflection sections in order, matching the template sections'),
+    .describe('All template sections in order, including empty ones'),
+  capabilityAnnotations: z
+    .array(
+      z.object({
+        sectionId: z.string().describe('Which section demonstrates this capability'),
+        capabilityCode: z.string().describe('Capability code, e.g., "C-06"'),
+        evidence: z.string().describe('Direct quote from the transcript as evidence'),
+      })
+    )
+    .describe('Capabilities mapped to sections as metadata — NOT embedded in section text'),
 });
 
 /* ------------------------------------------------------------------ */
 /*  Prompt template                                                    */
 /* ------------------------------------------------------------------ */
 
-/**
- * ChatPromptTemplate separates the template structure from runtime data.
- *
- * Variables:
- *  - specialtyName: e.g. "General Practice"
- *  - templateName: e.g. "Clinical Case Review"
- *  - wordMin / wordMax: target word count range from the template
- *  - sectionBlock: formatted sections with labels and promptHints
- *  - capabilityBlock: tagged capabilities for the LLM to weave in
- *
- * The human message is the raw transcript — passed directly from state.
- */
 const reflectPrompt = ChatPromptTemplate.fromMessages([
   [
     'system',
-    `You are an educational writing assistant for {specialtyName} portfolio reflections.
+    `You are a medical portfolio formatting assistant for {specialtyName} trainees.
 
-Your task: generate a structured {templateName} reflection based on the trainee's transcript. The reflection should read as if written by the trainee — authentic, specific, and professionally honest. Also generate a concise title summarising the artefact for list views.
+Your task: organise the trainee's transcript into the template sections below. You are NOT writing a reflection — you are sorting and lightly formatting what the trainee has already said.
 
 ## Trainee Context
 
 {trainingStageContext}
 
+Use this context to calibrate formatting only:
+- For earlier-stage trainees, more cleanup of speech fragments is expected.
+- For later-stage trainees, preserve more precise clinical language.
+- Do NOT use training stage to add content or change what the trainee said.
+
 ## Sections
 
-Write the reflection as an array of section objects. Each section has a title (the section heading) and text (the content). Follow the sections below, in order.
+Organise the transcript into these sections, in order. Return ALL sections — set covered: false and text: "" for sections with no matching content.
 
 {sectionBlock}
 
-## Tagged Capabilities
+## Formatting Rules
 
-The following capabilities have been identified in the transcript. Weave them naturally into the relevant sections — do not list them mechanically or force them where they don't fit.
+1. Use ONLY the trainee's own words and phrasing.
+2. You may fix grammar, punctuation, and sentence fragments from speech-to-text.
+3. You may reorder sentences so related content sits together within a section.
+4. Do NOT add reflective language, clinical reasoning, or insights the trainee did not express.
+5. Do NOT paraphrase or synthesise — preserve the trainee's voice.
+6. Do NOT expand brief statements into detailed paragraphs.
+7. Write in first person ("I"), matching the trainee's own voice.
 
-{capabilityBlock}
+## What "lightly formatting" means — examples
 
-## Writing Guidelines
+OK: Joining fragments ("the ECG was. normal sinus" → "The ECG was normal sinus rhythm.")
+OK: Fixing speech-to-text errors ("met four men" → "Metformin")
+OK: Adding paragraph breaks between distinct points within a section
+NOT OK: "I was a bit relieved" → "I experienced initial reassurance"
+NOT OK: Adding transition phrases the trainee didn't say
+NOT OK: "I learned a lot" → "This case deepened my understanding of..."
 
-1. Write in FIRST PERSON ("I").
-2. Be specific — refer to details from the transcript, not generic statements.
-3. Do NOT invent clinical facts, patient details, or events not present in the transcript.
-4. Do NOT include any patient-identifiable information.
-5. Include clinical reasoning under uncertainty where relevant.
-6. Address what went well AND what could be improved — balanced, honest reflection.
-7. End with concrete learning points and commitments to change.
-8. Target word count: {wordMin}-{wordMax} words. Do not significantly exceed the upper limit.
-9. Tone: professional, reflective, self-aware. Not defensive, not self-congratulatory.
-10. Only include sections where the transcript provides content. Skip optional sections if there is nothing meaningful to say.`,
+## Capability Annotations
+
+The following capabilities were confirmed by the trainee. For each, identify which section demonstrates it and provide a brief evidence quote from the transcript.
+
+Do NOT mention capabilities in the section text. Return them as capabilityAnnotations only.
+
+{capabilityBlock}`,
   ],
   ['human', '{transcript}'],
 ]);
@@ -99,26 +114,24 @@ The following capabilities have been identified in the transcript. Weave them na
 /* ------------------------------------------------------------------ */
 
 /**
- * Build the section block that gets injected into the prompt template.
- * Each section is rendered with its label, description, and the LLM
- * prompt hint that guides tone and content for that section.
+ * Build the section block for the extraction/organisation prompt.
+ * Each section includes its ID, label, description, and sorting guidance.
  */
 function formatSectionBlock(
-  sections: { label: string; required: boolean; description: string; promptHint: string }[]
+  sections: { id: string; label: string; required: boolean; description: string; promptHint: string }[]
 ): string {
   return sections
     .map(
       (s) =>
-        `### ${s.label}${s.required ? '' : ' (optional)'}\n` +
-        `${s.description}\n` +
-        `Guidance: ${s.promptHint}`
+        `### ${s.id} — ${s.label}${s.required ? '' : ' (optional)'}\n` +
+        `Content to look for: ${s.description}\n` +
+        `Sorting guidance: ${s.promptHint}`
     )
     .join('\n\n');
 }
 
 /**
- * Build a concise capability summary for inclusion in the prompt.
- * Keeps it short so it doesn't dominate the context window.
+ * Build a concise capability summary for the LLM to map to sections.
  */
 function formatCapabilityBlock(
   capabilities: { code: string; name: string; reasoning: string }[]
@@ -136,15 +149,16 @@ function formatCapabilityBlock(
  * Factory that creates the reflect node with injected dependencies.
  *
  * Loads the template for the classified entry type, builds a prompt
- * from the template's section labels and promptHints, and generates
- * a structured reflection in the trainee's voice.
+ * from the template's section definitions, and organises the trainee's
+ * transcript into structured sections. The AI formats and sorts —
+ * it does not generate reflective content.
  *
- * Uses moderate temperature (0.4) because this is generative writing,
- * not classification or extraction. Higher than the extraction nodes
- * but still constrained enough to stay grounded in the transcript.
+ * Uses low temperature (0.1) because this is an extraction/formatting
+ * task, not creative writing. The output should faithfully preserve
+ * the trainee's own words.
  *
- * The maxTokens budget is derived from the template's word count range
- * (1 token ≈ 0.75 words, plus headroom for Markdown structure).
+ * Token budget is proportional to transcript length (not a fixed
+ * word count target), since output length should reflect input length.
  */
 export function createReflectNode(deps: GraphDeps) {
   return async function reflectNode(
@@ -154,13 +168,12 @@ export function createReflectNode(deps: GraphDeps) {
       conversationId: state.conversationId,
       step: 'reflect',
     });
-    logger.log(
-      `Generating reflection for conversation ${state.conversationId} (type: ${state.entryType})`
-    );
+    const cid = state.conversationId;
+    logger.log(`[${cid}] Organising reflection (type: ${state.entryType})`);
 
     // ── Guard: no entry type ──
     if (!state.entryType) {
-      logger.warn('No entry type set — skipping reflection');
+      logger.warn(`[${cid}] No entry type set — skipping reflection`);
       return { reflection: null };
     }
 
@@ -169,20 +182,15 @@ export function createReflectNode(deps: GraphDeps) {
     const config = getSpecialtyConfig(specialty);
     const template = getTemplateForEntryType(config, state.entryType);
 
-    // ── Estimate maxTokens from word count range ──
-    // 1 token ≈ 0.75 words. Use the upper word limit with 2× headroom
-    // for Markdown headings, structural tokens, and JSON overhead from
-    // structured output. Floor at 1500 to avoid hitting the limit on
-    // shorter templates (e.g. CCR at 300 words).
-    const maxTokens = Math.max(Math.ceil((template.wordCountRange.max / 0.75) * 2), 3000);
+    // ── Token budget proportional to transcript length ──
+    // 2× headroom for JSON overhead + section headings. Floor at 2000.
+    const transcriptWordCount = state.fullTranscript.split(/\s+/).filter(Boolean).length;
+    const maxTokens = Math.max(Math.ceil(transcriptWordCount * 2), 2000);
 
     // ── Build and send prompt ──
     const messages = await reflectPrompt.formatMessages({
       specialtyName: config.name,
       trainingStageContext: getStageContext(specialty, state.trainingStage),
-      templateName: template.name,
-      wordMin: template.wordCountRange.min.toString(),
-      wordMax: template.wordCountRange.max.toString(),
       sectionBlock: formatSectionBlock(template.sections),
       capabilityBlock: formatCapabilityBlock(state.capabilities),
       transcript: state.fullTranscript,
@@ -191,19 +199,32 @@ export function createReflectNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       reflectResponseSchema,
-      { model: OpenAIModels.GPT_5_4, temperature: 0.4, maxTokens }
+      { model: OpenAIModels.GPT_4_1_MINI, temperature: 0.1, maxTokens }
     );
 
+    const coveredCount = response.sections.filter((s) => s.covered).length;
     const wordCount = response.sections.reduce(
       (sum, s) => sum + s.text.split(/\s+/).filter(Boolean).length,
       0
     );
 
+    // Log per-section detail for traceability
+    for (const s of response.sections) {
+      const sectionWords = s.text.split(/\s+/).filter(Boolean).length;
+      logger.log(
+        `[${cid}]   section=${s.sectionId} covered=${s.covered} words=${sectionWords}`
+      );
+    }
     logger.log(
-      `Reflection generated: ${response.sections.length} sections, ${wordCount} words ` +
-        `(target: ${template.wordCountRange.min}-${template.wordCountRange.max})`
+      `[${cid}] Reflection organised: ${coveredCount}/${response.sections.length} sections covered, ` +
+        `${wordCount} words, ${response.capabilityAnnotations.length} capability annotations, ` +
+        `maxTokens=${maxTokens}, transcriptWords=${transcriptWordCount}`
     );
 
-    return { title: response.title, reflection: response.sections };
+    return {
+      title: response.title,
+      reflection: response.sections,
+      capabilityAnnotations: response.capabilityAnnotations,
+    };
   };
 }

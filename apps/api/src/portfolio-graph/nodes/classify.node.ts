@@ -181,7 +181,8 @@ export function createClassifyNode(deps: GraphDeps) {
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
     deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'classify' });
-    logger.log(`Classifying entry for conversation ${state.conversationId}`);
+    const cid = state.conversationId;
+    logger.log(`[${cid}] Classifying entry`);
 
     const specialty = Number(state.specialty) as Specialty;
     const config = getSpecialtyConfig(specialty);
@@ -214,7 +215,7 @@ export function createClassifyNode(deps: GraphDeps) {
     );
 
     logger.log(
-      `Classification: ${classification.entryType} ` +
+      `[${cid}] Classification: ${classification.entryType} ` +
         `(raw: ${classification.confidence}, adjusted: ${adjustedConfidence}, ` +
         `signals: ${classification.signalsFound.length}, words: ${wordCount})`
     );

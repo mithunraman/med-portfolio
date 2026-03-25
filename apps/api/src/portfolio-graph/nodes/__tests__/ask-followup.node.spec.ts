@@ -37,6 +37,7 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     capabilities: [],
     title: null,
     reflection: null,
+    capabilityAnnotations: [],
     pdpGoals: [],
     error: null,
     ...overrides,

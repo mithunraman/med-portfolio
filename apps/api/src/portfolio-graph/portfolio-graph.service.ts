@@ -361,6 +361,7 @@ export class PortfolioGraphService implements OnModuleInit {
         const questions = interruptValue.questions as Array<{
           sectionId: string;
           question: string;
+          hints: { examples: string[]; reassurance: string };
         }>;
         const followUpRound = interruptValue.followUpRound as number;
 
@@ -370,7 +371,7 @@ export class PortfolioGraphService implements OnModuleInit {
 
         const question: FreeTextQuestion = {
           questionType: 'free_text',
-          prompts: questions.map((q) => ({ key: q.sectionId, text: q.question })),
+          prompts: questions.map((q) => ({ key: q.sectionId, text: q.question, hints: q.hints })),
           missingSections: interruptValue.missingSections as string[],
           followUpRound,
           entryType: interruptValue.entryType as string,

@@ -20,12 +20,13 @@ export function createSaveNode(deps: GraphDeps) {
       step: 'save',
     });
 
-    if (!state.entryType) throw new Error('Cannot save: entryType is not set');
-    if (!state.title) throw new Error('Cannot save: title is not set');
-    if (!state.reflection) throw new Error('Cannot save: reflection is not set');
-    if (state.capabilities.length === 0) throw new Error('Cannot save: no capabilities');
+    const cid = state.conversationId;
+    if (!state.entryType) throw new Error(`[${cid}] Cannot save: entryType is not set`);
+    if (!state.title) throw new Error(`[${cid}] Cannot save: title is not set`);
+    if (!state.reflection) throw new Error(`[${cid}] Cannot save: reflection is not set`);
+    if (state.capabilities.length === 0) throw new Error(`[${cid}] Cannot save: no capabilities`);
 
-    logger.log(`Validation passed for artefact ${state.artefactId}`);
+    logger.log(`[${cid}] Validation passed for artefact ${state.artefactId}`);
     return {};
   };
 }

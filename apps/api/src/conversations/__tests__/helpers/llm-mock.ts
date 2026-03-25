@@ -123,12 +123,13 @@ export function classifyResponse(
  * Provide section IDs with their coverage status.
  */
 export function completenessResponse(
-  sections: Array<{ sectionId: string; covered: boolean; evidence?: string }>
+  sections: Array<{ sectionId: string; covered: boolean; depth?: 'rich' | 'adequate' | 'shallow'; evidence?: string }>
 ) {
   return {
     sections: sections.map((s) => ({
       sectionId: s.sectionId,
       covered: s.covered,
+      depth: s.depth ?? (s.covered ? 'adequate' : 'shallow'),
       evidence: s.evidence ?? (s.covered ? 'Evidence from transcript' : ''),
     })),
   };
@@ -138,9 +139,18 @@ export function completenessResponse(
  * Build a canned follow-up questions response.
  */
 export function followupQuestionsResponse(
-  questions: Array<{ sectionId: string; question: string }>
+  questions: Array<{ sectionId: string; question: string; hints?: { examples: string[]; reassurance: string } }>
 ) {
-  return { questions };
+  return {
+    questions: questions.map((q) => ({
+      sectionId: q.sectionId,
+      question: q.question,
+      hints: q.hints ?? {
+        examples: ['Example response from a different clinical scenario.'],
+        reassurance: 'Even a short answer is useful here.',
+      },
+    })),
+  };
 }
 
 /** CCR sections that check_completeness will assess (required + has extractionQuestion). */
@@ -198,25 +208,33 @@ export function tagCapabilitiesResponse(
 export function reflectResponse(
   overrides?: Partial<{
     title: string;
-    sections: Array<{ title: string; text: string }>;
+    sections: Array<{ sectionId: string; title: string; text: string; covered: boolean }>;
+    capabilityAnnotations: Array<{ sectionId: string; capabilityCode: string; evidence: string }>;
   }>
 ) {
   return {
     title: overrides?.title ?? 'T2DM Management in Elderly Patient',
     sections: overrides?.sections ?? [
       {
+        sectionId: 'presentation',
         title: 'Presentation',
         text: 'I saw a 55-year-old patient with poorly controlled type 2 diabetes.',
+        covered: true,
       },
       {
+        sectionId: 'clinical_reasoning',
         title: 'Clinical Reasoning',
         text: 'I considered the HbA1c of 72 and decided to initiate metformin.',
+        covered: true,
       },
       {
+        sectionId: 'reflection',
         title: 'Reflection',
         text: 'This case reinforced the importance of shared decision making in chronic disease management.',
+        covered: true,
       },
     ],
+    capabilityAnnotations: overrides?.capabilityAnnotations ?? [],
   };
 }
 

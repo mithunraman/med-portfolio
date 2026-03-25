@@ -17,7 +17,16 @@ const sectionAssessmentSchema = z.object({
   sectionId: z.string().describe('The section ID from the template'),
   covered: z
     .boolean()
-    .describe('Whether the transcript contains sufficient information for this section'),
+    .describe('Whether the transcript contains ANY relevant information for this section'),
+  depth: z
+    .enum(['rich', 'adequate', 'shallow'])
+    .describe(
+      'How thoroughly the section is covered. ' +
+        'rich = multiple specific points with reasoning or detail (2+ meaningful sentences). ' +
+        'adequate = relevant content present with at least 1 specific detail. ' +
+        'shallow = only vague or generic statements (e.g., "I learned a lot") with no specifics. ' +
+        'If covered is false, set depth to "shallow".'
+    ),
   evidence: z
     .string()
     .describe(
@@ -54,7 +63,13 @@ const completenessPrompt = ChatPromptTemplate.fromMessages([
 4. A section is NOT covered if there is no mention at all, or only a vague or tangential reference.
 5. For covered sections, provide a brief quote or summary from the transcript as evidence.
 6. For uncovered sections, set evidence to an empty string.
-7. Be honest — do not mark a section as covered unless there is clear evidence in the transcript.`,
+7. Be honest — do not mark a section as covered unless there is clear evidence in the transcript.
+8. For each covered section, also assess the DEPTH of coverage:
+   - "rich": The trainee provided multiple specific points, clinical reasoning, or detailed reflection (2+ meaningful sentences of relevant content).
+   - "adequate": The trainee mentioned relevant content with at least one specific detail. Enough to work with.
+   - "shallow": The trainee said something relevant but it is vague, generic, or lacks any specific detail. Examples: "I learned a lot", "it went well", "I found it useful".
+9. If a section is not covered, set depth to "shallow".
+10. Be particularly attentive to depth in reflective sections (reflection, learning, what went well, what could improve). Factual sections (presentation, findings, management) are usually either covered or not — depth matters less for them.`,
   ],
   ['human', '{transcript}'],
 ]);
@@ -93,13 +108,12 @@ export function createCheckCompletenessNode(deps: GraphDeps) {
       conversationId: state.conversationId,
       step: 'check_completeness',
     });
-    logger.log(
-      `Checking completeness for conversation ${state.conversationId} (type: ${state.entryType})`
-    );
+    const cid = state.conversationId;
+    logger.log(`[${cid}] Checking completeness (type: ${state.entryType})`);
 
     // ── Guard: no entry type ──
     if (!state.entryType) {
-      logger.warn('No entry type set — skipping completeness check');
+      logger.warn(`[${cid}] No entry type set — skipping completeness check`);
       return {
         sectionCoverage: {},
         missingSections: [],
@@ -119,7 +133,7 @@ export function createCheckCompletenessNode(deps: GraphDeps) {
     );
 
     if (assessableSections.length === 0) {
-      logger.log('No assessable sections — proceeding');
+      logger.log(`[${cid}] No assessable sections — proceeding`);
       return {
         sectionCoverage: {},
         missingSections: [],
@@ -147,26 +161,44 @@ export function createCheckCompletenessNode(deps: GraphDeps) {
     const sectionCoverage: SectionCoverage = {};
     for (const assessment of response.sections) {
       if (assessableIds.has(assessment.sectionId)) {
-        sectionCoverage[assessment.sectionId] = assessment.covered;
+        sectionCoverage[assessment.sectionId] = {
+          covered: assessment.covered,
+          depth: assessment.covered ? assessment.depth : 'shallow',
+        };
       }
     }
 
     // Any assessable section not returned by the LLM is treated as uncovered
     for (const section of assessableSections) {
       if (!(section.id in sectionCoverage)) {
-        sectionCoverage[section.id] = false;
+        sectionCoverage[section.id] = { covered: false, depth: 'shallow' };
       }
     }
 
+    // Missing = uncovered OR shallow (for required sections)
     const missingSections = Object.entries(sectionCoverage)
-      .filter(([, covered]) => !covered)
+      .filter(([, assessment]) => !assessment.covered || assessment.depth === 'shallow')
       .map(([id]) => id);
 
     const hasEnoughInfo = missingSections.length === 0;
 
+    const coveredCount = Object.values(sectionCoverage).filter((a) => a.covered && a.depth !== 'shallow').length;
+
+    // Log per-section detail so we can trace exactly what the LLM assessed
+    for (const assessment of response.sections) {
+      if (!assessableIds.has(assessment.sectionId)) continue;
+      const cov = sectionCoverage[assessment.sectionId];
+      const isMissing = !cov?.covered || cov.depth === 'shallow';
+      logger.log(
+        `[${cid}]   section=${assessment.sectionId} covered=${cov?.covered} depth=${cov?.depth}` +
+          `${isMissing ? ' → MISSING' : ''}` +
+          `${assessment.evidence ? ` evidence="${assessment.evidence.slice(0, 80)}..."` : ''}`
+      );
+    }
+
     logger.log(
-      `Completeness: ${Object.values(sectionCoverage).filter(Boolean).length}/${assessableSections.length} sections covered. ` +
-        `Missing: ${missingSections.length > 0 ? missingSections.join(', ') : 'none'}`
+      `[${cid}] Completeness: ${coveredCount}/${assessableSections.length} sections adequate. ` +
+        `Missing/shallow: [${missingSections.join(', ')}]. hasEnoughInfo=${hasEnoughInfo}`
     );
 
     return { sectionCoverage, missingSections, hasEnoughInfo };

@@ -38,6 +38,10 @@ export type CapabilityOption = z.infer<typeof CapabilityOptionSchema>;
 export const FollowupQuestionSchema = z.object({
   sectionId: z.string(),
   question: z.string(),
+  hints: z.object({
+    examples: z.array(z.string()).max(3),
+    reassurance: z.string(),
+  }),
 });
 export type FollowupQuestion = z.infer<typeof FollowupQuestionSchema>;
 
@@ -51,9 +55,21 @@ export const QuestionOptionSchema = z.object({
 });
 export type QuestionOption = z.infer<typeof QuestionOptionSchema>;
 
+export const PromptHintsSchema = z.object({
+  examples: z
+    .array(z.string())
+    .max(3)
+    .describe('Short example responses showing expected depth, from DIFFERENT clinical scenarios'),
+  reassurance: z
+    .string()
+    .describe('Brief normalising statement, e.g., "Even a short answer is useful here"'),
+});
+export type PromptHints = z.infer<typeof PromptHintsSchema>;
+
 export const FreeTextPromptSchema = z.object({
   key: z.string(),
   text: z.string(),
+  hints: PromptHintsSchema,
 });
 export type FreeTextPrompt = z.infer<typeof FreeTextPromptSchema>;
 

@@ -175,7 +175,8 @@ export function createTagCapabilitiesNode(deps: GraphDeps) {
       conversationId: state.conversationId,
       step: 'tag_capabilities',
     });
-    logger.log(`Tagging capabilities for conversation ${state.conversationId}`);
+    const cid = state.conversationId;
+    logger.log(`[${cid}] Tagging capabilities`);
 
     const specialty = Number(state.specialty) as Specialty;
     const config = getSpecialtyConfig(specialty);
@@ -201,12 +202,13 @@ export function createTagCapabilitiesNode(deps: GraphDeps) {
     const capabilities = validateAndRank(response, validCodes);
 
     if (capabilities.length === 0) {
-      logger.warn('No valid capabilities tagged — this is unusual');
+      logger.warn(`[${cid}] No valid capabilities tagged — this is unusual`);
     }
 
+    // Log LLM raw response vs validated for debugging undertag issues
     logger.log(
-      `Tagged ${capabilities.length} capabilities: ` +
-        capabilities.map((c) => `${c.code}(${c.confidence})`).join(', ')
+      `[${cid}] Capabilities: ${response.capabilities.length} raw → ${capabilities.length} validated: ` +
+        capabilities.map((c) => `${c.code} ${c.name}(${c.confidence})`).join(', ')
     );
 
     return { capabilities };

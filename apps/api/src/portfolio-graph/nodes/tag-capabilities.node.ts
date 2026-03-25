@@ -10,34 +10,51 @@ const logger = new Logger('TagCapabilitiesNode');
 
 const MAX_CAPABILITIES = 5;
 
+/** Minimum confidence threshold to include a capability. */
+const CONFIDENCE_THRESHOLD = 0.5;
+
 /* ------------------------------------------------------------------ */
-/*  Zod schema — single source of truth for the LLM response shape    */
+/*  Zod schema — recognition-based approach                            */
 /* ------------------------------------------------------------------ */
 
-const capabilityTagSchema = z.object({
-  code: z.string().describe('Capability code from the list above (e.g. "C-06")'),
-  name: z.string().describe('Capability name'),
+/**
+ * Each capability assessment is a yes/no decision with evidence.
+ * The LLM evaluates EVERY capability individually rather than
+ * recalling which ones apply from an open-ended prompt.
+ */
+const capabilityAssessmentSchema = z.object({
+  code: z.string().describe('Capability code (e.g. "C-06")'),
+  demonstrated: z
+    .boolean()
+    .describe(
+      'Whether the transcript contains clear, specific evidence of this capability. ' +
+        'The trainee must have described actions, reasoning, or behaviours that demonstrate it.'
+    ),
   confidence: z
     .number()
     .min(0)
     .max(1)
-    .describe('Confidence that this capability is demonstrated, 0-1'),
+    .describe(
+      'How strongly the capability is demonstrated. ' +
+        '0.9-1.0: explicit, detailed demonstration. ' +
+        '0.7-0.89: clear but could be more detailed. ' +
+        '0.5-0.69: partial or indirect demonstration. ' +
+        'Below 0.5: not convincingly demonstrated. ' +
+        'Set to 0 if demonstrated is false.'
+    ),
   reasoning: z
     .string()
     .describe(
-      '1-2 sentence explanation written in the first person (e.g. "I considered broader patient care…") of why this capability is demonstrated, referencing specific details from the transcript.'
+      'If demonstrated: 1-2 sentence explanation written in the first person ' +
+        '(e.g. "I considered broader patient care…") referencing specific transcript details. ' +
+        'If not demonstrated: empty string.'
     ),
 });
 
-/**
- * Schema passed to OpenAI's structured output (function calling).
- * The API constrains token generation to only produce valid JSON
- * matching this shape — no markdown fences, no parsing needed.
- */
 const tagCapabilitiesResponseSchema = z.object({
-  capabilities: z
-    .array(capabilityTagSchema)
-    .describe('Capabilities demonstrated in the transcript'),
+  assessments: z
+    .array(capabilityAssessmentSchema)
+    .describe('Assessment of EVERY capability listed — one entry per capability'),
 });
 
 type TagCapabilitiesResponse = z.infer<typeof tagCapabilitiesResponseSchema>;
@@ -47,24 +64,20 @@ type TagCapabilitiesResponse = z.infer<typeof tagCapabilitiesResponseSchema>;
 /* ------------------------------------------------------------------ */
 
 /**
- * ChatPromptTemplate separates the template structure from runtime data.
+ * Recognition-based prompt: the LLM evaluates each capability
+ * individually against the transcript, rather than recalling
+ * which capabilities apply from an open-ended question.
  *
- * Variables:
- *  - specialtyName: e.g. "General Practice"
- *  - capabilityBlock: formatted capability definitions (built at call time)
- *  - entryType: classified entry type for context
- *
- * The human message is the raw transcript — passed directly from state.
- *
- * No "Response Format" section — the Zod schema enforces the shape
- * via OpenAI's structured output. The prompt focuses purely on the task.
+ * This produces more complete tagging because recognition is
+ * cognitively easier than recall — the LLM won't skip capabilities
+ * that are clearly demonstrated but not the most obvious.
  */
 const tagCapabilitiesPrompt = ChatPromptTemplate.fromMessages([
   [
     'system',
     `You are a UK medical portfolio capability mapper for {specialtyName} trainees.
 
-Your task: given a trainee's transcript for a {entryType} entry, identify which curriculum capabilities are demonstrated by the content.
+Your task: given a trainee's transcript for a {entryType} entry, assess EACH curriculum capability below to determine whether it is demonstrated.
 
 ## Curriculum Capabilities
 
@@ -73,16 +86,15 @@ Your task: given a trainee's transcript for a {entryType} entry, identify which 
 ## Instructions
 
 1. Read the full transcript carefully.
-2. Identify capabilities that are CLEARLY demonstrated — the trainee must have described actions, reasoning, or behaviours that demonstrate the capability.
-3. For each capability, provide a 1-2 sentence reasoning explaining why it is demonstrated, referencing specific details from the transcript.
-4. For each capability, provide a confidence score (0-1) reflecting how strongly the transcript demonstrates it. Use these guidelines:
-   - 0.9-1.0: Explicit, detailed demonstration of the capability.
-   - 0.7-0.89: Clear demonstration but could be more detailed or specific.
-   - 0.5-0.69: Some demonstration present but indirect or partial.
-   - Below 0.5: Do not include — too weak.
-5. Return up to ${MAX_CAPABILITIES} capabilities. Do NOT tag a capability unless there is clear, specific demonstration in the transcript.
-6. Prefer fewer, well-reasoned capabilities over many weakly-supported ones.
-7. The entry type ({entryType}) gives context but should not override what the transcript actually contains.`,
+2. For EACH capability listed above, make an independent yes/no assessment:
+   - Is there clear, specific evidence in the transcript that the trainee demonstrated this capability?
+   - The trainee must have described actions, reasoning, or behaviours — not just mentioned the topic.
+3. Return an assessment for EVERY capability (one per capability code).
+4. For demonstrated capabilities, write a 1-2 sentence reasoning in the first person, referencing specific details from the transcript.
+5. For non-demonstrated capabilities, set demonstrated to false, confidence to 0, and reasoning to an empty string.
+6. Be thorough — check each capability on its own merits. A clinical case review typically demonstrates 3-5 capabilities across data gathering, reasoning, management, and learning.
+7. The transcript may contain AI questions (lines starting with "AI asked:"). These are context only — assess only what the trainee said.
+8. The entry type ({entryType}) gives context but should not override what the transcript actually contains.`,
   ],
   ['human', '{transcript}'],
 ]);
@@ -110,37 +122,37 @@ function formatCapabilityBlock(specialty: Specialty): string {
 /* ------------------------------------------------------------------ */
 
 /**
- * Validate, filter, sort, and normalise the LLM response.
+ * Filter, validate, sort, and normalise the LLM response.
  *
- * Structured output guarantees the JSON shape, but not that the codes
- * exist in our config — that's a semantic check we still own.
- *
- * Steps:
- *  1. Reject unknown capability codes
- *  2. Deduplicate by code (LLMs occasionally return the same capability twice)
- *  3. Drop entries with empty reasoning
- *  4. Sort by confidence descending (we own the ranking, not the LLM)
- *  5. Enforce max count
- *  6. Use canonical name from config, not the LLM's rephrasing
+ * The LLM returns assessments for all capabilities. We:
+ *  1. Keep only demonstrated capabilities with valid codes
+ *  2. Apply the confidence threshold
+ *  3. Deduplicate by code
+ *  4. Drop entries with empty reasoning
+ *  5. Sort by confidence descending
+ *  6. Enforce max count
+ *  7. Use canonical name from config
  */
-function validateAndRank(
+function filterAndRank(
   response: TagCapabilitiesResponse,
   validCodes: Map<string, string>
 ): CapabilityTag[] {
   const seen = new Set<string>();
   const validated: CapabilityTag[] = [];
 
-  for (const cap of response.capabilities) {
-    if (!validCodes.has(cap.code)) continue;
-    if (seen.has(cap.code)) continue;
-    if (!cap.reasoning) continue;
-    seen.add(cap.code);
+  for (const assessment of response.assessments) {
+    if (!assessment.demonstrated) continue;
+    if (assessment.confidence < CONFIDENCE_THRESHOLD) continue;
+    if (!validCodes.has(assessment.code)) continue;
+    if (seen.has(assessment.code)) continue;
+    if (!assessment.reasoning) continue;
+    seen.add(assessment.code);
 
     validated.push({
-      code: cap.code,
-      name: validCodes.get(cap.code) ?? cap.name,
-      reasoning: cap.reasoning,
-      confidence: Math.round(cap.confidence * 100) / 100,
+      code: assessment.code,
+      name: validCodes.get(assessment.code) ?? assessment.code,
+      reasoning: assessment.reasoning,
+      confidence: Math.round(assessment.confidence * 100) / 100,
     });
   }
 
@@ -157,15 +169,13 @@ function validateAndRank(
 /**
  * Factory that creates the tag-capabilities node with injected dependencies.
  *
- * Uses ChatPromptTemplate for prompt composition and
- * LLMService.invokeStructured() with a Zod schema so OpenAI's
- * structured output guarantees valid JSON. The node then applies
- * post-validation to ensure only known capability codes are returned,
- * and sorts by confidence score rather than relying on LLM ordering.
+ * Uses a recognition-based approach: the LLM evaluates EVERY capability
+ * individually against the transcript, rather than recalling which ones
+ * apply. This produces more complete tagging because recognition is
+ * cognitively easier than recall for LLMs.
  *
- * Entry type is included as context to help the LLM focus on relevant
- * capabilities, but the transcript content is what ultimately determines
- * whether a capability is tagged.
+ * Post-validation filters to demonstrated capabilities above the
+ * confidence threshold, validates codes, and enforces max count.
  */
 export function createTagCapabilitiesNode(deps: GraphDeps) {
   return async function tagCapabilitiesNode(
@@ -195,19 +205,31 @@ export function createTagCapabilitiesNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       tagCapabilitiesResponseSchema,
-      { temperature: 0.1, maxTokens: 1000 }
+      { temperature: 0.1, maxTokens: 2000 }
     );
 
-    // Structured output guarantees the shape; we still check codes are valid
-    const capabilities = validateAndRank(response, validCodes);
+    // Log every assessment for traceability
+    for (const a of response.assessments) {
+      const valid = validCodes.has(a.code);
+      logger.log(
+        `[${cid}]   ${a.code} demonstrated=${a.demonstrated} confidence=${a.confidence}` +
+          `${!valid ? ' [IGNORED — unknown code]' : ''}` +
+          `${a.demonstrated && a.confidence < CONFIDENCE_THRESHOLD ? ' [BELOW THRESHOLD]' : ''}` +
+          `${a.reasoning ? ` reasoning="${a.reasoning.slice(0, 60)}..."` : ''}`
+      );
+    }
+
+    // Filter to demonstrated capabilities above threshold
+    const capabilities = filterAndRank(response, validCodes);
 
     if (capabilities.length === 0) {
       logger.warn(`[${cid}] No valid capabilities tagged — this is unusual`);
     }
 
-    // Log LLM raw response vs validated for debugging undertag issues
     logger.log(
-      `[${cid}] Capabilities: ${response.capabilities.length} raw → ${capabilities.length} validated: ` +
+      `[${cid}] Capabilities: ${response.assessments.length} assessed, ` +
+        `${response.assessments.filter((a) => a.demonstrated).length} demonstrated, ` +
+        `${capabilities.length} after filtering: ` +
         capabilities.map((c) => `${c.code} ${c.name}(${c.confidence})`).join(', ')
     );
 

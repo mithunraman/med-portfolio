@@ -194,25 +194,20 @@ describe('Conversations Integration Tests', () => {
         'I saw a 55-year-old patient with poorly controlled type 2 diabetes. HbA1c was 72.'
       );
 
-      // ── Enqueue all 8 LLM responses upfront ──
+      // ── Enqueue all 7 LLM responses upfront ──
       llmMock.enqueue(classifyResponse()); // 0: classify
       llmMock.enqueue(someMissingResponse(['reflection'])); // 1: check_completeness (missing)
       llmMock.enqueue(
-        // 2: ask_followup (initial)
+        // 2: generate_followup
         followupQuestionsResponse([
           { sectionId: 'reflection', question: 'What did you learn from this case?' },
         ])
       );
-      llmMock.enqueue(
-        // 3: ask_followup (replay on resume)
-        followupQuestionsResponse([
-          { sectionId: 'reflection', question: 'What did you learn from this case?' },
-        ])
-      );
-      llmMock.enqueue(allCoveredResponse()); // 4: check_completeness (all covered)
-      llmMock.enqueue(tagCapabilitiesResponse()); // 5: tag_capabilities
-      llmMock.enqueue(reflectResponse()); // 6: reflect
-      llmMock.enqueue(generatePdpResponse()); // 7: generate_pdp
+      // ask_followup is interrupt-only (no LLM call, no replay response needed)
+      llmMock.enqueue(allCoveredResponse()); // 3: check_completeness (all covered)
+      llmMock.enqueue(tagCapabilitiesResponse()); // 4: tag_capabilities
+      llmMock.enqueue(reflectResponse()); // 5: reflect
+      llmMock.enqueue(generatePdpResponse()); // 6: generate_pdp
 
       // ── Step 1: Start analysis → classify → pause at present_classification ──
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
@@ -282,7 +277,7 @@ describe('Conversations Integration Tests', () => {
       const status3 = await waitForRunStable(harness, conv._id, true);
 
       expect(status3).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
-      expect(llmMock.callCount).toBe(6); // +followup(replay) + completeness + tag_capabilities
+      expect(llmMock.callCount).toBe(5); // +completeness + tag_capabilities (no followup replay)
 
       // Capability options ASSISTANT message created
       const msgs3 = await getMessagesForConversation(conv._id);
@@ -299,8 +294,8 @@ describe('Conversations Integration Tests', () => {
       expect(capOptions[0]).toMatchObject({ key: 'C-06', confidence: 0.88 });
       expect(capOptions[1]).toMatchObject({ key: 'C-08', confidence: 0.75 });
 
-      // tag_capabilities prompt (call index 5) includes transcript and capability codes
-      const tagCall = llmMock.calls[5];
+      // tag_capabilities prompt (call index 4) includes transcript and capability codes
+      const tagCall = llmMock.calls[4];
       const tagSystemMsg = tagCall.messages.find((m) => m._getType() === 'system');
       assertDefined(tagSystemMsg);
       const tagSystemContent = tagSystemMsg.content as string;
@@ -321,7 +316,7 @@ describe('Conversations Integration Tests', () => {
       const finalStatus = await waitForRunStable(harness, conv._id, true);
 
       expect(finalStatus).toEqual({ status: 'completed' });
-      expect(llmMock.callCount).toBe(8); // +reflect + generate_pdp
+      expect(llmMock.callCount).toBe(7); // +reflect + generate_pdp
       llmMock.assertAllConsumed();
 
       // ── Final assertions: messages ──
@@ -338,15 +333,15 @@ describe('Conversations Integration Tests', () => {
       assertDefined(capabilityAudit);
       expect(capabilityAudit.content).toBe('Selected: Decision-making and diagnosis');
 
-      // reflect prompt (call index 6) includes selected capability C-06
-      const reflectCall = llmMock.calls[6];
+      // reflect prompt (call index 5) includes selected capability C-06
+      const reflectCall = llmMock.calls[5];
       const reflectSystemMsg = reflectCall.messages.find((m) => m._getType() === 'system');
       assertDefined(reflectSystemMsg);
       const reflectSystem = reflectSystemMsg.content as string;
       expect(reflectSystem).toContain('C-06');
 
-      // generate_pdp prompt (call index 7) receives the reflection
-      const pdpCall = llmMock.calls[7];
+      // generate_pdp prompt (call index 6) receives the reflection
+      const pdpCall = llmMock.calls[6];
       const pdpHumanMsg = pdpCall.messages.find((m) => m._getType() === 'human');
       assertDefined(pdpHumanMsg);
       const pdpHuman = pdpHumanMsg.content as string;
@@ -387,36 +382,24 @@ describe('Conversations Integration Tests', () => {
       llmMock.enqueue(classifyResponse()); // 1: classify
       llmMock.enqueue(someMissingResponse(['clinical_reasoning', 'reflection', 'outcome'])); // 2: check_completeness
       llmMock.enqueue(
-        // 3: ask_followup (initial)
+        // 3: generate_followup (round 1)
         followupQuestionsResponse([
           { sectionId: 'clinical_reasoning', question: 'What was your reasoning?' },
           { sectionId: 'reflection', question: 'What did you learn?' },
           { sectionId: 'outcome', question: 'What was the outcome?' },
         ])
       );
+      // ask_followup is interrupt-only (no LLM call)
+      llmMock.enqueue(someMissingResponse(['reflection'])); // 4: check_completeness
       llmMock.enqueue(
-        // 4: ask_followup (replay on resume)
-        followupQuestionsResponse([
-          { sectionId: 'clinical_reasoning', question: 'What was your reasoning?' },
-          { sectionId: 'reflection', question: 'What did you learn?' },
-          { sectionId: 'outcome', question: 'What was the outcome?' },
-        ])
-      );
-      llmMock.enqueue(someMissingResponse(['reflection'])); // 5: check_completeness
-      llmMock.enqueue(
-        // 6: ask_followup (initial, round 2)
+        // 5: generate_followup (round 2)
         followupQuestionsResponse([
           { sectionId: 'reflection', question: 'Can you reflect more on what you learned?' },
         ])
       );
-      llmMock.enqueue(
-        // 7: ask_followup (replay on resume, round 2)
-        followupQuestionsResponse([
-          { sectionId: 'reflection', question: 'Can you reflect more on what you learned?' },
-        ])
-      );
-      llmMock.enqueue(allCoveredResponse()); // 8: check_completeness
-      llmMock.enqueue(tagCapabilitiesResponse()); // 9: tag_capabilities
+      // ask_followup is interrupt-only (no LLM call)
+      llmMock.enqueue(allCoveredResponse()); // 6: check_completeness
+      llmMock.enqueue(tagCapabilitiesResponse()); // 7: tag_capabilities
 
       // Start → classify → pause
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
@@ -499,47 +482,36 @@ describe('Conversations Integration Tests', () => {
       expect((allFollowupMsgs[0].question as FreeTextQuestion).followUpRound).toBe(1);
       expect((allFollowupMsgs[1].question as FreeTextQuestion).followUpRound).toBe(2);
 
-      expect(llmMock.callCount).toBe(9);
+      expect(llmMock.callCount).toBe(7); // no followup replay calls
     });
 
     it('A4. Max follow-up rounds reached — graph proceeds anyway', async () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a diabetic patient.');
 
-      // LLM calls include ask_followup replay on each resume:
-      // classify → completeness(missing) → followup → followup(replay) → completeness(missing)
-      //   → followup → followup(replay) → completeness(missing) → followup → followup(replay) → completeness(missing)
-      // After MAX_FOLLOWUP_ROUNDS (3), completenessRouter routes to tag_capabilities
+      // LLM calls: generate_followup replaces ask_followup's LLM call, no replay needed
+      // classify → completeness(missing) → generate_followup → [interrupt]
+      //   → completeness(missing) → generate_followup → [interrupt]
+      //   → completeness(missing) → generate_followup → [interrupt]
+      //   → completeness(still missing, max rounds) → tag_capabilities
       llmMock.enqueue(classifyResponse()); // 1: classify
       llmMock.enqueue(someMissingResponse(['reflection'])); // 2: check_completeness
       llmMock.enqueue(
-        // 3: ask_followup (initial)
+        // 3: generate_followup (round 1)
         followupQuestionsResponse([{ sectionId: 'reflection', question: 'What did you learn?' }])
       );
+      llmMock.enqueue(someMissingResponse(['reflection'])); // 4: check_completeness
       llmMock.enqueue(
-        // 4: ask_followup (replay on resume)
-        followupQuestionsResponse([{ sectionId: 'reflection', question: 'What did you learn?' }])
-      );
-      llmMock.enqueue(someMissingResponse(['reflection'])); // 5: check_completeness
-      llmMock.enqueue(
-        // 6: ask_followup (initial, round 2)
+        // 5: generate_followup (round 2)
         followupQuestionsResponse([{ sectionId: 'reflection', question: 'Please reflect more.' }])
       );
+      llmMock.enqueue(someMissingResponse(['reflection'])); // 6: check_completeness (still missing)
       llmMock.enqueue(
-        // 7: ask_followup (replay on resume, round 2)
-        followupQuestionsResponse([{ sectionId: 'reflection', question: 'Please reflect more.' }])
-      );
-      llmMock.enqueue(someMissingResponse(['reflection'])); // 8: check_completeness (still missing)
-      llmMock.enqueue(
-        // 9: ask_followup (initial, round 3)
+        // 7: generate_followup (round 3)
         followupQuestionsResponse([{ sectionId: 'reflection', question: 'Any final reflections?' }])
       );
-      llmMock.enqueue(
-        // 10: ask_followup (replay on resume, round 3)
-        followupQuestionsResponse([{ sectionId: 'reflection', question: 'Any final reflections?' }])
-      );
-      llmMock.enqueue(someMissingResponse(['reflection'])); // 11: check_completeness (still missing, but max rounds)
-      llmMock.enqueue(tagCapabilitiesResponse()); // 12: tag_capabilities
+      llmMock.enqueue(someMissingResponse(['reflection'])); // 8: check_completeness (still missing, but max rounds)
+      llmMock.enqueue(tagCapabilitiesResponse()); // 9: tag_capabilities
 
       // Start → classify → pause
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
@@ -905,11 +877,8 @@ describe('Conversations Integration Tests', () => {
       assertDefined(lastUser.rawContent);
       await markMessageComplete(lastUser._id, lastUser.rawContent);
 
-      // ask_followup replays on resume (LangGraph re-executes the node), then
+      // ask_followup is interrupt-only (no LLM call on replay), then
       // gather_context → check_completeness → tag_capabilities → present_capabilities
-      llmMock.enqueue(
-        followupQuestionsResponse([{ sectionId: 'reflection', question: 'What did you learn?' }])
-      );
       llmMock.enqueue(allCoveredResponse());
       llmMock.enqueue(tagCapabilitiesResponse());
 

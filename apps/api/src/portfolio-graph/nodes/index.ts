@@ -2,6 +2,7 @@ export { createGatherContextNode } from './gather-context.node';
 export { createClassifyNode } from './classify.node';
 export { createPresentClassificationNode } from './present-classification.node';
 export { createCheckCompletenessNode } from './check-completeness.node';
+export { createGenerateFollowupNode } from './generate-followup.node';
 export { createAskFollowupNode } from './ask-followup.node';
 export { createTagCapabilitiesNode } from './tag-capabilities.node';
 export { createPresentCapabilitiesNode } from './present-capabilities.node';

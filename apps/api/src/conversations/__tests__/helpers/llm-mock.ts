@@ -119,20 +119,35 @@ export function classifyResponse(
 }
 
 /**
- * Build a canned completeness response.
- * Provide section IDs with their coverage status.
+ * Build a canned completeness response (assignment-based).
+ * Provide section IDs with their coverage status. Covered sections
+ * get a substantive assignment; uncovered sections get none.
  */
 export function completenessResponse(
   sections: Array<{ sectionId: string; covered: boolean; depth?: 'rich' | 'adequate' | 'shallow'; evidence?: string }>
 ) {
-  return {
-    sections: sections.map((s) => ({
-      sectionId: s.sectionId,
-      covered: s.covered,
-      depth: s.depth ?? (s.covered ? 'adequate' : 'shallow'),
-      evidence: s.evidence ?? (s.covered ? 'Evidence from transcript' : ''),
-    })),
-  };
+  const assignments: Array<{ evidence: string; sectionId: string; isSubstantive: boolean }> = [];
+
+  for (const s of sections) {
+    if (!s.covered) continue;
+
+    const depth = s.depth ?? 'adequate';
+    const evidence = s.evidence ?? 'Evidence from transcript';
+
+    if (depth === 'rich') {
+      // Rich = 2+ substantive assignments
+      assignments.push({ evidence, sectionId: s.sectionId, isSubstantive: true });
+      assignments.push({ evidence: `Additional detail for ${s.sectionId}`, sectionId: s.sectionId, isSubstantive: true });
+    } else if (depth === 'adequate') {
+      // Adequate = 1 substantive assignment
+      assignments.push({ evidence, sectionId: s.sectionId, isSubstantive: true });
+    } else {
+      // Shallow = only a non-substantive (tangential) mention
+      assignments.push({ evidence, sectionId: s.sectionId, isSubstantive: false });
+    }
+  }
+
+  return { assignments };
 }
 
 /**
@@ -170,33 +185,44 @@ export function allCoveredResponse() {
 }
 
 /**
- * Build a canned tag-capabilities response.
- * Default: two capabilities with reasoning and confidence.
+ * Build a canned tag-capabilities response (recognition-based).
+ * Default: assessments for all 13 GP capabilities, with 2 demonstrated.
  */
 export function tagCapabilitiesResponse(
   overrides?: Partial<{
-    capabilities: Array<{
+    assessments: Array<{
       code: string;
-      name: string;
+      demonstrated: boolean;
       confidence: number;
       reasoning: string;
     }>;
   }>
 ) {
   return {
-    capabilities: overrides?.capabilities ?? [
+    assessments: overrides?.assessments ?? [
       {
         code: 'C-06',
-        name: 'Managing Medical Complexity',
+        demonstrated: true,
         confidence: 0.88,
         reasoning: 'Managed the patient with type 2 diabetes, demonstrating ability to handle complex medical cases.',
       },
       {
         code: 'C-08',
-        name: 'Independent Working',
+        demonstrated: true,
         confidence: 0.75,
         reasoning: 'Independently decided to start metformin, showing autonomous clinical decision-making.',
       },
+      { code: 'C-01', demonstrated: false, confidence: 0, reasoning: '' },
+      { code: 'C-02', demonstrated: false, confidence: 0, reasoning: '' },
+      { code: 'C-03', demonstrated: false, confidence: 0, reasoning: '' },
+      { code: 'C-04', demonstrated: false, confidence: 0, reasoning: '' },
+      { code: 'C-05', demonstrated: false, confidence: 0, reasoning: '' },
+      { code: 'C-07', demonstrated: false, confidence: 0, reasoning: '' },
+      { code: 'C-09', demonstrated: false, confidence: 0, reasoning: '' },
+      { code: 'C-10', demonstrated: false, confidence: 0, reasoning: '' },
+      { code: 'C-11', demonstrated: false, confidence: 0, reasoning: '' },
+      { code: 'C-12', demonstrated: false, confidence: 0, reasoning: '' },
+      { code: 'C-13', demonstrated: false, confidence: 0, reasoning: '' },
     ],
   };
 }

@@ -1,7 +1,12 @@
+import { interrupt } from '@langchain/langgraph';
 import { createAskFollowupNode } from '../ask-followup.node';
-import { MAX_FOLLOWUP_ROUNDS } from '../../portfolio-graph.builder';
 import type { GraphDeps } from '../../graph-deps';
 import type { PortfolioStateType } from '../../portfolio-graph.state';
+
+// Mock LangGraph's interrupt
+jest.mock('@langchain/langgraph', () => ({
+  interrupt: jest.fn(),
+}));
 
 // ── Helpers ──
 
@@ -21,19 +26,32 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     conversationId: 'conv-123',
     artefactId: 'art-123',
     userId: 'user-123',
-    specialty: '0',
-    fullTranscript: 'Some clinical transcript',
+    specialty: '100',
+    trainingStage: 'ST1',
+    fullTranscript: 'Some transcript',
     messageCount: 1,
-    entryType: 'CLINICAL_ENCOUNTER',
+    entryType: 'CLINICAL_CASE_REVIEW',
     classificationConfidence: 0.9,
     classificationReasoning: '',
     classificationSignals: [],
     alternatives: [],
     classificationSource: 'USER_CONFIRMED',
     sectionCoverage: {},
-    missingSections: ['clinical_situation'],
+    missingSections: ['reflection', 'outcome'],
     hasEnoughInfo: false,
-    followUpRound: 0,
+    followUpRound: 1,
+    pendingFollowupQuestions: [
+      {
+        sectionId: 'reflection',
+        question: 'What did you learn?',
+        hints: { examples: ['Example'], reassurance: 'Even a short answer helps.' },
+      },
+      {
+        sectionId: 'outcome',
+        question: 'What happened to the patient?',
+        hints: { examples: ['The patient recovered...'], reassurance: 'Brief is fine.' },
+      },
+    ],
     capabilities: [],
     title: null,
     reflection: null,
@@ -46,38 +64,51 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
 
 // ── Tests ──
 
-describe('AskFollowupNode', () => {
-  describe('follow-up round circuit breaker', () => {
-    it('should throw when followUpRound equals MAX_FOLLOWUP_ROUNDS', async () => {
-      const node = createAskFollowupNode(makeDeps());
-      const state = makeState({ followUpRound: MAX_FOLLOWUP_ROUNDS });
+describe('AskFollowupNode (interrupt-only)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
-      await expect(node(state)).rejects.toThrow(
-        `Follow-up round ${MAX_FOLLOWUP_ROUNDS} exceeds maximum ${MAX_FOLLOWUP_ROUNDS}`
-      );
+  it('should call interrupt with questions from state', async () => {
+    const node = createAskFollowupNode(makeDeps());
+    const state = makeState();
+
+    await node(state);
+
+    expect(interrupt).toHaveBeenCalledWith({
+      type: 'followup',
+      questions: state.pendingFollowupQuestions,
+      missingSections: ['reflection', 'outcome'],
+      entryType: 'CLINICAL_CASE_REVIEW',
+      followUpRound: 1,
     });
+  });
 
-    it('should throw when followUpRound exceeds MAX_FOLLOWUP_ROUNDS', async () => {
-      const node = createAskFollowupNode(makeDeps());
-      const state = makeState({ followUpRound: MAX_FOLLOWUP_ROUNDS + 1 });
+  it('should not make any LLM calls', async () => {
+    const deps = makeDeps();
+    deps.llmService = { invokeStructured: jest.fn() } as any;
 
-      await expect(node(state)).rejects.toThrow('exceeds maximum');
-    });
+    const node = createAskFollowupNode(deps);
+    await node(makeState());
 
-    it('should NOT throw when followUpRound is below MAX_FOLLOWUP_ROUNDS', async () => {
-      const deps = makeDeps();
-      // The node will proceed past the assertion but may fail on missing
-      // specialty config — that's fine, we only care that it doesn't throw
-      // the circuit breaker error.
-      const node = createAskFollowupNode(deps);
-      const state = makeState({ followUpRound: MAX_FOLLOWUP_ROUNDS - 1 });
+    expect(deps.llmService.invokeStructured).not.toHaveBeenCalled();
+  });
 
-      try {
-        await node(state);
-      } catch (error) {
-        // Should NOT be the circuit breaker error
-        expect((error as Error).message).not.toContain('exceeds maximum');
-      }
-    });
+  it('should return empty state (no state mutations)', async () => {
+    const node = createAskFollowupNode(makeDeps());
+    const result = await node(makeState());
+
+    expect(result).toEqual({});
+  });
+
+  it('should emit ANALYSIS_STEP_STARTED event', async () => {
+    const deps = makeDeps();
+    const node = createAskFollowupNode(deps);
+    await node(makeState());
+
+    expect(deps.eventEmitter.emit).toHaveBeenCalledWith(
+      'analysis.step.started',
+      { conversationId: 'conv-123', step: 'ask_followup' }
+    );
   });
 });

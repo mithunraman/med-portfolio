@@ -6,6 +6,7 @@ import {
   createCheckCompletenessNode,
   createClassifyNode,
   createGatherContextNode,
+  createGenerateFollowupNode,
   createGeneratePdpNode,
   createPresentCapabilitiesNode,
   createPresentClassificationNode,
@@ -30,11 +31,11 @@ function gatherContextRouter(state: PortfolioStateType): 'classify' | 'check_com
 }
 
 /**
- * After check_completeness: proceed to tag capabilities or ask follow-up questions.
+ * After check_completeness: proceed to tag capabilities or generate follow-up questions.
  */
-function completenessRouter(state: PortfolioStateType): 'ask_followup' | 'tag_capabilities' {
+function completenessRouter(state: PortfolioStateType): 'generate_followup' | 'tag_capabilities' {
   if (!state.hasEnoughInfo && state.followUpRound < MAX_FOLLOWUP_ROUNDS) {
-    return 'ask_followup';
+    return 'generate_followup';
   }
   return 'tag_capabilities';
 }
@@ -50,12 +51,12 @@ function completenessRouter(state: PortfolioStateType): 'ask_followup' | 'tag_ca
  *               │                                              ↓
  *               │                                   ┌── completenessRouter ──┐
  *               │                                   ↓                        ↓
- *               │                              ask_followup          tag_capabilities
+ *               │                          generate_followup          tag_capabilities
  *               │                                   ↓                        ↓
- *               └───────────────────────────────────┘              present_capabilities (INTERRUPT)
+ *               │                             ask_followup (INTERRUPT) present_capabilities (INTERRUPT)
+ *               │                                   ↓                        ↓
+ *               └───────────────────────────────────┘                    reflect
  *                  (loop back, skip classification)                          ↓
- *                                                                        reflect
- *                                                                            ↓
  *                                                                      generate_pdp
  *                                                                            ↓
  *                                                                          save
@@ -69,6 +70,7 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
     .addNode('classify', createClassifyNode(deps))
     .addNode('present_classification', createPresentClassificationNode(deps))
     .addNode('check_completeness', createCheckCompletenessNode(deps))
+    .addNode('generate_followup', createGenerateFollowupNode(deps))
     .addNode('ask_followup', createAskFollowupNode(deps))
     .addNode('tag_capabilities', createTagCapabilitiesNode(deps))
     .addNode('present_capabilities', createPresentCapabilitiesNode(deps))
@@ -91,11 +93,12 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
     .addEdge('classify', 'present_classification')
     .addEdge('present_classification', 'check_completeness')
 
-    // Completeness routing (loop 1: follow-up)
+    // Completeness routing (loop: generate questions → interrupt → loop back)
     .addConditionalEdges('check_completeness', completenessRouter, {
-      ask_followup: 'ask_followup',
+      generate_followup: 'generate_followup',
       tag_capabilities: 'tag_capabilities',
     })
+    .addEdge('generate_followup', 'ask_followup')
     .addEdge('ask_followup', 'gather_context') // Loop back, re-gather + re-check completeness
 
     // Linear chain: tag → present capabilities → reflect → PDP → save → end

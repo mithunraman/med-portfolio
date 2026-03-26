@@ -1,6 +1,7 @@
 import type { AuthUser, SpecialtyOption, UpdateProfileRequest } from '@acme/shared';
 import { UserRole } from '@acme/shared';
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
+import * as Sentry from '@sentry/react-native';
 import { api } from '../../api/client';
 import { AppSecureStorage } from '../../services';
 import { logger } from '../../utils/logger';
@@ -256,6 +257,9 @@ const authSlice = createSlice({
         state.status = action.payload.status;
         state.user = action.payload.user;
         state.error = null;
+        if (action.payload.user) {
+          Sentry.setUser({ id: action.payload.user.id });
+        }
       })
       .addCase(initializeAuth.rejected, (state) => {
         state.status = 'unauthenticated';
@@ -282,6 +286,7 @@ const authSlice = createSlice({
         state.status = 'authenticated';
         state.user = action.payload;
         state.error = null;
+        Sentry.setUser({ id: action.payload.id });
       })
       .addCase(otpVerify.rejected, (state, action) => {
         state.status = 'unauthenticated';
@@ -297,6 +302,7 @@ const authSlice = createSlice({
         state.user = action.payload;
         state.error = null;
         state.isNewRegistration = true;
+        Sentry.setUser({ id: action.payload.id });
       })
       .addCase(registerGuest.rejected, (state, action) => {
         state.status = 'unauthenticated';
@@ -311,6 +317,7 @@ const authSlice = createSlice({
         state.status = 'authenticated';
         state.user = action.payload;
         state.error = null;
+        Sentry.setUser({ id: action.payload.id });
       })
       .addCase(claimGuest.rejected, (state, action) => {
         state.status = 'guest';
@@ -323,6 +330,7 @@ const authSlice = createSlice({
         state.user = null;
         state.error = null;
         state.specialties = [];
+        Sentry.setUser(null);
       })
 
       // Fetch Specialties

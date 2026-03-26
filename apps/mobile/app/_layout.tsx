@@ -1,11 +1,12 @@
+import { setOnUnauthorized } from '@/api/client';
 import { ErrorBoundary } from '@/components';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkListener } from '@/hooks/useNetworkListener';
 import { initializeAuth, loadOnboardingState, setUnauthenticated, store } from '@/store';
 import { ThemeProvider, useTheme } from '@/theme';
-import { setOnUnauthorized } from '@/api/client';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
+import * as Sentry from '@sentry/react-native';
 import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -15,6 +16,20 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider as ReduxProvider } from 'react-redux';
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  environment: __DEV__ ? 'development' : 'production',
+
+  // Sample 10% of transactions in production, 100% in dev
+  tracesSampleRate: __DEV__ ? 1.0 : 1,
+
+  // Track crash-free session rate
+  enableAutoSessionTracking: true,
+
+  // Disabled in dev to avoid noise during local testing
+  enabled: !__DEV__,
+});
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -115,8 +130,7 @@ function RootLayoutNav() {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
-    const onSpecialtyScreen =
-      segments[1] === 'select-specialty' || segments[1] === 'select-stage';
+    const onSpecialtyScreen = segments[1] === 'select-specialty' || segments[1] === 'select-stage';
 
     if (isLoggedIn && inAuthGroup && !needsSpecialty) {
       // Logged in with specialty set — go to main app
@@ -157,7 +171,7 @@ function RootLayoutNav() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <ErrorBoundary>
       <ReduxProvider store={store}>
@@ -174,6 +188,8 @@ export default function RootLayout() {
     </ErrorBoundary>
   );
 }
+
+export default Sentry.wrap(RootLayout);
 
 const styles = StyleSheet.create({
   container: {

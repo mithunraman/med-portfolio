@@ -20,6 +20,7 @@ import { OutboxModule } from './outbox';
 import { ReviewPeriodsModule } from './review-periods/review-periods.module';
 import { OtpModule } from './otp';
 import { SpecialtiesModule } from './specialties/specialties.module';
+import { HealthModule } from './health';
 import { JwtAuthGuard, RolesGuard } from './common/guards';
 import { TokenRefreshInterceptor } from './common/interceptors';
 
@@ -73,6 +74,7 @@ import { TokenRefreshInterceptor } from './common/interceptors';
     ReviewPeriodsModule,
     OtpModule,
     SpecialtiesModule,
+    HealthModule,
   ],
   providers: [
     {

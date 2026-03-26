@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { Module } from '@nestjs/common';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { LoggerModule } from 'nestjs-pino';
@@ -21,6 +21,7 @@ import { ReviewPeriodsModule } from './review-periods/review-periods.module';
 import { OtpModule } from './otp';
 import { SpecialtiesModule } from './specialties/specialties.module';
 import { HealthModule } from './health';
+import { SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { JwtAuthGuard, RolesGuard } from './common/guards';
 import { TokenRefreshInterceptor } from './common/interceptors';
 
@@ -77,6 +78,10 @@ import { TokenRefreshInterceptor } from './common/interceptors';
     HealthModule,
   ],
   providers: [
+    {
+      provide: APP_FILTER,
+      useClass: SentryGlobalFilter,
+    },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

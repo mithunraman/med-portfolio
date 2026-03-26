@@ -2,6 +2,7 @@ import { BaseMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as Sentry from '@sentry/nestjs';
 import { AssemblyAI, SpeechModel } from 'assemblyai';
 import { backOff } from 'exponential-backoff';
 import { z } from 'zod';
@@ -88,34 +89,42 @@ export class LLMService {
       `invokeStructured [${model}] messages:\n${messages.map((m) => `[${m.type}] ${m.content}`).join('\n')}`
     );
 
-    return backOff(
-      async () => {
-        const chatModel = this.createChatModel({ model, temperature, maxTokens });
+    try {
+      return await backOff(
+        async () => {
+          const chatModel = this.createChatModel({ model, temperature, maxTokens });
 
-        // Cast to `any` to avoid TS2589 (excessive type depth) from LangChain's
-        // heavily overloaded withStructuredOutput generics. Caller-side type
-        // safety is preserved by the method signature: schema: ZodType<T> → T.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const structuredModel = (chatModel as any).withStructuredOutput(schema);
+          // Cast to `any` to avoid TS2589 (excessive type depth) from LangChain's
+          // heavily overloaded withStructuredOutput generics. Caller-side type
+          // safety is preserved by the method signature: schema: ZodType<T> → T.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const structuredModel = (chatModel as any).withStructuredOutput(schema);
 
-        const data = (await structuredModel.invoke(messages)) as T;
+          const data = (await structuredModel.invoke(messages)) as T;
 
-        return { data, model, tokensUsed: null };
-      },
-      {
-        numOfAttempts: 3,
-        startingDelay: 1000,
-        timeMultiple: 2,
-        jitter: 'full',
-        retry: (error) => {
-          const retryable = this.isRetryableApiError(error);
-          if (retryable) {
-            this.logger.warn(`Retryable OpenAI error, retrying...`, error);
-          }
-          return retryable;
+          return { data, model, tokensUsed: null };
         },
-      }
-    );
+        {
+          numOfAttempts: 3,
+          startingDelay: 1000,
+          timeMultiple: 2,
+          jitter: 'full',
+          retry: (error) => {
+            const retryable = this.isRetryableApiError(error);
+            if (retryable) {
+              this.logger.warn(`Retryable OpenAI error, retrying...`, error);
+            }
+            return retryable;
+          },
+        }
+      );
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: { operation: 'invokeStructured', model },
+        extra: { messageCount: messages.length, maxRetries: 3 },
+      });
+      throw error;
+    }
   }
 
   private createChatModel(options: Required<LLMOptions>): ChatOpenAI {
@@ -137,65 +146,73 @@ export class LLMService {
   async transcribeAudio(audioUrl: string): Promise<TranscriptionResult> {
     this.logger.log('Starting transcription with AssemblyAI Universal-3 Pro');
 
-    return backOff(
-      async () => {
-        // Create transcription with timeout
-        const transcriptPromise = this.assemblyai.transcripts.transcribe({
-          audio_url: audioUrl,
-          speech_models: ['universal-3-pro'] as unknown as SpeechModel[],
-          language_code: 'en_uk',
-          // Medical keyterms for improved accuracy
-          keyterms_prompt: MEDICAL_KEYTERMS,
-        });
+    try {
+      return await backOff(
+        async () => {
+          // Create transcription with timeout
+          const transcriptPromise = this.assemblyai.transcripts.transcribe({
+            audio_url: audioUrl,
+            speech_models: ['universal-3-pro'] as unknown as SpeechModel[],
+            language_code: 'en_uk',
+            // Medical keyterms for improved accuracy
+            keyterms_prompt: MEDICAL_KEYTERMS,
+          });
 
-        // Apply timeout (2 minutes for max 5-minute audio)
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => {
-            reject(new Error(`Transcription timed out after ${TRANSCRIPTION_TIMEOUT_MS}ms`));
-          }, TRANSCRIPTION_TIMEOUT_MS);
-        });
+          // Apply timeout (2 minutes for max 5-minute audio)
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => {
+              reject(new Error(`Transcription timed out after ${TRANSCRIPTION_TIMEOUT_MS}ms`));
+            }, TRANSCRIPTION_TIMEOUT_MS);
+          });
 
-        const transcript = await Promise.race([transcriptPromise, timeoutPromise]);
+          const transcript = await Promise.race([transcriptPromise, timeoutPromise]);
 
-        if (transcript.status === 'error') {
-          this.logger.error(`Transcription failed: ${transcript.error}`);
-          throw new Error(`Transcription failed: ${transcript.error}`);
-        }
-
-        const wordCount = transcript.words?.length ?? 0;
-        const confidence = transcript.confidence ?? null;
-        const audioDurationMs = transcript.audio_duration
-          ? Math.round(transcript.audio_duration * 1000)
-          : null;
-
-        this.logger.log(
-          `Transcription completed: ${wordCount} words, confidence: ${confidence}, duration: ${audioDurationMs}ms`
-        );
-
-        return {
-          text: transcript.text ?? '',
-          confidence,
-          audioDurationMs,
-          wordCount,
-        };
-      },
-      {
-        numOfAttempts: 3,
-        startingDelay: 2000,
-        timeMultiple: 2,
-        jitter: 'full',
-        retry: (error) => {
-          // Don't retry timeouts — they've already waited long enough
-          if (error instanceof Error && error.message.includes('timed out')) return false;
-
-          const retryable = this.isRetryableApiError(error);
-          if (retryable) {
-            this.logger.warn(`Retryable AssemblyAI error, retrying...`, error);
+          if (transcript.status === 'error') {
+            this.logger.error(`Transcription failed: ${transcript.error}`);
+            throw new Error(`Transcription failed: ${transcript.error}`);
           }
-          return retryable;
+
+          const wordCount = transcript.words?.length ?? 0;
+          const confidence = transcript.confidence ?? null;
+          const audioDurationMs = transcript.audio_duration
+            ? Math.round(transcript.audio_duration * 1000)
+            : null;
+
+          this.logger.log(
+            `Transcription completed: ${wordCount} words, confidence: ${confidence}, duration: ${audioDurationMs}ms`
+          );
+
+          return {
+            text: transcript.text ?? '',
+            confidence,
+            audioDurationMs,
+            wordCount,
+          };
         },
-      }
-    );
+        {
+          numOfAttempts: 3,
+          startingDelay: 2000,
+          timeMultiple: 2,
+          jitter: 'full',
+          retry: (error) => {
+            // Don't retry timeouts — they've already waited long enough
+            if (error instanceof Error && error.message.includes('timed out')) return false;
+
+            const retryable = this.isRetryableApiError(error);
+            if (retryable) {
+              this.logger.warn(`Retryable AssemblyAI error, retrying...`, error);
+            }
+            return retryable;
+          },
+        }
+      );
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: { operation: 'transcribeAudio' },
+        extra: { maxRetries: 3 },
+      });
+      throw error;
+    }
   }
 
   private isRetryableApiError(error: unknown): boolean {

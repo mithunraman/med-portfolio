@@ -2,6 +2,7 @@ import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nes
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Observable, tap } from 'rxjs';
+import * as Sentry from '@sentry/nestjs';
 import { AuthService } from '../../auth/auth.service';
 import { User, UserDocument } from '../../auth/schemas/user.schema';
 
@@ -21,6 +22,9 @@ export class TokenRefreshInterceptor implements NestInterceptor {
     if (!user?.userId) {
       return next.handle();
     }
+
+    // Set Sentry user context so all errors in this request are attributed
+    Sentry.setUser({ id: user.userId });
 
     return next.handle().pipe(
       tap(async () => {

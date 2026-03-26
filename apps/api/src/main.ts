@@ -1,3 +1,6 @@
+// Sentry must be imported before everything else — it patches Node modules at import time.
+import './instrument';
+
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { Request, Response, NextFunction } from 'express';

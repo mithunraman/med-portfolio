@@ -6,6 +6,7 @@ import {
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import { OutboxService } from './outbox.service';
 import type { OutboxEntry } from './schemas/outbox.schema';
 
@@ -128,6 +129,10 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
       this.logger.error(
         `Handler failed for outbox entry ${entry._id} (type: ${entry.type}): ${errorMessage}`
       );
+      Sentry.captureException(error, {
+        tags: { outboxType: entry.type },
+        extra: { entryId: String(entry._id) },
+      });
       await this.outboxService.markFailed(entry._id, errorMessage);
     }
   }

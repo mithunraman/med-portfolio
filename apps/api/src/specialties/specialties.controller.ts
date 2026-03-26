@@ -1,5 +1,5 @@
-import { Controller, Get, Header } from '@nestjs/common';
 import type { SpecialtyListResponse } from '@acme/shared';
+import { Controller, Get, Header } from '@nestjs/common';
 import { Public } from '../common/decorators/public.decorator';
 import { getAllSpecialtyOptions } from './specialty.registry';
 

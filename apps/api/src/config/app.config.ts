@@ -50,6 +50,11 @@ export const envSchema = z.object({
     .string({ required_error: 'ASSEMBLYAI_API_KEY is required' })
     .min(1, 'ASSEMBLYAI_API_KEY cannot be empty'),
 
+  // Sentry
+  SENTRY_DSN: z
+    .string({ required_error: 'SENTRY_DSN is required' })
+    .url('SENTRY_DSN must be a valid URL'),
+
   // OTP
   OTP_EXPIRY_MINUTES: z
     .string()
@@ -136,6 +141,9 @@ export const appConfig = registerAs('app', () => {
     },
     assemblyai: {
       apiKey: env.ASSEMBLYAI_API_KEY,
+    },
+    sentry: {
+      dsn: env.SENTRY_DSN,
     },
     otp: {
       expiryMinutes: env.OTP_EXPIRY_MINUTES,

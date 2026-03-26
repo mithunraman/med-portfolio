@@ -29,9 +29,6 @@ const contextualisedQuestionSchema = z.object({
           "MUST use different clinical scenarios than the trainee's case. " +
           'Show what a good answer LOOKS LIKE, not what it should SAY.'
       ),
-    reassurance: z
-      .string()
-      .describe('Brief normalising statement, e.g., "Even a short answer helps here"'),
   }),
 });
 
@@ -83,8 +80,7 @@ For EACH question, generate 2-3 example response hints:
 1. Hints are SHORT (1 sentence each) example responses.
 2. Hints MUST use DIFFERENT clinical scenarios than the trainee's actual case. If the trainee described a chest pain case, use examples from dermatology, paediatrics, mental health, etc.
 3. Hints demonstrate the LEVEL OF DETAIL expected, not the content.
-4. Include a brief reassurance (e.g., "Even a short answer is useful here").
-5. For reflective questions, normalise uncertainty and imperfection in hints.`,
+4. For reflective questions, normalise uncertainty and imperfection in hints.`,
   ],
   ['human', '{transcript}'],
 ]);
@@ -124,7 +120,6 @@ function formatMissingSectionBlock(
 /** Default hints used when LLM contextualisation fails. */
 const DEFAULT_HINTS = {
   examples: ['A couple of sentences with specific details is ideal.'],
-  reassurance: 'Even a short answer is useful here.',
 };
 
 /* ------------------------------------------------------------------ */

@@ -154,7 +154,7 @@ export function completenessResponse(
  * Build a canned follow-up questions response.
  */
 export function followupQuestionsResponse(
-  questions: Array<{ sectionId: string; question: string; hints?: { examples: string[]; reassurance: string } }>
+  questions: Array<{ sectionId: string; question: string; hints?: { examples: string[] } }>
 ) {
   return {
     questions: questions.map((q) => ({
@@ -162,7 +162,6 @@ export function followupQuestionsResponse(
       question: q.question,
       hints: q.hints ?? {
         examples: ['Example response from a different clinical scenario.'],
-        reassurance: 'Even a short answer is useful here.',
       },
     })),
   };

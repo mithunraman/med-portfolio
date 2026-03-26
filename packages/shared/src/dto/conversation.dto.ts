@@ -40,7 +40,6 @@ export const FollowupQuestionSchema = z.object({
   question: z.string(),
   hints: z.object({
     examples: z.array(z.string()).max(3),
-    reassurance: z.string(),
   }),
 });
 export type FollowupQuestion = z.infer<typeof FollowupQuestionSchema>;
@@ -60,9 +59,6 @@ export const PromptHintsSchema = z.object({
     .array(z.string())
     .max(3)
     .describe('Short example responses showing expected depth, from DIFFERENT clinical scenarios'),
-  reassurance: z
-    .string()
-    .describe('Brief normalising statement, e.g., "Even a short answer is useful here"'),
 });
 export type PromptHints = z.infer<typeof PromptHintsSchema>;
 

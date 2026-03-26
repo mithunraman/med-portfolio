@@ -83,7 +83,7 @@ describe('GenerateFollowupNode', () => {
             {
               sectionId: 'reflection',
               question: 'What did you learn?',
-              hints: { examples: ['Example'], reassurance: 'Even a short answer helps.' },
+              hints: { examples: ['Example'] },
             },
           ],
         },
@@ -129,17 +129,17 @@ describe('GenerateFollowupNode', () => {
             {
               sectionId: 'reflection',
               question: 'Was there anything you would do differently?',
-              hints: { examples: ['In a paeds case I...'], reassurance: 'Even a short answer helps.' },
+              hints: { examples: ['In a paeds case I...'] },
             },
             {
               sectionId: 'clinical_reasoning',
               question: 'What other diagnoses did you consider?',
-              hints: { examples: ['For a rash I considered...'], reassurance: 'Just your thought process.' },
+              hints: { examples: ['For a rash I considered...'] },
             },
             {
               sectionId: 'management',
               question: 'What management plan did you put in place?',
-              hints: { examples: ['I prescribed...'], reassurance: 'Include any safety netting.' },
+              hints: { examples: ['I prescribed...'] },
             },
           ],
         },
@@ -189,7 +189,7 @@ describe('GenerateFollowupNode', () => {
             {
               sectionId: 'reflection',
               question: 'Contextualised reflection question',
-              hints: { examples: ['Example'], reassurance: 'Reassurance' },
+              hints: { examples: ['Example'] },
             },
           ],
         },
@@ -217,12 +217,12 @@ describe('GenerateFollowupNode', () => {
             {
               sectionId: 'reflection',
               question: 'Valid question',
-              hints: { examples: ['Ex'], reassurance: 'Ok' },
+              hints: { examples: ['Ex'] },
             },
             {
               sectionId: 'bogus_section',
               question: 'Invalid question',
-              hints: { examples: ['Ex'], reassurance: 'Ok' },
+              hints: { examples: ['Ex'] },
             },
           ],
         },
@@ -253,7 +253,7 @@ describe('GenerateFollowupNode', () => {
       expect(reflectionQ!.question).toBe(
         'What did you learn from this case, and would you do anything differently?'
       );
-      expect(reflectionQ!.hints.reassurance).toBe('Even a short answer is useful here.');
+      expect(reflectionQ!.hints.examples).toEqual(['A couple of sentences with specific details is ideal.']);
     });
   });
 

@@ -1159,7 +1159,7 @@ describe('Conversations Integration Tests', () => {
         processingStatus: MessageProcessingStatus.COMPLETE,
         question: {
           questionType: 'free_text',
-          prompts: [{ key: 'test', text: 'test question', hints: { examples: ['example'], reassurance: 'reassurance' } }],
+          prompts: [{ key: 'test', text: 'test question', hints: { examples: ['example'] } }],
         },
       });
 

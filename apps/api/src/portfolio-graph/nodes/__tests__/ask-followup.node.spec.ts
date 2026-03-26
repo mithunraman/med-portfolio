@@ -44,12 +44,12 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
       {
         sectionId: 'reflection',
         question: 'What did you learn?',
-        hints: { examples: ['Example'], reassurance: 'Even a short answer helps.' },
+        hints: { examples: ['Example'] },
       },
       {
         sectionId: 'outcome',
         question: 'What happened to the patient?',
-        hints: { examples: ['The patient recovered...'], reassurance: 'Brief is fine.' },
+        hints: { examples: ['The patient recovered...'] },
       },
     ],
     capabilities: [],

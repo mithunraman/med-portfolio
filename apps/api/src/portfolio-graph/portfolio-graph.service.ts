@@ -361,7 +361,7 @@ export class PortfolioGraphService implements OnModuleInit {
         const questions = interruptValue.questions as Array<{
           sectionId: string;
           question: string;
-          hints: { examples: string[]; reassurance: string };
+          hints: { examples: string[] };
         }>;
         const followUpRound = interruptValue.followUpRound as number;
 

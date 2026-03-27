@@ -6,6 +6,7 @@ import * as Sentry from '@sentry/nestjs';
 import { AssemblyAI, SpeechModel } from 'assemblyai';
 import { backOff } from 'exponential-backoff';
 import { z } from 'zod';
+import { MetricsService } from '../common/metrics';
 import { MEDICAL_KEYTERMS, TRANSCRIPTION_TIMEOUT_MS } from './medical-keyterms';
 
 export const OpenAIModels = {
@@ -50,7 +51,10 @@ export class LLMService {
   private readonly openaiApiKey: string;
   private readonly assemblyai: AssemblyAI;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly metricsService: MetricsService
+  ) {
     const openaiApiKey = this.configService.get<string>('app.openai.apiKey');
     if (!openaiApiKey) throw new Error('Missing config: app.openai.apiKey');
     this.openaiApiKey = openaiApiKey;
@@ -89,6 +93,7 @@ export class LLMService {
       `invokeStructured [${model}] messages:\n${messages.map((m) => `[${m.type}] ${m.content}`).join('\n')}`
     );
 
+    const startTime = Date.now();
     try {
       return await backOff(
         async () => {
@@ -112,6 +117,7 @@ export class LLMService {
           retry: (error) => {
             const retryable = this.isRetryableApiError(error);
             if (retryable) {
+              this.metricsService.recordLLMRetry('invokeStructured');
               this.logger.warn(`Retryable OpenAI error, retrying...`, error);
             }
             return retryable;
@@ -124,6 +130,8 @@ export class LLMService {
         extra: { messageCount: messages.length, maxRetries: 3 },
       });
       throw error;
+    } finally {
+      this.metricsService.recordLLMDuration('invokeStructured', model, Date.now() - startTime);
     }
   }
 
@@ -146,6 +154,7 @@ export class LLMService {
   async transcribeAudio(audioUrl: string): Promise<TranscriptionResult> {
     this.logger.log('Starting transcription with AssemblyAI Universal-3 Pro');
 
+    const startTime = Date.now();
     try {
       return await backOff(
         async () => {
@@ -200,6 +209,7 @@ export class LLMService {
 
             const retryable = this.isRetryableApiError(error);
             if (retryable) {
+              this.metricsService.recordLLMRetry('transcribeAudio');
               this.logger.warn(`Retryable AssemblyAI error, retrying...`, error);
             }
             return retryable;
@@ -212,6 +222,12 @@ export class LLMService {
         extra: { maxRetries: 3 },
       });
       throw error;
+    } finally {
+      this.metricsService.recordLLMDuration(
+        'transcribeAudio',
+        'assemblyai',
+        Date.now() - startTime
+      );
     }
   }
 

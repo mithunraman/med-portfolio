@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import type { OutboxEntry } from '../schemas/outbox.schema';
 import { OutboxService } from '../outbox.service';
 import { OutboxConsumer, type OutboxHandler } from '../outbox.consumer';
+import { MetricsService } from '../../common/metrics';
 
 // ── Helpers ──
 
@@ -43,9 +44,17 @@ function createConsumer(overrides: {
     resetStaleLocks: overrides.resetStaleLocks ?? jest.fn().mockResolvedValue(0),
     markCompleted: overrides.markCompleted ?? jest.fn().mockResolvedValue(undefined),
     markFailed: overrides.markFailed ?? jest.fn().mockResolvedValue(undefined),
+    countPending: jest.fn().mockResolvedValue(0),
   } as unknown as OutboxService;
 
-  const consumer = new OutboxConsumer(outboxService, overrides.handlers ?? []);
+  const metricsService = {
+    recordOutboxJobStart: jest.fn(),
+    recordOutboxJobEnd: jest.fn(),
+    recordOutboxJobFailure: jest.fn(),
+    recordOutboxQueueDepth: jest.fn(),
+  } as unknown as MetricsService;
+
+  const consumer = new OutboxConsumer(outboxService, metricsService, overrides.handlers ?? []);
 
   return { consumer, outboxService };
 }

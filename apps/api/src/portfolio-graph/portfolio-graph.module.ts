@@ -8,7 +8,7 @@ import { PortfolioGraphService } from './portfolio-graph.service';
 
 @Module({
   imports: [
-    ArtefactsModule,
+    forwardRef(() => ArtefactsModule),
     DatabaseModule,
     LLMModule,
     PdpGoalsModule,

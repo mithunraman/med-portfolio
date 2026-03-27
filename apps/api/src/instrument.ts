@@ -18,11 +18,8 @@ Sentry.init({
   dsn,
   environment: process.env.NODE_ENV || 'development',
 
-  // Sample 10% of requests for performance traces in production, 100% in dev
-  tracesSampleRate: process.env.NODE_ENV === 'production' ? 1.0 : 1.0,
-
-  // Don't create transactions for health checks
-  ignoreTransactions: ['/api/health'],
+  // Tracing handled by OpenTelemetry (tracing.ts) — Sentry is error-only.
+  tracesSampleRate: 0,
 
   // Avoid capturing PII in request bodies by default
   sendDefaultPii: false,

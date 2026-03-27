@@ -7,6 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
+import { MetricsService } from '../common/metrics';
 import { OutboxService } from './outbox.service';
 import type { OutboxEntry } from './schemas/outbox.schema';
 
@@ -33,6 +34,7 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly outboxService: OutboxService,
+    private readonly metricsService: MetricsService,
     @Optional() @Inject(OUTBOX_HANDLERS) handlers?: OutboxHandler[]
   ) {
     if (handlers) {
@@ -90,6 +92,10 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
       // Reset stale locks first (handles crashed consumers)
       await this.outboxService.resetStaleLocks();
 
+      // Record queue depth before claiming
+      const pendingCount = await this.outboxService.countPending();
+      this.metricsService.recordOutboxQueueDepth(pendingCount);
+
       // Claim only as many jobs as we have capacity for
       const entries = await this.outboxService.claimBatch(freeSlots);
       if (entries.length === 0) return;
@@ -121,6 +127,9 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    const startTime = Date.now();
+    this.metricsService.recordOutboxJobStart();
+
     try {
       await handler.handle(entry.payload);
       await this.outboxService.markCompleted(entry._id);
@@ -133,7 +142,10 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
         tags: { outboxType: entry.type },
         extra: { entryId: String(entry._id) },
       });
+      this.metricsService.recordOutboxJobFailure(entry.type);
       await this.outboxService.markFailed(entry._id, errorMessage);
+    } finally {
+      this.metricsService.recordOutboxJobEnd(entry.type, Date.now() - startTime);
     }
   }
 }

@@ -71,6 +71,18 @@ export class OutboxService {
   }
 
   /**
+   * Count pending entries that are ready to process.
+   */
+  async countPending(): Promise<number> {
+    const result = await this.repository.countPending();
+    if (!result.ok) {
+      this.logger.error('Failed to count pending entries', result.error);
+      return 0;
+    }
+    return result.value;
+  }
+
+  /**
    * Reset stale processing entries whose locks have expired.
    * Should be called periodically to handle consumer crashes.
    */

@@ -51,6 +51,11 @@ export interface IOutboxRepository {
   resetStaleLocks(): Promise<Result<number, DBError>>;
 
   /**
+   * Count entries that are pending and ready to process.
+   */
+  countPending(): Promise<Result<number, DBError>>;
+
+  /**
    * Delete completed/failed entries older than the given date.
    * Returns the count of entries deleted.
    */

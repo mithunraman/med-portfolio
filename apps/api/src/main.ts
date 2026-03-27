@@ -1,5 +1,7 @@
-// Sentry must be imported before everything else — it patches Node modules at import time.
+// 1. Sentry — must be first, patches Node modules at import time.
 import './instrument';
+// 2. OpenTelemetry — must be before NestJS/Express/Mongoose for auto-instrumentation.
+import './tracing';
 
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';

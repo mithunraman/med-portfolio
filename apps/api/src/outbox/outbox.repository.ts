@@ -162,6 +162,20 @@ export class OutboxRepository implements IOutboxRepository {
     }
   }
 
+  async countPending(): Promise<Result<number, DBError>> {
+    try {
+      const now = new Date();
+      const count = await this.outboxModel.countDocuments({
+        status: OutboxStatus.PENDING,
+        processAfter: { $lte: now },
+      });
+      return ok(count);
+    } catch (error) {
+      this.logger.error('Failed to count pending outbox entries', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to count pending outbox entries' });
+    }
+  }
+
   async cleanupOldEntries(
     olderThan: Date,
     statuses: OutboxStatus[]

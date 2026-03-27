@@ -1,34 +1,36 @@
-import { randomUUID } from 'crypto';
 import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { LoggerModule } from 'nestjs-pino';
-import { ConfigModule } from './config';
-import { DatabaseModule } from './database';
-import { AuthModule } from './auth/auth.module';
-import { ItemsModule } from './items/items.module';
-import { ConversationsModule } from './conversations/conversations.module';
-import { ArtefactsModule } from './artefacts/artefacts.module';
-import { DashboardModule } from './dashboard/dashboard.module';
-import { StorageModule } from './storage';
-import { LLMModule } from './llm';
-import { MediaModule } from './media';
-import { ProcessingModule } from './processing';
-import { AnalysisRunsModule } from './analysis-runs';
-import { OutboxModule } from './outbox';
-import { ReviewPeriodsModule } from './review-periods/review-periods.module';
-import { OtpModule } from './otp';
-import { SpecialtiesModule } from './specialties/specialties.module';
-import { HealthModule } from './health';
 import { SentryGlobalFilter } from '@sentry/nestjs/setup';
+import { randomUUID } from 'crypto';
+import { LoggerModule } from 'nestjs-pino';
+import { AnalysisRunsModule } from './analysis-runs';
+import { ArtefactsModule } from './artefacts/artefacts.module';
+import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard, RolesGuard } from './common/guards';
 import { TokenRefreshInterceptor } from './common/interceptors';
+import { MetricsModule } from './common/metrics';
+import { ConfigModule } from './config';
+import { ConversationsModule } from './conversations/conversations.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { DatabaseModule } from './database';
+import { HealthModule } from './health';
+import { ItemsModule } from './items/items.module';
+import { LLMModule } from './llm';
+import { MediaModule } from './media';
+import { OtpModule } from './otp';
+import { OutboxModule } from './outbox';
+import { ProcessingModule } from './processing';
+import { ReviewPeriodsModule } from './review-periods/review-periods.module';
+import { SpecialtiesModule } from './specialties/specialties.module';
+import { StorageModule } from './storage';
 
 @Module({
   imports: [
     ConfigModule,
     DatabaseModule,
+    MetricsModule,
     EventEmitterModule.forRoot(),
     LoggerModule.forRootAsync({
       inject: [ConfigService],

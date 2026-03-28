@@ -1,4 +1,4 @@
-import { MessageProcessingStatus, MessageRole, PROCESSING_STATUS_LABELS, type Message } from '@acme/shared';
+import { MessageStatus, MessageRole, MESSAGE_STATUS_LABELS, type Message } from '@acme/shared';
 import type { DeliveryStatus } from '../../../store/slices/messages/slice';
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useEffect, useState } from 'react';
@@ -11,7 +11,7 @@ const BUBBLE_COLORS = {
   received: { light: '#ffffff', dark: '#1f2c34' },
 } as const;
 
-const TERMINAL = new Set([MessageProcessingStatus.COMPLETE, MessageProcessingStatus.FAILED]);
+const TERMINAL = new Set([MessageStatus.COMPLETE, MessageStatus.FAILED]);
 
 function ProcessingLabel({ label, color }: { label: string; color: string }) {
   const [dots, setDots] = useState(0);
@@ -58,8 +58,8 @@ export const BubbleShell = memo(function BubbleShell({
   const mode = isDark ? 'dark' : 'light';
   const bubbleColor = isUser ? BUBBLE_COLORS.sent[mode] : BUBBLE_COLORS.received[mode];
 
-  const isProcessing = !TERMINAL.has(message.processingStatus);
-  const statusLabel = isProcessing ? PROCESSING_STATUS_LABELS[message.processingStatus] : null;
+  const isProcessing = !TERMINAL.has(message.status);
+  const statusLabel = isProcessing ? MESSAGE_STATUS_LABELS[message.status] : null;
 
   const metaColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)';
 
@@ -76,10 +76,10 @@ export const BubbleShell = memo(function BubbleShell({
     }
 
     // Server message — existing logic
-    if (message.processingStatus === MessageProcessingStatus.FAILED) {
+    if (message.status === MessageStatus.FAILED) {
       return <Ionicons name="close" size={12} color="#ef4444" />;
     }
-    if (TERMINAL.has(message.processingStatus)) {
+    if (TERMINAL.has(message.status)) {
       return <Ionicons name="checkmark-done" size={12} color="#53bdeb" />;
     }
     return <Ionicons name="checkmark" size={12} color="#8696a0" />;

@@ -7,7 +7,7 @@ export * from './specialty.enum';
 export * from './media-status.enum';
 export * from './media-type.enum';
 export * from './media-ref-collection.enum';
-export * from './message-processing-status.enum';
+export * from './message-status.enum';
 export * from './message-type.enum';
 export * from './pdp-goal-status.enum';
 export * from './analysis-run-status.enum';

@@ -12,7 +12,7 @@ import {
   MediaRefCollection,
   MediaStatus,
   MediaType,
-  MessageProcessingStatus,
+  MessageStatus,
   MessageRole,
   MessageType,
 } from '@acme/shared';
@@ -459,7 +459,7 @@ export class ConversationsService {
               role: MessageRole.USER,
               messageType: MessageType.TEXT,
               content: `Selected: ${label}`,
-              processingStatus: MessageProcessingStatus.COMPLETE,
+              status: MessageStatus.COMPLETE,
               idempotencyKey,
             },
             session
@@ -475,7 +475,7 @@ export class ConversationsService {
               role: MessageRole.USER,
               messageType: MessageType.TEXT,
               content: `Selected: ${labels.join(', ')}`,
-              processingStatus: MessageProcessingStatus.COMPLETE,
+              status: MessageStatus.COMPLETE,
               idempotencyKey,
             },
             session

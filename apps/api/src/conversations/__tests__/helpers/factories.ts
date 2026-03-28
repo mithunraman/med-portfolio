@@ -2,7 +2,7 @@ import {
   ArtefactStatus,
   ConversationStatus,
   type Question,
-  MessageProcessingStatus,
+  MessageStatus,
   MessageRole,
   MessageType,
   Specialty,
@@ -103,7 +103,7 @@ export async function createTestMessage(
     rawContent: string | null;
     cleanedContent: string | null;
     content: string | null;
-    processingStatus: MessageProcessingStatus;
+    status: MessageStatus;
     question: Question | null;
   }> = {}
 ): Promise<MessageDocument> {
@@ -116,7 +116,7 @@ export async function createTestMessage(
       rawContent: overrides.rawContent ?? 'I saw a patient today with type 2 diabetes.',
       cleanedContent: overrides.cleanedContent ?? null,
       content: overrides.content ?? 'I saw a patient today with type 2 diabetes.',
-      processingStatus: overrides.processingStatus ?? MessageProcessingStatus.COMPLETE,
+      status: overrides.status ?? MessageStatus.COMPLETE,
       question: overrides.question ?? null,
       idempotencyKey: nanoidAlphanumeric(),
     },
@@ -132,7 +132,7 @@ export async function createCompleteUserMessage(
   return createTestMessage(conversationId, {
     content,
     rawContent: content,
-    processingStatus: MessageProcessingStatus.COMPLETE,
+    status: MessageStatus.COMPLETE,
   });
 }
 
@@ -144,7 +144,7 @@ export async function createPendingUserMessage(
   return createTestMessage(conversationId, {
     content: null,
     rawContent: content,
-    processingStatus: MessageProcessingStatus.PENDING,
+    status: MessageStatus.PENDING,
   });
 }
 
@@ -157,7 +157,7 @@ export async function markMessageComplete(
     { _id: messageId },
     {
       $set: {
-        processingStatus: MessageProcessingStatus.COMPLETE,
+        status: MessageStatus.COMPLETE,
         content,
         cleanedContent: content,
       },

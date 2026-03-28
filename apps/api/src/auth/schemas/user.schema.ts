@@ -44,6 +44,5 @@ export type UserDocument = User & Document;
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
-// Indexes
-UserSchema.index({ email: 1 }, { unique: true });
+// Indexes (email unique index is created by @Prop({ unique: true, index: true }))
 UserSchema.index({ deletionScheduledFor: 1 }, { sparse: true });

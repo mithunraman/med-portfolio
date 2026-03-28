@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AnalysisRunStatus } from '../enums/analysis-run-status.enum';
 import { ConversationStatus } from '../enums/conversation-status.enum';
-import { MessageProcessingStatus } from '../enums/message-processing-status.enum';
+import { MessageStatus } from '../enums/message-status.enum';
 import { MessageRole } from '../enums/message-role.enum';
 import { MessageType } from '../enums/message-type.enum';
 import { ThinkingStep } from '../enums/thinking-step.enum';
@@ -117,7 +117,7 @@ export const MessageSchema = z.object({
   conversationId: z.string(),
   role: z.nativeEnum(MessageRole),
   messageType: z.nativeEnum(MessageType).catch(MessageType.UNKNOWN),
-  processingStatus: z.nativeEnum(MessageProcessingStatus),
+  status: z.nativeEnum(MessageStatus),
   content: z.string().nullable(),
   media: MessageMediaSchema.nullable(),
   question: QuestionSchema.nullable().optional(),

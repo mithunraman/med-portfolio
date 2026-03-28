@@ -1,4 +1,4 @@
-import { ConversationStatus, MessageProcessingStatus, MessageRole } from '@acme/shared';
+import { ConversationStatus, MessageStatus, MessageRole } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
@@ -224,7 +224,7 @@ export class ConversationsRepository implements IConversationsRepository {
         .countDocuments({
           conversation: conversationId,
           role: MessageRole.USER,
-          processingStatus: MessageProcessingStatus.COMPLETE,
+          status: MessageStatus.COMPLETE,
         })
         .limit(1)
         .session(session || null);
@@ -245,7 +245,7 @@ export class ConversationsRepository implements IConversationsRepository {
         .countDocuments({
           conversation: conversationId,
           role: MessageRole.USER,
-          processingStatus: { $lt: MessageProcessingStatus.COMPLETE },
+          status: { $lt: MessageStatus.COMPLETE },
         })
         .limit(1)
         .session(session || null);
@@ -340,7 +340,7 @@ export class ConversationsRepository implements IConversationsRepository {
             rawContent: '[deleted]',
             cleanedContent: '[deleted]',
             content: '[deleted]',
-            processingStatus: MessageProcessingStatus.DELETED,
+            status: MessageStatus.DELETED,
           },
           $unset: { question: '', answer: '' },
         }

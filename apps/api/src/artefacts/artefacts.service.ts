@@ -7,7 +7,7 @@ import type {
   RestoreArtefactVersionRequest,
   UpdateArtefactStatusRequest,
 } from '@acme/shared';
-import { ArtefactStatus, MessageProcessingStatus, PdpGoalStatus } from '@acme/shared';
+import { ArtefactStatus, MessageStatus, PdpGoalStatus } from '@acme/shared';
 import {
   BadRequestException,
   Inject,
@@ -618,7 +618,7 @@ export class ArtefactsService {
               role: msg.role,
               messageType: msg.messageType,
               content: msg.content ?? null,
-              processingStatus: MessageProcessingStatus.COMPLETE,
+              status: MessageStatus.COMPLETE,
               idempotencyKey: nanoidAlphanumeric(),
             },
             session

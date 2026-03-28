@@ -79,6 +79,9 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
   // Use replica set so Mongoose transactions work (they require oplog)
   const mongod = await MongoMemoryReplSet.create({
     replSet: { count: 1, storageEngine: 'wiredTiger' },
+    instanceOpts: [
+      { args: ['--setParameter', 'maxTransactionLockRequestTimeoutMillis=5000'] },
+    ],
   });
   const uri = mongod.getUri();
 

@@ -71,8 +71,7 @@ export type ArtefactDocument = Artefact & Document;
 
 export const ArtefactSchema = SchemaFactory.createForClass(Artefact);
 
-// Indexes
-ArtefactSchema.index({ artefactId: 1 }, { unique: true });
+// Indexes (artefactId unique index is created by @Prop({ unique: true }))
 ArtefactSchema.index({ userId: 1, status: 1 });
 ArtefactSchema.index({ userId: 1, createdAt: -1 });
 ArtefactSchema.index({ userId: 1, status: 1, completedAt: 1 });

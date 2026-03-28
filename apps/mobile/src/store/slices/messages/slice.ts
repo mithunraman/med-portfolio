@@ -1,5 +1,5 @@
 import type { ConversationContext, Message } from '@acme/shared';
-import { MessageRole, MessageProcessingStatus, MessageType } from '@acme/shared';
+import { MessageRole, MessageStatus, MessageType } from '@acme/shared';
 import { createEntityAdapter, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import {
   fetchMessages,
@@ -51,7 +51,7 @@ export function toRenderableMessage(opt: OptimisticMessage): RenderableMessage {
     conversationId: opt.conversationId,
     role: MessageRole.USER,
     messageType: opt.messageType,
-    processingStatus: MessageProcessingStatus.PENDING,
+    status: MessageStatus.PENDING,
     content: opt.content,
     media: null,
     question: null,
@@ -142,7 +142,7 @@ const messagesSlice = createSlice({
       state.idsByConversation = {};
       state.contextByConversation = {};
     },
-    // Upsert a single message — used for real-time processingStatus updates.
+    // Upsert a single message — used for real-time status updates.
     // If the message is new (not yet in the index), it is prepended as the newest.
     upsertMessage(state, action: PayloadAction<Message>) {
       const msg = action.payload;

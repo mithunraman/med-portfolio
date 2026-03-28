@@ -45,7 +45,7 @@ function makeInterruptPayload() {
       messageType: 'TEXT',
       rawContent: 'test',
       content: 'test',
-      processingStatus: 'COMPLETE',
+      status: 'COMPLETE',
       question: { questionType: 'single_select', options: [], suggestedKey: 'CE' },
       idempotencyKey: 'conv:present_classification:cp-1',
     },

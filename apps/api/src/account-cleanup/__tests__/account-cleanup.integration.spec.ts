@@ -4,7 +4,7 @@ import {
   ConversationStatus,
   ItemStatus,
   MediaStatus,
-  MessageProcessingStatus,
+  MessageStatus,
   MessageRole,
   MessageType,
   OutboxStatus,
@@ -205,7 +205,7 @@ describe('AccountCleanupService (integration)', () => {
       rawContent: `Raw content for ${userId}`,
       cleanedContent: `Cleaned content for ${userId}`,
       content: `Content for ${userId}`,
-      processingStatus: MessageProcessingStatus.COMPLETE,
+      status: MessageStatus.COMPLETE,
       idempotencyKey: `idem_${userId}`,
     });
 
@@ -317,7 +317,7 @@ describe('AccountCleanupService (integration)', () => {
     expect(msgA!.rawContent).toBe('[deleted]');
     expect(msgA!.cleanedContent).toBe('[deleted]');
     expect(msgA!.content).toBe('[deleted]');
-    expect(msgA!.processingStatus).toBe(MessageProcessingStatus.DELETED);
+    expect(msgA!.status).toBe(MessageStatus.DELETED);
     expect(msgA!.question).toBeUndefined();
     expect(msgA!.answer).toBeUndefined();
 
@@ -378,7 +378,7 @@ describe('AccountCleanupService (integration)', () => {
 
     const msgB = await messageModel.findOne({ userId: userBId }).lean();
     expect(msgB!.content).toBe(`Content for ${userBId}`);
-    expect(msgB!.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
+    expect(msgB!.status).toBe(MessageStatus.COMPLETE);
 
     const mediaB = await mediaModel.findOne({ userId: userBId }).lean();
     expect(mediaB!.status).toBe(MediaStatus.ATTACHED);

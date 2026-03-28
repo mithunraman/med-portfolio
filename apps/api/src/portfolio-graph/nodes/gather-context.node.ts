@@ -1,6 +1,6 @@
 import {
   type FreeTextQuestion,
-  MessageProcessingStatus,
+  MessageStatus,
   MessageRole,
   type Question,
 } from '@acme/shared';
@@ -63,7 +63,7 @@ export function createGatherContextNode(deps: GraphDeps) {
     // Skips messages still being processed (PENDING, TRANSCRIBING, CLEANING).
     const allMessages = result.value.messages.filter(
       (msg) =>
-        msg.processingStatus === MessageProcessingStatus.COMPLETE &&
+        msg.status === MessageStatus.COMPLETE &&
         (msg.role === MessageRole.USER || msg.role === MessageRole.ASSISTANT)
     );
 

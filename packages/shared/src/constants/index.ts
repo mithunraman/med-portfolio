@@ -1,1 +1,1 @@
-export * from './processing-status-labels';
+export * from './message-status-labels';

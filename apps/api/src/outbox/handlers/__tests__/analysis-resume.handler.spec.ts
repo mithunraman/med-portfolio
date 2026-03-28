@@ -44,7 +44,7 @@ function makeInterruptPayload() {
       messageType: 'TEXT',
       rawContent: 'follow-up questions',
       content: 'follow-up questions',
-      processingStatus: 'COMPLETE',
+      status: 'COMPLETE',
       question: { questionType: 'free_text', prompts: [], missingSections: [], followUpRound: 1, entryType: 'CE' },
       idempotencyKey: 'conv:ask_followup:cp-2',
     },

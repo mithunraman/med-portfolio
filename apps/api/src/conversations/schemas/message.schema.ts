@@ -1,4 +1,4 @@
-import { type Question, MessageProcessingStatus, MessageRole, MessageType } from '@acme/shared';
+import { type Question, MessageStatus, MessageRole, MessageType } from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
@@ -56,8 +56,8 @@ export class Message {
   media!: Types.ObjectId | null;
 
   // Processing status
-  @Prop({ required: true, type: Number, default: MessageProcessingStatus.PENDING })
-  processingStatus!: MessageProcessingStatus;
+  @Prop({ required: true, type: Number, default: MessageStatus.PENDING })
+  status!: MessageStatus;
 
   @Prop({ type: String, default: null })
   processingError!: string | null;

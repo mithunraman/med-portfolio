@@ -1,4 +1,4 @@
-import { MessageProcessingStatus, MessageRole, MessageType, type Message } from '@acme/shared';
+import { MessageStatus, MessageRole, MessageType, type Message } from '@acme/shared';
 import type { DeliveryStatus } from '../../store/slices/messages/slice';
 import { memo, useCallback, useRef } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -14,7 +14,7 @@ function isDeleted(message: Message): boolean {
   return (
     message.content === null &&
     message.messageType === MessageType.TEXT &&
-    message.processingStatus === MessageProcessingStatus.FAILED
+    message.status === MessageStatus.FAILED
   );
 }
 

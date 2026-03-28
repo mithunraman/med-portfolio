@@ -29,7 +29,7 @@ import {
   type Message,
   type MultiSelectQuestion,
   type SingleSelectQuestion,
-  MessageProcessingStatus,
+  MessageStatus,
   MessageRole,
   ThinkingStep,
 } from '@acme/shared';
@@ -46,8 +46,8 @@ const INITIAL_WORD_THRESHOLD = 60;
 const FOLLOWUP_WORD_THRESHOLD = 30;
 
 const TERMINAL_STATUSES = new Set([
-  MessageProcessingStatus.COMPLETE,
-  MessageProcessingStatus.FAILED,
+  MessageStatus.COMPLETE,
+  MessageStatus.FAILED,
 ]);
 
 // Phase-aware polling intervals (ms). null = no polling.
@@ -174,7 +174,7 @@ export default function ChatScreen() {
 
   // Poll fast while any message is still being processed (transcription, cleaning, etc.)
   const hasProcessingMessages = serverMessages.some(
-    (m) => !TERMINAL_STATUSES.has(m.processingStatus)
+    (m) => !TERMINAL_STATUSES.has(m.status)
   );
   const pollIntervalMs = getPollInterval(context?.phase, hasProcessingMessages, hasUnsentMessages);
 

@@ -1,4 +1,4 @@
-import { MediaType, MessageProcessingStatus } from '@acme/shared';
+import { MediaType, MessageStatus } from '@acme/shared';
 import { Inject, Injectable } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -58,10 +58,10 @@ export class ProcessingService {
 
     // Idempotency guard: skip if already in a terminal state (safe for outbox retry)
     if (
-      message.processingStatus === MessageProcessingStatus.COMPLETE ||
-      message.processingStatus === MessageProcessingStatus.FAILED
+      message.status === MessageStatus.COMPLETE ||
+      message.status === MessageStatus.FAILED
     ) {
-      this.logger.info(`Message ${messageId} already ${message.processingStatus}, skipping`);
+      this.logger.info(`Message ${messageId} already ${message.status}, skipping`);
       return;
     }
 
@@ -114,7 +114,7 @@ export class ProcessingService {
     const media = message.media as unknown as Media;
 
     // Update status to TRANSCRIBING
-    await this.updateStatus(messageId, MessageProcessingStatus.TRANSCRIBING);
+    await this.updateStatus(messageId, MessageStatus.TRANSCRIBING);
 
     // Get presigned URL for the audio
     const audioUrl = await this.mediaService.getPresignedUrl(media.xid);
@@ -129,7 +129,7 @@ export class ProcessingService {
     // Update with raw transcript and transcription metadata
     await this.conversationsRepository.updateMessage(messageId, {
       rawContent: transcriptionResult.text,
-      processingStatus: MessageProcessingStatus.CLEANING,
+      status: MessageStatus.CLEANING,
       transcription: transcriptionResult.transcription,
     });
 
@@ -140,7 +140,7 @@ export class ProcessingService {
     // Update with cleaned content
     await this.conversationsRepository.updateMessage(messageId, {
       cleanedContent: cleaningResult.text,
-      processingStatus: MessageProcessingStatus.DEIDENTIFYING,
+      status: MessageStatus.DEIDENTIFYING,
     });
 
     // Stage 3: PII Redaction (regex + LLM)
@@ -149,7 +149,7 @@ export class ProcessingService {
     // Update with final redacted content
     await this.conversationsRepository.updateMessage(messageId, {
       content: redactedContent,
-      processingStatus: MessageProcessingStatus.COMPLETE,
+      status: MessageStatus.COMPLETE,
     });
 
     this.logger.info(`Message processing complete for ${message.xid}`);
@@ -162,7 +162,7 @@ export class ProcessingService {
     const messageId = message._id;
 
     // Update status to CLEANING
-    await this.updateStatus(messageId, MessageProcessingStatus.CLEANING);
+    await this.updateStatus(messageId, MessageStatus.CLEANING);
 
     // Stage 1: Cleaning
     this.logger.info(`Cleaning text for message ${message.xid}`);
@@ -175,7 +175,7 @@ export class ProcessingService {
     // Update with cleaned content
     await this.conversationsRepository.updateMessage(messageId, {
       cleanedContent: cleaningResult.text,
-      processingStatus: MessageProcessingStatus.DEIDENTIFYING,
+      status: MessageStatus.DEIDENTIFYING,
     });
 
     // Stage 2: PII Redaction (regex + LLM)
@@ -184,7 +184,7 @@ export class ProcessingService {
     // Update with final redacted content
     await this.conversationsRepository.updateMessage(messageId, {
       content: redactedContent,
-      processingStatus: MessageProcessingStatus.COMPLETE,
+      status: MessageStatus.COMPLETE,
     });
 
     this.logger.info(`Message processing complete for ${message.xid}`);
@@ -202,16 +202,16 @@ export class ProcessingService {
 
   private async updateStatus(
     messageId: Types.ObjectId,
-    status: MessageProcessingStatus
+    status: MessageStatus
   ): Promise<void> {
     await this.conversationsRepository.updateMessage(messageId, {
-      processingStatus: status,
+      status: status,
     });
   }
 
   private async markFailed(messageId: Types.ObjectId, error: string): Promise<void> {
     await this.conversationsRepository.updateMessage(messageId, {
-      processingStatus: MessageProcessingStatus.FAILED,
+      status: MessageStatus.FAILED,
       processingError: error,
     });
   }

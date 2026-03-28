@@ -12,7 +12,7 @@ export function toMessageDto(
     conversationId: conversationXid,
     role: doc.role,
     messageType: doc.messageType,
-    processingStatus: doc.processingStatus,
+    status: doc.status,
     // Resolve best available content across pipeline stages
     content: doc.content ?? doc.cleanedContent ?? doc.rawContent ?? null,
     media: mediaData,

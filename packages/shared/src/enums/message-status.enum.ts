@@ -1,4 +1,4 @@
-export enum MessageProcessingStatus {
+export enum MessageStatus {
   DELETED = -999,
   PENDING = 100,
   TRANSCRIBING = 200,

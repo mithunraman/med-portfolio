@@ -1,7 +1,7 @@
 import {
   AnalysisRunStatus,
   ArtefactStatus,
-  MessageProcessingStatus,
+  MessageStatus,
   MessageRole,
   MessageType,
   type FreeTextQuestion,
@@ -223,7 +223,7 @@ describe('Conversations Integration Tests', () => {
           m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
       );
       assertDefined(classificationMsg);
-      expect(classificationMsg.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
+      expect(classificationMsg.status).toBe(MessageStatus.COMPLETE);
       const classificationMeta = classificationMsg.question as SingleSelectQuestion;
       expect(classificationMeta.options).toBeInstanceOf(Array);
 
@@ -286,7 +286,7 @@ describe('Conversations Integration Tests', () => {
           m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'multi_select'
       );
       assertDefined(capabilityMsg);
-      expect(capabilityMsg.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
+      expect(capabilityMsg.status).toBe(MessageStatus.COMPLETE);
 
       const capMeta = capabilityMsg.question as MultiSelectQuestion;
       const capOptions = capMeta.options;
@@ -853,7 +853,7 @@ describe('Conversations Integration Tests', () => {
       await createTestMessage(conv._id, {
         role: MessageRole.SYSTEM,
         content: 'System note',
-        processingStatus: MessageProcessingStatus.COMPLETE,
+        status: MessageStatus.COMPLETE,
       });
 
       await expect(
@@ -985,7 +985,7 @@ describe('Conversations Integration Tests', () => {
 
       assertDefined(assistantMsg);
       expect(assistantMsg.role).toBe(MessageRole.ASSISTANT);
-      expect(assistantMsg.processingStatus).toBe(MessageProcessingStatus.COMPLETE);
+      expect(assistantMsg.status).toBe(MessageStatus.COMPLETE);
       expect(assistantMsg.messageType).toBe(MessageType.TEXT);
       expect((assistantMsg.question as any)?.questionType).toBe('single_select');
       const f1Meta = assistantMsg.question as SingleSelectQuestion;
@@ -1068,7 +1068,7 @@ describe('Conversations Integration Tests', () => {
 
       expect(selectionMsgs).toHaveLength(1);
       expect(selectionMsgs[0].content).toBe('Selected: Clinical Case Review');
-      expect(selectionMsgs[0].processingStatus).toBe(MessageProcessingStatus.COMPLETE);
+      expect(selectionMsgs[0].status).toBe(MessageStatus.COMPLETE);
     });
 
     it('F4. gather_context only reads USER COMPLETE messages', async () => {
@@ -1079,12 +1079,12 @@ describe('Conversations Integration Tests', () => {
       await createTestMessage(conv._id, {
         role: MessageRole.ASSISTANT,
         content: 'Assistant response',
-        processingStatus: MessageProcessingStatus.COMPLETE,
+        status: MessageStatus.COMPLETE,
       });
       await createTestMessage(conv._id, {
         role: MessageRole.SYSTEM,
         content: 'System audit',
-        processingStatus: MessageProcessingStatus.COMPLETE,
+        status: MessageStatus.COMPLETE,
       });
 
       llmMock.enqueue(classifyResponse());
@@ -1156,7 +1156,7 @@ describe('Conversations Integration Tests', () => {
       const wrongMsg = await createTestMessage(conv._id, {
         role: MessageRole.ASSISTANT,
         content: 'Wrong question',
-        processingStatus: MessageProcessingStatus.COMPLETE,
+        status: MessageStatus.COMPLETE,
         question: {
           questionType: 'free_text',
           prompts: [{ key: 'test', text: 'test question', hints: { examples: ['example'] } }],
@@ -1178,7 +1178,7 @@ describe('Conversations Integration Tests', () => {
       const questionMsg = await createTestMessage(conv._id, {
         role: MessageRole.ASSISTANT,
         content: 'A question',
-        processingStatus: MessageProcessingStatus.COMPLETE,
+        status: MessageStatus.COMPLETE,
         question: {
           questionType: 'single_select',
           options: [{ key: 'CLINICAL_CASE_REVIEW', label: 'Clinical Case Review' }],

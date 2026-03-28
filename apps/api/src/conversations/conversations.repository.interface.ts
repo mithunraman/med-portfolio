@@ -1,4 +1,4 @@
-import { type Question, MessageProcessingStatus, MessageRole, MessageType } from '@acme/shared';
+import { type Question, MessageStatus, MessageRole, MessageType } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
 import type { Result } from '../common/utils/result.util';
 import type { Conversation } from './schemas/conversation.schema';
@@ -26,7 +26,7 @@ export interface CreateMessageData {
   messageType: MessageType;
   rawContent?: string | null;
   content?: string | null;
-  processingStatus?: MessageProcessingStatus;
+  status?: MessageStatus;
   media?: Types.ObjectId | null;
   question?: Question | null;
   idempotencyKey: string;
@@ -36,7 +36,7 @@ export interface UpdateMessageData {
   rawContent?: string | null;
   cleanedContent?: string | null;
   content?: string | null;
-  processingStatus?: MessageProcessingStatus;
+  status?: MessageStatus;
   processingError?: string | null;
   transcription?: TranscriptionMetadata | null;
   answer?: Record<string, unknown> | null;

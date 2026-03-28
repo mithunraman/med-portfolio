@@ -125,9 +125,9 @@
 - `_layout.tsx` only handles `entries`, `pdp`, `profile`, `home`. No deep links for specific entries (`/entry/:id`), conversations, or PDP goals.
 - Matters for push notifications or shared links.
 
-### 21. No pull-to-refresh on Home screen — PARTIALLY FIXED
+### ~~21. No pull-to-refresh on Home screen~~ — FIXED
 
-- Home screen auto-refetches via `useFocusEffect` and `useNetworkRecovery`, but still uses a plain `ScrollView` without `RefreshControl`. Users cannot manually pull-to-refresh.
+- **Status:** Resolved. `ScrollView` now has `RefreshControl` wired to `fetchInit()`. Pull-to-refresh reloads dashboard data and syncs user profile. Uses themed `tintColor` for the spinner.
 
 ### ~~22. Accessibility: close buttons use "X" text~~ — REMOVED
 
@@ -174,7 +174,7 @@ Since the initial review, **11 of 18 open items have been fixed/removed** and **
 | Critical | 1 | #3 Privacy Policy |
 | High | 1 | #9 Help & Feedback placeholder email |
 | Medium | 0 | — |
-| Low | 3 | #20 Deep linking, #21 Home pull-to-refresh, #23 Terms of Service |
+| Low | 2 | #20 Deep linking, #23 Terms of Service |
 
 **Deferred to post-MVP:**
 

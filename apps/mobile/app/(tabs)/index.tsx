@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -459,11 +460,23 @@ export default function HomeScreen() {
 
   // Randomise prompt on each screen focus (not just mount)
   const [prompt, setPrompt] = useState(() => PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
+  const [refreshing, setRefreshing] = useState(false);
   useFocusEffect(
     useCallback(() => {
       setPrompt(PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
     }, [])
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await dispatch(fetchInit()).unwrap();
+    } catch {
+      // Error handled by slice
+    } finally {
+      setRefreshing(false);
+    }
+  }, [dispatch]);
 
   useEffect(() => {
     if (isNewRegistration) {
@@ -532,6 +545,14 @@ export default function HomeScreen() {
         style={styles.scrollView}
         contentContainerStyle={scrollContentStyle}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
         {/* Header */}
         <View style={styles.header}>

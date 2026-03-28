@@ -130,30 +130,6 @@ function DomainSection({ domain }: { domain: DomainCoverage }) {
   );
 }
 
-// ── Gaps Summary ─────────────────────────────────────────────────────────────
-
-function GapsSummary({ gaps }: { gaps: string[] }) {
-  const { colors } = useTheme();
-
-  if (gaps.length === 0) return null;
-
-  return (
-    <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>
-        Gaps ({gaps.length} missing)
-      </Text>
-      <View style={[styles.gapsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        {gaps.map((gap, index) => (
-          <View key={gap} style={styles.gapRow}>
-            <Ionicons name="alert-circle-outline" size={16} color="#f59e0b" />
-            <Text style={[styles.gapText, { color: colors.text }]}>{gap}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
 // ── Detail Screen ────────────────────────────────────────────────────────────
 
 export default function ReviewPeriodDetailScreen() {
@@ -295,9 +271,6 @@ export default function ReviewPeriodDetailScreen() {
         </View>
       )}
 
-      {/* Gaps */}
-      {coverage && <GapsSummary gaps={coverage.gaps} />}
-
       {/* Archive Button */}
       {isActive && (
         <View style={styles.section}>
@@ -401,21 +374,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Gaps
-  gapsCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
-    gap: 8,
-  },
-  gapRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  gapText: {
-    fontSize: 14,
-    lineHeight: 20,
-    flex: 1,
-  },
 });

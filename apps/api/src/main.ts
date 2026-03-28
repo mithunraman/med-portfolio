@@ -3,11 +3,11 @@ import './instrument';
 // 2. OpenTelemetry — must be before NestJS/Express/Mongoose for auto-instrumentation.
 import './tracing';
 
-import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { Request, Response, NextFunction } from 'express';
-import { ZodValidationPipe } from 'nestjs-zod';
+import { NestFactory } from '@nestjs/core';
+import { NextFunction, Request, Response } from 'express';
 import { Logger } from 'nestjs-pino';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -38,6 +38,21 @@ async function bootstrap() {
 
   await app.listen(port);
   logger.log(`Application is running on: http://localhost:${port}/api`);
+
+  // Ensure clean shutdown on watch-mode restarts (nest CLI sends SIGTERM).
+  // Force exit after 2s to avoid EADDRINUSE when app.close() is slow.
+  const shutdown = async (signal: string) => {
+    logger.log(`Received ${signal}, shutting down...`);
+    const forceExit = setTimeout(() => process.exit(0), 2000);
+    try {
+      await app.close();
+    } finally {
+      clearTimeout(forceExit);
+      process.exit(0);
+    }
+  };
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+  process.once('SIGINT', () => shutdown('SIGINT'));
 }
 
 bootstrap();

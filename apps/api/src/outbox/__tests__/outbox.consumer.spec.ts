@@ -54,7 +54,16 @@ function createConsumer(overrides: {
     recordOutboxQueueDepth: jest.fn(),
   } as unknown as MetricsService;
 
-  const consumer = new OutboxConsumer(outboxService, metricsService, overrides.handlers ?? []);
+  const logger = {
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
+    trace: jest.fn(),
+    fatal: jest.fn(),
+  } as unknown as import('nestjs-pino').PinoLogger;
+
+  const consumer = new OutboxConsumer(logger, outboxService, metricsService, overrides.handlers ?? []);
 
   return { consumer, outboxService };
 }
@@ -174,7 +183,7 @@ describe('OutboxConsumer (semaphore concurrency)', () => {
     expect(markFailed).toHaveBeenCalledWith(entry._id, 'Transcription timeout');
   });
 
-  it('should prevent concurrent polls when claiming is slow', async () => {
+  it('should handle sequential polls correctly when claiming is slow', async () => {
     const claimDeferred = createDeferred();
     // resetStaleLocks blocks until we resolve — simulates slow DB
     const resetStaleLocks = jest.fn().mockReturnValue(claimDeferred.promise);
@@ -184,18 +193,15 @@ describe('OutboxConsumer (semaphore concurrency)', () => {
     // Poll A: enters, hits resetStaleLocks which blocks
     const pollA = poll(consumer);
 
-    // Poll B: fires while A is still in resetStaleLocks → should skip
-    const pollB = poll(consumer);
-    await pollB;
-
-    // resetStaleLocks called only once (from poll A)
+    // resetStaleLocks called once (from poll A)
     expect(resetStaleLocks).toHaveBeenCalledTimes(1);
 
     // Unblock poll A
     claimDeferred.resolve();
     await pollA;
 
-    // Poll C: should work normally now that isPolling is released
+    // Poll B: should work normally after A completes
+    resetStaleLocks.mockResolvedValue(0);
     await poll(consumer);
     expect(resetStaleLocks).toHaveBeenCalledTimes(2);
   });

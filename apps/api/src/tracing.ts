@@ -42,6 +42,10 @@ const sdk = new NodeSDK({
       '@opentelemetry/instrumentation-dns': { enabled: false },
       // Disable Net — low-level socket spans are noise
       '@opentelemetry/instrumentation-net': { enabled: false },
+      // Disable undici/fetch — conflicts with OpenAI/LangChain SDK streaming;
+      // the instrumentation reads the response body for telemetry, causing
+      // "Body has already been read" errors on structured-output calls.
+      '@opentelemetry/instrumentation-undici': { enabled: false },
     }),
   ],
 });

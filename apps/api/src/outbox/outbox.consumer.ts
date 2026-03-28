@@ -1,13 +1,8 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-  Optional,
-} from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { MetricsService } from '../common/metrics';
+import { sleep } from '../common/utils/sleep.util';
 import { OutboxService } from './outbox.service';
 import type { OutboxEntry } from './schemas/outbox.schema';
 
@@ -18,21 +13,21 @@ export interface OutboxHandler {
 
 export const OUTBOX_HANDLERS = Symbol('OUTBOX_HANDLERS');
 
-/** Default polling interval: 1 second */
-const DEFAULT_POLL_INTERVAL_MS = 1000;
+/** Default polling interval: 500ms */
+const DEFAULT_POLL_INTERVAL_MS = 500;
 
 /** Maximum number of jobs running concurrently */
 const MAX_CONCURRENCY = 5;
 
 @Injectable()
 export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(OutboxConsumer.name);
   private readonly handlers = new Map<string, OutboxHandler>();
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private running = false;
   private activeJobs = 0;
-  private isPolling = false;
 
   constructor(
+    @InjectPinoLogger(OutboxConsumer.name)
+    private readonly logger: PinoLogger,
     private readonly outboxService: OutboxService,
     private readonly metricsService: MetricsService,
     @Optional() @Inject(OUTBOX_HANDLERS) handlers?: OutboxHandler[]
@@ -52,11 +47,11 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
       throw new Error(`Handler already registered for type: ${handler.type}`);
     }
     this.handlers.set(handler.type, handler);
-    this.logger.log(`Registered outbox handler for type: ${handler.type}`);
+    this.logger.info(`Registered outbox handler for type: ${handler.type}`);
   }
 
   onModuleInit(): void {
-    this.logger.log(
+    this.logger.info(
       `Outbox consumer starting with ${this.handlers.size} handler(s): ` +
         `[${[...this.handlers.keys()].join(', ')}]`
     );
@@ -68,51 +63,57 @@ export class OutboxConsumer implements OnModuleInit, OnModuleDestroy {
   }
 
   private startPolling(): void {
-    this.logger.log(
+    this.running = true;
+    this.logger.info(
       `Polling outbox every ${DEFAULT_POLL_INTERVAL_MS}ms (max concurrency: ${MAX_CONCURRENCY})`
     );
-    this.pollTimer = setInterval(() => this.poll(), DEFAULT_POLL_INTERVAL_MS);
+    this.pollLoop();
   }
 
   private stopPolling(): void {
-    if (this.pollTimer) {
-      clearInterval(this.pollTimer);
-      this.pollTimer = null;
-      this.logger.log('Outbox consumer stopped');
+    this.running = false;
+    this.logger.info('Outbox consumer stopped');
+  }
+
+  private async pollLoop(): Promise<void> {
+    while (this.running) {
+      try {
+        await this.poll();
+      } catch (error) {
+        this.logger.error('Error during outbox poll cycle', error);
+      }
+
+      try {
+        await sleep(DEFAULT_POLL_INTERVAL_MS);
+      } catch {
+        // sleep should never reject, but guard against loop death
+      }
     }
   }
 
   private async poll(): Promise<void> {
-    if (this.isPolling) return;
     const freeSlots = MAX_CONCURRENCY - this.activeJobs;
     if (freeSlots <= 0) return;
 
-    this.isPolling = true;
-    try {
-      // Reset stale locks first (handles crashed consumers)
-      await this.outboxService.resetStaleLocks();
+    // Reset stale locks first (handles crashed consumers)
+    await this.outboxService.resetStaleLocks();
 
-      // Record queue depth before claiming
-      const pendingCount = await this.outboxService.countPending();
-      this.metricsService.recordOutboxQueueDepth(pendingCount);
+    // Record queue depth before claiming
+    const pendingCount = await this.outboxService.countPending();
+    this.metricsService.recordOutboxQueueDepth(pendingCount);
 
-      // Claim only as many jobs as we have capacity for
-      const entries = await this.outboxService.claimBatch(freeSlots);
-      if (entries.length === 0) return;
+    // Claim only as many jobs as we have capacity for
+    const entries = await this.outboxService.claimBatch(freeSlots);
+    if (entries.length === 0) return;
 
-      this.logger.debug(`Claimed ${entries.length} outbox entries (active: ${this.activeJobs})`);
+    this.logger.debug(`Claimed ${entries.length} outbox entries (active: ${this.activeJobs})`);
 
-      // Launch each job independently — no waiting for siblings
-      for (const entry of entries) {
-        this.activeJobs++;
-        this.processEntry(entry).finally(() => {
-          this.activeJobs--;
-        });
-      }
-    } catch (error) {
-      this.logger.error('Error during outbox poll cycle', error);
-    } finally {
-      this.isPolling = false;
+    // Launch each job independently — no waiting for siblings
+    for (const entry of entries) {
+      this.activeJobs++;
+      this.processEntry(entry).finally(() => {
+        this.activeJobs--;
+      });
     }
   }
 

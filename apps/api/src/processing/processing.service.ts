@@ -1,6 +1,7 @@
 import { MediaType, MessageProcessingStatus } from '@acme/shared';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Types } from 'mongoose';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   ARTEFACTS_REPOSITORY,
   IArtefactsRepository,
@@ -20,9 +21,9 @@ import { TranscriptionStage, TranscriptionStageResult } from './stages/transcrip
 
 @Injectable()
 export class ProcessingService {
-  private readonly logger = new Logger(ProcessingService.name);
-
   constructor(
+    @InjectPinoLogger(ProcessingService.name)
+    private readonly logger: PinoLogger,
     @Inject(CONVERSATIONS_REPOSITORY)
     private readonly conversationsRepository: IConversationsRepository,
     @Inject(ARTEFACTS_REPOSITORY)
@@ -38,7 +39,7 @@ export class ProcessingService {
    * This is called asynchronously after message creation
    */
   async processMessage(messageId: Types.ObjectId): Promise<void> {
-    this.logger.log(`Starting processing for message ${messageId}`);
+    this.logger.info(`Starting processing for message ${messageId}`);
 
     // Fetch message with media populated
     const findResult = await this.conversationsRepository.findMessageById(messageId);
@@ -60,7 +61,7 @@ export class ProcessingService {
       message.processingStatus === MessageProcessingStatus.COMPLETE ||
       message.processingStatus === MessageProcessingStatus.FAILED
     ) {
-      this.logger.log(`Message ${messageId} already ${message.processingStatus}, skipping`);
+      this.logger.info(`Message ${messageId} already ${message.processingStatus}, skipping`);
       return;
     }
 
@@ -119,7 +120,7 @@ export class ProcessingService {
     const audioUrl = await this.mediaService.getPresignedUrl(media.xid);
 
     // Stage 1: Transcription
-    this.logger.log(`Transcribing audio for message ${message.xid}`);
+    this.logger.info(`Transcribing audio for message ${message.xid}`);
     const transcriptionResult: TranscriptionStageResult = await this.transcriptionStage.execute(
       audioUrl,
       context
@@ -133,7 +134,7 @@ export class ProcessingService {
     });
 
     // Stage 2: Cleaning
-    this.logger.log(`Cleaning transcript for message ${message.xid}`);
+    this.logger.info(`Cleaning transcript for message ${message.xid}`);
     const cleaningResult = await this.cleaningStage.execute(transcriptionResult.text, context);
 
     // Update with cleaned content
@@ -151,7 +152,7 @@ export class ProcessingService {
       processingStatus: MessageProcessingStatus.COMPLETE,
     });
 
-    this.logger.log(`Message processing complete for ${message.xid}`);
+    this.logger.info(`Message processing complete for ${message.xid}`);
   }
 
   /**
@@ -164,7 +165,7 @@ export class ProcessingService {
     await this.updateStatus(messageId, MessageProcessingStatus.CLEANING);
 
     // Stage 1: Cleaning
-    this.logger.log(`Cleaning text for message ${message.xid}`);
+    this.logger.info(`Cleaning text for message ${message.xid}`);
     if (!message.rawContent) {
       await this.markFailed(messageId, 'No raw content to clean');
       return;
@@ -186,7 +187,7 @@ export class ProcessingService {
       processingStatus: MessageProcessingStatus.COMPLETE,
     });
 
-    this.logger.log(`Message processing complete for ${message.xid}`);
+    this.logger.info(`Message processing complete for ${message.xid}`);
   }
 
   /**
@@ -194,7 +195,7 @@ export class ProcessingService {
    * Shared by both audio and text processing paths.
    */
   private async redactPii(text: string, context: StageContext): Promise<string> {
-    this.logger.log(`Redacting PII for message ${context.messageId}`);
+    this.logger.info(`Redacting PII for message ${context.messageId}`);
     const redactionResult = await this.redactionStage.execute(text, context);
     return redactionResult.text;
   }

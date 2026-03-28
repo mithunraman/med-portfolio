@@ -42,8 +42,7 @@ import { StorageModule } from './storage';
               ? { target: 'pino-pretty', options: { colorize: true, singleLine: true } }
               : undefined,
           // Phase 3: Correlation IDs — honour client X-Request-Id, else generate UUID
-          genReqId: (req: Record<string, any>) =>
-            req.headers['x-request-id'] ?? randomUUID(),
+          genReqId: (req: Record<string, any>) => req.headers['x-request-id'] ?? randomUUID(),
           // Phase 2: HTTP request logging
           customProps: (req: Record<string, any>, res: Record<string, any>) => {
             // Return X-Request-Id in response so clients can correlate

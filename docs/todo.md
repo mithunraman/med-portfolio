@@ -1,19 +1,17 @@
-# Screens
-
-- Pages not supporting swiping and Gestures
-- Example: When I open a chat and swipe back, nothing happens. It should go back to the previous screen.
-
-# Chat
-
-- Text messages not getting populated in the chat screen. This is because content is not yet available when the message is being processed.
-
 # Login screen
 
 - WHen API error is returned during login, the user is signed out. Fix this later.
 
+# Chat
+
+- Word counting on the UI should happen only for successful messages
+- When message processing fails, we need to either allow retry of the message.
+- Sometimes start analysis gets stuck in processing mode. If i restart the app, and open the same chat, i can see the start analysis button again.
+- Allow minimum word count for analysis to come from the backend.
+
 # LLM
 
-- Make await classificationPrompt.formatMessages typescript safe
+- [Important] When user clicks initial analysis, and there is little / no case information, we need to instruct the user to enter case related information into the conversation.
 
 # Backend
 

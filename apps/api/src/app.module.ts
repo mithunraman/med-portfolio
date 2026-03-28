@@ -8,7 +8,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { AnalysisRunsModule } from './analysis-runs';
 import { ArtefactsModule } from './artefacts/artefacts.module';
 import { AuthModule } from './auth/auth.module';
-import { JwtAuthGuard, RolesGuard } from './common/guards';
+import { DevOnlyGuard, JwtAuthGuard, RolesGuard } from './common/guards';
 import { TokenRefreshInterceptor } from './common/interceptors';
 import { MetricsModule } from './common/metrics';
 import { ConfigModule } from './config';
@@ -90,6 +90,10 @@ import { StorageModule } from './storage';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: DevOnlyGuard,
     },
     {
       provide: APP_INTERCEPTOR,

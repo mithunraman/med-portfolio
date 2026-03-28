@@ -45,4 +45,6 @@ export interface IReviewPeriodsRepository {
     userId: Types.ObjectId,
     data: UpdateReviewPeriodData
   ): Promise<Result<ReviewPeriod | null, DBError>>;
+
+  anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
 }

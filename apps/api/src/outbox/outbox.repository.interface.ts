@@ -60,4 +60,13 @@ export interface IOutboxRepository {
    * Returns the count of entries deleted.
    */
   cleanupOldEntries(olderThan: Date, statuses: OutboxStatus[]): Promise<Result<number, DBError>>;
+
+  /**
+   * Cancel pending/processing entries related to a user.
+   * Matches by payload.userId or payload.conversationId.
+   */
+  cancelByUser(
+    userId: Types.ObjectId,
+    conversationIds: string[]
+  ): Promise<Result<number, DBError>>;
 }

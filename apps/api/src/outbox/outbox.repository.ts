@@ -191,4 +191,26 @@ export class OutboxRepository implements IOutboxRepository {
       return err({ code: 'DB_ERROR', message: 'Failed to cleanup old outbox entries' });
     }
   }
+
+  async cancelByUser(
+    userId: Types.ObjectId,
+    conversationIds: string[]
+  ): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.outboxModel.updateMany(
+        {
+          status: { $in: [OutboxStatus.PENDING, OutboxStatus.PROCESSING] },
+          $or: [
+            { 'payload.userId': userId.toString() },
+            { 'payload.conversationId': { $in: conversationIds } },
+          ],
+        },
+        { $set: { status: OutboxStatus.FAILED, lastError: 'Account deleted' } }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to cancel outbox entries for user', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to cancel outbox entries' });
+    }
+  }
 }

@@ -1,4 +1,5 @@
 export enum ReviewPeriodStatus {
-  ACTIVE = 100,
+  DELETED = -999,
   ARCHIVED = -1,
+  ACTIVE = 100,
 }

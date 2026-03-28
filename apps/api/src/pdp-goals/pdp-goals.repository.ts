@@ -339,4 +339,27 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       return err({ code: 'DB_ERROR', message: 'Failed to delete PDP goals' });
     }
   }
+
+  async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.pdpGoalModel.updateMany(
+        { userId },
+        {
+          $set: {
+            goal: '[deleted]',
+            completionReview: null,
+            status: PdpGoalStatus.DELETED,
+            'actions.$[].action': '[deleted]',
+            'actions.$[].intendedEvidence': '[deleted]',
+            'actions.$[].completionReview': null,
+            'actions.$[].status': PdpGoalStatus.DELETED,
+          },
+        }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to anonymize PDP goals', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to anonymize PDP goals' });
+    }
+  }
 }

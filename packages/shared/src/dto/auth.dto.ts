@@ -24,6 +24,8 @@ export const AuthUserSchema = z.object({
   role: z.nativeEnum(UserRole),
   specialty: z.nativeEnum(Specialty).nullable(),
   trainingStage: z.string().nullable(),
+  deletionRequestedAt: z.string().nullable(),
+  deletionScheduledFor: z.string().nullable(),
 });
 
 export type AuthUser = z.infer<typeof AuthUserSchema>;

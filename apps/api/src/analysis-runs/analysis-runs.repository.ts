@@ -210,4 +210,27 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
       return err({ code: 'DB_ERROR', message: 'Failed to list analysis runs' });
     }
   }
+
+  async anonymizeByConversationIds(
+    conversationIds: Types.ObjectId[]
+  ): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.analysisRunModel.updateMany(
+        { conversationId: { $in: conversationIds } },
+        {
+          $set: {
+            status: AnalysisRunStatus.DELETED,
+            langGraphThreadId: '[deleted]',
+            currentStep: null,
+            currentQuestion: null,
+            error: null,
+          },
+        }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to anonymize analysis runs', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to anonymize analysis runs' });
+    }
+  }
 }

@@ -44,6 +44,18 @@ export class AuthController {
     return this.authService.registerGuest();
   }
 
+  @Post('me/request-deletion')
+  @HttpCode(HttpStatus.OK)
+  async requestDeletion(@CurrentUser() user: CurrentUserPayload): Promise<AuthUser> {
+    return this.authService.requestDeletion(user.userId);
+  }
+
+  @Post('me/cancel-deletion')
+  @HttpCode(HttpStatus.OK)
+  async cancelDeletion(@CurrentUser() user: CurrentUserPayload): Promise<AuthUser> {
+    return this.authService.cancelDeletion(user.userId);
+  }
+
   @Get('me')
   async me(@CurrentUser() user: CurrentUserPayload): Promise<AuthUser> {
     return this.authService.getCurrentUser(user.userId);

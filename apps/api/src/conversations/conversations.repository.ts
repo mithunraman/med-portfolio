@@ -1,4 +1,8 @@
-import { ConversationStatus, MessageProcessingStatus, MessageRole } from '@acme/shared';
+import {
+  ConversationStatus,
+  MessageProcessingStatus,
+  MessageRole,
+} from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
@@ -312,6 +316,43 @@ export class ConversationsRepository implements IConversationsRepository {
     } catch (error) {
       this.logger.error('Failed to find artefact xid by conversation id', error);
       return err({ code: 'DB_ERROR', message: 'Failed to find artefact xid' });
+    }
+  }
+
+  async findConversationIdsByUser(
+    userId: Types.ObjectId
+  ): Promise<Result<Types.ObjectId[], DBError>> {
+    try {
+      const ids = await this.conversationModel.find({ userId }).distinct('_id');
+      return ok(ids);
+    } catch (error) {
+      this.logger.error('Failed to find conversation ids by user', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find conversation ids' });
+    }
+  }
+
+  async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
+    try {
+      const convResult = await this.conversationModel.updateMany(
+        { userId },
+        { $set: { title: '[deleted]', status: ConversationStatus.DELETED } }
+      );
+      const msgResult = await this.messageModel.updateMany(
+        { userId },
+        {
+          $set: {
+            rawContent: '[deleted]',
+            cleanedContent: '[deleted]',
+            content: '[deleted]',
+            processingStatus: MessageProcessingStatus.DELETED,
+          },
+          $unset: { question: '', answer: '' },
+        }
+      );
+      return ok(convResult.modifiedCount + msgResult.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to anonymize conversations', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to anonymize conversations' });
     }
   }
 }

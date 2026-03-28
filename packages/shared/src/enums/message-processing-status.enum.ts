@@ -1,4 +1,5 @@
 export enum MessageProcessingStatus {
+  DELETED = -999,
   PENDING = 100,
   TRANSCRIBING = 200,
   CLEANING = 300,

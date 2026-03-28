@@ -1,3 +1,4 @@
+import { ItemStatus } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types, ClientSession, FilterQuery } from 'mongoose';
@@ -113,6 +114,25 @@ export class ItemsRepository implements IItemsRepository {
     } catch (error) {
       this.logger.error('Failed to delete item', error);
       return err({ code: 'DB_ERROR', message: 'Failed to delete item' });
+    }
+  }
+
+  async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.itemModel.updateMany(
+        { userId },
+        {
+          $set: {
+            name: '[deleted]',
+            description: '[deleted]',
+            status: ItemStatus.DELETED,
+          },
+        }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to anonymize items', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to anonymize items' });
     }
   }
 }

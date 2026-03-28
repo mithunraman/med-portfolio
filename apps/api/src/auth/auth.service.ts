@@ -12,12 +12,13 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import { isValidTrainingStage } from '../specialties/specialty.registry';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import * as crypto from 'crypto';
 import { Model } from 'mongoose';
+import ms from 'ms';
 import { OtpService } from '../otp';
+import { isValidTrainingStage } from '../specialties/specialty.registry';
 import { User, UserDocument } from './schemas/user.schema';
 
 @Injectable()
@@ -152,18 +153,62 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    this.logger.log(`Profile updated for user ${userId}: specialty=${dto.specialty}, stage=${dto.trainingStage}`);
+    this.logger.log(
+      `Profile updated for user ${userId}: specialty=${dto.specialty}, stage=${dto.trainingStage}`
+    );
+    return this.toAuthUser(user);
+  }
+
+  // ── Account deletion ──
+
+  private static readonly DELETION_GRACE_PERIOD_MS = ms('48h');
+
+  async requestDeletion(userId: string): Promise<AuthUser> {
+    const user = await this.findUserOrThrow(userId);
+
+    if (user.deletionRequestedAt) {
+      throw new ConflictException('Account deletion already requested');
+    }
+
+    const now = new Date();
+    user.deletionRequestedAt = now;
+    user.deletionScheduledFor = new Date(now.getTime() + AuthService.DELETION_GRACE_PERIOD_MS);
+    await user.save();
+
+    this.logger.log(
+      `Account deletion requested for user ${userId}, scheduled for ${user.deletionScheduledFor.toISOString()}`
+    );
+    return this.toAuthUser(user);
+  }
+
+  async cancelDeletion(userId: string): Promise<AuthUser> {
+    const user = await this.findUserOrThrow(userId);
+
+    if (!user.deletionRequestedAt) {
+      throw new BadRequestException('No pending deletion request');
+    }
+
+    user.deletionRequestedAt = null;
+    user.deletionScheduledFor = null;
+    await user.save();
+
+    this.logger.log(`Account deletion cancelled for user ${userId}`);
     return this.toAuthUser(user);
   }
 
   // ── Common ──
 
   async getCurrentUser(userId: string): Promise<AuthUser> {
+    const user = await this.findUserOrThrow(userId);
+    return this.toAuthUser(user);
+  }
+
+  private async findUserOrThrow(userId: string): Promise<UserDocument> {
     const user = await this.userModel.findById(userId);
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
-    return this.toAuthUser(user);
+    return user;
   }
 
   generateToken(user: UserDocument): string {
@@ -176,7 +221,7 @@ export class AuthService {
     return this.jwtService.sign(payload);
   }
 
-  private toAuthUser(user: UserDocument): AuthUser {
+  toAuthUser(user: UserDocument): AuthUser {
     return {
       id: user._id.toString(),
       email: user.email,
@@ -184,6 +229,8 @@ export class AuthService {
       role: user.role,
       specialty: user.specialty ?? null,
       trainingStage: user.trainingStage ?? null,
+      deletionRequestedAt: user.deletionRequestedAt?.toISOString() ?? null,
+      deletionScheduledFor: user.deletionScheduledFor?.toISOString() ?? null,
     };
   }
 }

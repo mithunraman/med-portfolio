@@ -24,6 +24,6 @@ import { ReviewPeriod, ReviewPeriodSchema } from './schemas/review-period.schema
       useClass: ReviewPeriodsRepository,
     },
   ],
-  exports: [ReviewPeriodsService],
+  exports: [ReviewPeriodsService, REVIEW_PERIODS_REPOSITORY],
 })
 export class ReviewPeriodsModule {}

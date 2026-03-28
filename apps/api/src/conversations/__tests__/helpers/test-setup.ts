@@ -54,6 +54,7 @@ import {
   ConversationSchema,
 } from '../../schemas/conversation.schema';
 import { Message, MessageDocument, MessageSchema } from '../../schemas/message.schema';
+import { MetricsService } from '../../../common/metrics';
 import { initFactories } from './factories';
 import type { SequentialLLMMock } from './llm-mock';
 
@@ -142,6 +143,31 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
         inject: [AnalysisStartHandler, AnalysisResumeHandler, MessageProcessingHandler],
       },
       OutboxConsumer,
+
+      // Mock PinoLogger for OutboxConsumer
+      {
+        provide: 'PinoLogger:OutboxConsumer',
+        useValue: {
+          info: jest.fn(),
+          warn: jest.fn(),
+          error: jest.fn(),
+          debug: jest.fn(),
+          trace: jest.fn(),
+          setContext: jest.fn(),
+          assign: jest.fn(),
+        },
+      },
+
+      // Mock MetricsService
+      {
+        provide: MetricsService,
+        useValue: {
+          recordOutboxQueueDepth: jest.fn(),
+          recordOutboxJobStart: jest.fn(),
+          recordOutboxJobEnd: jest.fn(),
+          recordOutboxJobFailure: jest.fn(),
+        },
+      },
 
       // Mocked LLMService — replaced by SequentialLLMMock
       {

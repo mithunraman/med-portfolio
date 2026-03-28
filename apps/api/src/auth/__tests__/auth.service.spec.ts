@@ -297,6 +297,8 @@ describe('AuthService', () => {
         role: UserRole.USER,
         specialty: null,
         trainingStage: null,
+        deletionRequestedAt: null,
+        deletionScheduledFor: null,
       });
     });
 

@@ -77,4 +77,6 @@ export interface IArtefactsRepository {
     userId: Types.ObjectId,
     filter?: CountByUserFilter
   ): Promise<Result<number, DBError>>;
+
+  anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
 }

@@ -49,6 +49,6 @@ import { OutboxEntry, OutboxEntrySchema } from './schemas/outbox.schema';
       inject: [AnalysisStartHandler, AnalysisResumeHandler, MessageProcessingHandler],
     },
   ],
-  exports: [OutboxService, OutboxConsumer],
+  exports: [OutboxService, OutboxConsumer, OUTBOX_REPOSITORY],
 })
 export class OutboxModule {}

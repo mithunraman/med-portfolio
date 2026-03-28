@@ -28,7 +28,10 @@ export class ArtefactsRepository implements IArtefactsRepository {
     session?: ClientSession
   ): Promise<Result<Artefact | null, DBError>> {
     try {
-      const artefact = await this.artefactModel.findById(id).session(session ?? null).lean();
+      const artefact = await this.artefactModel
+        .findById(id)
+        .session(session ?? null)
+        .lean();
       return ok(artefact);
     } catch (error) {
       this.logger.error('Failed to find artefact by id', error);
@@ -156,6 +159,27 @@ export class ArtefactsRepository implements IArtefactsRepository {
     } catch (error) {
       this.logger.error('Failed to count artefacts', error);
       return err({ code: 'DB_ERROR', message: 'Failed to count artefacts' });
+    }
+  }
+
+  async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.artefactModel.updateMany(
+        { userId },
+        {
+          $set: {
+            title: '[deleted]',
+            reflection: [],
+            capabilities: [],
+            tags: {},
+            status: ArtefactStatus.DELETED,
+          },
+        }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to anonymize artefacts', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to anonymize artefacts' });
     }
   }
 }

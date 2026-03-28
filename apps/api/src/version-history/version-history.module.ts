@@ -16,6 +16,6 @@ import { VersionHistory, VersionHistorySchema } from './schemas/version-history.
       useClass: VersionHistoryRepository,
     },
   ],
-  exports: [VersionHistoryService],
+  exports: [VersionHistoryService, VERSION_HISTORY_REPOSITORY],
 })
 export class VersionHistoryModule {}

@@ -27,6 +27,15 @@ export class User {
   @Prop({ type: Number, default: 0 })
   tokenVersion!: number;
 
+  @Prop({ type: Date, default: null })
+  deletionRequestedAt!: Date | null;
+
+  @Prop({ type: Date, default: null })
+  deletionScheduledFor!: Date | null;
+
+  @Prop({ type: Date, default: null })
+  anonymizedAt!: Date | null;
+
   createdAt!: Date;
   updatedAt!: Date;
 }
@@ -37,3 +46,4 @@ export const UserSchema = SchemaFactory.createForClass(User);
 
 // Indexes
 UserSchema.index({ email: 1 }, { unique: true });
+UserSchema.index({ deletionScheduledFor: 1 }, { sparse: true });

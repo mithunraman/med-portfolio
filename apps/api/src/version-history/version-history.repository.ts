@@ -94,4 +94,14 @@ export class VersionHistoryRepository implements IVersionHistoryRepository {
       return err({ code: 'DB_ERROR', message: 'Failed to count versions' });
     }
   }
+
+  async deleteByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.versionHistoryModel.deleteMany({ userId });
+      return ok(result.deletedCount);
+    } catch (error) {
+      this.logger.error('Failed to delete version history', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to delete version history' });
+    }
+  }
 }

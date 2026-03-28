@@ -113,4 +113,8 @@ export interface IAnalysisRunsRepository {
     conversationId: Types.ObjectId,
     session?: ClientSession,
   ): Promise<Result<AnalysisRun[], DBError>>;
+
+  anonymizeByConversationIds(
+    conversationIds: Types.ObjectId[]
+  ): Promise<Result<number, DBError>>;
 }

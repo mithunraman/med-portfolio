@@ -1,4 +1,5 @@
 export enum AnalysisRunStatus {
+  DELETED = -999,
   PENDING = 100,
   RUNNING = 200,
   AWAITING_INPUT = 300,

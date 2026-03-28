@@ -93,4 +93,17 @@ export class ReviewPeriodsRepository implements IReviewPeriodsRepository {
       return err({ code: 'DB_ERROR', message: 'Failed to update review period' });
     }
   }
+
+  async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.model.updateMany(
+        { userId },
+        { $set: { name: '[deleted]', status: ReviewPeriodStatus.DELETED } }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to anonymize review periods', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to anonymize review periods' });
+    }
+  }
 }

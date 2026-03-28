@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   HeadObjectOutput,
@@ -98,6 +99,19 @@ export class StorageService {
         }
         throw error;
       }
+    });
+  }
+
+  /**
+   * Delete an object from storage
+   */
+  async deleteObject(bucket: string, key: string): Promise<void> {
+    await this.withRetry(async () => {
+      const command = new DeleteObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      });
+      await this.s3.send(command);
     });
   }
 

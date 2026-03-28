@@ -20,6 +20,6 @@ import { AnalysisRun, AnalysisRunSchema } from './schemas/analysis-run.schema';
       useClass: AnalysisRunsRepository,
     },
   ],
-  exports: [AnalysisRunsService],
+  exports: [AnalysisRunsService, ANALYSIS_RUNS_REPOSITORY],
 })
 export class AnalysisRunsModule {}

@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
 import { SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { randomUUID } from 'crypto';
 import { LoggerModule } from 'nestjs-pino';
+import { AccountCleanupModule } from './account-cleanup';
 import { AnalysisRunsModule } from './analysis-runs';
 import { ArtefactsModule } from './artefacts/artefacts.module';
 import { AuthModule } from './auth/auth.module';
@@ -16,6 +18,7 @@ import { ConversationsModule } from './conversations/conversations.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { DatabaseModule } from './database';
 import { HealthModule } from './health';
+import { InitModule } from './init';
 import { ItemsModule } from './items/items.module';
 import { LLMModule } from './llm';
 import { MediaModule } from './media';
@@ -32,6 +35,7 @@ import { StorageModule } from './storage';
     DatabaseModule,
     MetricsModule,
     EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
     LoggerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -71,6 +75,8 @@ import { StorageModule } from './storage';
     ConversationsModule,
     ArtefactsModule,
     DashboardModule,
+    InitModule,
+    AccountCleanupModule,
     AnalysisRunsModule,
     OutboxModule,
     ReviewPeriodsModule,

@@ -153,4 +153,17 @@ export interface IConversationsRepository {
     conversationId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<string | null, DBError>>;
+
+  /**
+   * Return conversation IDs belonging to a user.
+   */
+  findConversationIdsByUser(
+    userId: Types.ObjectId
+  ): Promise<Result<Types.ObjectId[], DBError>>;
+
+  /**
+   * Anonymize all conversations and messages belonging to a user.
+   * Returns the total number of modified documents.
+   */
+  anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
 }

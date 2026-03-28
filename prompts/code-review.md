@@ -1,6 +1,7 @@
-Review the entire codebase and identify every file affected by the changes.
+For current phase ONLY, identify every file affected by the changes.
 
 Your task:
+
 1. Create a complete list of all affected files.
 2. Sort the files in the order they should be reviewed.
 3. For each file, briefly explain why it appears in that position.
@@ -8,6 +9,7 @@ Your task:
 5. If helpful, group related files into sections.
 
 Output format:
+
 - A numbered review order
 - File path for each item
 - A short explanation for the review position of each file

@@ -30,6 +30,14 @@ export class AuthClient {
     return this.client.post<void>('/auth/logout', {}, { skipUnauthorizedCallback: true });
   }
 
+  async requestDeletion(): Promise<AuthUser> {
+    return this.client.post<AuthUser>('/auth/me/request-deletion', {});
+  }
+
+  async cancelDeletion(): Promise<AuthUser> {
+    return this.client.post<AuthUser>('/auth/me/cancel-deletion', {});
+  }
+
   async me(): Promise<AuthUser> {
     return this.client.get<AuthUser>('/auth/me');
   }

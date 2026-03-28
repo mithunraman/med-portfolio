@@ -16,6 +16,6 @@ import { Item, ItemSchema } from './schemas/item.schema';
       useClass: ItemsRepository,
     },
   ],
-  exports: [ItemsService],
+  exports: [ItemsService, ITEMS_REPOSITORY],
 })
 export class ItemsModule {}

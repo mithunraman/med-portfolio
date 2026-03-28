@@ -38,4 +38,8 @@ export interface IMediaRepository {
     data: UpdateMediaStatusData,
     session?: ClientSession
   ): Promise<Result<Media | null, DBError>>;
+
+  findByUser(userId: Types.ObjectId): Promise<Result<Media[], DBError>>;
+
+  anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
 }

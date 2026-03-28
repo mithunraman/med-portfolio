@@ -53,4 +53,6 @@ export interface IItemsRepository {
     userId: Types.ObjectId,
     session?: ClientSession,
   ): Promise<Result<boolean, DBError>>;
+
+  anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
 }

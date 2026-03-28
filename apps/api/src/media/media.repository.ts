@@ -96,4 +96,30 @@ export class MediaRepository implements IMediaRepository {
       return err({ code: 'DB_ERROR', message: 'Failed to update media status' });
     }
   }
+
+  async findByUser(userId: Types.ObjectId): Promise<Result<Media[], DBError>> {
+    try {
+      const media = await this.mediaModel
+        .find({ userId })
+        .select('bucket key')
+        .lean();
+      return ok(media);
+    } catch (error) {
+      this.logger.error('Failed to find media by user', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find media by user' });
+    }
+  }
+
+  async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.mediaModel.updateMany(
+        { userId },
+        { $set: { status: MediaStatus.DELETED } }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to anonymize media', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to anonymize media' });
+    }
+  }
 }

@@ -42,4 +42,6 @@ export interface IVersionHistoryRepository {
     entityId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
+
+  deleteByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
 }

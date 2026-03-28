@@ -6,6 +6,7 @@ import { ConversationsClient } from './clients/conversations.client';
 import { ItemsClient } from './clients/items.client';
 import { MediaClient } from './clients/media.client';
 import { DashboardClient } from './clients/dashboard.client';
+import { InitClient } from './clients/init.client';
 import { PdpGoalsClient } from './clients/pdp-goals.client';
 import { ReviewPeriodsClient } from './clients/review-periods.client';
 import { SpecialtiesClient } from './clients/specialties.client';
@@ -30,6 +31,7 @@ export function createApiClient(config: ApiClientConfig) {
     items: new ItemsClient(baseClient),
     media: new MediaClient(baseClient),
     dashboard: new DashboardClient(baseClient),
+    init: new InitClient(baseClient),
     pdpGoals: new PdpGoalsClient(baseClient),
     reviewPeriods: new ReviewPeriodsClient(baseClient),
     specialties: new SpecialtiesClient(baseClient),

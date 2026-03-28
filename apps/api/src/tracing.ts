@@ -2,9 +2,13 @@
 // so it can monkey-patch their modules for auto-instrumentation.
 // Import order in main.ts: instrument.ts (Sentry) → tracing.ts (OTel) → NestFactory.
 
-import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
+import { MongooseInstrumentation } from '@opentelemetry/instrumentation-mongoose';
+import { NestInstrumentation } from '@opentelemetry/instrumentation-nestjs-core';
+import { PinoInstrumentation } from '@opentelemetry/instrumentation-pino';
+import { RuntimeNodeInstrumentation } from '@opentelemetry/instrumentation-runtime-node';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
@@ -34,19 +38,17 @@ const sdk = new NodeSDK({
     exportIntervalMillis: 60_000,
   }),
 
+  // Explicit allowlist instead of getNodeAutoInstrumentations().
+  // The auto bundle includes ~40 instrumentations; several (undici, http,
+  // openai, generic-pool, etc.) monkey-patch fetch/HTTP and consume response
+  // bodies, breaking OpenAI/LangChain structured-output calls with
+  // "Body has already been read" errors. Only register what we need.
   instrumentations: [
-    getNodeAutoInstrumentations({
-      // Disable fs instrumentation — too noisy, no value
-      '@opentelemetry/instrumentation-fs': { enabled: false },
-      // Disable DNS — low value, adds noise
-      '@opentelemetry/instrumentation-dns': { enabled: false },
-      // Disable Net — low-level socket spans are noise
-      '@opentelemetry/instrumentation-net': { enabled: false },
-      // Disable undici/fetch — conflicts with OpenAI/LangChain SDK streaming;
-      // the instrumentation reads the response body for telemetry, causing
-      // "Body has already been read" errors on structured-output calls.
-      '@opentelemetry/instrumentation-undici': { enabled: false },
-    }),
+    new ExpressInstrumentation(),
+    new NestInstrumentation(),
+    new MongooseInstrumentation(),
+    new PinoInstrumentation(),
+    new RuntimeNodeInstrumentation(),
   ],
 });
 

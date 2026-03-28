@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { AuthProvider, ProtectedRoute } from '@/auth';
-import { LoginPage, RegisterPage, DashboardPage } from '@/pages';
+import { LoginPage, DashboardPage } from '@/pages';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 
@@ -14,7 +14,6 @@ export function App() {
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
             <Route
               path="/"
               element={

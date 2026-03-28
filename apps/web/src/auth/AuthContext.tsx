@@ -6,15 +6,15 @@ import {
   useEffect,
   type ReactNode,
 } from 'react';
-import type { AuthUser, LoginRequest, RegisterRequest } from '@acme/shared';
+import type { AuthUser } from '@acme/shared';
 import { api, webTokenProvider, setOnUnauthorized } from '@/api/client';
 
 interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (credentials: LoginRequest) => Promise<void>;
-  register: (data: RegisterRequest) => Promise<void>;
+  otpSend: (email: string) => Promise<{ isNewUser: boolean; devOtp?: string }>;
+  otpVerify: (email: string, code: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -47,14 +47,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
-  const login = useCallback(async (credentials: LoginRequest) => {
-    const response = await api.auth.login(credentials);
-    await webTokenProvider.setAccessToken(response.accessToken);
-    setUser(response.user);
+  const otpSend = useCallback(async (email: string) => {
+    const response = await api.auth.otpSend({ email });
+    return { isNewUser: response.isNewUser, devOtp: response.devOtp };
   }, []);
 
-  const register = useCallback(async (data: RegisterRequest) => {
-    const response = await api.auth.register(data);
+  const otpVerify = useCallback(async (email: string, code: string, name?: string) => {
+    const response = await api.auth.otpVerify({ email, code, name });
     await webTokenProvider.setAccessToken(response.accessToken);
     setUser(response.user);
   }, []);
@@ -90,8 +89,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         user,
         isLoading,
         isAuthenticated: !!user,
-        login,
-        register,
+        otpSend,
+        otpVerify,
         logout,
       }}
     >

@@ -11,6 +11,7 @@ import { PdpGoalsModule } from '../pdp-goals/pdp-goals.module';
 import { ReviewPeriodsModule } from '../review-periods/review-periods.module';
 import { StorageModule } from '../storage';
 import { VersionHistoryModule } from '../version-history/version-history.module';
+import { AccountCleanupController } from './account-cleanup.controller';
 import { AccountCleanupService } from './account-cleanup.service';
 
 @Module({
@@ -27,6 +28,7 @@ import { AccountCleanupService } from './account-cleanup.service';
     OutboxModule,
     StorageModule,
   ],
+  controllers: [AccountCleanupController],
   providers: [AccountCleanupService],
 })
 export class AccountCleanupModule {}

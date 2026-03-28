@@ -31,6 +31,8 @@ export {
   otpVerify,
   registerGuest,
   claimGuest,
+  requestDeletion,
+  cancelDeletion,
   logout,
   clearError,
   setUnauthenticated,
@@ -69,7 +71,7 @@ export type { DeliveryStatus, OptimisticMessage, RenderableMessage } from './mes
 export { loadOnboardingState } from './onboardingSlice';
 
 // ── Dashboard ──
-export { fetchDashboard, clearDashboard } from './dashboard';
+export { fetchInit, clearDashboard } from './dashboard';
 
 // ── PDP Goals ──
 export {

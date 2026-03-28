@@ -2,7 +2,7 @@ import { CoverageRing, SectionHeader, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
-import { clearNewRegistration, fetchDashboard } from '@/store';
+import { clearNewRegistration, fetchInit } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
 import {
@@ -472,14 +472,14 @@ export default function HomeScreen() {
       dispatch(clearNewRegistration());
       return;
     }
-    dispatch(fetchDashboard());
+    dispatch(fetchInit());
   }, [dispatch, isNewRegistration]);
 
   // Refetch dashboard when connectivity returns, only if data is missing or errored
   useNetworkRecovery(
     useCallback(() => {
       if (!dashboardLoading && (!dashboardData || dashboardError)) {
-        dispatch(fetchDashboard());
+        dispatch(fetchInit());
       }
     }, [dispatch, dashboardLoading, dashboardData, dashboardError])
   );

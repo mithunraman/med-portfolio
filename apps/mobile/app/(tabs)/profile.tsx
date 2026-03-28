@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/hooks';
 import { useAppDispatch, useAppSelector } from '@/hooks';
-import { fetchSpecialties } from '@/store/slices/authSlice';
+import { fetchSpecialties, requestDeletion } from '@/store/slices/authSlice';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -129,6 +129,25 @@ export default function ProfileScreen() {
     router.push('/claim-account');
   };
 
+  const hasPendingDeletion = !!user?.deletionScheduledFor;
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account?',
+      'Your data will be permanently deleted after 48 hours. You can cancel this anytime before then.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: () => {
+            dispatch(requestDeletion());
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View
       style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}
@@ -246,6 +265,17 @@ export default function ProfileScreen() {
             }
           />
         </SettingsSection>
+
+        {/* Danger Zone */}
+        {!hasPendingDeletion && (
+          <SettingsSection title="Danger Zone">
+            <SettingsItem
+              icon="trash-outline"
+              label="Delete Account"
+              onPress={handleDeleteAccount}
+            />
+          </SettingsSection>
+        )}
 
         {/* Logout */}
         <View style={styles.logoutContainer}>

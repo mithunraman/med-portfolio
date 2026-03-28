@@ -1,6 +1,6 @@
 import type { DashboardResponse } from '@acme/shared';
 import { createSlice } from '@reduxjs/toolkit';
-import { fetchDashboard } from './thunks';
+import { fetchInit } from './thunks';
 
 interface DashboardState {
   data: DashboardResponse | null;
@@ -25,15 +25,15 @@ const dashboardSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchDashboard.pending, (state) => {
+      .addCase(fetchInit.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchDashboard.fulfilled, (state, action) => {
+      .addCase(fetchInit.fulfilled, (state, action) => {
         state.loading = false;
-        state.data = action.payload;
+        state.data = action.payload.dashboard;
       })
-      .addCase(fetchDashboard.rejected, (state, action) => {
+      .addCase(fetchInit.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       });

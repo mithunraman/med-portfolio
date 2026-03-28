@@ -1,8 +1,4 @@
-import {
-  ConversationStatus,
-  MessageProcessingStatus,
-  MessageRole,
-} from '@acme/shared';
+import { ConversationStatus, MessageProcessingStatus, MessageRole } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';

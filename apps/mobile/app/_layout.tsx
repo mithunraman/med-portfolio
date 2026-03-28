@@ -1,5 +1,6 @@
 import { setOnUnauthorized } from '@/api/client';
 import { ErrorBoundary } from '@/components';
+import { DeletionBanner } from '@/components/DeletionBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkListener } from '@/hooks/useNetworkListener';
@@ -151,6 +152,7 @@ function RootLayoutNav() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
+      <DeletionBanner />
       <Stack
         screenOptions={{
           headerShown: false,

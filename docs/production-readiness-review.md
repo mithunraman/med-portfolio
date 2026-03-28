@@ -33,12 +33,9 @@
 - **Fix:** Replace the alert with an in-app WebView or external link to a hosted privacy policy.
 - **Impact:** App Store rejection; legal non-compliance.
 
-### 4. No account deletion flow
+### ~~4. No account deletion flow~~ — FIXED
 
-- **What's missing:** No "Delete Account" option anywhere in the profile screen. Only logout/sign-out exists.
-- **Why it matters:** Apple App Store requires account deletion since June 2022. Play Store followed suit. Submission will be rejected without it.
-- **Fix:** Add "Delete Account" option in the Profile > Account section with confirmation flow and backend `DELETE /api/users/me` endpoint.
-- **Impact:** App Store rejection.
+- **Status:** Resolved. Full account deletion flow implemented with 48h grace period. Profile screen has "Delete Account" in Danger Zone section with confirmation alert. `DeletionBanner` component shows app-wide when deletion is pending, with one-tap cancel. Backend: `POST /auth/me/request-deletion` and `POST /auth/me/cancel-deletion` endpoints. Daily cron at 5 AM anonymizes expired accounts across all 12 collections (content set to `[deleted]`, statuses set to `DELETED = -999`, S3 audio files hard-deleted, version history hard-deleted, user record anonymized, tokenVersion incremented to force logout). GDPR-compliant irreversible anonymization.
 
 ---
 
@@ -147,11 +144,11 @@
 | Flow | Evidence | Status |
 |------|----------|--------|
 | ~~**Password reset**~~ | ~~Login screen has no "Forgot password?"~~ | N/A — OTP passwordless auth |
-| **Account deletion** | Profile has no "Delete Account" | Not implemented |
+| ~~**Account deletion**~~ | ~~Profile has no "Delete Account"~~ | FIXED — 48h grace period, anonymization cron, DeletionBanner |
 | **Push notifications** | No notification permissions, no token registration | Not implemented |
 | **Onboarding questions** | Store has `onboarding` slice, initialized in root layout, but no onboarding screens exist | Wired but no UI |
 | **Guest data migration** | Guest to registered account transition exists, but no mention of migrating guest data to the new account | Unclear |
-| **Token refresh** | JWT auth present but no visible token refresh or session expiry handling | Unclear |
+| ~~**Token refresh**~~ | ~~JWT auth present but no visible token refresh or session expiry handling~~ | FIXED — sliding window via `X-Refreshed-Token` response header on every authenticated request |
 | **Image/document attachments** | Media upload exists for audio, but no image capture or document attach in chat | May be intentional |
 | **Search** | No search functionality across entries or conversations | Not implemented |
 | **Entry editing of capabilities** | Title and reflection are editable in IN_REVIEW, but capabilities are read-only | May be intentional |
@@ -162,20 +159,19 @@
 
 ## Final Recommendation
 
-### **Getting closer — 5 items remain for MVP**
+### **Almost there — 4 items remain for MVP**
 
-Since the initial review, **10 of 18 open items have been fixed/removed** and **4 have been deferred to post-MVP** (#10 Toast system, #12 Dashboard skeletons, #15 Haptic feedback, #17 Version diff).
+Since the initial review, **11 of 18 open items have been fixed/removed** and **4 have been deferred to post-MVP** (#10 Toast system, #12 Dashboard skeletons, #15 Haptic feedback, #17 Version diff).
 
-**2 critical items** still block production release:
+**1 critical item** still blocks production release:
 
 1. **No privacy policy** — needs legal content + hosting
-2. **No account deletion** — requires backend `DELETE /api/users/me` + frontend confirmation flow
 
 **Remaining open items for MVP (by priority):**
 
 | Priority | Count | Items |
 |----------|-------|-------|
-| Critical | 2 | #3 Privacy Policy, #4 Account deletion |
+| Critical | 1 | #3 Privacy Policy |
 | High | 1 | #9 Help & Feedback placeholder email |
 | Medium | 0 | — |
 | Low | 3 | #20 Deep linking, #21 Home pull-to-refresh, #23 Terms of Service |
@@ -186,4 +182,4 @@ Since the initial review, **10 of 18 open items have been fixed/removed** and **
 |-------|
 | #10 Toast/snackbar system, #12 Dashboard skeletons, #15 Haptic feedback, #17 Version diff |
 
-**Estimated effort to reach minimum viable production release: 1-2 days** for critical + high items.
+**Estimated effort to reach minimum viable production release: 1 day** for the critical item (privacy policy content + hosting).

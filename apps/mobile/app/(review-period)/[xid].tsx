@@ -4,7 +4,7 @@ import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
   archiveReviewPeriod,
   fetchCoverage,
-  fetchDashboard,
+  fetchInit,
   fetchReviewPeriods,
   selectReviewPeriodById,
 } from '@/store';
@@ -202,7 +202,7 @@ export default function ReviewPeriodDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             await dispatch(archiveReviewPeriod(xid));
-            dispatch(fetchDashboard());
+            dispatch(fetchInit());
             dispatch(fetchReviewPeriods());
             router.back();
           },

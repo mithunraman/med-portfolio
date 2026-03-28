@@ -5,4 +5,4 @@ export { default as dashboardReducer } from './slice';
 export { clearDashboard } from './slice';
 
 // Thunks
-export { fetchDashboard } from './thunks';
+export { fetchInit } from './thunks';

@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/react-native';
 import { api } from '../../api/client';
 import { AppSecureStorage } from '../../services';
 import { logger } from '../../utils/logger';
+import { fetchInit } from './dashboard/thunks';
 
 const authLogger = logger.createScope('AuthSlice');
 
@@ -217,6 +218,60 @@ export const updateProfile = createAsyncThunk(
 );
 
 /**
+ * Request account deletion (48h grace period).
+ */
+export const requestDeletion = createAsyncThunk(
+  'auth/requestDeletion',
+  async (_, { rejectWithValue }) => {
+    authLogger.info('Requesting account deletion');
+
+    try {
+      const user = await api.auth.requestDeletion();
+
+      const storedSession = await AppSecureStorage.get('user');
+      if (storedSession) {
+        await AppSecureStorage.set('user', { ...storedSession, user });
+      }
+
+      authLogger.info('Account deletion requested', {
+        scheduledFor: user.deletionScheduledFor,
+      });
+      return user;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to request deletion';
+      authLogger.error('Account deletion request failed', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
+ * Cancel a pending account deletion.
+ */
+export const cancelDeletion = createAsyncThunk(
+  'auth/cancelDeletion',
+  async (_, { rejectWithValue }) => {
+    authLogger.info('Cancelling account deletion');
+
+    try {
+      const user = await api.auth.cancelDeletion();
+
+      const storedSession = await AppSecureStorage.get('user');
+      if (storedSession) {
+        await AppSecureStorage.set('user', { ...storedSession, user });
+      }
+
+      authLogger.info('Account deletion cancelled');
+      return user;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to cancel deletion';
+      authLogger.error('Cancel deletion failed', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
  * Logout and clear session.
  */
 export const logout = createAsyncThunk('auth/logout', async () => {
@@ -340,6 +395,21 @@ const authSlice = createSlice({
 
       // Update Profile
       .addCase(updateProfile.fulfilled, (state, action) => {
+        state.user = action.payload;
+      })
+
+      // Sync user profile from init endpoint
+      .addCase(fetchInit.fulfilled, (state, action) => {
+        state.user = action.payload.user;
+      })
+
+      // Request Deletion
+      .addCase(requestDeletion.fulfilled, (state, action) => {
+        state.user = action.payload;
+      })
+
+      // Cancel Deletion
+      .addCase(cancelDeletion.fulfilled, (state, action) => {
         state.user = action.payload;
       });
   },

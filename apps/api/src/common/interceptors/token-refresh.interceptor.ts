@@ -1,8 +1,8 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import * as Sentry from '@sentry/nestjs';
 import { Model } from 'mongoose';
 import { Observable, tap } from 'rxjs';
-import * as Sentry from '@sentry/nestjs';
 import { AuthService } from '../../auth/auth.service';
 import { User, UserDocument } from '../../auth/schemas/user.schema';
 

@@ -82,6 +82,10 @@ export class AccountCleanupService {
     }
   }
 
+  async triggerAnonymization(userId: string): Promise<void> {
+    await this.anonymizeUser(new Types.ObjectId(userId));
+  }
+
   private async anonymizeUser(userId: Types.ObjectId): Promise<void> {
     const start = Date.now();
     this.logger.log(`Starting anonymization for user ${userId}`);

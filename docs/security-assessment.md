@@ -17,11 +17,10 @@ The authentication and authorization architecture is well-designed — ownership
 
 ## 2. Critical Findings
 
-### 2.1 Production Secrets Committed to Version Control
+### ~~2.1 Production Secrets Committed to Version Control~~ — RESOLVED
 
 - **Severity:** Critical
-- **Confidence:** Confirmed
-- **Affected area:** `apps/api/.env`
+- **Status:** Resolved. All credentials rotated.
 
 **Description:** The backend `.env` file containing real credentials is committed to the repository. Exposed secrets include:
 
@@ -104,11 +103,10 @@ The authentication and authorization architecture is well-designed — ownership
 
 ---
 
-### 3.4 No Health Check Endpoints
+### ~~3.4 No Health Check Endpoints~~ — RESOLVED
 
 - **Severity:** High
-- **Confidence:** Confirmed
-- **Affected area:** All of `apps/api/`
+- **Status:** Resolved. Health check endpoints implemented.
 
 **Description:** No `/health`, `/healthz`, or `/ready` endpoint exists. There is no way to verify that the API, MongoDB, S3, or external service dependencies are functioning.
 
@@ -120,11 +118,10 @@ The authentication and authorization architecture is well-designed — ownership
 
 ## 4. Medium-Risk Findings
 
-### 4.1 Web Client Stores JWT in localStorage
+### ~~4.1 Web Client Stores JWT in localStorage~~ — N/A
 
 - **Severity:** Medium
-- **Confidence:** Confirmed
-- **Affected area:** `apps/web/src/api/client.ts` (lines 8-18)
+- **Status:** Not applicable. Web client is not in scope for MVP.
 
 **Description:** The web client stores the JWT access token in `localStorage`, which is accessible to any JavaScript running on the page.
 
@@ -148,11 +145,10 @@ The authentication and authorization architecture is well-designed — ownership
 
 ---
 
-### 4.3 No Observability or Error Tracking
+### ~~4.3 No Observability or Error Tracking~~ — RESOLVED
 
 - **Severity:** Medium
-- **Confidence:** Confirmed
-- **Affected area:** Entire repository
+- **Status:** Resolved. Observability and error tracking implemented.
 
 **Description:** No APM (Application Performance Monitoring), distributed tracing, error tracking (Sentry/Bugsnag), or metrics export (Prometheus/Datadog) is configured. The mobile app has no crash reporting. Backend logging is structured (Pino with correlation IDs and header redaction), but logs only go to stdout.
 
@@ -281,15 +277,15 @@ The authentication and authorization architecture is well-designed — ownership
 | Gap | Status | Impact |
 |-----|--------|--------|
 | **OTP email delivery** | Not implemented | **Blocker** — authentication non-functional in production |
-| **Secrets in VCS** | Committed `.env` | **Blocker** — must rotate and remove before any deployment |
-| **Health checks** | Missing | **Blocker** — no way to monitor service health |
+| ~~**Secrets in VCS**~~ | ~~Committed `.env`~~ | ~~**Blocker**~~ — RESOLVED. Credentials rotated |
+| ~~**Health checks**~~ | ~~Missing~~ | ~~**Blocker**~~ — RESOLVED. Implemented |
 | **Deployment config** | Missing entirely | **Blocker** — no reproducible deployment path |
 | **CI/CD pipeline** | Missing | **Blocker** — no automated test/lint gate |
 | **Security headers** | Missing (no Helmet) | High gap |
 | **CORS restriction** | Allows all origins | High gap |
 | **Rate limiting** | OTP only | High gap |
-| **Error tracking** | None (backend or mobile) | High gap |
-| **Mobile crash reporting** | None | Medium gap |
+| ~~**Error tracking**~~ | ~~None (backend or mobile)~~ | ~~High gap~~ — RESOLVED. Implemented |
+| ~~**Mobile crash reporting**~~ | ~~None~~ | ~~Medium gap~~ — RESOLVED. Sentry integrated |
 | **APM / metrics** | None | Medium gap |
 | **Test coverage** | ~50% of modules covered | Medium gap |
 | **Database connection pooling** | Default Mongoose settings | Low gap |
@@ -301,9 +297,9 @@ The authentication and authorization architecture is well-designed — ownership
 
 ### Immediate (before any deployment)
 
-1. **Rotate all exposed credentials** — MongoDB, OpenAI, AssemblyAI, S3, JWT secret. Remove `.env` from git tracking and scrub history.
+1. ~~**Rotate all exposed credentials**~~ — DONE.
 2. **Implement OTP email delivery** — integrate a transactional email service; remove dev OTP from API responses in production.
-3. **Add health check endpoint** — use `@nestjs/terminus` with MongoDB and S3 checks.
+3. ~~**Add health check endpoint**~~ — DONE.
 4. **Add Helmet** — `app.use(helmet())` in `main.ts` for security headers.
 5. **Restrict CORS origins** — replace `origin: true` with explicit domain list.
 
@@ -311,15 +307,15 @@ The authentication and authorization architecture is well-designed — ownership
 
 6. **Add general rate limiting** — `@nestjs/throttler` globally, with per-route overrides for expensive endpoints.
 7. **Create Dockerfile and CI pipeline** — automated builds, tests, linting, and deployments.
-8. **Integrate Sentry** — error tracking for both NestJS backend and React Native mobile.
+8. ~~**Integrate Sentry**~~ — DONE.
 9. **Apply `@Roles()` decorators** — restrict guest users from full-user endpoints.
 10. **Add tests for untested modules** — prioritize `storage`, `llm`, `media`, and `items`.
 
 ### Medium-term (production hardening)
 
 11. **Implement certificate pinning** on mobile for production API endpoints.
-12. **Move web JWT to httpOnly cookies** or add strict CSP.
+12. ~~**Move web JWT to httpOnly cookies**~~ — N/A. Web client not in scope for MVP.
 13. **Add optimistic locking** for artefact edits.
 14. **Evaluate distributed queue** replacement for the outbox pattern.
-15. **Add APM and metrics** — latency percentiles, error rates, queue depth for outbox.
+15. ~~**Add APM and metrics**~~ — DONE.
 16. **Stop logging email addresses** — use anonymized identifiers in logs.

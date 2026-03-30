@@ -75,11 +75,10 @@ The authentication and authorization architecture is well-designed — ownership
 
 ---
 
-### 3.2 No HTTP Security Headers (Helmet)
+### ~~3.2 No HTTP Security Headers (Helmet)~~ — RESOLVED
 
 - **Severity:** High
-- **Confidence:** Confirmed
-- **Affected area:** `apps/api/src/main.ts`
+- **Status:** Resolved. `helmet()` middleware added in `main.ts` before CORS.
 
 **Description:** No security header middleware is configured. Missing headers include: `Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `Strict-Transport-Security`, `X-XSS-Protection`, `Referrer-Policy`, and `Permissions-Policy`.
 
@@ -281,7 +280,7 @@ The authentication and authorization architecture is well-designed — ownership
 | ~~**Health checks**~~ | ~~Missing~~ | ~~**Blocker**~~ — RESOLVED. Implemented |
 | **Deployment config** | Missing entirely | **Blocker** — no reproducible deployment path |
 | **CI/CD pipeline** | Missing | **Blocker** — no automated test/lint gate |
-| **Security headers** | Missing (no Helmet) | High gap |
+| ~~**Security headers**~~ | ~~Missing (no Helmet)~~ | ~~High gap~~ — RESOLVED. Helmet added |
 | **CORS restriction** | Allows all origins | High gap |
 | **Rate limiting** | OTP only | High gap |
 | ~~**Error tracking**~~ | ~~None (backend or mobile)~~ | ~~High gap~~ — RESOLVED. Implemented |
@@ -300,7 +299,7 @@ The authentication and authorization architecture is well-designed — ownership
 1. ~~**Rotate all exposed credentials**~~ — DONE.
 2. **Implement OTP email delivery** — integrate a transactional email service; remove dev OTP from API responses in production.
 3. ~~**Add health check endpoint**~~ — DONE.
-4. **Add Helmet** — `app.use(helmet())` in `main.ts` for security headers.
+4. ~~**Add Helmet**~~ — DONE.
 5. **Restrict CORS origins** — replace `origin: true` with explicit domain list.
 
 ### Short-term (before production launch)

@@ -6,6 +6,7 @@ import './tracing';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NextFunction, Request, Response } from 'express';
+import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { AppModule } from './app.module';
@@ -18,6 +19,9 @@ async function bootstrap() {
   // Get config service
   const configService = app.get(ConfigService);
   const port = configService.get<number>('app.port', 3001);
+
+  // Security headers
+  app.use(helmet());
 
   // Enable CORS
   app.enableCors({

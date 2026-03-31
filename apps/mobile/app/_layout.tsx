@@ -1,11 +1,17 @@
-import { setOnUnauthorized } from '@/api/client';
+import { setOnQuotaUpdate, setOnUnauthorized } from '@/api/client';
 import { ErrorBoundary } from '@/components';
 import { DeletionBanner } from '@/components/DeletionBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { QuotaWarningBanner } from '@/components/QuotaWarningBanner';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkListener } from '@/hooks/useNetworkListener';
-import { initializeAuth, loadOnboardingState, setUnauthenticated, store } from '@/store';
+import {
+  initializeAuth,
+  loadOnboardingState,
+  setUnauthenticated,
+  store,
+  updateQuota,
+} from '@/store';
 import { ThemeProvider, useTheme } from '@/theme';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 import * as Sentry from '@sentry/react-native';
@@ -66,6 +72,26 @@ function RootLayoutNav() {
     // On 401, clear auth state so user is redirected to login
     setOnUnauthorized(() => {
       dispatch(setUnauthenticated());
+    });
+
+    // On quota header update, sync Redux state
+    setOnQuotaUpdate((headers) => {
+      dispatch(
+        updateQuota({
+          shortWindow: {
+            used: headers.shortUsed,
+            limit: headers.shortLimit,
+            resetsAt: headers.shortReset,
+            windowType: 'rolling',
+          },
+          weeklyWindow: {
+            used: headers.weeklyUsed,
+            limit: headers.weeklyLimit,
+            resetsAt: headers.weeklyReset,
+            windowType: 'fixed',
+          },
+        })
+      );
     });
   }, [dispatch]);
 

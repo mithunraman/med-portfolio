@@ -34,10 +34,20 @@ export interface TokenProvider {
 /**
  * Configuration for creating an API client instance.
  */
+export interface QuotaHeaders {
+  shortUsed: number;
+  shortLimit: number;
+  shortReset: string | null;
+  weeklyUsed: number;
+  weeklyLimit: number;
+  weeklyReset: string | null;
+}
+
 export interface ApiClientConfig {
   baseUrl: string;
   httpAdapter: HttpAdapter;
   tokenProvider: TokenProvider;
   requestIdGenerator?: () => string;
   onUnauthorized?: () => void;
+  onQuotaUpdate?: (quota: QuotaHeaders) => void;
 }

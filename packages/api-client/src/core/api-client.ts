@@ -21,7 +21,8 @@ export class BaseApiClient {
     this.config = {
       ...config,
       requestIdGenerator: config.requestIdGenerator || generateRequestId,
-      onUnauthorized: config.onUnauthorized || (() => { }),
+      onUnauthorized: config.onUnauthorized || (() => {}),
+      onQuotaUpdate: config.onQuotaUpdate || (() => {}),
     };
   }
 
@@ -97,6 +98,19 @@ export class BaseApiClient {
     const refreshedToken = response.headers['x-refreshed-token'];
     if (refreshedToken && authenticated) {
       this.config.tokenProvider.setAccessToken(refreshedToken);
+    }
+
+    // Quota header sync: update client with latest quota status
+    const shortUsed = response.headers['x-quota-short-used'];
+    if (shortUsed) {
+      this.config.onQuotaUpdate({
+        shortUsed: Number(shortUsed),
+        shortLimit: Number(response.headers['x-quota-short-limit'] ?? 0),
+        shortReset: response.headers['x-quota-short-reset'] || null,
+        weeklyUsed: Number(response.headers['x-quota-weekly-used'] ?? 0),
+        weeklyLimit: Number(response.headers['x-quota-weekly-limit'] ?? 0),
+        weeklyReset: response.headers['x-quota-weekly-reset'] || null,
+      });
     }
 
     return response.data as T;

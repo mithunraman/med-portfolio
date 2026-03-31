@@ -1,6 +1,6 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { Observable, tap } from 'rxjs';
+import { Observable, from, switchMap } from 'rxjs';
 import { QuotaService } from '../../quota/quota.service';
 import { QUOTA_TYPE_KEY } from '../decorators/use-quota.decorator';
 
@@ -26,28 +26,29 @@ export class QuotaInterceptor implements NestInterceptor {
     if (!user?.userId) return next.handle();
 
     return next.handle().pipe(
-      tap({
-        next: async () => {
-          try {
-            // Record the usage event
-            await this.quotaService.recordEvent(user.userId, quotaType);
+      switchMap((data) =>
+        from(
+          (async () => {
+            try {
+              await this.quotaService.recordEvent(user.userId, quotaType);
 
-            // Fetch fresh status for response headers
-            const status = await this.quotaService.getQuotaStatus(user.userId, user.role);
+              const status = await this.quotaService.getQuotaStatus(user.userId, user.role);
 
-            response.setHeader('X-Quota-Short-Used', status.shortWindow.used);
-            response.setHeader('X-Quota-Short-Limit', status.shortWindow.limit);
-            if (status.shortWindow.resetsAt) {
-              response.setHeader('X-Quota-Short-Reset', status.shortWindow.resetsAt);
+              response.setHeader('X-Quota-Short-Used', String(status.shortWindow.used));
+              response.setHeader('X-Quota-Short-Limit', String(status.shortWindow.limit));
+              if (status.shortWindow.resetsAt) {
+                response.setHeader('X-Quota-Short-Reset', status.shortWindow.resetsAt);
+              }
+              response.setHeader('X-Quota-Weekly-Used', String(status.weeklyWindow.used));
+              response.setHeader('X-Quota-Weekly-Limit', String(status.weeklyWindow.limit));
+              response.setHeader('X-Quota-Weekly-Reset', status.weeklyWindow.resetsAt ?? '');
+            } catch {
+              // Quota recording/headers are best-effort
             }
-            response.setHeader('X-Quota-Weekly-Used', status.weeklyWindow.used);
-            response.setHeader('X-Quota-Weekly-Limit', status.weeklyWindow.limit);
-            response.setHeader('X-Quota-Weekly-Reset', status.weeklyWindow.resetsAt ?? '');
-          } catch {
-            // Quota recording/headers are best-effort — don't fail the request
-          }
-        },
-      })
+            return data;
+          })()
+        )
+      )
     );
   }
 }

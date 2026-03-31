@@ -10,6 +10,10 @@
 
 - [Bug] Strong hallucination. When passing random text in Audio conversation (like Malyalam), it converts to english for some reason.
 
+- [Bug] Sometimes, when the topic not related at all to cases, the AI will still recommend entry types. The AI should revert saying that this is not a medical case.
+
+- [Bug] Sometimes, the AI will recommend capabilities with no options, this will make the user stuck in chat.
+
 # Chat screen
 
 - When any message is sent, there seems to be a delay before the message is displayed. What may be causing this ?

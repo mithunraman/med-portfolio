@@ -1,4 +1,9 @@
-import { createApiClient, type HttpAdapter, type TokenProvider } from '@acme/api-client';
+import {
+  createApiClient,
+  type HttpAdapter,
+  type QuotaHeaders,
+  type TokenProvider,
+} from '@acme/api-client';
 import * as SecureStore from 'expo-secure-store';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
@@ -64,11 +69,16 @@ function createRNHttpAdapter(): HttpAdapter {
   };
 }
 
-// Store for unauthorized callback
+// Store for callbacks
 let onUnauthorizedCallback: (() => void) | null = null;
+let onQuotaUpdateCallback: ((quota: QuotaHeaders) => void) | null = null;
 
 export function setOnUnauthorized(callback: () => void) {
   onUnauthorizedCallback = callback;
+}
+
+export function setOnQuotaUpdate(callback: (quota: QuotaHeaders) => void) {
+  onQuotaUpdateCallback = callback;
 }
 
 /**
@@ -80,6 +90,9 @@ export const api = createApiClient({
   tokenProvider: mobileTokenProvider,
   onUnauthorized: () => {
     onUnauthorizedCallback?.();
+  },
+  onQuotaUpdate: (quota) => {
+    onQuotaUpdateCallback?.(quota);
   },
 });
 

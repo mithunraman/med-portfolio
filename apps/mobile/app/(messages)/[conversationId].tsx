@@ -34,6 +34,7 @@ import {
   ThinkingStep,
 } from '@acme/shared';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useBannerOffset } from '@/hooks/useBannerOffset';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -108,6 +109,7 @@ export default function ChatScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const bannerOffset = useBannerOffset();
 
   // Track IDs from backend for new conversations.
   // State drives re-renders (selectors); ref provides stale-closure-safe access in callbacks.
@@ -472,7 +474,7 @@ export default function ChatScreen() {
       <KeyboardAvoidingView
         style={styles.kav}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={headerHeight}
+        keyboardVerticalOffset={headerHeight + bannerOffset}
       >
         <View style={phase === 'completed' ? styles.dimmed : styles.flex}>
           {showEmptyState ? (

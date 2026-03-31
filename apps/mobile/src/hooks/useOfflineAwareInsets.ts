@@ -1,4 +1,4 @@
-import { selectBannerVisible } from '@/store/slices/networkSlice';
+import { selectBannerVisible, selectIsOffline } from '@/store/slices/networkSlice';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppSelector } from './useAppSelector';
 
@@ -21,7 +21,9 @@ export function useOfflineAwareInsets() {
     return shortPercent >= 0.8 || weeklyPercent >= 0.8;
   });
 
-  const anyBannerVisible = offlineBannerVisible || deletionPending || quotaWarningVisible;
+  const isOffline = useAppSelector(selectIsOffline);
+  const anyBannerVisible =
+    isOffline || offlineBannerVisible || deletionPending || quotaWarningVisible;
 
   return {
     ...insets,

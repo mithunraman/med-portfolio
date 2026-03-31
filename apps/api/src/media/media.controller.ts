@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
+import { UseQuota } from '../common/decorators/use-quota.decorator';
 import { InitiateUploadDto } from './dto';
 import { InitiateUploadResult, MediaInfo, MediaService } from './media.service';
 
@@ -7,6 +8,7 @@ import { InitiateUploadResult, MediaInfo, MediaService } from './media.service';
 export class MediaController {
   constructor(private readonly mediaService: MediaService) {}
 
+  @UseQuota('upload')
   @Post('initiate')
   async initiateUpload(
     @CurrentUser() user: CurrentUserPayload,

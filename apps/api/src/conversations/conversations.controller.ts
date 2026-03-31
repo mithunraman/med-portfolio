@@ -6,6 +6,7 @@ import type {
 } from '@acme/shared';
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
+import { UseQuota } from '../common/decorators/use-quota.decorator';
 import { ConversationsService } from './conversations.service';
 import { AnalysisActionPipe, SendMessageDto } from './dto';
 
@@ -13,6 +14,7 @@ import { AnalysisActionPipe, SendMessageDto } from './dto';
 export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
 
+  @UseQuota('message')
   @Post(':conversationId/messages')
   async sendMessage(
     @CurrentUser() user: CurrentUserPayload,
@@ -22,6 +24,7 @@ export class ConversationsController {
     return this.conversationsService.sendMessage(user.userId, conversationId, dto);
   }
 
+  @UseQuota('analysis')
   @Post(':conversationId/analysis')
   async analysis(
     @CurrentUser() user: CurrentUserPayload,

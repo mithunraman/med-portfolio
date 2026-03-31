@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/hooks';
 import { useAppDispatch, useAppSelector } from '@/hooks';
+import { QuotaUsageSection } from '@/components/QuotaUsageSection';
 import { fetchSpecialties, requestDeletion } from '@/store/slices/authSlice';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -212,6 +213,9 @@ export default function ProfileScreen() {
             )}
           </SettingsSection>
         )}
+
+        {/* Usage Quota */}
+        <QuotaUsageSection />
 
         {/* Preferences */}
         <SettingsSection title="Preferences">

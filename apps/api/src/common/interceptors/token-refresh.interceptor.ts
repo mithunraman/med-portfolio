@@ -27,19 +27,21 @@ export class TokenRefreshInterceptor implements NestInterceptor {
     Sentry.setUser({ id: user.userId });
 
     return next.handle().pipe(
-      tap(async () => {
-        try {
-          const userDoc = (await this.userModel
-            .findById(user.userId)
-            .lean()) as UserDocument | null;
+      tap({
+        next: async () => {
+          try {
+            const userDoc = (await this.userModel
+              .findById(user.userId)
+              .lean()) as UserDocument | null;
 
-          if (userDoc) {
-            const newToken = this.authService.generateToken(userDoc);
-            response.setHeader('X-Refreshed-Token', newToken);
+            if (userDoc) {
+              const newToken = this.authService.generateToken(userDoc);
+              response.setHeader('X-Refreshed-Token', newToken);
+            }
+          } catch {
+            // Silently fail — token refresh is best-effort
           }
-        } catch {
-          // Silently fail — token refresh is best-effort
-        }
+        },
       })
     );
   }

@@ -88,11 +88,10 @@ The authentication and authorization architecture is well-designed — ownership
 
 ---
 
-### 3.3 No General API Rate Limiting
+### ~~3.3 No General API Rate Limiting~~ — RESOLVED
 
 - **Severity:** High
-- **Confidence:** Confirmed
-- **Affected area:** `apps/api/src/main.ts`, all controllers
+- **Status:** Resolved. Two-layer protection: (1) `@nestjs/throttler` for global burst rate limiting (20/10s, 60/min), (2) Usage quota system with rolling 4-hour and fixed weekly windows, per-role tiered limits (guest: 20/100, registered: 40/200), event-based tracking with analytics. Applied to analysis, message, and upload endpoints via `@UseQuota()` decorator.
 
 **Description:** Rate limiting exists only for OTP requests (3 per 10 minutes per email in `otp.service.ts` lines 105-118). No general rate limiting is applied to API endpoints.
 
@@ -282,7 +281,7 @@ The authentication and authorization architecture is well-designed — ownership
 | **CI/CD pipeline** | Missing | **Blocker** — no automated test/lint gate |
 | ~~**Security headers**~~ | ~~Missing (no Helmet)~~ | ~~High gap~~ — RESOLVED. Helmet added |
 | **CORS restriction** | Allows all origins | High gap |
-| **Rate limiting** | OTP only | High gap |
+| ~~**Rate limiting**~~ | ~~OTP only~~ | ~~High gap~~ — RESOLVED. Throttler + usage quota |
 | ~~**Error tracking**~~ | ~~None (backend or mobile)~~ | ~~High gap~~ — RESOLVED. Implemented |
 | ~~**Mobile crash reporting**~~ | ~~None~~ | ~~Medium gap~~ — RESOLVED. Sentry integrated |
 | **APM / metrics** | None | Medium gap |
@@ -304,7 +303,7 @@ The authentication and authorization architecture is well-designed — ownership
 
 ### Short-term (before production launch)
 
-6. **Add general rate limiting** — `@nestjs/throttler` globally, with per-route overrides for expensive endpoints.
+6. ~~**Add general rate limiting**~~ — DONE. Throttler + usage quota system.
 7. **Create Dockerfile and CI pipeline** — automated builds, tests, linting, and deployments.
 8. ~~**Integrate Sentry**~~ — DONE.
 9. **Apply `@Roles()` decorators** — restrict guest users from full-user endpoints.

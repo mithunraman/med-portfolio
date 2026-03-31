@@ -1,9 +1,11 @@
 import { BadRequestException, Controller, Get } from '@nestjs/common';
 import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
+import { SkipThrottle } from '@nestjs/throttler';
 import { Public } from '../common/decorators/public.decorator';
 import { MongoHealthIndicator } from './mongo-health.indicator';
 import { StorageHealthIndicator } from './storage-health.indicator';
 
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   constructor(

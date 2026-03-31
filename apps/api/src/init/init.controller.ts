@@ -9,6 +9,6 @@ export class InitController {
 
   @Get()
   async getInit(@CurrentUser() user: CurrentUserPayload): Promise<InitResponse> {
-    return this.initService.getInit(user.userId);
+    return this.initService.getInit(user.userId, user.role);
   }
 }

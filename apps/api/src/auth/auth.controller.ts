@@ -1,10 +1,12 @@
 import type { AuthUser, LoginResponse, OtpSendResponse } from '@acme/shared';
 import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
 import { OtpClaimDto, OtpSendDto, OtpVerifyDto, UpdateProfileDto } from './dto';
 
+@SkipThrottle()
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}

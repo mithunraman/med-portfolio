@@ -13,9 +13,18 @@ export function useOfflineAwareInsets() {
   const insets = useSafeAreaInsets();
   const offlineBannerVisible = useAppSelector(selectBannerVisible);
   const deletionPending = useAppSelector((s) => !!s.auth.user?.deletionScheduledFor);
+  const quotaWarningVisible = useAppSelector((s) => {
+    const q = s.auth.quota;
+    if (!q) return false;
+    const shortPercent = q.shortWindow.limit > 0 ? q.shortWindow.used / q.shortWindow.limit : 0;
+    const weeklyPercent = q.weeklyWindow.limit > 0 ? q.weeklyWindow.used / q.weeklyWindow.limit : 0;
+    return shortPercent >= 0.8 || weeklyPercent >= 0.8;
+  });
+
+  const anyBannerVisible = offlineBannerVisible || deletionPending || quotaWarningVisible;
 
   return {
     ...insets,
-    top: offlineBannerVisible || deletionPending ? 0 : insets.top,
+    top: anyBannerVisible ? 0 : insets.top,
   };
 }

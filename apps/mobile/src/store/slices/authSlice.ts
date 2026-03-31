@@ -1,4 +1,4 @@
-import type { AuthUser, SpecialtyOption, UpdateProfileRequest } from '@acme/shared';
+import type { AuthUser, QuotaStatus, SpecialtyOption, UpdateProfileRequest } from '@acme/shared';
 import { UserRole } from '@acme/shared';
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import * as Sentry from '@sentry/react-native';
@@ -14,6 +14,7 @@ export type AuthStatus = 'idle' | 'loading' | 'authenticated' | 'guest' | 'unaut
 export interface AuthState {
   status: AuthStatus;
   user: AuthUser | null;
+  quota: QuotaStatus | null;
   error: string | null;
   isNewUser: boolean | null;
   isNewRegistration: boolean;
@@ -24,6 +25,7 @@ export interface AuthState {
 const initialState: AuthState = {
   status: 'idle',
   user: null,
+  quota: null,
   error: null,
   isNewUser: null,
   isNewRegistration: false,
@@ -301,6 +303,9 @@ const authSlice = createSlice({
     clearNewRegistration(state) {
       state.isNewRegistration = false;
     },
+    updateQuota(state, action: { payload: QuotaStatus }) {
+      state.quota = action.payload;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -398,9 +403,10 @@ const authSlice = createSlice({
         state.user = action.payload;
       })
 
-      // Sync user profile from init endpoint
+      // Sync user profile + quota from init endpoint
       .addCase(fetchInit.fulfilled, (state, action) => {
         state.user = action.payload.user;
+        state.quota = action.payload.quota;
       })
 
       // Request Deletion
@@ -415,5 +421,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, setUnauthenticated, clearNewRegistration } = authSlice.actions;
+export const { clearError, setUnauthenticated, clearNewRegistration, updateQuota } = authSlice.actions;
 export default authSlice.reducer;

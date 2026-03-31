@@ -2,6 +2,7 @@ import { setOnUnauthorized } from '@/api/client';
 import { ErrorBoundary } from '@/components';
 import { DeletionBanner } from '@/components/DeletionBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { QuotaWarningBanner } from '@/components/QuotaWarningBanner';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkListener } from '@/hooks/useNetworkListener';
 import { initializeAuth, loadOnboardingState, setUnauthenticated, store } from '@/store';
@@ -153,6 +154,7 @@ function RootLayoutNav() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
       <DeletionBanner />
+      <QuotaWarningBanner />
       <Stack
         screenOptions={{
           headerShown: false,

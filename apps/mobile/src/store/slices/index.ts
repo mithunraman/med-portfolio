@@ -37,6 +37,7 @@ export {
   clearError,
   setUnauthenticated,
   clearNewRegistration,
+  updateQuota,
 } from './authSlice';
 export type { AuthStatus, AuthState } from './authSlice';
 

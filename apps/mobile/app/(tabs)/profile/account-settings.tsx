@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useAuth } from '@/hooks';
-import { useAppDispatch, useAppSelector } from '@/hooks';
+import { useAppDispatch } from '@/hooks';
 import { SettingsItem, SettingsSection } from '@/components';
-import { fetchSpecialties, updateProfile } from '@/store/slices/authSlice';
+import { updateProfile } from '@/store/slices/authSlice';
 import { useTheme } from '@/theme';
 import { useRouter } from 'expo-router';
 import {
@@ -23,25 +23,14 @@ export default function AccountSettingsScreen() {
   const dispatch = useAppDispatch();
   const { colors } = useTheme();
   const { user } = useAuth();
-  const specialties = useAppSelector((s) => s.auth.specialties);
 
   // Name edit modal state
   const [nameModalVisible, setNameModalVisible] = useState(false);
   const [editedName, setEditedName] = useState(user?.name ?? '');
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    if (specialties.length === 0) {
-      dispatch(fetchSpecialties());
-    }
-  }, [dispatch, specialties.length]);
-
-  const specialtyConfig = specialties.find((s) => s.specialty === user?.specialty);
-  const specialtyLabel = specialtyConfig?.name ?? null;
-  const stageLabel =
-    specialtyConfig?.trainingStages.find((s) => s.code === user?.trainingStage)?.label ??
-    user?.trainingStage ??
-    null;
+  const specialtyLabel = user?.specialty?.name ?? null;
+  const stageLabel = user?.specialty?.trainingStage?.label ?? null;
 
   const handleChangeSpecialty = useCallback(() => {
     router.push('/(auth)/select-specialty');
@@ -68,8 +57,8 @@ export default function AccountSettingsScreen() {
       await dispatch(
         updateProfile({
           name: trimmed,
-          specialty: user!.specialty!,
-          trainingStage: user!.trainingStage!,
+          specialty: user!.specialty!.code,
+          trainingStage: user!.specialty!.trainingStage.code,
         })
       ).unwrap();
       setNameModalVisible(false);

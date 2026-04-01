@@ -18,7 +18,7 @@ import * as crypto from 'crypto';
 import { Model } from 'mongoose';
 import ms from 'ms';
 import { OtpService } from '../otp';
-import { isValidTrainingStage } from '../specialties/specialty.registry';
+import { getSpecialtyConfig, isValidTrainingStage } from '../specialties/specialty.registry';
 import { User, UserDocument } from './schemas/user.schema';
 
 @Injectable()
@@ -226,13 +226,28 @@ export class AuthService {
   }
 
   toAuthUser(user: UserDocument): AuthUser {
+    let specialty: AuthUser['specialty'] = null;
+
+    if (user.specialty && user.trainingStage) {
+      const config = getSpecialtyConfig(user.specialty);
+      const stage = config.trainingStages.find((s) => s.code === user.trainingStage);
+
+      specialty = {
+        code: user.specialty,
+        name: config.name,
+        trainingStage: {
+          code: user.trainingStage,
+          label: stage?.label ?? user.trainingStage,
+        },
+      };
+    }
+
     return {
       id: user._id.toString(),
       email: user.email,
       name: user.name,
       role: user.role,
-      specialty: user.specialty ?? null,
-      trainingStage: user.trainingStage ?? null,
+      specialty,
       deletionRequestedAt: user.deletionRequestedAt?.toISOString() ?? null,
       deletionScheduledFor: user.deletionScheduledFor?.toISOString() ?? null,
     };

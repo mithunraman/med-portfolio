@@ -296,7 +296,6 @@ describe('AuthService', () => {
         name: 'Test User',
         role: UserRole.USER,
         specialty: null,
-        trainingStage: null,
         deletionRequestedAt: null,
         deletionScheduledFor: null,
       });
@@ -353,11 +352,11 @@ describe('AuthService', () => {
 
       expect(mockUserModel.findByIdAndUpdate).toHaveBeenCalledWith(
         userIdStr,
-        { specialty: Specialty.GP, trainingStage: 'ST2' },
+        expect.objectContaining({ specialty: Specialty.GP, trainingStage: 'ST2' }),
         { new: true }
       );
-      expect(result.specialty).toBe(Specialty.GP);
-      expect(result.trainingStage).toBe('ST2');
+      expect(result.specialty?.code).toBe(Specialty.GP);
+      expect(result.specialty?.trainingStage.code).toBe('ST2');
     });
 
     it('should reject invalid training stage for specialty', async () => {
@@ -403,8 +402,8 @@ describe('AuthService', () => {
         trainingStage: 'ST6',
       });
 
-      expect(result.specialty).toBe(Specialty.PSYCHIATRY);
-      expect(result.trainingStage).toBe('ST6');
+      expect(result.specialty?.code).toBe(Specialty.PSYCHIATRY);
+      expect(result.specialty?.trainingStage.code).toBe('ST6');
     });
 
     it('should accept valid Internal Medicine stage', async () => {
@@ -419,8 +418,8 @@ describe('AuthService', () => {
         trainingStage: 'IMY2',
       });
 
-      expect(result.specialty).toBe(Specialty.INTERNAL_MEDICINE);
-      expect(result.trainingStage).toBe('IMY2');
+      expect(result.specialty?.code).toBe(Specialty.INTERNAL_MEDICINE);
+      expect(result.specialty?.trainingStage.code).toBe('IMY2');
     });
   });
 });

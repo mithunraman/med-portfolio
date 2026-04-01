@@ -188,6 +188,12 @@ export const fetchSpecialties = createAsyncThunk(
       const message = error instanceof Error ? error.message : 'Failed to load specialties';
       return rejectWithValue(message);
     }
+  },
+  {
+    condition: (_, { getState }) => {
+      const { auth } = getState() as { auth: AuthState };
+      return auth.specialties.length === 0;
+    },
   }
 );
 

@@ -17,13 +17,23 @@ export const RegisterRequestSchema = z.object({
 
 export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
 
+export const AuthUserSpecialtySchema = z.object({
+  code: z.nativeEnum(Specialty),
+  name: z.string(),
+  trainingStage: z.object({
+    code: z.string(),
+    label: z.string(),
+  }),
+});
+
+export type AuthUserSpecialty = z.infer<typeof AuthUserSpecialtySchema>;
+
 export const AuthUserSchema = z.object({
   id: z.string(),
   email: z.string().email(),
   name: z.string(),
   role: z.nativeEnum(UserRole),
-  specialty: z.nativeEnum(Specialty).nullable(),
-  trainingStage: z.string().nullable(),
+  specialty: AuthUserSpecialtySchema.nullable(),
   deletionRequestedAt: z.string().nullable(),
   deletionScheduledFor: z.string().nullable(),
 });

@@ -439,16 +439,11 @@ export default function HomeScreen() {
   const dashboardError = useAppSelector((state) => state.dashboard.error);
   const isNewRegistration = useAppSelector((state) => state.auth.isNewRegistration);
   const user = useAppSelector((state) => state.auth.user);
-  const specialties = useAppSelector((state) => state.auth.specialties);
-
   // Capture on mount so it survives clearNewRegistration() in the useEffect below
   const [isFirstRun] = useState(() => isNewRegistration);
 
-  // Derive specialty/stage labels for the welcome module
-  const specialtyOption = specialties.find((s) => s.specialty === user?.specialty);
-  const specialtyLabel = specialtyOption?.name ?? null;
-  const stageLabel =
-    specialtyOption?.trainingStages.find((s) => s.code === user?.trainingStage)?.label ?? null;
+  const specialtyLabel = user?.specialty?.name ?? null;
+  const stageLabel = user?.specialty?.trainingStage?.label ?? null;
 
   // True on first load when no data exists yet (not on subsequent refreshes)
   const isInitialLoad = dashboardLoading && !dashboardData;

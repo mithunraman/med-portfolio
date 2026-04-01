@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useAuth } from '@/hooks';
-import { useAppDispatch, useAppSelector } from '@/hooks';
 import { QuotaUsageSection } from '@/components/QuotaUsageSection';
 import { SettingsItem, SettingsSection } from '@/components';
-import { fetchSpecialties } from '@/store/slices/authSlice';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -22,24 +20,12 @@ import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 export default function ProfileScreen() {
   const insets = useOfflineAwareInsets();
   const router = useRouter();
-  const dispatch = useAppDispatch();
   const { colors } = useTheme();
   const { user, isGuest, logout } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const specialties = useAppSelector((s) => s.auth.specialties);
 
-  useEffect(() => {
-    if (specialties.length === 0) {
-      dispatch(fetchSpecialties());
-    }
-  }, [dispatch, specialties.length]);
-
-  const specialtyConfig = specialties.find((s) => s.specialty === user?.specialty);
-  const specialtyLabel = specialtyConfig?.name ?? null;
-  const stageLabel =
-    specialtyConfig?.trainingStages.find((s) => s.code === user?.trainingStage)?.label ??
-    user?.trainingStage ??
-    null;
+  const specialtyLabel = user?.specialty?.name ?? null;
+  const stageLabel = user?.specialty?.trainingStage?.label ?? null;
 
   const handleLogout = () => {
     Alert.alert(

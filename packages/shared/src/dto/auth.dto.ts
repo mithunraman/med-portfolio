@@ -33,6 +33,7 @@ export type AuthUser = z.infer<typeof AuthUserSchema>;
 export const UpdateProfileRequestSchema = z.object({
   specialty: z.nativeEnum(Specialty),
   trainingStage: z.string(),
+  name: z.string().min(2, 'Name must be at least 2 characters').optional(),
 });
 
 export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequestSchema>;

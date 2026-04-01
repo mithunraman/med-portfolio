@@ -27,42 +27,38 @@ function getBarColor(percent: number, colors: { primary: string; error: string }
   return colors.primary;
 }
 
-function QuotaBar({ label, window }: { label: string; window: QuotaWindow }) {
+function QuotaBar({ label, window: w }: { label: string; window: QuotaWindow }) {
   const { colors } = useTheme();
   const [, setTick] = useState(0);
 
-  // Update countdown every minute
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60_000);
     return () => clearInterval(id);
   }, []);
 
-  const percent = window.limit > 0 ? Math.min((window.used / window.limit) * 100, 100) : 0;
-  const remaining = Math.max(0, window.limit - window.used);
+  const percent = w.limit > 0 ? Math.min((w.used / w.limit) * 100, 100) : 0;
   const barColor = getBarColor(percent, colors);
   const resetLabel =
-    window.windowType === 'rolling'
-      ? window.resetsAt
-        ? formatTimeRemaining(window.resetsAt)
+    w.windowType === 'rolling'
+      ? w.resetsAt
+        ? formatTimeRemaining(w.resetsAt)
         : 'Rolling 4h window'
-      : formatTimeRemaining(window.resetsAt);
+      : formatTimeRemaining(w.resetsAt);
 
   return (
     <View style={styles.quotaRow}>
       <View style={styles.quotaHeader}>
         <Text style={[styles.quotaLabel, { color: colors.text }]}>{label}</Text>
-        <Text style={[styles.quotaCount, { color: colors.textSecondary }]}>
-          {window.used}/{window.limit}
+        <Text style={[styles.quotaPercent, { color: barColor }]}>
+          {Math.round(percent)}% used
         </Text>
       </View>
-      <View style={[styles.barBackground, { backgroundColor: colors.border }]}>
+      <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
         <View
           style={[styles.barFill, { width: `${percent}%`, backgroundColor: barColor }]}
         />
       </View>
-      <Text style={[styles.quotaMeta, { color: colors.textSecondary }]}>
-        {remaining} remaining — {resetLabel}
-      </Text>
+      <Text style={[styles.quotaMeta, { color: colors.textSecondary }]}>{resetLabel}</Text>
     </View>
   );
 }
@@ -77,9 +73,9 @@ export function QuotaUsageSection() {
     <View style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Usage</Text>
       <View style={[styles.sectionContent, { backgroundColor: colors.surface }]}>
-        <QuotaBar label="Session budget (4h)" window={quota.shortWindow} />
+        <QuotaBar label="Session" window={quota.shortWindow} />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <QuotaBar label="Weekly budget" window={quota.weeklyWindow} />
+        <QuotaBar label="Weekly" window={quota.weeklyWindow} />
       </View>
     </View>
   );
@@ -115,18 +111,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  quotaCount: {
-    fontSize: 13,
-    fontWeight: '500',
+  quotaPercent: {
+    fontSize: 14,
+    fontWeight: '700',
   },
-  barBackground: {
-    height: 8,
-    borderRadius: 4,
+  barTrack: {
+    height: 10,
+    borderRadius: 5,
     overflow: 'hidden',
   },
   barFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 5,
   },
   quotaMeta: {
     fontSize: 12,

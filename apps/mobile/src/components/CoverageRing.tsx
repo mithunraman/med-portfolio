@@ -7,17 +7,26 @@ interface CoverageRingProps {
   percent: number;
   /** e.g. "8 of 13" */
   label?: string;
+  /** Second line below the label. */
+  sublabel?: string;
   /** Ring diameter. Default 64 for dashboard, use 120 for detail. */
   size?: number;
   /** Ring stroke width. Default 6. */
   strokeWidth?: number;
+  /** Override stroke color. Defaults to colors.primary. */
+  strokeColor?: string;
+  /** Custom centre content, replaces the default "XX%" text. */
+  renderCenter?: () => React.ReactNode;
 }
 
 export function CoverageRing({
   percent,
   label,
+  sublabel,
   size = 64,
   strokeWidth = 6,
+  strokeColor,
+  renderCenter,
 }: CoverageRingProps) {
   const { colors } = useTheme();
   const clampedPercent = Math.min(100, Math.max(0, percent));
@@ -44,7 +53,7 @@ export function CoverageRing({
             cx={size / 2}
             cy={size / 2}
             r={radius}
-            stroke={colors.primary}
+            stroke={strokeColor ?? colors.primary}
             strokeWidth={strokeWidth}
             fill="none"
             strokeDasharray={circumference}
@@ -56,23 +65,30 @@ export function CoverageRing({
 
         {/* Centre label */}
         <View style={[styles.centerLabel, { width: size, height: size }]}>
-          <Text
-            style={[
-              styles.percentText,
-              {
-                color: colors.text,
-                fontSize: size >= 100 ? 24 : 14,
-                fontWeight: '700',
-              },
-            ]}
-          >
-            {Math.round(clampedPercent)}%
-          </Text>
+          {renderCenter ? (
+            renderCenter()
+          ) : (
+            <Text
+              style={[
+                styles.percentText,
+                {
+                  color: colors.text,
+                  fontSize: size >= 100 ? 24 : 14,
+                  fontWeight: '700',
+                },
+              ]}
+            >
+              {Math.round(clampedPercent)}%
+            </Text>
+          )}
         </View>
       </View>
 
       {label && (
-        <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
+        <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
+      )}
+      {sublabel && (
+        <Text style={[styles.sublabel, { color: colors.textSecondary }]}>{sublabel}</Text>
       )}
     </View>
   );
@@ -89,6 +105,11 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  sublabel: {
+    fontSize: 11,
     textAlign: 'center',
   },
 });

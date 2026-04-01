@@ -143,11 +143,15 @@ export class AuthService {
       );
     }
 
-    const user = await this.userModel.findByIdAndUpdate(
-      userId,
-      { specialty: dto.specialty, trainingStage: dto.trainingStage },
-      { new: true }
-    );
+    const updateFields: Record<string, unknown> = {
+      specialty: dto.specialty,
+      trainingStage: dto.trainingStage,
+    };
+    if (dto.name !== undefined) {
+      updateFields.name = dto.name;
+    }
+
+    const user = await this.userModel.findByIdAndUpdate(userId, updateFields, { new: true });
 
     if (!user) {
       throw new UnauthorizedException('User not found');

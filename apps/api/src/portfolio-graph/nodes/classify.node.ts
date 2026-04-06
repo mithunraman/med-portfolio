@@ -2,8 +2,8 @@ import { Specialty } from '@acme/shared';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { getStageContext } from '../../specialties/stage-context';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
+import { getStageContext } from '../../specialties/stage-context';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { ClassificationAlternative, PortfolioStateType } from '../portfolio-graph.state';
 
@@ -180,7 +180,10 @@ export function createClassifyNode(deps: GraphDeps) {
   return async function classifyNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'classify' });
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
+      conversationId: state.conversationId,
+      step: 'classify',
+    });
     const cid = state.conversationId;
     logger.log(`[${cid}] Classifying entry`);
 

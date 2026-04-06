@@ -1,14 +1,11 @@
 import { interrupt } from '@langchain/langgraph';
-import { createAskFollowupNode } from '../ask-followup.node';
+import { createAskClarificationNode } from '../ask-clarification.node';
 import type { GraphDeps } from '../../graph-deps';
 import type { PortfolioStateType } from '../../portfolio-graph.state';
 
-// Mock LangGraph's interrupt
 jest.mock('@langchain/langgraph', () => ({
   interrupt: jest.fn(),
 }));
-
-// ── Helpers ──
 
 function makeDeps(): GraphDeps {
   return {
@@ -31,28 +28,17 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     fullTranscript: 'Some transcript',
     messageCount: 1,
     entryType: 'CLINICAL_CASE_REVIEW',
-    classificationConfidence: 0.9,
-    classificationReasoning: '',
+    classificationConfidence: 0.5,
+    classificationReasoning: 'Insufficient signals',
     classificationSignals: [],
     alternatives: [],
-    classificationConfirmed: true,
+    classificationConfirmed: false,
     clarificationRound: 0,
     sectionCoverage: {},
-    missingSections: ['reflection', 'outcome'],
+    missingSections: [],
     hasEnoughInfo: false,
-    followUpRound: 1,
-    pendingFollowupQuestions: [
-      {
-        sectionId: 'reflection',
-        question: 'What did you learn?',
-        hints: { examples: ['Example'] },
-      },
-      {
-        sectionId: 'outcome',
-        question: 'What happened to the patient?',
-        hints: { examples: ['The patient recovered...'] },
-      },
-    ],
+    followUpRound: 0,
+    pendingFollowupQuestions: [],
     capabilities: [],
     title: null,
     reflection: null,
@@ -63,53 +49,58 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
   } as PortfolioStateType;
 }
 
-// ── Tests ──
-
-describe('AskFollowupNode (interrupt-only)', () => {
+describe('AskClarificationNode (interrupt-only)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('should call interrupt with questions from state', async () => {
-    const node = createAskFollowupNode(makeDeps());
+  it('should call interrupt with classification context', async () => {
+    const node = createAskClarificationNode(makeDeps());
     const state = makeState();
 
     await node(state);
 
     expect(interrupt).toHaveBeenCalledWith({
-      type: 'followup',
-      questions: state.pendingFollowupQuestions,
-      missingSections: ['reflection', 'outcome'],
-      entryType: 'CLINICAL_CASE_REVIEW',
-      followUpRound: 1,
+      type: 'clarification',
+      confidence: 0.5,
+      reasoning: 'Insufficient signals',
+      suggestedEntryType: 'CLINICAL_CASE_REVIEW',
+      clarificationRound: 0,
     });
+  });
+
+  it('should increment clarificationRound on resume', async () => {
+    const node = createAskClarificationNode(makeDeps());
+    const result = await node(makeState({ clarificationRound: 0 }));
+
+    expect(result.clarificationRound).toBe(1);
+  });
+
+  it('should increment clarificationRound from round 1 to 2', async () => {
+    const node = createAskClarificationNode(makeDeps());
+    const result = await node(makeState({ clarificationRound: 1 }));
+
+    expect(result.clarificationRound).toBe(2);
   });
 
   it('should not make any LLM calls', async () => {
     const deps = makeDeps();
     deps.llmService = { invokeStructured: jest.fn() } as any;
 
-    const node = createAskFollowupNode(deps);
+    const node = createAskClarificationNode(deps);
     await node(makeState());
 
     expect(deps.llmService.invokeStructured).not.toHaveBeenCalled();
   });
 
-  it('should return empty state (no state mutations)', async () => {
-    const node = createAskFollowupNode(makeDeps());
-    const result = await node(makeState());
-
-    expect(result).toEqual({});
-  });
-
   it('should emit ANALYSIS_STEP_STARTED event', async () => {
     const deps = makeDeps();
-    const node = createAskFollowupNode(deps);
+    const node = createAskClarificationNode(deps);
     await node(makeState());
 
     expect(deps.eventEmitter.emit).toHaveBeenCalledWith(
       'analysis.step.started',
-      { conversationId: 'conv-123', step: 'ask_followup' }
+      { conversationId: 'conv-123', step: 'ask_clarification' }
     );
   });
 });

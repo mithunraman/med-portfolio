@@ -24,68 +24,71 @@ interface ClassificationResumeValue {
  */
 export function createPresentClassificationNode(deps: GraphDeps) {
   return async function presentClassificationNode(
-    state: PortfolioStateType,
+    state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
     const cid = state.conversationId;
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: cid, step: 'present_classification' });
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
+      conversationId: cid,
+      step: 'present_classification',
+    });
     logger.log(`[${cid}] Presenting classification`);
 
-  const specialty = Number(state.specialty) as Specialty;
-  const config = getSpecialtyConfig(specialty);
-  const validCodes = new Set(config.entryTypes.map((et) => et.code));
+    const specialty = Number(state.specialty) as Specialty;
+    const config = getSpecialtyConfig(specialty);
+    const validCodes = new Set(config.entryTypes.map((et) => et.code));
 
-  // Build options from primary suggestion + alternatives
-  const options: ClassificationOption[] = [];
+    // Build options from primary suggestion + alternatives
+    const options: ClassificationOption[] = [];
 
-  if (state.entryType) {
-    const entryDef = config.entryTypes.find((et) => et.code === state.entryType);
-    options.push({
-      code: state.entryType,
-      label: entryDef?.label ?? state.entryType,
-      confidence: state.classificationConfidence,
+    if (state.entryType) {
+      const entryDef = config.entryTypes.find((et) => et.code === state.entryType);
+      options.push({
+        code: state.entryType,
+        label: entryDef?.label ?? state.entryType,
+        confidence: state.classificationConfidence,
+        reasoning: state.classificationReasoning,
+      });
+    }
+
+    for (const alt of state.alternatives) {
+      if (alt.entryType === state.entryType) continue; // skip duplicate
+
+      const entryDef = config.entryTypes.find((et) => et.code === alt.entryType);
+      options.push({
+        code: alt.entryType,
+        label: entryDef?.label ?? alt.entryType,
+        confidence: alt.confidence,
+        reasoning: alt.reasoning,
+      });
+    }
+
+    // Pause the graph — the interrupt payload is read by PortfolioGraphService
+    // to write the ASSISTANT message. Returns the resume value on second execution.
+    const resumeValue = interrupt({
+      type: 'classification',
+      options,
+      suggestedEntryType: state.entryType,
       reasoning: state.classificationReasoning,
-    });
-  }
+    }) as ClassificationResumeValue;
 
-  for (const alt of state.alternatives) {
-    if (alt.entryType === state.entryType) continue; // skip duplicate
+    // ── Validate resume value ──
+    const selectedType = resumeValue?.entryType;
 
-    const entryDef = config.entryTypes.find((et) => et.code === alt.entryType);
-    options.push({
-      code: alt.entryType,
-      label: entryDef?.label ?? alt.entryType,
-      confidence: alt.confidence,
-      reasoning: alt.reasoning,
-    });
-  }
+    if (selectedType && validCodes.has(selectedType)) {
+      logger.log(`[${cid}] User confirmed entry type: ${selectedType}`);
+      return {
+        entryType: selectedType,
+        classificationConfidence: 1.0,
+        classificationConfirmed: true,
+      };
+    }
 
-  // Pause the graph — the interrupt payload is read by PortfolioGraphService
-  // to write the ASSISTANT message. Returns the resume value on second execution.
-  const resumeValue = interrupt({
-    type: 'classification',
-    options,
-    suggestedEntryType: state.entryType,
-    reasoning: state.classificationReasoning,
-  }) as ClassificationResumeValue;
-
-  // ── Validate resume value ──
-  const selectedType = resumeValue?.entryType;
-
-  if (selectedType && validCodes.has(selectedType)) {
-    logger.log(`[${cid}] User confirmed entry type: ${selectedType}`);
+    // Invalid or missing selection — keep LLM's suggestion
+    logger.warn(
+      `[${cid}] Invalid resume value (entryType: ${selectedType}), keeping LLM suggestion: ${state.entryType}`
+    );
     return {
-      entryType: selectedType,
-      classificationConfidence: 1.0,
-      classificationSource: 'USER_CONFIRMED',
+      classificationConfirmed: true,
     };
-  }
-
-  // Invalid or missing selection — keep LLM's suggestion
-  logger.warn(
-    `[${cid}] Invalid resume value (entryType: ${selectedType}), keeping LLM suggestion: ${state.entryType}`,
-  );
-  return {
-    classificationSource: 'USER_CONFIRMED',
-  };
   };
 }

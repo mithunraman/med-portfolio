@@ -2,6 +2,7 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 import { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 import { GraphDeps } from './graph-deps';
 import {
+  createAskClarificationNode,
   createAskFollowupNode,
   createCheckCompletenessNode,
   createClassifyNode,
@@ -18,16 +19,33 @@ import { PortfolioState, PortfolioStateType } from './portfolio-graph.state';
 
 // ── Max loop limits ──
 export const MAX_FOLLOWUP_ROUNDS = 3;
+export const CONFIDENCE_THRESHOLD = 0.7;
+export const MAX_CLARIFICATION_ROUNDS = 2;
 
 // ── Router functions ──
 
 /**
  * After gather_context: if the user has already confirmed the entry type,
  * skip classification and go straight to completeness check.
- * Otherwise (first run), proceed to classify.
+ * Otherwise (first run or clarification loop), proceed to classify.
  */
-function gatherContextRouter(state: PortfolioStateType): 'classify' | 'check_completeness' {
-  return state.classificationSource === 'USER_CONFIRMED' ? 'check_completeness' : 'classify';
+export function gatherContextRouter(state: PortfolioStateType): 'classify' | 'check_completeness' {
+  return state.classificationConfirmed ? 'check_completeness' : 'classify';
+}
+
+/**
+ * After classify: if confidence is below threshold and rounds remain,
+ * ask the user to provide more detail before presenting classification options.
+ * Falls through to present_classification after MAX_CLARIFICATION_ROUNDS.
+ */
+export function classifyRouter(
+  state: PortfolioStateType
+): 'present_classification' | 'ask_clarification' {
+  const lowConfidence = state.classificationConfidence < CONFIDENCE_THRESHOLD;
+  const canAskMore = state.clarificationRound < MAX_CLARIFICATION_ROUNDS;
+
+  if (lowConfidence && canAskMore) return 'ask_clarification';
+  return 'present_classification';
 }
 
 /**
@@ -45,29 +63,29 @@ function completenessRouter(state: PortfolioStateType): 'generate_followup' | 't
  *
  * Graph structure:
  *
- *   START → gather_context ──┬── (first run) ──→ classify → present_classification (INTERRUPT)
- *               ↑            │                                       ↓
- *               │            └── (type confirmed) ──→ check_completeness
- *               │                                              ↓
- *               │                                   ┌── completenessRouter ──┐
- *               │                                   ↓                        ↓
- *               │                          generate_followup          tag_capabilities
- *               │                                   ↓                        ↓
- *               │                             ask_followup (INTERRUPT) present_capabilities (INTERRUPT)
- *               │                                   ↓                        ↓
- *               └───────────────────────────────────┘                    reflect
- *                  (loop back, skip classification)                          ↓
- *                                                                      generate_pdp
- *                                                                            ↓
- *                                                                          save
- *                                                                            ↓
- *                                                                           END
+ *   START → gather_context ──┬── (classificationConfirmed) ──────────────────────→ check_completeness
+ *               ↑            │                                                              ↓
+ *               │            └── (first run) ──→ classify → classifyRouter ──┐  ┌── completenessRouter ──┐
+ *               │                                                             │  ↓                        ↓
+ *               │                                            (confidence OK) ─┴→ present_classification  generate_followup
+ *               │                                                                    (INTERRUPT)              ↓
+ *               │                                            (low confidence) ──→ ask_clarification    ask_followup (INTERRUPT)
+ *               │                                                                    (INTERRUPT)              │
+ *               ├───────────────────────────────────────────────────────────────────────┘                    │
+ *               └────────────────────────────────────────────────────────────────────────────────────────────┘
+ *
+ *   present_classification (INTERRUPT) → check_completeness → ... → tag_capabilities
+ *                                                                          ↓
+ *                                                               present_capabilities (INTERRUPT)
+ *                                                                          ↓
+ *                                                                       reflect → generate_pdp → save → END
  */
 export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: GraphDeps) {
   const graph = new StateGraph(PortfolioState)
     // ── Nodes ──
     .addNode('gather_context', createGatherContextNode(deps))
     .addNode('classify', createClassifyNode(deps))
+    .addNode('ask_clarification', createAskClarificationNode(deps))
     .addNode('present_classification', createPresentClassificationNode(deps))
     .addNode('check_completeness', createCheckCompletenessNode(deps))
     .addNode('generate_followup', createGenerateFollowupNode(deps))
@@ -89,8 +107,12 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
       check_completeness: 'check_completeness',
     })
 
-    // Classification → always present to user for confirmation
-    .addEdge('classify', 'present_classification')
+    // Classification → route based on confidence
+    .addConditionalEdges('classify', classifyRouter, {
+      present_classification: 'present_classification',
+      ask_clarification: 'ask_clarification',
+    })
+    .addEdge('ask_clarification', 'gather_context')
     .addEdge('present_classification', 'check_completeness')
 
     // Completeness routing (loop: generate questions → interrupt → loop back)

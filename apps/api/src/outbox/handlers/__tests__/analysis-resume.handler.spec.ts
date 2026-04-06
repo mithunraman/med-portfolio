@@ -290,5 +290,22 @@ describe('AnalysisResumeHandler', () => {
       // getFinalState uses threadId
       expect(getFinalState).toHaveBeenCalledWith('conv-456:3');
     });
+
+    it('should resume ask_clarification with no resume value', async () => {
+      const resumeGraph = jest.fn().mockResolvedValue(null);
+
+      const { handler } = createHandler({
+        resumeGraph,
+        transitionStatus: jest.fn().mockResolvedValue({}),
+        withTransaction: jest.fn((fn) => fn({})),
+        updateArtefactById: jest.fn().mockResolvedValue({ ok: true, value: {} }),
+        deleteByArtefactId: jest.fn().mockResolvedValue({ ok: true, value: 0 }),
+      });
+
+      const payload = makePayload({ node: 'ask_clarification', resumeValue: undefined, langGraphThreadId: 'conv-456:3' });
+      await handler.handle(payload);
+
+      expect(resumeGraph).toHaveBeenCalledWith('conv-456:3', 'ask_clarification');
+    });
   });
 });

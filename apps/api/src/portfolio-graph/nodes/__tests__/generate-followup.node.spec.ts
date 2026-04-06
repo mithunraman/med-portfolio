@@ -33,7 +33,8 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     classificationReasoning: '',
     classificationSignals: [],
     alternatives: [],
-    classificationSource: 'USER_CONFIRMED',
+    classificationConfirmed: true,
+    clarificationRound: 0,
     sectionCoverage: {
       presentation: { covered: true, depth: 'adequate' },
       clinical_reasoning: { covered: false, depth: 'shallow' },

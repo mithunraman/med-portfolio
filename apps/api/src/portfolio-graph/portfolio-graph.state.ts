@@ -109,10 +109,16 @@ export const PortfolioState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => [],
   }),
-  /** Whether the entry type was confirmed by the user or only suggested by the LLM */
-  classificationSource: Annotation<'LLM' | 'USER_CONFIRMED' | null>({
+  /** True once the user has confirmed the entry type. Drives gatherContextRouter. */
+  classificationConfirmed: Annotation<boolean>({
     reducer: (_, next) => next,
-    default: () => null,
+    default: () => false,
+  }),
+
+  /** Number of low-confidence clarification rounds completed. Drives classifyRouter. */
+  clarificationRound: Annotation<number>({
+    reducer: (_, next) => next,
+    default: () => 0,
   }),
 
   // ── Completeness ──

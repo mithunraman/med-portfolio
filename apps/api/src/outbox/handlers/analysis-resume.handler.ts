@@ -82,6 +82,12 @@ export class AnalysisResumeHandler implements OutboxHandler {
             'ask_followup'
           );
           break;
+        case 'ask_clarification':
+          pausedNode = await this.portfolioGraphService.resumeGraph(
+            threadId,
+            'ask_clarification'
+          );
+          break;
         case 'present_classification':
           pausedNode = await this.portfolioGraphService.resumeGraph(
             threadId,

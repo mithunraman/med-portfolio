@@ -39,6 +39,7 @@ import type { PortfolioStateType } from './portfolio-graph.state';
 export interface GraphResumeMap {
   present_classification: { entryType: string };
   ask_followup: true;
+  ask_clarification: true;
   present_capabilities: { selectedCodes: string[] };
 }
 
@@ -96,6 +97,19 @@ const CAPABILITIES_PROMPTS = [
   "I found some relevant capabilities in your input. Review and adjust the selection.",
   "Here's what I identified — select the capabilities that best reflect your entry.",
 ] as const;
+
+const CLARIFICATION_PROMPTS: Record<string, readonly string[]> = {
+  initial: [
+    "I wasn't able to identify the entry type from what you've shared. Could you describe the clinical situation in more detail — for example, what happened, your role, and what you learned?",
+    "I need a bit more context to categorise this entry. Could you tell me more about the clinical situation, your involvement, and the outcome?",
+    "Could you share more detail about the clinical experience? A brief description of what happened, your role, and any reflections would help.",
+  ],
+  retry: [
+    'Thanks for sharing more. A little more detail about the clinical context would help me categorise this correctly.',
+    "That's helpful. Could you add a bit more about the clinical situation or your specific role?",
+    'A few more details about what happened clinically would help me identify the right entry type.',
+  ],
+} as const;
 
 /** Data needed to create the ASSISTANT question message for an interrupt. No DB writes. */
 export interface InterruptPayload {
@@ -256,6 +270,7 @@ export class PortfolioGraphService implements OnModuleInit {
     const interruptNodes = new Set<string>([
       'present_classification',
       'ask_followup',
+      'ask_clarification',
       'present_capabilities',
     ]);
 
@@ -352,6 +367,28 @@ export class PortfolioGraphService implements OnModuleInit {
             content,
             status: MessageStatus.COMPLETE,
             question,
+            idempotencyKey,
+          },
+        };
+      }
+
+      case 'clarification': {
+        const round = interruptValue.clarificationRound as number;
+        const prompts = round === 0 ? CLARIFICATION_PROMPTS.initial : CLARIFICATION_PROMPTS.retry;
+        const content = prompts[Math.floor(Math.random() * prompts.length)];
+
+        return {
+          idempotencyKey,
+          pausedNode,
+          questionType: 'free_text',
+          messageData: {
+            conversation: conversationOid,
+            userId: userOid,
+            role: MessageRole.ASSISTANT,
+            messageType: MessageType.TEXT,
+            rawContent: content,
+            content,
+            status: MessageStatus.COMPLETE,
             idempotencyKey,
           },
         };

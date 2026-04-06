@@ -2,7 +2,7 @@ Analyse if the following is a concern. Do not make any code changes yet.
 
 Probable Concern:
 
-Terminal classification interrupt returns questionType: 'single_select' with no options
-File: portfolio-graph.service.ts:357 | Confidence: 0.8
+Debug logging in production mobile code
+File: apps/mobile/app/(messages)/[conversationId].tsx:186-210 | Confidence: 0.6
 
-When the classification interrupt has zero options (irrelevant content), the returned InterruptPayload still sets questionType: 'single_select' but the messageData contains no question field. Consumers that switch on questionType to render UI (e.g. the mobile app) may attempt to render a selection widget with no options, or fail to recognize this as a terminal/informational message. A distinct question type (e.g. 'info') or an explicit question: null would make the contract clearer for clients.
+Multiple chatLogger.debug(...) calls were added to the chat screen's render/effect paths including actionBarState (which runs on every render) and the poll config computation. If the logger isn't stripped or gated by **DEV** in release builds, this adds measurable overhead on every re-render. Confirm that the logger.createScope implementation suppresses debug-level output in production; if it does, this is a non-issue.

@@ -62,6 +62,15 @@ export interface IOutboxRepository {
   cleanupOldEntries(olderThan: Date, statuses: OutboxStatus[]): Promise<Result<number, DBError>>;
 
   /**
+   * Check if any pending or processing analysis entries exist for a conversation.
+   * Used by computeContext to derive the correct phase when work is queued
+   * but the analysis run hasn't transitioned yet.
+   */
+  hasPendingByConversationId(
+    conversationId: string
+  ): Promise<Result<boolean, DBError>>;
+
+  /**
    * Cancel pending/processing entries related to a user.
    * Matches by payload.userId or payload.conversationId.
    */

@@ -41,6 +41,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { logger } from '@/utils/logger';
+
+const chatLogger = logger.createScope('ChatScreen');
 /** Minimum user words before "Start Analysis" is available */
 const INITIAL_WORD_THRESHOLD = 60;
 /** Minimum user words (since the question) before "Continue Analysis" is available */
@@ -180,8 +183,20 @@ export default function ChatScreen() {
   );
   const pollIntervalMs = getPollInterval(context?.phase, hasProcessingMessages, hasUnsentMessages);
 
+  chatLogger.debug('[poll-config]', {
+    phase: context?.phase,
+    pollIntervalMs,
+    hasProcessingMessages,
+    hasUnsentMessages,
+  });
+
   useEffect(() => {
     if (!effectiveConversationId || isPendingConversation || pollIntervalMs === null) {
+      chatLogger.debug('[poll] skipping — no polling needed', {
+        effectiveConversationId,
+        isPendingConversation,
+        pollIntervalMs,
+      });
       return undefined;
     }
 
@@ -189,6 +204,7 @@ export default function ChatScreen() {
 
     const startPolling = () => {
       if (intervalId !== null) return;
+      chatLogger.debug('[poll] starting interval', { pollIntervalMs });
       intervalId = setInterval(() => {
         dispatch(pollConversation(effectiveConversationId));
       }, pollIntervalMs);
@@ -326,28 +342,49 @@ export default function ChatScreen() {
   const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
 
-  // Clear the flag once the server confirms the phase change
+  // Clear the optimistic flag when the server phase leaves 'analysing'.
+  // This works for both start and resume because the server now returns
+  // phase='analysing' whenever an outbox entry is pending (even if the
+  // run status is still AWAITING_INPUT). The phase transition will be:
+  //   composing → analysing → awaiting_input  (start)
+  //   awaiting_input → analysing → awaiting_input  (resume)
+  // In both cases the effect fires when phase leaves 'analysing'.
   useEffect(() => {
-    if (phase === 'analysing') setPendingAnalysis(false);
+    if (phase && phase !== 'analysing') {
+      chatLogger.debug('[phase-effect] clearing pendingAnalysis', { phase });
+      setPendingAnalysis(false);
+    }
   }, [phase]);
 
   const handleStartAnalysis = useCallback(async () => {
+    chatLogger.debug('[startAnalysis] setting pendingAnalysis=true');
     setPendingAnalysis(true);
-    await dispatch(startAnalysis(effectiveConversationId));
+    const result = await dispatch(startAnalysis(effectiveConversationId));
+    chatLogger.debug('[startAnalysis] thunk resolved', {
+      fulfilled: startAnalysis.fulfilled.match(result),
+    });
+    // On rejection, clear immediately — no server phase will arrive
+    if (startAnalysis.rejected.match(result)) setPendingAnalysis(false);
   }, [effectiveConversationId, dispatch]);
 
   const handleResumeAnalysis = useCallback(
     async (messageId?: string, value?: Record<string, unknown>) => {
       const msgId = messageId ?? context?.activeQuestion?.messageId;
       if (!msgId) return;
+      chatLogger.debug('[resumeAnalysis] setting pendingAnalysis=true');
       setPendingAnalysis(true);
-      await dispatch(
+      const result = await dispatch(
         resumeAnalysis({
           conversationId: effectiveConversationId,
           messageId: msgId,
           value,
         })
       );
+      chatLogger.debug('[resumeAnalysis] thunk resolved', {
+        fulfilled: resumeAnalysis.fulfilled.match(result),
+      });
+      // On rejection, clear immediately — no server phase will arrive
+      if (resumeAnalysis.rejected.match(result)) setPendingAnalysis(false);
     },
     [effectiveConversationId, context?.activeQuestion?.messageId, dispatch]
   );
@@ -396,6 +433,17 @@ export default function ChatScreen() {
 
   // Single derived bar state — status mode (busy) or action mode (clickable)
   const actionBarState = useMemo((): ActionBarState | null => {
+    chatLogger.debug('[actionBarState] computing', {
+      phase,
+      pendingAnalysis,
+      hasUnsentMessages,
+      hasProcessingMessages,
+      canStartAnalysis,
+      canResumeAnalysis,
+      activeQuestionType: context?.activeQuestion?.questionType,
+      msgCount: mergedMessages.length,
+    });
+
     // No conversation yet — hide the bar entirely
     if (mergedMessages.length === 0 && !context) return null;
 
@@ -409,6 +457,10 @@ export default function ChatScreen() {
 
     // Optimistic or server-confirmed analysis in progress
     if (pendingAnalysis || phase === 'analysing') {
+      chatLogger.debug('[actionBarState] showing analysis-in-progress', {
+        pendingAnalysis,
+        phase,
+      });
       const reason =
         thinkingStepLabel(context?.analysisRun?.thinkingReason) ?? 'Starting analysis...';
       return { mode: 'status', reason };

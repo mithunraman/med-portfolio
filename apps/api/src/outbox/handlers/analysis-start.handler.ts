@@ -183,6 +183,21 @@ export class AnalysisStartHandler implements OutboxHandler {
   ): Promise<void> {
     const finalState = await this.portfolioGraphService.getFinalState(threadId);
 
+    // If the graph completed without producing an artefact (e.g. irrelevant content),
+    // just transition to COMPLETED without saving artefact/PDP data.
+    if (!finalState.entryType || !finalState.reflection) {
+      this.logger.warn(
+        `Graph completed without artefact output (entryType: ${finalState.entryType}) — skipping saves`
+      );
+      await this.analysisRunsService.transitionStatus(
+        runId,
+        AnalysisRunStatus.RUNNING,
+        AnalysisRunStatus.COMPLETED,
+        { currentStep: null },
+      );
+      return;
+    }
+
     await this.transactionService.withTransaction(async (session) => {
       const artefactOid = new Types.ObjectId(finalState.artefactId);
       const userOid = new Types.ObjectId(finalState.userId);

@@ -192,6 +192,25 @@ export class OutboxRepository implements IOutboxRepository {
     }
   }
 
+  async hasPendingByConversationId(
+    conversationId: string
+  ): Promise<Result<boolean, DBError>> {
+    try {
+      const count = await this.outboxModel.countDocuments(
+        {
+          'payload.conversationId': conversationId,
+          type: { $in: ['analysis.start', 'analysis.resume'] },
+          status: { $in: [OutboxStatus.PENDING, OutboxStatus.PROCESSING] },
+        },
+        { limit: 1 }
+      );
+      return ok(count > 0);
+    } catch (error) {
+      this.logger.error('Failed to check pending outbox entries', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to check pending outbox entries' });
+    }
+  }
+
   async cancelByUser(
     userId: Types.ObjectId,
     conversationIds: string[]

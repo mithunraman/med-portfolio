@@ -47,8 +47,16 @@ const mockAnalysisRunsService = {
   findLatestRun: jest.fn(),
 };
 
+const mockOutboxService = {
+  hasPendingForConversation: jest.fn().mockResolvedValue(false),
+};
+
 function createService(): ConversationContextService {
-  return new ConversationContextService(mockRepo as any, mockAnalysisRunsService as any);
+  return new ConversationContextService(
+    mockRepo as any,
+    mockAnalysisRunsService as any,
+    mockOutboxService as any
+  );
 }
 
 // ── Tests ──
@@ -369,6 +377,87 @@ describe('ConversationContextService', () => {
         const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
         expect(ctx.activeQuestion?.questionType).toBe('multi_select');
       });
+    });
+  });
+
+  // ─── Phase: awaiting_input with pending outbox (outbox-aware phase) ───
+
+  describe('when AWAITING_INPUT with pending outbox entry', () => {
+    beforeEach(() => {
+      mockAnalysisRunsService.findLatestRun.mockResolvedValue(
+        makeRun({
+          status: AnalysisRunStatus.AWAITING_INPUT,
+          currentQuestion: makeCurrentQuestion('free_text'),
+        })
+      );
+      mockOutboxService.hasPendingForConversation.mockResolvedValue(true);
+    });
+
+    it('returns phase "analysing" instead of "awaiting_input"', async () => {
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
+      expect(ctx.phase).toBe('analysing');
+    });
+
+    it('denies all actions (same as analysing phase)', async () => {
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
+      expect(ctx.actions.sendMessage.allowed).toBe(false);
+      expect(ctx.actions.sendAudio.allowed).toBe(false);
+      expect(ctx.actions.startAnalysis.allowed).toBe(false);
+      expect(ctx.actions.resumeAnalysis.allowed).toBe(false);
+    });
+  });
+
+  describe('outbox check is only called for AWAITING_INPUT', () => {
+    it('does not check outbox when run is RUNNING', async () => {
+      mockAnalysisRunsService.findLatestRun.mockResolvedValue(
+        makeRun({ status: AnalysisRunStatus.RUNNING })
+      );
+
+      await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
+      expect(mockOutboxService.hasPendingForConversation).not.toHaveBeenCalled();
+    });
+
+    it('does not check outbox when run is PENDING', async () => {
+      mockAnalysisRunsService.findLatestRun.mockResolvedValue(
+        makeRun({ status: AnalysisRunStatus.PENDING })
+      );
+
+      await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
+      expect(mockOutboxService.hasPendingForConversation).not.toHaveBeenCalled();
+    });
+
+    it('does not check outbox when run is COMPLETED', async () => {
+      mockAnalysisRunsService.findLatestRun.mockResolvedValue(
+        makeRun({ status: AnalysisRunStatus.COMPLETED })
+      );
+
+      await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
+      expect(mockOutboxService.hasPendingForConversation).not.toHaveBeenCalled();
+    });
+
+    it('does not check outbox when no run exists', async () => {
+      mockAnalysisRunsService.findLatestRun.mockResolvedValue(null);
+      mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
+      mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
+
+      await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
+      expect(mockOutboxService.hasPendingForConversation).not.toHaveBeenCalled();
+    });
+
+    it('checks outbox when run is AWAITING_INPUT', async () => {
+      mockAnalysisRunsService.findLatestRun.mockResolvedValue(
+        makeRun({
+          status: AnalysisRunStatus.AWAITING_INPUT,
+          currentQuestion: makeCurrentQuestion('free_text'),
+        })
+      );
+      mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
+      mockOutboxService.hasPendingForConversation.mockResolvedValue(false);
+
+      await service.computeContext(conversationOid, ConversationStatus.ACTIVE, 'test-artefact-id');
+      expect(mockOutboxService.hasPendingForConversation).toHaveBeenCalledWith(
+        conversationOid.toString()
+      );
     });
   });
 

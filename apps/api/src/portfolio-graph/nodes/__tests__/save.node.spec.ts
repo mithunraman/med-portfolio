@@ -23,11 +23,12 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     specialty: '0',
     trainingStage: '',
     fullTranscript: 'test transcript',
-    messageCount: 1,
+
+    isRelevant: true,
     entryType: 'CLINICAL_ENCOUNTER',
     classificationConfidence: 0.9,
     classificationReasoning: 'test',
-    classificationSignals: [],
+
     alternatives: [],
     classificationConfirmed: true,
     clarificationRound: 0,
@@ -39,9 +40,9 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     capabilities: [{ code: 'CAP1', name: 'Cap 1', confidence: 0.9, reasoning: 'test' }],
     title: 'Test Entry',
     reflection: [{ sectionId: 'reflection', title: 'Reflection', text: 'Some reflection', covered: true }],
-    capabilityAnnotations: [],
+
     pdpGoals: [],
-    error: null,
+
     ...overrides,
   } as PortfolioStateType;
 }
@@ -67,12 +68,11 @@ describe('SaveNode (validation-only)', () => {
     expect(deps.transactionService).toEqual({});
   });
 
-  it('should throw when entryType is missing', async () => {
+  it('should return empty state without throwing when entryType is null (irrelevant content path)', async () => {
     const node = createSaveNode(makeDeps());
+    const result = await node(makeState({ entryType: null }));
 
-    await expect(node(makeState({ entryType: null }))).rejects.toThrow(
-      'Cannot save: entryType is not set',
-    );
+    expect(result).toEqual({});
   });
 
   it('should throw when title is missing', async () => {

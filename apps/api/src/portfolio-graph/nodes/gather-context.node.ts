@@ -55,8 +55,7 @@ export function createGatherContextNode(deps: GraphDeps) {
     });
 
     if (!result.ok) {
-      logger.error(`[${cid}] Failed to fetch messages: ${result.error.message}`);
-      return { error: `gather_context: ${result.error.message}` };
+      throw new Error(`[${cid}] Failed to fetch messages: ${result.error.message}`);
     }
 
     // Include both USER and ASSISTANT messages to preserve Q&A context.
@@ -90,6 +89,6 @@ export function createGatherContextNode(deps: GraphDeps) {
         `transcript length: ${fullTranscript.length} chars`
     );
 
-    return { fullTranscript, messageCount: userMessageCount };
+    return { fullTranscript };
   };
 }

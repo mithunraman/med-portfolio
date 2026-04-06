@@ -224,7 +224,6 @@ export function createReflectNode(deps: GraphDeps) {
     return {
       title: response.title,
       reflection: response.sections,
-      capabilityAnnotations: response.capabilityAnnotations,
     };
   };
 }

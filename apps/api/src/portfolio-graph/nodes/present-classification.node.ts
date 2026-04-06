@@ -33,6 +33,21 @@ export function createPresentClassificationNode(deps: GraphDeps) {
     });
     logger.log(`[${cid}] Presenting classification`);
 
+    // ── Guard: irrelevant content with no entry type after max clarification rounds ──
+    if (!state.isRelevant && !state.entryType) {
+      logger.warn(`[${cid}] Content not relevant — presenting terminal classification`);
+
+      interrupt({
+        type: 'classification',
+        options: [],
+        suggestedEntryType: null,
+        reasoning: 'The content provided does not appear to be related to medical training.',
+      });
+
+      // Even if resumed, there's nothing valid to select — proceed with null entryType
+      return { classificationConfirmed: true };
+    }
+
     const specialty = Number(state.specialty) as Specialty;
     const config = getSpecialtyConfig(specialty);
     const validCodes = new Set(config.entryTypes.map((et) => et.code));

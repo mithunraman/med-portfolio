@@ -21,7 +21,16 @@ export function createSaveNode(deps: GraphDeps) {
     });
 
     const cid = state.conversationId;
-    if (!state.entryType) throw new Error(`[${cid}] Cannot save: entryType is not set`);
+
+    // ── Irrelevant content path: graph completes without artefact output ──
+    if (!state.entryType) {
+      logger.warn(
+        `[${cid}] No entry type — graph completing without artefact (content was not relevant)`
+      );
+      return {};
+    }
+
+    // ── Normal path: validate all required fields are present ──
     if (!state.title) throw new Error(`[${cid}] Cannot save: title is not set`);
     if (!state.reflection) throw new Error(`[${cid}] Cannot save: reflection is not set`);
     if (state.capabilities.length === 0) throw new Error(`[${cid}] Cannot save: no capabilities`);

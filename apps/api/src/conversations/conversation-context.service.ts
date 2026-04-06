@@ -13,6 +13,7 @@ import { Types } from 'mongoose';
 import { AnalysisRunsService } from '../analysis-runs/analysis-runs.service';
 import type { AnalysisRun } from '../analysis-runs/schemas/analysis-run.schema';
 import { isErr } from '../common/utils/result.util';
+import { OutboxService } from '../outbox/outbox.service';
 import {
   CONVERSATIONS_REPOSITORY,
   type IConversationsRepository,
@@ -30,7 +31,8 @@ export class ConversationContextService {
   constructor(
     @Inject(CONVERSATIONS_REPOSITORY)
     private readonly conversationsRepository: IConversationsRepository,
-    private readonly analysisRunsService: AnalysisRunsService
+    private readonly analysisRunsService: AnalysisRunsService,
+    private readonly outboxService: OutboxService
   ) {}
 
   async computeContext(
@@ -52,7 +54,18 @@ export class ConversationContextService {
     }
 
     const latestRun = await this.analysisRunsService.findLatestRun(conversationOid);
-    const phase = this.derivePhase(latestRun);
+
+    // Check for queued outbox work only when the run is AWAITING_INPUT —
+    // a pending outbox entry means the graph is about to resume, so the
+    // phase should be 'analysing' rather than 'awaiting_input'.
+    let hasPendingWork = false;
+    if (latestRun?.status === AnalysisRunStatus.AWAITING_INPUT) {
+      hasPendingWork = await this.outboxService.hasPendingForConversation(
+        conversationOid.toString()
+      );
+    }
+
+    const phase = this.derivePhase(latestRun, hasPendingWork);
 
     // Query message state when needed for action gating
     let hasProcessing = false;
@@ -97,7 +110,10 @@ export class ConversationContextService {
     return { artefactId, phase, actions, activeQuestion, analysisRun };
   }
 
-  private derivePhase(latestRun: AnalysisRun | null): ConversationPhase {
+  private derivePhase(
+    latestRun: AnalysisRun | null,
+    hasPendingWork = false
+  ): ConversationPhase {
     if (!latestRun) return 'composing';
 
     switch (latestRun.status) {
@@ -105,7 +121,7 @@ export class ConversationContextService {
       case AnalysisRunStatus.RUNNING:
         return 'analysing';
       case AnalysisRunStatus.AWAITING_INPUT:
-        return 'awaiting_input';
+        return hasPendingWork ? 'analysing' : 'awaiting_input';
       case AnalysisRunStatus.COMPLETED:
         return 'completed';
       case AnalysisRunStatus.FAILED:

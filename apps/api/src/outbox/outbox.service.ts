@@ -83,6 +83,19 @@ export class OutboxService {
   }
 
   /**
+   * Check if any pending or processing analysis entries exist for a conversation.
+   * Returns false on error (safe default — avoids blocking the UI).
+   */
+  async hasPendingForConversation(conversationId: string): Promise<boolean> {
+    const result = await this.repository.hasPendingByConversationId(conversationId);
+    if (!result.ok) {
+      this.logger.error('Failed to check pending outbox entries', result.error);
+      return false;
+    }
+    return result.value;
+  }
+
+  /**
    * Reset stale processing entries whose locks have expired.
    * Should be called periodically to handle consumer crashes.
    */

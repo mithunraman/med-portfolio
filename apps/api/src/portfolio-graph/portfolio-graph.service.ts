@@ -4,8 +4,8 @@ import {
   type FreeTextQuestion,
   type MultiSelectQuestion,
   type SingleSelectQuestion,
-  MessageStatus,
   MessageRole,
+  MessageStatus,
   MessageType,
 } from '@acme/shared';
 import { Command } from '@langchain/langgraph';
@@ -86,28 +86,33 @@ const FOLLOWUP_PROMPTS: Record<string, readonly string[]> = {
 } as const;
 
 const CAPABILITIES_PROMPTS = [
-  'I spotted some capabilities in your entry. Confirm the ones that apply, or deselect any that don\'t fit.',
-  "Here are the capabilities I picked up from your input. Check the ones that match.",
+  "I spotted some capabilities in your entry. Confirm the ones that apply, or deselect any that don't fit.",
+  'Here are the capabilities I picked up from your input. Check the ones that match.',
   "I've mapped your entry to a few capabilities. Select the ones that are relevant.",
   "Based on what you've shared, these capabilities stood out. Confirm or adjust as needed.",
   "A few capabilities came through in your entry. Keep the ones that fit and remove any that don't.",
   "I've highlighted some capabilities from your input. Does this look right?",
   "These capabilities seem to align with your entry. Deselect any that aren't a match.",
   "Your entry maps to the capabilities below. Confirm the ones you'd like to include.",
-  "I found some relevant capabilities in your input. Review and adjust the selection.",
+  'I found some relevant capabilities in your input. Review and adjust the selection.',
   "Here's what I identified — select the capabilities that best reflect your entry.",
 ] as const;
 
 const CLARIFICATION_PROMPTS: Record<string, readonly string[]> = {
   initial: [
     "I wasn't able to identify the entry type from what you've shared. Could you describe the clinical situation in more detail — for example, what happened, your role, and what you learned?",
-    "I need a bit more context to categorise this entry. Could you tell me more about the clinical situation, your involvement, and the outcome?",
-    "Could you share more detail about the clinical experience? A brief description of what happened, your role, and any reflections would help.",
+    'I need a bit more context to categorise this entry. Could you tell me more about the clinical situation, your involvement, and the outcome?',
+    'Could you share more detail about the clinical experience? A brief description of what happened, your role, and any reflections would help.',
   ],
   retry: [
     'Thanks for sharing more. A little more detail about the clinical context would help me categorise this correctly.',
     "That's helpful. Could you add a bit more about the clinical situation or your specific role?",
     'A few more details about what happened clinically would help me identify the right entry type.',
+  ],
+  irrelevant: [
+    "That doesn't look like a portfolio entry to me. Could you describe a clinical experience, learning event, or professional activity you'd like to reflect on?",
+    "I wasn't able to identify a clinical or learning experience in what you shared. Could you tell me about a case, procedure, or training event instead?",
+    'It looks like this might not be related to your medical portfolio. Try describing a specific clinical encounter or learning activity.',
   ],
 } as const;
 
@@ -340,6 +345,29 @@ export class PortfolioGraphService implements OnModuleInit {
       case 'classification': {
         const options = interruptValue.options as ClassificationOption[];
 
+        // ── Terminal message: content was not relevant, no options to present ──
+        if (options.length === 0) {
+          const terminalContent =
+            "I wasn't able to identify a portfolio entry type from what you've shared. " +
+            'You can start a new conversation with a clinical experience or learning event.';
+
+          return {
+            idempotencyKey,
+            pausedNode,
+            questionType: 'single_select',
+            messageData: {
+              conversation: conversationOid,
+              userId: userOid,
+              role: MessageRole.ASSISTANT,
+              messageType: MessageType.TEXT,
+              rawContent: terminalContent,
+              content: terminalContent,
+              status: MessageStatus.COMPLETE,
+              idempotencyKey,
+            },
+          };
+        }
+
         const content =
           CLASSIFICATION_PROMPTS[Math.floor(Math.random() * CLASSIFICATION_PROMPTS.length)];
 
@@ -374,8 +402,26 @@ export class PortfolioGraphService implements OnModuleInit {
 
       case 'clarification': {
         const round = interruptValue.clarificationRound as number;
-        const prompts = round === 0 ? CLARIFICATION_PROMPTS.initial : CLARIFICATION_PROMPTS.retry;
+        const isRelevant = interruptValue.isRelevant as boolean;
+
+        let prompts: readonly string[];
+        if (!isRelevant) {
+          prompts = CLARIFICATION_PROMPTS.irrelevant;
+        } else if (round === 0) {
+          prompts = CLARIFICATION_PROMPTS.initial;
+        } else {
+          prompts = CLARIFICATION_PROMPTS.retry;
+        }
+
         const content = prompts[Math.floor(Math.random() * prompts.length)];
+
+        const clarificationQuestion: FreeTextQuestion = {
+          questionType: 'free_text',
+          prompts: [],
+          missingSections: [],
+          followUpRound: 0,
+          entryType: (interruptValue.suggestedEntryType as string) ?? '',
+        };
 
         return {
           idempotencyKey,
@@ -389,6 +435,7 @@ export class PortfolioGraphService implements OnModuleInit {
             rawContent: content,
             content,
             status: MessageStatus.COMPLETE,
+            question: clarificationQuestion,
             idempotencyKey,
           },
         };

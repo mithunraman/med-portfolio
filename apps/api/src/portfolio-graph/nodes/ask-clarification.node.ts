@@ -38,6 +38,7 @@ export function createAskClarificationNode(deps: GraphDeps) {
       reasoning: state.classificationReasoning,
       suggestedEntryType: state.entryType,
       clarificationRound: state.clarificationRound,
+      isRelevant: state.isRelevant,
     });
 
     return { clarificationRound: state.clarificationRound + 1 };

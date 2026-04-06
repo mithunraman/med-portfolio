@@ -18,31 +18,51 @@ describe('gatherContextRouter', () => {
 describe('classifyRouter', () => {
   it('routes to present_classification when confidence meets threshold', () => {
     expect(
-      classifyRouter(s({ classificationConfidence: CONFIDENCE_THRESHOLD, clarificationRound: 0 }))
+      classifyRouter(s({ isRelevant: true, classificationConfidence: CONFIDENCE_THRESHOLD, clarificationRound: 0 }))
     ).toBe('present_classification');
   });
 
   it('routes to present_classification when confidence is above threshold', () => {
     expect(
-      classifyRouter(s({ classificationConfidence: 0.9, clarificationRound: 0 }))
+      classifyRouter(s({ isRelevant: true, classificationConfidence: 0.9, clarificationRound: 0 }))
     ).toBe('present_classification');
   });
 
   it('routes to ask_clarification when confidence is below threshold and rounds remain', () => {
     expect(
-      classifyRouter(s({ classificationConfidence: 0.5, clarificationRound: 0 }))
+      classifyRouter(s({ isRelevant: true, classificationConfidence: 0.5, clarificationRound: 0 }))
     ).toBe('ask_clarification');
   });
 
   it('routes to ask_clarification on second low-confidence round', () => {
     expect(
-      classifyRouter(s({ classificationConfidence: 0.5, clarificationRound: 1 }))
+      classifyRouter(s({ isRelevant: true, classificationConfidence: 0.5, clarificationRound: 1 }))
     ).toBe('ask_clarification');
   });
 
   it('falls through to present_classification after max clarification rounds', () => {
     expect(
-      classifyRouter(s({ classificationConfidence: 0.5, clarificationRound: MAX_CLARIFICATION_ROUNDS }))
+      classifyRouter(s({ isRelevant: true, classificationConfidence: 0.5, clarificationRound: MAX_CLARIFICATION_ROUNDS }))
+    ).toBe('present_classification');
+  });
+
+  // ── Relevance gate ──
+
+  it('routes to ask_clarification when content is irrelevant and rounds remain', () => {
+    expect(
+      classifyRouter(s({ isRelevant: false, classificationConfidence: 0, clarificationRound: 0 }))
+    ).toBe('ask_clarification');
+  });
+
+  it('routes to ask_clarification when irrelevant on second round', () => {
+    expect(
+      classifyRouter(s({ isRelevant: false, classificationConfidence: 0, clarificationRound: 1 }))
+    ).toBe('ask_clarification');
+  });
+
+  it('falls through to present_classification when irrelevant and max rounds exhausted', () => {
+    expect(
+      classifyRouter(s({ isRelevant: false, classificationConfidence: 0, clarificationRound: MAX_CLARIFICATION_ROUNDS }))
     ).toBe('present_classification');
   });
 });

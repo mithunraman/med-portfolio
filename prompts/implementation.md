@@ -1,4 +1,4 @@
-Based on the conversation, break the work into clear implementation phases.
+Based on the conversation, break the work into clear implementation phases. Ask questions if anything is ambiguous or needs more clarity.
 
 For each phase, include:
 

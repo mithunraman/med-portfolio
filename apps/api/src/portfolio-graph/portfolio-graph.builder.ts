@@ -34,17 +34,26 @@ export function gatherContextRouter(state: PortfolioStateType): 'classify' | 'ch
 }
 
 /**
- * After classify: if confidence is below threshold and rounds remain,
- * ask the user to provide more detail before presenting classification options.
- * Falls through to present_classification after MAX_CLARIFICATION_ROUNDS.
+ * After classify: route based on relevance and confidence.
+ *
+ * - Irrelevant content → ask_clarification (up to MAX_CLARIFICATION_ROUNDS)
+ * - Low confidence      → ask_clarification (up to MAX_CLARIFICATION_ROUNDS)
+ * - Otherwise           → present_classification
+ *
+ * Both irrelevant and low-confidence share the same round counter.
+ * After MAX_CLARIFICATION_ROUNDS, falls through to present_classification.
  */
 export function classifyRouter(
   state: PortfolioStateType
 ): 'present_classification' | 'ask_clarification' {
-  const lowConfidence = state.classificationConfidence < CONFIDENCE_THRESHOLD;
   const canAskMore = state.clarificationRound < MAX_CLARIFICATION_ROUNDS;
 
+  // Irrelevant content always routes to clarification if rounds remain
+  if (!state.isRelevant && canAskMore) return 'ask_clarification';
+
+  const lowConfidence = state.classificationConfidence < CONFIDENCE_THRESHOLD;
   if (lowConfidence && canAskMore) return 'ask_clarification';
+
   return 'present_classification';
 }
 

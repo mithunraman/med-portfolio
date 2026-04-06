@@ -26,11 +26,12 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     specialty: '100',
     trainingStage: 'ST1',
     fullTranscript: 'Some transcript',
-    messageCount: 1,
+
+    isRelevant: true,
     entryType: 'CLINICAL_CASE_REVIEW',
     classificationConfidence: 0.5,
     classificationReasoning: 'Insufficient signals',
-    classificationSignals: [],
+
     alternatives: [],
     classificationConfirmed: false,
     clarificationRound: 0,
@@ -42,9 +43,9 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     capabilities: [],
     title: null,
     reflection: null,
-    capabilityAnnotations: [],
+
     pdpGoals: [],
-    error: null,
+
     ...overrides,
   } as PortfolioStateType;
 }
@@ -54,7 +55,7 @@ describe('AskClarificationNode (interrupt-only)', () => {
     jest.clearAllMocks();
   });
 
-  it('should call interrupt with classification context', async () => {
+  it('should call interrupt with classification context including isRelevant', async () => {
     const node = createAskClarificationNode(makeDeps());
     const state = makeState();
 
@@ -66,7 +67,19 @@ describe('AskClarificationNode (interrupt-only)', () => {
       reasoning: 'Insufficient signals',
       suggestedEntryType: 'CLINICAL_CASE_REVIEW',
       clarificationRound: 0,
+      isRelevant: true,
     });
+  });
+
+  it('should pass isRelevant=false in interrupt when content is irrelevant', async () => {
+    const node = createAskClarificationNode(makeDeps());
+    const state = makeState({ isRelevant: false, entryType: null, classificationConfidence: 0 });
+
+    await node(state);
+
+    expect(interrupt).toHaveBeenCalledWith(
+      expect.objectContaining({ isRelevant: false })
+    );
   });
 
   it('should increment clarificationRound on resume', async () => {

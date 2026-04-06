@@ -35,15 +35,6 @@ export interface CapabilityTag {
 }
 
 /**
- * Capability annotation linking a capability to a section with evidence.
- */
-export interface CapabilityAnnotation {
-  sectionId: string;
-  capabilityCode: string;
-  evidence: string;
-}
-
-/**
  * PDP goal action generated from the reflection.
  */
 export interface PdpGoalAction {
@@ -82,13 +73,13 @@ export const PortfolioState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => '',
   }),
-  /** Count of user messages in the conversation */
-  messageCount: Annotation<number>({
-    reducer: (_, next) => next,
-    default: () => 0,
-  }),
 
   // ── Classification ──
+  /** Whether the transcript content is relevant to medical portfolio entries. */
+  isRelevant: Annotation<boolean>({
+    reducer: (_, next) => next,
+    default: () => true,
+  }),
   entryType: Annotation<string | null>({
     reducer: (_, next) => next,
     default: () => null,
@@ -100,10 +91,6 @@ export const PortfolioState = Annotation.Root({
   classificationReasoning: Annotation<string>({
     reducer: (_, next) => next,
     default: () => '',
-  }),
-  classificationSignals: Annotation<string[]>({
-    reducer: (_, next) => next,
-    default: () => [],
   }),
   alternatives: Annotation<ClassificationAlternative[]>({
     reducer: (_, next) => next,
@@ -164,22 +151,12 @@ export const PortfolioState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => null,
   }),
-  capabilityAnnotations: Annotation<CapabilityAnnotation[]>({
-    reducer: (_, next) => next,
-    default: () => [],
-  }),
-
   // ── PDP ──
   pdpGoals: Annotation<PdpGoal[]>({
     reducer: (_, next) => next,
     default: () => [],
   }),
 
-  // ── Error tracking ──
-  error: Annotation<string | null>({
-    reducer: (_, next) => next,
-    default: () => null,
-  }),
 });
 
 /** Inferred type of the graph state */

@@ -27,11 +27,12 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     specialty: '100', // GP
     trainingStage: 'ST1',
     fullTranscript: 'I saw a 72 year old lady with a dry cough for 6 weeks.',
-    messageCount: 1,
+
+    isRelevant: true,
     entryType: 'CLINICAL_CASE_REVIEW',
     classificationConfidence: 0.9,
     classificationReasoning: '',
-    classificationSignals: [],
+
     alternatives: [],
     classificationConfirmed: true,
     clarificationRound: 0,
@@ -49,9 +50,9 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     capabilities: [],
     title: null,
     reflection: null,
-    capabilityAnnotations: [],
+
     pdpGoals: [],
-    error: null,
+
     ...overrides,
   } as PortfolioStateType;
 }

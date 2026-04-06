@@ -25,8 +25,21 @@ const classificationAlternativeSchema = z.object({
  * matching this shape — no markdown fences, no parsing needed.
  */
 const classifyResponseSchema = z.object({
-  entryType: z.string().describe('The best-matching entry type code'),
-  confidence: z.number().min(0).max(1).describe('Confidence score 0-1'),
+  isRelevant: z
+    .boolean()
+    .describe(
+      'Whether the transcript describes a clinical experience, learning event, ' +
+        'or professional development activity relevant to medical training. ' +
+        'false for non-medical content, personal messages, or off-topic text.'
+    ),
+  entryType: z
+    .string()
+    .describe('The best-matching entry type code, or "none" if isRelevant is false'),
+  confidence: z
+    .number()
+    .min(0)
+    .max(1)
+    .describe('Confidence score 0-1. Must be 0 if isRelevant is false.'),
   reasoning: z.string().describe('1-2 sentence explanation of why this type was chosen'),
   signalsFound: z
     .array(z.string())
@@ -75,10 +88,11 @@ Your task: given a transcript of one or more dictated messages from a trainee, d
 ## Instructions
 
 1. Read the full transcript carefully.
-2. Identify which signals from the list above appear in the text.
-3. Choose the SINGLE best-matching entry type.
-4. If the transcript could plausibly be more than one type, list alternatives.
-5. Be honest about confidence — a short or ambiguous transcript should NOT get high confidence.`,
+2. Assess whether the transcript describes a clinical experience, learning event, or professional development activity relevant to UK medical training. If the content is clearly unrelated (e.g. personal reminders, copied emails, non-clinical topics), set isRelevant to false, entryType to "none", and confidence to 0.
+3. If relevant, identify which signals from the list above appear in the text.
+4. Choose the SINGLE best-matching entry type.
+5. If the transcript could plausibly be more than one type, list alternatives.
+6. Be honest about confidence — a short or ambiguous transcript should NOT get high confidence.`,
   ],
   ['human', '{transcript}'],
 ]);
@@ -115,16 +129,21 @@ function formatEntryTypeBlock(specialty: Specialty): string {
  * triggers clarification when evidence is genuinely thin.
  *
  * Rules:
+ *  - Not relevant           → hard 0 (non-medical content)
  *  - Transcript < 50 words  → cap at 0.85 (not enough signal)
  *  - < 2 signals matched    → cap at 0.9  (weak evidence)
  *  - Top-2 within 0.15      → reduce by 0.1 (genuine ambiguity)
  */
-function adjustConfidence(
+export function adjustConfidence(
   raw: number,
   wordCount: number,
   signalCount: number,
-  alternatives: ClassificationAlternative[]
+  alternatives: ClassificationAlternative[],
+  isRelevant: boolean
 ): number {
+  // Hard gate: irrelevant content always gets 0
+  if (!isRelevant) return 0;
+
   let adjusted = Math.min(raw, 1.0);
 
   if (wordCount < 50) {
@@ -205,8 +224,10 @@ export function createClassifyNode(deps: GraphDeps) {
       { temperature: 0.1, maxTokens: 800 }
     );
 
-    // Structured output guarantees the shape; we still check the code is valid
-    validateEntryType(classification, validCodes);
+    // Only validate entry type code when the content is medically relevant
+    if (classification.isRelevant) {
+      validateEntryType(classification, validCodes);
+    }
 
     const wordCount = state.fullTranscript.split(/\s+/).filter(Boolean).length;
 
@@ -214,21 +235,23 @@ export function createClassifyNode(deps: GraphDeps) {
       classification.confidence,
       wordCount,
       classification.signalsFound.length,
-      classification.alternatives
+      classification.alternatives,
+      classification.isRelevant
     );
 
     logger.log(
       `[${cid}] Classification: ${classification.entryType} ` +
-        `(raw: ${classification.confidence}, adjusted: ${adjustedConfidence}, ` +
-        `signals: ${classification.signalsFound.length}, words: ${wordCount})`
+        `(relevant: ${classification.isRelevant}, raw: ${classification.confidence}, ` +
+        `adjusted: ${adjustedConfidence}, signals: ${classification.signalsFound.length}, ` +
+        `words: ${wordCount})`
     );
 
     return {
-      entryType: classification.entryType,
+      isRelevant: classification.isRelevant,
+      entryType: classification.isRelevant ? classification.entryType : null,
       classificationConfidence: adjustedConfidence,
       classificationReasoning: classification.reasoning,
-      classificationSignals: classification.signalsFound,
-      alternatives: classification.alternatives,
+      alternatives: classification.isRelevant ? classification.alternatives : [],
     };
   };
 }

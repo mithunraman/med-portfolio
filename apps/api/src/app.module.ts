@@ -19,6 +19,7 @@ import { MetricsModule } from './common/metrics';
 import { ConfigModule } from './config';
 import { ConversationsModule } from './conversations/conversations.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { EmailModule } from './email';
 import { DatabaseModule } from './database';
 import { HealthModule } from './health';
 import { InitModule } from './init';
@@ -71,6 +72,7 @@ import { StorageModule } from './storage';
         },
       }),
     }),
+    EmailModule,
     AuthModule,
     ItemsModule,
     StorageModule,

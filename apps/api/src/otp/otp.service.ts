@@ -8,6 +8,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { isErr } from '../common/utils/result.util';
+import { EmailService } from '../email';
+import { EmailLockoutService } from './email-lockout.service';
 import { IOtpRepository, OTP_REPOSITORY } from './otp.repository.interface';
 
 export interface SendOtpResult {
@@ -30,7 +32,9 @@ export class OtpService {
 
   constructor(
     @Inject(OTP_REPOSITORY) private readonly otpRepo: IOtpRepository,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
+    private readonly emailLockout: EmailLockoutService
   ) {
     this.expiryMinutes = this.configService.get<number>('app.otp.expiryMinutes', 5);
     this.maxAttempts = this.configService.get<number>('app.otp.maxAttempts', 3);
@@ -46,6 +50,19 @@ export class OtpService {
 
     await this.checkRateLimit(normalizedEmail);
 
+    // Carry over attempt count from any existing unexpired OTP
+    let carryOverAttempts = 0;
+    const existingResult = await this.otpRepo.findLatestByEmail(normalizedEmail);
+    if (!isErr(existingResult) && existingResult.value) {
+      const existing = existingResult.value;
+      if (existing.expiresAt > new Date()) {
+        carryOverAttempts = existing.attempts;
+      }
+    }
+
+    // Delete old OTPs before creating the new one — ensures only one valid code
+    await this.otpRepo.deleteByEmail(normalizedEmail);
+
     const code = this.generateCode();
     const codeHash = this.hashCode(code);
     const expiresAt = new Date(Date.now() + this.expiryMinutes * 60 * 1000);
@@ -54,14 +71,17 @@ export class OtpService {
       email: normalizedEmail,
       codeHash,
       expiresAt,
+      attempts: carryOverAttempts,
     });
 
     if (isErr(result)) {
       throw new InternalServerErrorException('Failed to create OTP');
     }
 
-    // TODO: Integrate email service (e.g., Resend) to send OTP via email
-    this.logger.log(`OTP generated for ${normalizedEmail}`);
+    // Fire-and-forget — don't block the response on SMTP round-trip
+    this.emailService.sendOtp(normalizedEmail, code, this.expiryMinutes).catch((error) => {
+      this.logger.error(`Failed to send OTP email to ${normalizedEmail}`, error);
+    });
 
     const isDev = this.configService.get<string>('NODE_ENV') !== 'production';
     if (isDev) {
@@ -76,6 +96,8 @@ export class OtpService {
 
   async verifyOtp(email: string, code: string): Promise<VerifyOtpResult> {
     const normalizedEmail = email.toLowerCase();
+
+    this.emailLockout.checkLockout(normalizedEmail);
 
     const findResult = await this.otpRepo.findLatestByEmail(normalizedEmail);
     if (isErr(findResult)) {
@@ -92,11 +114,13 @@ export class OtpService {
       throw new BadRequestException('Too many failed attempts. Please request a new OTP.');
 
     if (!this.verifyCode(code, otp.codeHash)) {
+      this.emailLockout.recordFailure(normalizedEmail);
       await this.otpRepo.incrementAttempts(otp._id.toString());
       throw new BadRequestException('Invalid OTP code.');
     }
 
     // OTP verified — delete all OTPs for this email
+    this.emailLockout.clearLockout(normalizedEmail);
     await this.otpRepo.deleteByEmail(normalizedEmail);
 
     return { email: normalizedEmail, valid: true };

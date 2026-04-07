@@ -33,6 +33,16 @@ const mockOtpRepo = {
   countRecentByEmail: jest.fn(),
 };
 
+const mockEmailService = {
+  sendOtp: jest.fn().mockResolvedValue(undefined),
+};
+
+const mockEmailLockout = {
+  checkLockout: jest.fn(),
+  recordFailure: jest.fn(),
+  clearLockout: jest.fn(),
+};
+
 const mockConfigService = {
   get: jest.fn((key: string, defaultValue?: unknown) => {
     const config: Record<string, unknown> = {
@@ -47,7 +57,7 @@ const mockConfigService = {
 };
 
 function createService(): OtpService {
-  return new OtpService(mockOtpRepo as any, mockConfigService as any);
+  return new OtpService(mockOtpRepo as any, mockConfigService as any, mockEmailService as any, mockEmailLockout as any);
 }
 
 // ── Tests ──
@@ -57,6 +67,9 @@ describe('OtpService', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    mockEmailService.sendOtp.mockResolvedValue(undefined);
+    mockOtpRepo.findLatestByEmail.mockResolvedValue(ok(null));
+    mockOtpRepo.deleteByEmail.mockResolvedValue(ok(0));
     mockConfigService.get.mockImplementation((key: string, defaultValue?: unknown) => {
       const config: Record<string, unknown> = {
         'app.otp.expiryMinutes': 5,
@@ -98,6 +111,15 @@ describe('OtpService', () => {
       expect(mockOtpRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ email: 'user@example.com' })
       );
+    });
+
+    it('should not check lockout when sending (allows re-request after failed verify)', async () => {
+      mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
+      mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
+
+      await service.sendOtp(TEST_EMAIL);
+
+      expect(mockEmailLockout.checkLockout).not.toHaveBeenCalled();
     });
 
     it('should throw BadRequestException when rate limited', async () => {
@@ -153,6 +175,29 @@ describe('OtpService', () => {
       expect(result.devOtp).toBeUndefined();
     });
 
+    it('should call emailService.sendOtp with correct args', async () => {
+      mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
+      mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
+
+      const result = await service.sendOtp(TEST_EMAIL);
+
+      expect(mockEmailService.sendOtp).toHaveBeenCalledWith(
+        TEST_EMAIL,
+        result.devOtp, // in test mode devOtp is the raw code
+        5 // expiryMinutes
+      );
+    });
+
+    it('should not throw when email delivery fails', async () => {
+      mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
+      mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
+      mockEmailService.sendOtp.mockRejectedValue(new Error('SMTP timeout'));
+
+      const result = await service.sendOtp(TEST_EMAIL);
+
+      expect(result.message).toBe('OTP sent successfully');
+    });
+
     it('should set correct expiry based on config', async () => {
       mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
       mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
@@ -167,6 +212,62 @@ describe('OtpService', () => {
       // Should be approximately 5 minutes from now
       expect(expiresAt).toBeGreaterThanOrEqual(before + 5 * 60 * 1000 - 100);
       expect(expiresAt).toBeLessThanOrEqual(after + 5 * 60 * 1000 + 100);
+    });
+
+    it('should delete old OTPs before creating new one', async () => {
+      mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
+      mockOtpRepo.findLatestByEmail.mockResolvedValue(ok(null));
+      mockOtpRepo.deleteByEmail.mockResolvedValue(ok(0));
+      mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
+
+      await service.sendOtp(TEST_EMAIL);
+
+      expect(mockOtpRepo.deleteByEmail).toHaveBeenCalledWith(TEST_EMAIL);
+      // deleteByEmail should be called before create
+      const deleteOrder = mockOtpRepo.deleteByEmail.mock.invocationCallOrder[0];
+      const createOrder = mockOtpRepo.create.mock.invocationCallOrder[0];
+      expect(deleteOrder).toBeLessThan(createOrder);
+    });
+
+    it('should carry over attempt count from existing unexpired OTP', async () => {
+      mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
+      mockOtpRepo.findLatestByEmail.mockResolvedValue(ok(makeOtpDoc({ attempts: 2 })));
+      mockOtpRepo.deleteByEmail.mockResolvedValue(ok(1));
+      mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
+
+      await service.sendOtp(TEST_EMAIL);
+
+      expect(mockOtpRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ attempts: 2 })
+      );
+    });
+
+    it('should not carry over attempts from expired OTP', async () => {
+      mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
+      mockOtpRepo.findLatestByEmail.mockResolvedValue(
+        ok(makeOtpDoc({ attempts: 2, expiresAt: new Date(Date.now() - 1000) }))
+      );
+      mockOtpRepo.deleteByEmail.mockResolvedValue(ok(1));
+      mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
+
+      await service.sendOtp(TEST_EMAIL);
+
+      expect(mockOtpRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ attempts: 0 })
+      );
+    });
+
+    it('should create with zero attempts when no existing OTP', async () => {
+      mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
+      mockOtpRepo.findLatestByEmail.mockResolvedValue(ok(null));
+      mockOtpRepo.deleteByEmail.mockResolvedValue(ok(0));
+      mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
+
+      await service.sendOtp(TEST_EMAIL);
+
+      expect(mockOtpRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ attempts: 0 })
+      );
     });
   });
 
@@ -244,6 +345,36 @@ describe('OtpService', () => {
       await expect(service.verifyOtp(TEST_EMAIL, '123456')).rejects.toThrow(
         InternalServerErrorException
       );
+    });
+
+    it('should check lockout before verifying', async () => {
+      mockEmailLockout.checkLockout.mockImplementation(() => {
+        throw new Error('locked');
+      });
+
+      await expect(service.verifyOtp(TEST_EMAIL, '123456')).rejects.toThrow('locked');
+      expect(mockOtpRepo.findLatestByEmail).not.toHaveBeenCalled();
+    });
+
+    it('should record failure on invalid code', async () => {
+      const otpDoc = makeOtpDoc();
+      mockOtpRepo.findLatestByEmail.mockResolvedValue(ok(otpDoc));
+      mockOtpRepo.incrementAttempts.mockResolvedValue(ok({ ...otpDoc, attempts: 1 }));
+
+      await expect(service.verifyOtp(TEST_EMAIL, '000000')).rejects.toThrow(BadRequestException);
+
+      expect(mockEmailLockout.recordFailure).toHaveBeenCalledWith(TEST_EMAIL);
+    });
+
+    it('should clear lockout on successful verify', async () => {
+      const code = '654321';
+      const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+      mockOtpRepo.findLatestByEmail.mockResolvedValue(ok(makeOtpDoc({ codeHash })));
+      mockOtpRepo.deleteByEmail.mockResolvedValue(ok(1));
+
+      await service.verifyOtp(TEST_EMAIL, code);
+
+      expect(mockEmailLockout.clearLockout).toHaveBeenCalledWith(TEST_EMAIL);
     });
 
     it('should not delete OTPs on failed verification', async () => {

@@ -55,6 +55,17 @@ export const envSchema = z.object({
     .string({ required_error: 'SENTRY_DSN is required' })
     .url('SENTRY_DSN must be a valid URL'),
 
+  // SMTP (email)
+  SMTP_HOST: z.string().min(1).optional(),
+  SMTP_PORT: z
+    .string()
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().int().min(1).max(65535))
+    .default('587'),
+  SMTP_USER: z.string().min(1).optional(),
+  SMTP_PASS: z.string().min(1).optional(),
+  SMTP_FROM: z.string().min(1).optional(),
+
   // OTP
   OTP_EXPIRY_MINUTES: z
     .string()
@@ -144,6 +155,13 @@ export const appConfig = registerAs('app', () => {
     },
     sentry: {
       dsn: env.SENTRY_DSN,
+    },
+    smtp: {
+      host: env.SMTP_HOST,
+      port: env.SMTP_PORT,
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+      from: env.SMTP_FROM,
     },
     otp: {
       expiryMinutes: env.OTP_EXPIRY_MINUTES,

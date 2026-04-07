@@ -1,6 +1,6 @@
 import type { AuthUser, LoginResponse, OtpSendResponse } from '@acme/shared';
 import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post } from '@nestjs/common';
-import { SkipThrottle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
@@ -13,6 +13,7 @@ export class AuthController {
 
   @Public()
   @Post('otp/send')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async otpSend(@Body() dto: OtpSendDto): Promise<OtpSendResponse> {
     return this.authService.otpSend(dto.email);
@@ -20,6 +21,7 @@ export class AuthController {
 
   @Public()
   @Post('otp/verify')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async otpVerify(@Body() dto: OtpVerifyDto): Promise<LoginResponse> {
     return this.authService.otpVerifyAndLogin(dto.email, dto.code, dto.name);

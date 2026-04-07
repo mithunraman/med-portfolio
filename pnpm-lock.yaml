@@ -143,6 +143,9 @@ importers:
       nestjs-zod:
         specifier: ^5.1.1
         version: 5.1.1(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)(zod@3.25.76)
+      nodemailer:
+        specifier: ^8.0.5
+        version: 8.0.5
       openai:
         specifier: ^6.32.0
         version: 6.32.0(ws@8.19.0)(zod@3.25.76)
@@ -192,6 +195,9 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.8
+      '@types/nodemailer':
+        specifier: ^8.0.0
+        version: 8.0.0
       '@types/passport-jwt':
         specifier: ^4.0.1
         version: 4.0.1
@@ -3833,6 +3839,9 @@ packages:
   '@types/node@22.19.8':
     resolution: {integrity: sha512-ebO/Yl+EAvVe8DnMfi+iaAyIqYdK0q/q0y0rw82INWEKJOBe6b/P3YWE8NW7oOlF/nXFNrHwhARrN/hdgDkraA==}
 
+  '@types/nodemailer@8.0.0':
+    resolution: {integrity: sha512-fyf8jWULsCo0d0BuoQ75i6IeoHs47qcqxWc7yUdUcV0pOZGjUTTOvwdG1PRXUDqN/8A64yQdQdnA2pZgcdi+cA==}
+
   '@types/oracledb@6.5.2':
     resolution: {integrity: sha512-kK1eBS/Adeyis+3OlBDMeQQuasIDLUYXsi2T15ccNJ0iyUpQ4xDF7svFu3+bGVrI0CMBUclPciz+lsQR3JX3TQ==}
 
@@ -7199,6 +7208,10 @@ packages:
 
   node-releases@2.0.27:
     resolution: {integrity: sha512-nmh3lCkYZ3grZvqcCH+fjmQ7X+H0OeZgP40OierEaAptX4XofMh5kwNbWh7lBduUzCcV/8kZ+NDLCwm2iorIlA==}
+
+  nodemailer@8.0.5:
+    resolution: {integrity: sha512-0PF8Yb1yZuQfQbq+5/pZJrtF6WQcjTd5/S4JOHs9PGFxuTqoB/icwuB44pOdURHJbRKX1PPoJZtY7R4VUoCC8w==}
+    engines: {node: '>=6.0.0'}
 
   normalize-path@3.0.0:
     resolution: {integrity: sha512-6eZs5Ls3WtCisHWp9S2GUy8dqkpGi4BVSz3GaqiE6ezub0512ESztXUwUB6C6IKbQkY2Pnb/mD4WYojCRwcwLA==}
@@ -13667,6 +13680,10 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/nodemailer@8.0.0':
+    dependencies:
+      '@types/node': 22.19.8
+
   '@types/oracledb@6.5.2':
     dependencies:
       '@types/node': 22.19.8
@@ -17802,6 +17819,8 @@ snapshots:
   node-int64@0.4.0: {}
 
   node-releases@2.0.27: {}
+
+  nodemailer@8.0.5: {}
 
   normalize-path@3.0.0: {}
 

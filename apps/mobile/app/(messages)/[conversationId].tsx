@@ -566,7 +566,13 @@ export default function ChatScreen() {
               isSending={sendingMessage}
               canSendMessage={canSendMessage}
               canSendAudio={canSendAudio}
-              phase={pendingAnalysis ? 'analysing' : phase}
+              phase={
+                pendingAnalysis
+                  ? 'analysing'
+                  : context?.activeQuestion?.questionType === 'terminal'
+                    ? 'completed'
+                    : phase
+              }
               onRecordingChange={setIsRecording}
             />
           </>

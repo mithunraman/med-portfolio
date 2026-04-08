@@ -163,6 +163,16 @@ export class ConversationContextService {
 
       case 'awaiting_input': {
         const questionType = latestRun?.currentQuestion?.questionType;
+
+        if (questionType === 'terminal') {
+          return {
+            sendMessage: denied('ANALYSIS_TERMINAL', 'Analysis has ended. Start a new conversation.'),
+            sendAudio: denied('ANALYSIS_TERMINAL', 'Analysis has ended. Start a new conversation.'),
+            startAnalysis: denied('ANALYSIS_TERMINAL', 'Analysis has ended.'),
+            resumeAnalysis: denied('ANALYSIS_TERMINAL', 'Analysis has ended. Start a new conversation.'),
+          };
+        }
+
         const isFreeText = questionType === 'free_text';
         return {
           sendMessage: isFreeText

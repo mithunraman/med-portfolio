@@ -180,7 +180,7 @@ export type ConversationListResponse = z.infer<typeof ConversationListResponseSc
 
 // ── ConversationContext schemas ──
 
-export const QuestionTypeSchema = z.enum(['single_select', 'multi_select', 'free_text']);
+export const QuestionTypeSchema = z.enum(['single_select', 'multi_select', 'free_text', 'terminal']);
 export type QuestionType = z.infer<typeof QuestionTypeSchema>;
 
 export const ConversationPhaseSchema = z.enum([

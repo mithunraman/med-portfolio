@@ -20,7 +20,7 @@ export class CurrentQuestion {
   node!: string;
 
   @Prop({ required: true, type: String })
-  questionType!: 'single_select' | 'multi_select' | 'free_text';
+  questionType!: 'single_select' | 'multi_select' | 'free_text' | 'terminal';
 }
 
 export class AnalysisRunError {

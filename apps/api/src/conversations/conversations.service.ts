@@ -364,16 +364,23 @@ export class ConversationsService {
       throw new ConflictException('This question is no longer the current question');
     const node = activeRun.currentQuestion.node as InterruptNode;
 
-    // 3. Verify graph is actually paused at this node
+    // 3. Reject terminal questions — these are informational and cannot be resumed
+    if (activeRun.currentQuestion.questionType === 'terminal') {
+      throw new BadRequestException(
+        'This analysis has ended. Start a new conversation to try again.',
+      );
+    }
+
+    // 4. Verify graph is actually paused at this node
     const pausedNode = await this.portfolioGraphService.getPausedNode(activeRun.langGraphThreadId);
     if (!pausedNode) throw new ConflictException('Analysis is not paused at any node');
     if (pausedNode !== node)
       throw new ConflictException(`Analysis is paused at "${pausedNode}", not "${node}"`);
 
-    // 4. Read questionType for SHAPE validation, node for DOMAIN mapping
+    // 5. Read questionType for SHAPE validation, node for DOMAIN mapping
     const questionType = (message.question as Question).questionType;
 
-    // 5a. Validate value SHAPE based on questionType (generic — works for any question)
+    // 6a. Validate value SHAPE based on questionType (generic — works for any question)
     //     Validate selected keys against question.options (not specialty config)
     let selectedKey: string | undefined;
     let selectedKeys: string[] | undefined;
@@ -411,7 +418,7 @@ export class ConversationsService {
       }
     }
 
-    // 5b. Build graph resume value based on NODE (domain-specific)
+    // 6b. Build graph resume value based on NODE (domain-specific)
     let resumeValue: Record<string, unknown> | true = true;
     switch (node) {
       case 'present_classification':

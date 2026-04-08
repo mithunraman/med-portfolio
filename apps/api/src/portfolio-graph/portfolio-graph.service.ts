@@ -121,7 +121,7 @@ export interface InterruptPayload {
   idempotencyKey: string;
   pausedNode: InterruptNode;
   messageData: CreateMessageData;
-  questionType: 'single_select' | 'multi_select' | 'free_text';
+  questionType: 'single_select' | 'multi_select' | 'free_text' | 'terminal';
 }
 
 @Injectable()
@@ -354,7 +354,7 @@ export class PortfolioGraphService implements OnModuleInit {
           return {
             idempotencyKey,
             pausedNode,
-            questionType: 'single_select',
+            questionType: 'terminal',
             messageData: {
               conversation: conversationOid,
               userId: userOid,
@@ -481,6 +481,30 @@ export class PortfolioGraphService implements OnModuleInit {
 
       case 'capabilities': {
         const options = interruptValue.options as CapabilityOption[];
+
+        // ── Terminal message: no capabilities identified ──
+        if (options.length === 0) {
+          const terminalContent =
+            "I wasn't able to identify specific curriculum capabilities from what you've shared. " +
+            'You can start a new conversation with more detail about what you did, ' +
+            'your clinical reasoning, or what you learned.';
+
+          return {
+            idempotencyKey,
+            pausedNode,
+            questionType: 'terminal',
+            messageData: {
+              conversation: conversationOid,
+              userId: userOid,
+              role: MessageRole.ASSISTANT,
+              messageType: MessageType.TEXT,
+              rawContent: terminalContent,
+              content: terminalContent,
+              status: MessageStatus.COMPLETE,
+              idempotencyKey,
+            },
+          };
+        }
 
         const capContent =
           CAPABILITIES_PROMPTS[Math.floor(Math.random() * CAPABILITIES_PROMPTS.length)];

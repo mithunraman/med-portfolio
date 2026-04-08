@@ -30,10 +30,18 @@ export function createPresentCapabilitiesNode(deps: GraphDeps) {
     deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: cid, step: 'present_capabilities' });
     logger.log(`[${cid}] Presenting capabilities`);
 
-    // ── Guard: no entry type or no capabilities (irrelevant content path) — skip interrupt ──
-    if (!state.entryType || state.capabilities.length === 0) {
-      logger.warn(`[${cid}] No entry type or capabilities — skipping capability presentation`);
+    // ── Guard: no entry type (irrelevant content path) — skip entirely ──
+    if (!state.entryType) {
+      logger.warn(`[${cid}] No entry type — skipping capability presentation`);
       return {};
+    }
+
+    // ── Empty capabilities: interrupt with empty options for terminal message ──
+    if (state.capabilities.length === 0) {
+      logger.warn(`[${cid}] No capabilities — interrupting with empty options`);
+      interrupt({ type: 'capabilities', options: [], entryType: state.entryType });
+      // After resume: clear entryType so downstream nodes skip gracefully
+      return { entryType: null };
     }
 
   // Build options from the LLM-tagged capabilities (already sorted by confidence)

@@ -27,7 +27,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
-    const user = await this.userModel.findById(payload.sub).select('tokenVersion').lean();
+    const user = await this.userModel
+      .findById(payload.sub)
+      .select('tokenVersion role email anonymizedAt')
+      .lean();
 
     if (!user) {
       throw new UnauthorizedException('User not found');
@@ -37,10 +40,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Token has been revoked');
     }
 
+    if (user.anonymizedAt) {
+      throw new UnauthorizedException('Account is no longer active');
+    }
+
     return {
       userId: payload.sub,
-      email: payload.email,
-      role: payload.role,
+      email: user.email,
+      role: user.role,
     };
   }
 }

@@ -23,9 +23,16 @@ async function bootstrap() {
   // Security headers
   app.use(helmet());
 
-  // Enable CORS
+  // CORS — whitelist specific origins; non-browser clients (mobile, curl) have no Origin header
+  const allowedOrigins = configService.get<string[]>('app.allowedOrigins', []);
   app.enableCors({
-    origin: true,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
     credentials: true,
   });
 

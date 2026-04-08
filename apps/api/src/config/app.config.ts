@@ -11,9 +11,7 @@ export const envSchema = z.object({
     .transform((val) => parseInt(val, 10))
     .pipe(z.number().int().min(1).max(65535)),
   NODE_ENV: z.enum(['development', 'production', 'test']),
-  LOG_LEVEL: z
-    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
-    .default('info'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
   // Database
   MONGODB_URI: z
@@ -65,6 +63,17 @@ export const envSchema = z.object({
   SMTP_USER: z.string().min(1).optional(),
   SMTP_PASS: z.string().min(1).optional(),
   SMTP_FROM: z.string().min(1).optional(),
+
+  // CORS — comma-separated list of allowed browser origins
+  ALLOWED_ORIGINS: z
+    .string()
+    .default('http://localhost:5173')
+    .transform((val) =>
+      val
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    ),
 
   // OTP
   OTP_EXPIRY_MINUTES: z
@@ -163,6 +172,7 @@ export const appConfig = registerAs('app', () => {
       pass: env.SMTP_PASS,
       from: env.SMTP_FROM,
     },
+    allowedOrigins: env.ALLOWED_ORIGINS,
     otp: {
       expiryMinutes: env.OTP_EXPIRY_MINUTES,
       maxAttempts: env.OTP_MAX_ATTEMPTS,

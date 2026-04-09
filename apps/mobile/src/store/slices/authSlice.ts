@@ -2,12 +2,27 @@ import type { AuthUser, QuotaStatus, SpecialtyOption, UpdateProfileRequest } fro
 import { UserRole } from '@acme/shared';
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import * as Sentry from '@sentry/react-native';
-import { api } from '../../api/client';
+import { api, mobileTokenProvider } from '../../api/client';
 import { AppSecureStorage } from '../../services';
 import { logger } from '../../utils/logger';
 import { fetchInit } from './dashboard/thunks';
 
 const authLogger = logger.createScope('AuthSlice');
+
+/**
+ * Persist auth session to secure storage after successful login/registration.
+ */
+async function persistAuthSession(
+  response: { accessToken: string; user: AuthUser },
+  isGuest: boolean
+): Promise<void> {
+  await mobileTokenProvider.setAccessToken(response.accessToken);
+  await AppSecureStorage.set('user', {
+    user: response.user,
+    isGuest,
+    lastLoginAt: Date.now(),
+  });
+}
 
 export type AuthStatus = 'idle' | 'loading' | 'authenticated' | 'guest' | 'unauthenticated';
 
@@ -96,13 +111,7 @@ export const otpVerify = createAsyncThunk(
 
     try {
       const response = await api.auth.otpVerify({ email, code, name });
-
-      await AppSecureStorage.set('accessToken', response.accessToken);
-      await AppSecureStorage.set('user', {
-        user: response.user,
-        isGuest: false,
-        lastLoginAt: Date.now(),
-      });
+      await persistAuthSession(response, false);
 
       authLogger.info('OTP verification successful', { userId: response.user.id });
       return response.user;
@@ -124,13 +133,7 @@ export const registerGuest = createAsyncThunk(
 
     try {
       const response = await api.auth.registerGuest();
-
-      await AppSecureStorage.set('accessToken', response.accessToken);
-      await AppSecureStorage.set('user', {
-        user: response.user,
-        isGuest: true,
-        lastLoginAt: Date.now(),
-      });
+      await persistAuthSession(response, true);
 
       authLogger.info('Guest registration successful', { userId: response.user.id });
       return response.user;
@@ -156,13 +159,7 @@ export const claimGuest = createAsyncThunk(
 
     try {
       const response = await api.auth.claimGuest({ email, code, name });
-
-      await AppSecureStorage.set('accessToken', response.accessToken);
-      await AppSecureStorage.set('user', {
-        user: response.user,
-        isGuest: false,
-        lastLoginAt: Date.now(),
-      });
+      await persistAuthSession(response, false);
 
       authLogger.info('Guest account claimed', { userId: response.user.id });
       return response.user;
@@ -355,7 +352,6 @@ const authSlice = createSlice({
         Sentry.setUser({ id: action.payload.id });
       })
       .addCase(otpVerify.rejected, (state, action) => {
-        state.status = 'unauthenticated';
         state.error = action.payload as string;
       })
 
@@ -371,7 +367,6 @@ const authSlice = createSlice({
         Sentry.setUser({ id: action.payload.id });
       })
       .addCase(registerGuest.rejected, (state, action) => {
-        state.status = 'unauthenticated';
         state.error = action.payload as string;
       })
 
@@ -391,12 +386,9 @@ const authSlice = createSlice({
       })
 
       // Logout
-      .addCase(logout.fulfilled, (state) => {
-        state.status = 'unauthenticated';
-        state.user = null;
-        state.error = null;
-        state.specialties = [];
+      .addCase(logout.fulfilled, () => {
         Sentry.setUser(null);
+        return { ...initialState, status: 'unauthenticated' as const };
       })
 
       // Fetch Specialties
@@ -427,5 +419,6 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, setUnauthenticated, clearNewRegistration, updateQuota } = authSlice.actions;
+export const { clearError, setUnauthenticated, clearNewRegistration, updateQuota } =
+  authSlice.actions;
 export default authSlice.reducer;

@@ -1,4 +1,5 @@
-import { configureStore } from '@reduxjs/toolkit';
+import type { Action, Reducer } from '@reduxjs/toolkit';
+import { combineReducers, configureStore } from '@reduxjs/toolkit';
 import {
   artefactsReducer,
   authReducer,
@@ -11,18 +12,49 @@ import {
   reviewPeriodsReducer,
 } from './slices';
 
+const appReducer = combineReducers({
+  artefacts: artefactsReducer,
+  auth: authReducer,
+  conversations: conversationsReducer,
+  messages: messagesReducer,
+  network: networkReducer,
+  onboarding: onboardingReducer,
+  dashboard: dashboardReducer,
+  pdpGoals: pdpGoalsReducer,
+  reviewPeriods: reviewPeriodsReducer,
+});
+
+/**
+ * Root reducer that resets user-specific state on logout.
+ * Preserves app-level state (onboarding, network) that is initialized once on mount.
+ * Auth slice handles its own reset (status: 'unauthenticated') via logout.fulfilled.
+ */
+const rootReducer: Reducer<ReturnType<typeof appReducer>, Action> = (state, action) => {
+  if (action.type === 'auth/logout/fulfilled') {
+    return appReducer(
+      state
+        ? {
+            // Preserve app-level state
+            onboarding: state.onboarding,
+            network: state.network,
+            // Reset user-specific slices by passing undefined
+            artefacts: undefined as never,
+            auth: undefined as never,
+            conversations: undefined as never,
+            messages: undefined as never,
+            dashboard: undefined as never,
+            pdpGoals: undefined as never,
+            reviewPeriods: undefined as never,
+          }
+        : undefined,
+      action,
+    );
+  }
+  return appReducer(state, action);
+};
+
 export const store = configureStore({
-  reducer: {
-    artefacts: artefactsReducer,
-    auth: authReducer,
-    conversations: conversationsReducer,
-    messages: messagesReducer,
-    network: networkReducer,
-    onboarding: onboardingReducer,
-    dashboard: dashboardReducer,
-    pdpGoals: pdpGoalsReducer,
-    reviewPeriods: reviewPeriodsReducer,
-  },
+  reducer: rootReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {

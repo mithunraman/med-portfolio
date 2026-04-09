@@ -4,15 +4,13 @@
 
 - Work on empty states for all screens.
 
+- After initial user sign up, and user creating an entry
+  1. The entry is not visible in the home page
+  2. Refreshing home page does not help.
+
 # LLM
 
 - Add support for Clinical Experience Groups like: Older adults, Urgent and unscheduled care, etc
-
-- [Bug] Strong hallucination. When passing random text in Audio conversation (like Malyalam), it converts to english for some reason.
-
-- [Bug] Sometimes, when the topic not related at all to cases, the AI will still recommend entry types. The AI should revert saying that this is not a medical case.
-
-- [Bug] Sometimes, the AI will recommend capabilities with no options, this will make the user stuck in chat.
 
 # Chat screen
 

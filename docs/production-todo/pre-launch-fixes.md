@@ -95,16 +95,15 @@ Consolidated from: `backend-failure-review.md`, `production-readiness-review.md`
 - **Fix:** (a) Cache `computeContext()` with short TTL. (b) Add `lastUpdatedAt` for conditional requests. (c) Consider SSE for active analysis.
 - **Effort:** Medium-Large
 
-### 12. LLM hallucination and edge case bugs
+### 12. ~~LLM hallucination and edge case bugs~~ RESOLVED
 
 - **Source:** `bugs.md` lines 11-15, `todo.md` line 14
 - **Problems:**
-  - [ ] Non-medical audio (e.g. Malayalam) gets hallucinated into English by AssemblyAI
-  - [ ] AI recommends entry types for non-medical topics instead of rejecting
-  - [ ] AI sometimes returns capabilities with no options, leaving user stuck in chat
-  - [ ] No guard when user starts analysis with little/no case information
-- **Fix:** Improve classification prompts, add non-medical detection, validate capability options are non-empty, add minimum content guard before analysis.
-- **Effort:** Medium
+  - [x] Non-medical audio (e.g. Malayalam) gets hallucinated into English by AssemblyAI — **Mitigated:** `language_code: 'en_uk'` hardcoded in `llm.service.ts`, plus `isRelevant` classification gate catches non-medical transcriptions. Anti-injection preamble added to all 8 prompts.
+  - [x] AI recommends entry types for non-medical topics instead of rejecting — **Fixed:** `isRelevant` boolean in classify schema, `adjustConfidence()` hard-gates to 0 when irrelevant, up to 2 clarification rounds, terminal rejection message when exhausted. Test coverage confirms.
+  - [x] AI sometimes returns capabilities with no options, leaving user stuck in chat — **Fixed:** `present-capabilities.node.ts` now interrupts with empty options instead of silently continuing. `portfolio-graph.service.ts` sends a terminal message. Added `questionType: 'terminal'` across the stack to prevent resume crashes and disable UI actions. 6 unit tests added.
+  - [x] No guard when user starts analysis with little/no case information — **Fixed:** `hasCompleteMessages()` check requires ≥1 complete user message. Short transcripts (<50 words) capped at 0.85 confidence. Low confidence triggers clarification rounds.
+- **Resolved:** 2026-04-08
 
 ### 13. Login error signs user out
 
@@ -135,6 +134,6 @@ Consolidated from: `backend-failure-review.md`, `production-readiness-review.md`
 - [ ] **Medium:** Terms of Service
 - [ ] **Medium:** Test coverage for critical modules
 - [ ] **Medium:** Polling load / caching
-- [ ] **Medium:** LLM hallucination bugs
+- [x] **Medium:** LLM hallucination bugs (resolved 2026-04-08)
 - [ ] **Medium:** Login error handling
 - [ ] **Medium:** Log aggregation

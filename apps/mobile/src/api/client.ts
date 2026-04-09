@@ -11,16 +11,33 @@ import { logger } from '../utils/logger';
 const apiLogger = logger.createScope('API');
 
 /**
- * Mobile token provider using Expo SecureStore.
+ * In-memory token cache to avoid native bridge calls on every API request.
+ * SecureStore is only read on cold start; mutations keep the cache in sync.
+ */
+let cachedToken: string | null = null;
+let tokenLoaded = false;
+
+/**
+ * Mobile token provider using Expo SecureStore with in-memory caching.
  */
 const mobileTokenProvider: TokenProvider = {
   async getAccessToken() {
-    return SecureStore.getItemAsync('accessToken');
+    if (!tokenLoaded) {
+      cachedToken = await SecureStore.getItemAsync('accessToken');
+      tokenLoaded = true;
+    }
+    return cachedToken;
   },
   async setAccessToken(token: string) {
+    cachedToken = token;
+    tokenLoaded = true;
+    unauthorizedFired = false;
     await SecureStore.setItemAsync('accessToken', token);
   },
   async clearAccessToken() {
+    cachedToken = null;
+    tokenLoaded = true;
+    unauthorizedFired = false;
     await SecureStore.deleteItemAsync('accessToken');
   },
 };
@@ -73,6 +90,10 @@ function createRNHttpAdapter(): HttpAdapter {
 let onUnauthorizedCallback: (() => void) | null = null;
 let onQuotaUpdateCallback: ((quota: QuotaHeaders) => void) | null = null;
 
+// Prevents multiple 401 dispatches when several in-flight requests fail simultaneously.
+// Reset in mobileTokenProvider.setAccessToken() on successful auth.
+let unauthorizedFired = false;
+
 export function setOnUnauthorized(callback: () => void) {
   onUnauthorizedCallback = callback;
 }
@@ -89,7 +110,10 @@ export const api = createApiClient({
   httpAdapter: createRNHttpAdapter(),
   tokenProvider: mobileTokenProvider,
   onUnauthorized: () => {
-    onUnauthorizedCallback?.();
+    if (!unauthorizedFired) {
+      unauthorizedFired = true;
+      onUnauthorizedCallback?.();
+    }
   },
   onQuotaUpdate: (quota) => {
     onQuotaUpdateCallback?.(quota);

@@ -1,10 +1,12 @@
-import { useCallback, useState } from 'react';
-import { useAuth } from '@/hooks';
-import { QuotaUsageSection } from '@/components/QuotaUsageSection';
 import { SettingsItem, SettingsSection } from '@/components';
+import { QuotaUsageSection } from '@/components/QuotaUsageSection';
+import { useAuth } from '@/hooks';
+import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 import { useTheme } from '@/theme';
+import { hexToRgba } from '@/utils/color';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,7 +18,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 
 export default function ProfileScreen() {
   const insets = useOfflineAwareInsets();
@@ -26,7 +27,7 @@ export default function ProfileScreen() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const specialtyLabel = user?.specialty?.name ?? null;
-  const stageLabel = user?.specialty?.trainingStage?.label ?? null;
+  const stageLabel = user?.specialty?.trainingStage?.code ?? null;
 
   const handleLogout = () => {
     Alert.alert(
@@ -52,10 +53,6 @@ export default function ProfileScreen() {
     router.push('/claim-account');
   }, [router]);
 
-  const handleChangeSpecialty = useCallback(() => {
-    router.push('/(auth)/select-specialty');
-  }, [router]);
-
   return (
     <View
       style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}
@@ -73,21 +70,25 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[styles.heroCard, { backgroundColor: colors.surface }]}
           onPress={
-            isGuest ? handleChangeSpecialty : () => router.push('/(tabs)/profile/account-settings')
+            isGuest ? handleCreateAccount : () => router.push('/(tabs)/profile/account-settings')
           }
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel="Account settings"
+          accessibilityLabel={isGuest ? 'Create account' : 'Account settings'}
         >
           <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-            <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase() || 'G'}</Text>
+            <Text style={styles.avatarText}>
+              {user?.name?.charAt(0).toUpperCase() || 'G'}
+            </Text>
           </View>
           <View style={styles.heroInfo}>
             <Text style={[styles.heroName, { color: colors.text }]} numberOfLines={1}>
               {user?.name || 'Guest User'}
             </Text>
             {isGuest ? (
-              <Text style={[styles.heroMeta, { color: colors.textSecondary }]}>Guest Mode</Text>
+              <View style={[styles.guestBadge, { backgroundColor: hexToRgba(colors.error, 0.1) }]}>
+                <Text style={[styles.guestBadgeText, { color: colors.error }]}>Guest</Text>
+              </View>
             ) : (
               <Text style={[styles.heroMeta, { color: colors.textSecondary }]} numberOfLines={1}>
                 {user?.email || ''}
@@ -96,14 +97,14 @@ export default function ProfileScreen() {
             {(specialtyLabel || stageLabel) && (
               <View style={styles.chipRow}>
                 {specialtyLabel && (
-                  <View style={[styles.chip, { backgroundColor: colors.primary + '14' }]}>
+                  <View style={[styles.chip, { backgroundColor: hexToRgba(colors.primary, 0.08) }]}>
                     <Text style={[styles.chipText, { color: colors.primary }]}>
                       {specialtyLabel}
                     </Text>
                   </View>
                 )}
                 {stageLabel && (
-                  <View style={[styles.chip, { backgroundColor: colors.primary + '14' }]}>
+                  <View style={[styles.chip, { backgroundColor: hexToRgba(colors.primary, 0.08) }]}>
                     <Text style={[styles.chipText, { color: colors.primary }]}>{stageLabel}</Text>
                   </View>
                 )}
@@ -113,12 +114,27 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
 
-        {/* Guest CTA */}
+        {/* Guest warning + CTA */}
         {isGuest && (
           <View style={styles.ctaWrapper}>
-            <View style={[styles.ctaCard, { backgroundColor: colors.surface }]}>
+            <View
+              style={[
+                styles.ctaCard,
+                {
+                  backgroundColor: hexToRgba(colors.error, 0.08),
+                  borderColor: hexToRgba(colors.error, 0.2),
+                },
+              ]}
+            >
+              <View style={styles.warningHeader}>
+                <Ionicons name="alert-circle" size={20} color={colors.error} />
+                <Text style={[styles.warningTitle, { color: colors.error }]}>
+                  Your data isn't being saved
+                </Text>
+              </View>
               <Text style={[styles.ctaText, { color: colors.textSecondary }]}>
-                Create an account to save your progress
+                Guest sessions are temporary. Create an account to keep your portfolio entries and
+                track your progress.
               </Text>
               <TouchableOpacity
                 style={[styles.ctaButton, { backgroundColor: colors.primary }]}
@@ -220,20 +236,20 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     color: '#fff',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '600',
   },
   heroInfo: {
     flex: 1,
-    gap: 1,
+    gap: 2,
   },
   heroName: {
     fontSize: 18,
@@ -241,6 +257,17 @@ const styles = StyleSheet.create({
   },
   heroMeta: {
     fontSize: 13,
+  },
+  guestBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginTop: 2,
+  },
+  guestBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   chipRow: {
     flexDirection: 'row',
@@ -263,13 +290,24 @@ const styles = StyleSheet.create({
   },
   ctaCard: {
     borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: 20,
     alignItems: 'center',
     gap: 14,
   },
+  warningHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  warningTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
   ctaText: {
     fontSize: 14,
     textAlign: 'center',
+    lineHeight: 20,
   },
   ctaButton: {
     flexDirection: 'row',

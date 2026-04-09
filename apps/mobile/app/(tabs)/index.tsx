@@ -1,8 +1,8 @@
-import { CoverageRing, SectionHeader, StatusPill } from '@/components';
+import { CoverageRing, SectionHeader, StatusPill, WelcomeModule } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
-import { clearNewRegistration, fetchInit } from '@/store';
+import { fetchInit } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
 import {
@@ -50,45 +50,6 @@ function formatDate(): string {
     day: 'numeric',
     month: 'long',
   });
-}
-
-// ─── Welcome Module (first-run only) ─────────────────────────────────────────
-
-const HOW_IT_WORKS = [
-  { step: '1', text: 'Talk about your clinical experience' },
-  { step: '2', text: 'We structure it into a portfolio entry' },
-  { step: '3', text: 'Track your curriculum coverage over time' },
-];
-
-function WelcomeModule({
-  specialtyLabel,
-  stageLabel,
-}: {
-  specialtyLabel: string | null;
-  stageLabel: string | null;
-}) {
-  const { colors } = useTheme();
-  const setupLine =
-    specialtyLabel && stageLabel ? `You're set up for ${specialtyLabel}, ${stageLabel}.` : null;
-
-  return (
-    <View style={styles.welcomeContainer}>
-      <Text style={[styles.welcomeHeading, { color: colors.text }]}>Here's how it works</Text>
-      {setupLine && (
-        <Text style={[styles.welcomeSetup, { color: colors.textSecondary }]}>{setupLine}</Text>
-      )}
-      <View style={styles.welcomeSteps}>
-        {HOW_IT_WORKS.map((item) => (
-          <View key={item.step} style={styles.welcomeStepRow}>
-            <View style={[styles.welcomeStepCircle, { backgroundColor: colors.primary + '1F' }]}>
-              <Text style={[styles.welcomeStepNumber, { color: colors.primary }]}>{item.step}</Text>
-            </View>
-            <Text style={[styles.welcomeStepText, { color: colors.text }]}>{item.text}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
 }
 
 // ─── Module A: Start New Entry ────────────────────────────────────────────────
@@ -438,10 +399,11 @@ export default function HomeScreen() {
   const dashboardLoading = useAppSelector((state) => state.dashboard.loading);
   const dashboardError = useAppSelector((state) => state.dashboard.error);
   const dashboardStale = useAppSelector((state) => state.dashboard.stale);
-  const isNewRegistration = useAppSelector((state) => state.auth.isNewRegistration);
   const user = useAppSelector((state) => state.auth.user);
-  // Capture on mount so it survives clearNewRegistration() in the useEffect below
-  const [isFirstRun] = useState(() => isNewRegistration);
+
+  // Data-driven: show welcome when dashboard has no entries (new user or empty account)
+  const hasEntries = (dashboardData?.recentEntries.items.length ?? 0) > 0;
+  const showWelcome = !hasEntries && !dashboardLoading;
 
   const specialtyLabel = user?.specialty?.name ?? null;
   const stageLabel = user?.specialty?.trainingStage?.label ?? null;
@@ -478,14 +440,8 @@ export default function HomeScreen() {
   }, [dispatch]);
 
   useEffect(() => {
-    if (isNewRegistration) {
-      // New guest has no data — skip the fetch, show empty states immediately.
-      // Clear the flag so subsequent visits (after creating entries) will fetch.
-      dispatch(clearNewRegistration());
-      return;
-    }
     dispatch(fetchInit());
-  }, [dispatch, isNewRegistration]);
+  }, [dispatch]);
 
   // Refetch dashboard when connectivity returns, only if data is missing or errored
   useNetworkRecovery(
@@ -556,7 +512,7 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]}>
-            {isFirstRun ? 'Welcome to your portfolio' : 'Home'}
+            {showWelcome ? 'Welcome to your portfolio' : 'Home'}
           </Text>
           <Text style={[styles.dateText, { color: colors.textSecondary }]}>{formatDate()}</Text>
         </View>
@@ -569,8 +525,12 @@ export default function HomeScreen() {
         />
 
         {/* First-run: welcome explainer only. Returning: full dashboard modules. */}
-        {isFirstRun ? (
-          <WelcomeModule specialtyLabel={specialtyLabel} stageLabel={stageLabel} />
+        {showWelcome ? (
+          <WelcomeModule
+            specialtyLabel={specialtyLabel}
+            stageLabel={stageLabel}
+            onStartFirstEntry={handleStartNew}
+          />
         ) : isInitialLoad ? (
           <View style={styles.initialLoading}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -813,46 +773,6 @@ const styles = StyleSheet.create({
   coverageCardDates: {
     fontSize: 12,
     lineHeight: 16,
-  },
-
-  // Welcome Module (first-run)
-  welcomeContainer: {
-    marginHorizontal: 20,
-    marginTop: 12,
-    gap: 8,
-  },
-  welcomeHeading: {
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  welcomeSetup: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  welcomeSteps: {
-    marginTop: 4,
-    gap: 12,
-  },
-  welcomeStepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  welcomeStepCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  welcomeStepNumber: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  welcomeStepText: {
-    fontSize: 15,
-    lineHeight: 20,
-    flex: 1,
   },
 
   // Combined empty state (entries + PDP goals both empty)

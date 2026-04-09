@@ -32,7 +32,6 @@ export interface AuthState {
   quota: QuotaStatus | null;
   error: string | null;
   isNewUser: boolean | null;
-  isNewRegistration: boolean;
   devOtp: string | null;
   specialties: SpecialtyOption[];
 }
@@ -43,7 +42,6 @@ const initialState: AuthState = {
   quota: null,
   error: null,
   isNewUser: null,
-  isNewRegistration: false,
   devOtp: null,
   specialties: [],
 };
@@ -303,9 +301,6 @@ const authSlice = createSlice({
       state.status = 'unauthenticated';
       state.user = null;
     },
-    clearNewRegistration(state) {
-      state.isNewRegistration = false;
-    },
     updateQuota(state, action: { payload: QuotaStatus }) {
       state.quota = action.payload;
     },
@@ -363,7 +358,6 @@ const authSlice = createSlice({
         state.status = 'guest';
         state.user = action.payload;
         state.error = null;
-        state.isNewRegistration = true;
         Sentry.setUser({ id: action.payload.id });
       })
       .addCase(registerGuest.rejected, (state, action) => {
@@ -419,6 +413,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, setUnauthenticated, clearNewRegistration, updateQuota } =
-  authSlice.actions;
+export const { clearError, setUnauthenticated, updateQuota } = authSlice.actions;
 export default authSlice.reducer;

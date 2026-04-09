@@ -11,6 +11,7 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -20,7 +21,7 @@ import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 export default function ProfileScreen() {
   const insets = useOfflineAwareInsets();
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isDark, toggleMode } = useTheme();
   const { user, isGuest, logout } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -143,6 +144,18 @@ export default function ProfileScreen() {
               onPress={() => router.push('/(tabs)/profile/account-settings')}
             />
           )}
+          <SettingsItem
+            icon="moon-outline"
+            label="Dark Mode"
+            showChevron={false}
+            rightElement={
+              <Switch
+                value={isDark}
+                onValueChange={toggleMode}
+                trackColor={{ false: colors.border, true: colors.primary }}
+              />
+            }
+          />
           <SettingsItem
             icon="shield-outline"
             label="Privacy & Support"

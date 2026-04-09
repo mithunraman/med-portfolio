@@ -19,3 +19,4 @@ export { SettingsItem, type SettingsItemProps } from './SettingsItem';
 export { SettingsSection } from './SettingsSection';
 export { SingleSelect, type SingleSelectOption } from './SingleSelect';
 export { StatusPill, type StatusVariant } from './StatusPill';
+export { WelcomeModule } from './WelcomeModule';

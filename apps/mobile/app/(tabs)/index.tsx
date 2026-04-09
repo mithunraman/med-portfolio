@@ -437,6 +437,7 @@ export default function HomeScreen() {
   const dashboardData = useAppSelector((state) => state.dashboard.data);
   const dashboardLoading = useAppSelector((state) => state.dashboard.loading);
   const dashboardError = useAppSelector((state) => state.dashboard.error);
+  const dashboardStale = useAppSelector((state) => state.dashboard.stale);
   const isNewRegistration = useAppSelector((state) => state.auth.isNewRegistration);
   const user = useAppSelector((state) => state.auth.user);
   // Capture on mount so it survives clearNewRegistration() in the useEffect below
@@ -459,7 +460,10 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       setPrompt(PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
-    }, [])
+      if (dashboardStale) {
+        dispatch(fetchInit());
+      }
+    }, [dashboardStale, dispatch])
   );
 
   const onRefresh = useCallback(async () => {

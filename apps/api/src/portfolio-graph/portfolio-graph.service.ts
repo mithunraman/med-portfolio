@@ -54,7 +54,7 @@ const CLASSIFICATION_PROMPTS = [
   'Take a look at the options below — which entry type feels right?',
   "These entry types look like the best fit. Select one, or pick a different one if you'd prefer.",
   'I think one of these entry types matches your input. Which would you go with?',
-  "Here's what I came up with — select the entry type that fits best, or choose your own.",
+  "Here's what I came up with - select the entry type that fits best, or choose your own.",
   'A few entry types stood out. Pick the one that best captures your input.',
 ] as const;
 

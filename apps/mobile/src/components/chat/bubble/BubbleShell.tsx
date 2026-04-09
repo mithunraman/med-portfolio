@@ -5,10 +5,9 @@ import { memo, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../../theme';
 
-// WhatsApp exact bubble colors
 const BUBBLE_COLORS = {
   sent: { light: '#dcf8c6', dark: '#005c4b' },
-  received: { light: '#ffffff', dark: '#1f2c34' },
+  received: { light: '#f5f3f0', dark: '#1f2c34' },
 } as const;
 
 const TERMINAL = new Set([MessageStatus.COMPLETE, MessageStatus.FAILED]);

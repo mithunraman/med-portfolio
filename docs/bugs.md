@@ -8,6 +8,8 @@
   1. The entry is not visible in the home page
   2. Refreshing home page does not help.
 
+- Once entries screen or PDP screen is loaded, and we create more entires, these screens don't update. Ideally, we should clear the stale data.
+
 # LLM
 
 - Add support for Clinical Experience Groups like: Older adults, Urgent and unscheduled care, etc

@@ -19,6 +19,7 @@ import type { PdpGoalAction } from './schemas/pdp-goal.schema';
 
 const DEFAULT_STATUSES = [PdpGoalStatus.STARTED, PdpGoalStatus.COMPLETED];
 
+
 function mapActionToDto(a: PdpGoalAction) {
   return {
     id: a.xid,
@@ -38,7 +39,9 @@ function mapGoalToDto(goal: PdpGoalWithArtefact): PdpGoalResponse {
     reviewDate:
       goal.reviewDate instanceof Date ? goal.reviewDate.toISOString() : (goal.reviewDate ?? null),
     completedAt:
-      goal.completedAt instanceof Date ? goal.completedAt.toISOString() : (goal.completedAt ?? null),
+      goal.completedAt instanceof Date
+        ? goal.completedAt.toISOString()
+        : (goal.completedAt ?? null),
     completionReview: goal.completionReview,
     actions: goal.actions.map(mapActionToDto),
     artefactId: goal.artefactXid ?? '',
@@ -99,8 +102,10 @@ export class PdpGoalsService {
     const goal = result.value;
 
     if (dto.status !== undefined) goal.status = dto.status;
-    if (dto.reviewDate !== undefined)
+    if (dto.reviewDate !== undefined) {
       goal.reviewDate = dto.reviewDate ? new Date(dto.reviewDate) : null;
+      goal.actions = goal.actions.map((a) => ({ ...a, dueDate: goal.reviewDate }));
+    }
     if (dto.completionReview !== undefined) goal.completionReview = dto.completionReview ?? null;
 
     // When marking complete, complete all non-archived actions and capture timestamp
@@ -116,6 +121,7 @@ export class PdpGoalsService {
       reviewDate: goal.reviewDate,
       completedAt: goal.completedAt,
       completionReview: goal.completionReview,
+      nextActionDueDate: goal.reviewDate,
       actions: goal.actions,
     });
 
@@ -149,7 +155,10 @@ export class PdpGoalsService {
 
     goal.actions = [...goal.actions, newAction];
 
-    const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, { actions: goal.actions });
+    const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, {
+      actions: goal.actions,
+      nextActionDueDate: goal.reviewDate,
+    });
     if (isErr(saveResult)) throw new InternalServerErrorException(saveResult.error.message);
 
     return mapGoalToDto(goal);
@@ -176,7 +185,10 @@ export class PdpGoalsService {
     if (dto.status !== undefined) action.status = dto.status;
     if (dto.completionReview !== undefined) action.completionReview = dto.completionReview ?? null;
 
-    const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, { actions: goal.actions });
+    const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, {
+      actions: goal.actions,
+      nextActionDueDate: goal.reviewDate,
+    });
     if (isErr(saveResult)) throw new InternalServerErrorException(saveResult.error.message);
 
     return mapGoalToDto(goal);

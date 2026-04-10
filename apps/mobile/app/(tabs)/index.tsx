@@ -2,7 +2,7 @@ import { CoverageRing, SectionHeader, StatusPill, WelcomeModule } from '@/compon
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
-import { fetchInit } from '@/store';
+import { fetchInit, selectPdpGoalsDueSoon, selectPdpGoalsDueTotal } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
 import {
@@ -410,21 +410,24 @@ export default function HomeScreen() {
 
   const dispatch = useAppDispatch();
 
-  const dashboardData = useAppSelector((state) => state.dashboard.data);
+  const recentEntries = useAppSelector((state) => state.dashboard.recentEntries);
+  const activeReviewPeriod = useAppSelector((state) => state.dashboard.activeReviewPeriod);
+  const pdpGoalsDueSoon = useAppSelector(selectPdpGoalsDueSoon);
+  const pdpGoalsDueTotal = useAppSelector(selectPdpGoalsDueTotal);
   const dashboardLoading = useAppSelector((state) => state.dashboard.loading);
   const dashboardError = useAppSelector((state) => state.dashboard.error);
   const dashboardStale = useAppSelector((state) => state.dashboard.stale);
   const user = useAppSelector((state) => state.auth.user);
 
   // Data-driven: show welcome when dashboard has no entries (new user or empty account)
-  const hasEntries = (dashboardData?.recentEntries.items.length ?? 0) > 0;
+  const hasEntries = (recentEntries?.items.length ?? 0) > 0;
   const showWelcome = !hasEntries && !dashboardLoading;
 
   const specialtyLabel = user?.specialty?.name ?? null;
   const stageLabel = user?.specialty?.trainingStage?.label ?? null;
 
   // True on first load when no data exists yet (not on subsequent refreshes)
-  const isInitialLoad = dashboardLoading && !dashboardData;
+  const isInitialLoad = dashboardLoading && !recentEntries;
 
   const scrollContentStyle = useMemo(
     () => [styles.scrollContent, { paddingTop: 16, paddingBottom: insets.bottom + 24 }],
@@ -463,10 +466,10 @@ export default function HomeScreen() {
   // Refetch dashboard when connectivity returns, only if data is missing or errored
   useNetworkRecovery(
     useCallback(() => {
-      if (!dashboardLoading && (!dashboardData || dashboardError)) {
+      if (!dashboardLoading && (!recentEntries || dashboardError)) {
         dispatch(fetchInit());
       }
-    }, [dispatch, dashboardLoading, dashboardData, dashboardError])
+    }, [dispatch, dashboardLoading, recentEntries, dashboardError])
   );
 
   const handleStartNew = useCallback(() => {
@@ -497,9 +500,9 @@ export default function HomeScreen() {
   );
 
   const handleReviewPeriodPress = useCallback(() => {
-    const xid = dashboardData?.activeReviewPeriod?.period.id;
+    const xid = activeReviewPeriod?.period.id;
     if (xid) router.push(`/(review-period)/${xid}`);
-  }, [router, dashboardData?.activeReviewPeriod?.period.id]);
+  }, [router, activeReviewPeriod?.period.id]);
 
   const handleSetupReviewPeriod = useCallback(() => {
     router.push('/(review-period)/create');
@@ -537,7 +540,7 @@ export default function HomeScreen() {
         {/* Module A: Start New Entry */}
         <StartNewEntryCard
           onPress={handleStartNew}
-          lastEntryDate={dashboardData?.recentEntries.items[0]?.updatedAt}
+          lastEntryDate={recentEntries?.items[0]?.updatedAt}
           prompt={prompt}
           helper={helper}
         />
@@ -557,15 +560,14 @@ export default function HomeScreen() {
           <>
             {/* Module B: Review Period Coverage (high priority — ARCP tracking) */}
             <ReviewPeriodCoverageModule
-              data={dashboardData?.activeReviewPeriod ?? null}
+              data={activeReviewPeriod ?? null}
               onPress={handleReviewPeriodPress}
               onSetup={handleSetupReviewPeriod}
               onSeeAll={handleSeeAllReviewPeriods}
             />
 
             {/* Modules C+D: combined empty card when both are empty, individual modules otherwise */}
-            {(dashboardData?.recentEntries.items.length ?? 0) === 0 &&
-            (dashboardData?.pdpGoalsDue.items.length ?? 0) === 0 ? (
+            {(recentEntries?.items.length ?? 0) === 0 && pdpGoalsDueSoon.length === 0 ? (
               <View style={styles.moduleContainer}>
                 <View style={[styles.combinedEmptyCard, { backgroundColor: colors.surface }]}>
                   <Ionicons name="layers-outline" size={24} color={colors.textSecondary} />
@@ -577,14 +579,14 @@ export default function HomeScreen() {
             ) : (
               <>
                 <RecentEntriesModule
-                  items={dashboardData?.recentEntries.items ?? []}
-                  total={dashboardData?.recentEntries.total ?? 0}
+                  items={recentEntries?.items ?? []}
+                  total={recentEntries?.total ?? 0}
                   onEntryPress={handleEntryPress}
                   onSeeAll={handleSeeAllEntries}
                 />
                 <PdpDueSoonModule
-                  items={dashboardData?.pdpGoalsDue.items ?? []}
-                  total={dashboardData?.pdpGoalsDue.total ?? 0}
+                  items={pdpGoalsDueSoon}
+                  total={pdpGoalsDueTotal}
                   onGoalPress={handleGoalPress}
                 />
               </>

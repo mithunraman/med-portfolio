@@ -226,6 +226,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       if (data.reviewDate !== undefined) setFields.reviewDate = data.reviewDate;
       if (data.completedAt !== undefined) setFields.completedAt = data.completedAt;
       if (data.completionReview !== undefined) setFields.completionReview = data.completionReview;
+      if (data.nextActionDueDate !== undefined) setFields.nextActionDueDate = data.nextActionDueDate;
       if (data.actions !== undefined) setFields.actions = data.actions;
 
       if (Object.keys(setFields).length > 0) {

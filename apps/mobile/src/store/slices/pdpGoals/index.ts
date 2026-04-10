@@ -2,7 +2,12 @@
 export { default as pdpGoalsReducer } from './slice';
 
 // Selectors
-export { selectAllPdpGoals, selectPdpGoalById } from './slice';
+export {
+  selectAllPdpGoals,
+  selectPdpGoalById,
+  selectPdpGoalsDueSoon,
+  selectPdpGoalsDueTotal,
+} from './slice';
 
 // Thunks
 export {

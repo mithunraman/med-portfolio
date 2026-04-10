@@ -82,6 +82,8 @@ export {
   updatePdpGoalAction,
   selectAllPdpGoals,
   selectPdpGoalById,
+  selectPdpGoalsDueSoon,
+  selectPdpGoalsDueTotal,
 } from './pdpGoals';
 
 // ── Review Periods ──

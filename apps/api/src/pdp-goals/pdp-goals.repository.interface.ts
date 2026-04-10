@@ -29,6 +29,7 @@ export interface SaveGoalData {
   reviewDate?: Date | null;
   completedAt?: Date | null;
   completionReview?: string | null;
+  nextActionDueDate?: Date | null;
   actions?: PdpGoalAction[];
 }
 

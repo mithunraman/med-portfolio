@@ -55,21 +55,36 @@ function formatDate(): string {
 // ─── Module A: Start New Entry ────────────────────────────────────────────────
 
 const PROMPTS = [
-  'What happened today worth keeping?',
+  "What's worth keeping from today?",
   'Anything surprise you this week?',
   'Who did you help recently?',
   'What went better than expected?',
   'What would you do differently?',
+  'What did you learn this week?',
+  'Any difficult decisions lately?',
+  'What are you proud of today?',
+  'What challenged you recently?',
+  'Any feedback worth reflecting on?',
+];
+
+const HELPERS = [
+  'Just talk - we handle the rest.',
+  'Tap the mic and talk it through.',
+  'Voice or text, your choice.',
+  'A quick note now saves time later.',
+  'Two minutes now, evidence forever.',
 ];
 
 function StartNewEntryCard({
   onPress,
   lastEntryDate,
   prompt,
+  helper,
 }: {
   onPress: () => void;
   lastEntryDate?: string;
   prompt: string;
+  helper: string;
 }) {
   const { colors } = useTheme();
   const recency = lastEntryDate ? `Last entry ${formatTimeAgo(lastEntryDate)}` : null;
@@ -82,19 +97,19 @@ function StartNewEntryCard({
       accessibilityRole="button"
       accessibilityLabel="Start a new entry"
     >
-      <View style={styles.captureTextContent}>
-        <Text style={[styles.capturePrompt, { color: colors.text }]} numberOfLines={2}>
-          {prompt}
-        </Text>
-        {recency ? (
-          <Text style={[styles.captureHelper, { color: colors.textSecondary }]}>{recency}</Text>
-        ) : null}
-        <Text style={[styles.captureHelper, { color: colors.textSecondary }]}>
-          Just talk about your case - we'll handle the rest.
-        </Text>
-      </View>
-      <View style={[styles.micCircle, { backgroundColor: colors.primary }]}>
-        <Ionicons name="mic" size={32} color="#fff" />
+      <Text style={[styles.capturePrompt, { color: colors.text }]} numberOfLines={1}>
+        {prompt}
+      </Text>
+      <View style={styles.captureBottomRow}>
+        <View style={styles.captureTextContent}>
+          <Text style={[styles.captureHelper, { color: colors.textSecondary }]}>{helper}</Text>
+          {recency ? (
+            <Text style={[styles.captureHelper, { color: colors.textSecondary }]}>{recency}</Text>
+          ) : null}
+        </View>
+        <View style={[styles.micCircle, { backgroundColor: colors.primary }]}>
+          <Ionicons name="mic" size={24} color="#fff" />
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -416,12 +431,14 @@ export default function HomeScreen() {
     [insets.bottom]
   );
 
-  // Randomise prompt on each screen focus (not just mount)
+  // Randomise prompt and helper on each screen focus (not just mount)
   const [prompt, setPrompt] = useState(() => PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
+  const [helper, setHelper] = useState(() => HELPERS[Math.floor(Math.random() * HELPERS.length)]);
   const [refreshing, setRefreshing] = useState(false);
   useFocusEffect(
     useCallback(() => {
       setPrompt(PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
+      setHelper(HELPERS[Math.floor(Math.random() * HELPERS.length)]);
       if (dashboardStale) {
         dispatch(fetchInit());
       }
@@ -522,6 +539,7 @@ export default function HomeScreen() {
           onPress={handleStartNew}
           lastEntryDate={dashboardData?.recentEntries.items[0]?.updatedAt}
           prompt={prompt}
+          helper={helper}
         />
 
         {/* First-run: welcome explainer only. Returning: full dashboard modules. */}
@@ -616,25 +634,28 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 14,
+    gap: 4,
+  },
+  capturePrompt: {
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  captureBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  micCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   captureTextContent: {
     flex: 1,
     gap: 3,
   },
-  capturePrompt: {
-    fontSize: 16,
-    fontWeight: '600',
-    lineHeight: 20,
+  micCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   captureHelper: {
     fontSize: 12,

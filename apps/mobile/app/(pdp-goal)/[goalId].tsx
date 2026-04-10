@@ -1,5 +1,5 @@
-import { Button, EmptyState, StatusPill } from '@/components';
 import type { StatusVariant } from '@/components';
+import { Button, EmptyState, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
   addPdpGoalAction,
@@ -9,6 +9,7 @@ import {
   updatePdpGoalAction,
 } from '@/store';
 import { useTheme } from '@/theme';
+import { hexToRgba } from '@/utils/color';
 import { PdpGoalStatus, type PdpGoalResponse } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -291,9 +292,9 @@ export default function PdpGoalDetailScreen() {
   const visibleActions = useMemo(
     () =>
       goal?.actions.filter(
-        (a) => (optimisticStatuses[a.id] ?? a.status) !== PdpGoalStatus.ARCHIVED,
+        (a) => (optimisticStatuses[a.id] ?? a.status) !== PdpGoalStatus.ARCHIVED
       ) ?? [],
-    [goal?.actions, optimisticStatuses],
+    [goal?.actions, optimisticStatuses]
   );
 
   const handleSetReviewDate = useCallback(
@@ -317,18 +318,14 @@ export default function PdpGoalDetailScreen() {
       );
       return;
     }
-    Alert.alert(
-      'Mark goal as complete',
-      'Are you sure you want to mark this goal as completed?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Mark complete',
-          onPress: () =>
-            dispatch(updatePdpGoal({ goalId, data: { status: PdpGoalStatus.COMPLETED } })),
-        },
-      ]
-    );
+    Alert.alert('Mark goal as complete', 'Are you sure you want to mark this goal as completed?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Mark complete',
+        onPress: () =>
+          dispatch(updatePdpGoal({ goalId, data: { status: PdpGoalStatus.COMPLETED } })),
+      },
+    ]);
   }, [goalId, dispatch, visibleActions, optimisticStatuses]);
 
   const handleArchive = useCallback(() => {
@@ -494,12 +491,11 @@ export default function PdpGoalDetailScreen() {
   const isCompleted = goal.status === PdpGoalStatus.COMPLETED;
   const isArchived = goal.status === PdpGoalStatus.ARCHIVED;
   const completedActionCount = visibleActions.filter(
-    (a) => (optimisticStatuses[a.id] ?? a.status) === PdpGoalStatus.COMPLETED,
+    (a) => (optimisticStatuses[a.id] ?? a.status) === PdpGoalStatus.COMPLETED
   ).length;
   const allActionsDone =
     visibleActions.length === 0 || completedActionCount === visibleActions.length;
-  const isOverdue =
-    isActive && !!goal.reviewDate && new Date(goal.reviewDate) < new Date();
+  const isOverdue = isActive && !!goal.reviewDate && new Date(goal.reviewDate) < new Date();
 
   return (
     <>
@@ -512,58 +508,89 @@ export default function PdpGoalDetailScreen() {
           <Text style={[styles.goalText, { color: colors.text }]}>{goal.goal}</Text>
           {!!goal.artefactId && (
             <TouchableOpacity style={styles.provenanceRow} onPress={handleViewEntry}>
-              <Ionicons name="document-text-outline" size={13} color={colors.textSecondary} style={styles.provenanceIcon} />
-              <Text style={[styles.provenanceText, { color: colors.textSecondary }]} numberOfLines={2}>
+              <Ionicons
+                name="document-text-outline"
+                size={13}
+                color={colors.textSecondary}
+                style={styles.provenanceIcon}
+              />
+              <Text
+                style={[styles.provenanceText, { color: colors.textSecondary }]}
+                numberOfLines={2}
+              >
                 {goal.artefactTitle ?? 'View entry'}
               </Text>
-              <Ionicons name="chevron-forward" size={13} color={colors.textSecondary} style={styles.provenanceIcon} />
+              <Ionicons
+                name="chevron-forward"
+                size={13}
+                color={colors.textSecondary}
+                style={styles.provenanceIcon}
+              />
             </TouchableOpacity>
           )}
           <View style={styles.metaRow}>
             <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />
             {isCompleted && goal.completedAt && (
-              <View style={styles.reviewDateButton}>
+              <View style={styles.completedDateRow}>
                 <Ionicons name="checkmark-circle-outline" size={14} color={colors.textSecondary} />
-                <Text style={[styles.reviewDateText, { color: colors.textSecondary }]}>
+                <Text style={[styles.completedDateText, { color: colors.textSecondary }]}>
                   Completed {formatDate(goal.completedAt)}
                 </Text>
               </View>
             )}
-            {goal.reviewDate ? (
-              <TouchableOpacity
-                onPress={() => !isArchived && !isCompleted && setShowDatePicker(true)}
-                style={styles.reviewDateButton}
-                disabled={isArchived || isCompleted}
+          </View>
+          {goal.reviewDate ? (
+            <TouchableOpacity
+              onPress={() => !isArchived && !isCompleted && setShowDatePicker(true)}
+              disabled={isArchived || isCompleted}
+              style={[
+                styles.reviewDatePill,
+                isOverdue
+                  ? {
+                      backgroundColor: hexToRgba(WARNING_COLOR, 0.1),
+                      borderColor: hexToRgba(WARNING_COLOR, 0.2),
+                    }
+                  : {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                    },
+              ]}
+            >
+              <Ionicons
+                name={isOverdue ? 'alert-circle-outline' : 'calendar-outline'}
+                size={16}
+                color={isOverdue ? WARNING_COLOR : colors.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.reviewDatePillText,
+                  { color: isOverdue ? WARNING_COLOR : colors.textSecondary },
+                ]}
               >
-                <Ionicons
-                  name={isOverdue ? 'alert-circle-outline' : 'calendar-outline'}
-                  size={14}
-                  color={isOverdue ? WARNING_COLOR : colors.textSecondary}
-                />
-                <Text
-                  style={[
-                    styles.reviewDateText,
-                    { color: isOverdue ? WARNING_COLOR : colors.textSecondary },
-                  ]}
-                >
-                  {isOverdue ? 'Overdue · ' : 'Review by '}
-                  {formatDate(goal.reviewDate)}
+                {isOverdue ? 'Overdue · ' : 'Review by '}
+                {formatDate(goal.reviewDate)}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            !isArchived &&
+            !isCompleted && (
+              <TouchableOpacity
+                onPress={() => setShowDatePicker(true)}
+                style={[
+                  styles.reviewDatePill,
+                  {
+                    backgroundColor: hexToRgba(colors.primary, 0.1),
+                    borderColor: hexToRgba(colors.primary, 0.2),
+                  },
+                ]}
+              >
+                <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+                <Text style={[styles.reviewDatePillText, { color: colors.primary }]}>
+                  Set review date
                 </Text>
               </TouchableOpacity>
-            ) : (
-              !isArchived && !isCompleted && (
-                <TouchableOpacity
-                  onPress={() => setShowDatePicker(true)}
-                  style={styles.reviewDateButton}
-                >
-                  <Ionicons name="calendar-outline" size={14} color={colors.primary} />
-                  <Text style={[styles.reviewDateText, { color: colors.primary }]}>
-                    Set review date
-                  </Text>
-                </TouchableOpacity>
-              )
-            )}
-          </View>
+            )
+          )}
         </View>
 
         {/* Actions */}
@@ -583,7 +610,11 @@ export default function PdpGoalDetailScreen() {
                   Alert.alert('Remove an action', 'Long press any action to remove it.')
                 }
               >
-                <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} />
+                <Ionicons
+                  name="information-circle-outline"
+                  size={18}
+                  color={colors.textSecondary}
+                />
               </Pressable>
             )}
           </View>
@@ -593,7 +624,9 @@ export default function PdpGoalDetailScreen() {
                 variant="compact"
                 icon="checkmark-outline"
                 title="No actions yet"
-                description={isActive ? 'Add actions to track progress toward this goal.' : undefined}
+                description={
+                  isActive ? 'Add actions to track progress toward this goal.' : undefined
+                }
               />
             ) : (
               visibleActions.map((action, index) => {
@@ -605,7 +638,12 @@ export default function PdpGoalDetailScreen() {
                 return (
                   <Pressable
                     key={action.id}
-                    onPress={() => !isArchived && !isCompleted && !isPending && handleToggleAction(action.id, effectiveStatus)}
+                    onPress={() =>
+                      !isArchived &&
+                      !isCompleted &&
+                      !isPending &&
+                      handleToggleAction(action.id, effectiveStatus)
+                    }
                     onLongPress={() => isActive && !isPending && handleArchiveAction(action.id)}
                     delayLongPress={400}
                     style={[
@@ -697,7 +735,6 @@ export default function PdpGoalDetailScreen() {
             />
           </View>
         )}
-
       </ScrollView>
 
       <DatePickerModal
@@ -764,13 +801,27 @@ const styles = StyleSheet.create({
     gap: 10,
     flexWrap: 'wrap',
   },
-  reviewDateButton: {
+  completedDateRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  reviewDateText: {
+  completedDateText: {
     fontSize: 13,
+  },
+  reviewDatePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  reviewDatePillText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   sectionTitleRow: {
     flexDirection: 'row',

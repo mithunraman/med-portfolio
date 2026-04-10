@@ -1,4 +1,5 @@
 import { useTheme } from '@/theme';
+import { hexToRgba } from '@/utils/color';
 import type { PdpGoal } from '@acme/shared';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useCallback, useState } from 'react';
@@ -191,7 +192,7 @@ function DatePickerSheet({ visible, currentDate, onSelect, onClear, onDismiss }:
             <>
               <Pressable
                 onPress={() => setShowCalendar(false)}
-                style={[styles.quickPickPill, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' }]}
+                style={[styles.quickPickPill, { backgroundColor: hexToRgba(colors.primary, 0.08), borderColor: hexToRgba(colors.primary, 0.25) }]}
               >
                 <Ionicons name="flash" size={14} color={colors.primary} />
                 <Text style={[styles.quickPickPillText, { color: colors.primary }]}>Quick pick</Text>
@@ -292,30 +293,15 @@ export function PdpGoalSelector({
                   disabled={disabled}
                   style={[
                     styles.dateRow,
-                    sel.reviewDate
-                      ? {
-                          backgroundColor: colors.primary + '15',
-                          borderColor: colors.primary + '40',
-                          borderWidth: 1,
-                        }
-                      : {
-                          borderColor: colors.border,
-                          borderWidth: 1,
-                          borderStyle: 'dashed' as const,
-                        },
+                    {
+                      backgroundColor: hexToRgba(colors.primary, 0.1),
+                      borderColor: hexToRgba(colors.primary, 0.2),
+                      borderWidth: 1,
+                    },
                   ]}
                 >
-                  <Ionicons
-                    name="calendar-outline"
-                    size={18}
-                    color={sel.reviewDate ? colors.primary : colors.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.dateText,
-                      { color: sel.reviewDate ? colors.text : colors.textSecondary },
-                    ]}
-                  >
+                  <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+                  <Text style={[styles.dateText, { color: colors.primary }]}>
                     {sel.reviewDate ? `Review by ${formatDate(sel.reviewDate)}` : 'Set review date'}
                   </Text>
                 </Pressable>

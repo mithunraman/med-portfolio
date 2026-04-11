@@ -2,7 +2,13 @@ import { CoverageRing, SectionHeader, StatusPill, WelcomeModule } from '@/compon
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
-import { fetchInit, selectPdpGoalsDueSoon, selectPdpGoalsDueTotal } from '@/store';
+import {
+  fetchInit,
+  selectPdpGoalsDueSoon,
+  selectPdpGoalsDueTotal,
+  selectRecentEntries,
+  selectRecentEntriesTotal,
+} from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
 import {
@@ -410,7 +416,9 @@ export default function HomeScreen() {
 
   const dispatch = useAppDispatch();
 
-  const recentEntries = useAppSelector((state) => state.dashboard.recentEntries);
+  const recentArtefacts = useAppSelector(selectRecentEntries);
+  const recentEntriesTotal = useAppSelector(selectRecentEntriesTotal);
+  const recentEntryIds = useAppSelector((state) => state.dashboard.recentEntryIds);
   const activeReviewPeriod = useAppSelector((state) => state.dashboard.activeReviewPeriod);
   const pdpGoalsDueSoon = useAppSelector(selectPdpGoalsDueSoon);
   const pdpGoalsDueTotal = useAppSelector(selectPdpGoalsDueTotal);
@@ -420,14 +428,14 @@ export default function HomeScreen() {
   const user = useAppSelector((state) => state.auth.user);
 
   // Data-driven: show welcome when dashboard has no entries (new user or empty account)
-  const hasEntries = (recentEntries?.items.length ?? 0) > 0;
+  const hasEntries = recentArtefacts.length > 0;
   const showWelcome = !hasEntries && !dashboardLoading;
 
   const specialtyLabel = user?.specialty?.name ?? null;
   const stageLabel = user?.specialty?.trainingStage?.label ?? null;
 
-  // True on first load when no data exists yet (not on subsequent refreshes)
-  const isInitialLoad = dashboardLoading && !recentEntries;
+  // True on first load when no data exists yet (null = never fetched, [] = fetched but empty)
+  const isInitialLoad = dashboardLoading && recentEntryIds === null;
 
   const scrollContentStyle = useMemo(
     () => [styles.scrollContent, { paddingTop: 16, paddingBottom: insets.bottom + 24 }],
@@ -466,10 +474,10 @@ export default function HomeScreen() {
   // Refetch dashboard when connectivity returns, only if data is missing or errored
   useNetworkRecovery(
     useCallback(() => {
-      if (!dashboardLoading && (!recentEntries || dashboardError)) {
+      if (!dashboardLoading && (recentEntryIds === null || dashboardError)) {
         dispatch(fetchInit());
       }
-    }, [dispatch, dashboardLoading, recentEntries, dashboardError])
+    }, [dispatch, dashboardLoading, recentEntryIds, dashboardError])
   );
 
   const handleStartNew = useCallback(() => {
@@ -540,7 +548,7 @@ export default function HomeScreen() {
         {/* Module A: Start New Entry */}
         <StartNewEntryCard
           onPress={handleStartNew}
-          lastEntryDate={recentEntries?.items[0]?.updatedAt}
+          lastEntryDate={recentArtefacts[0]?.updatedAt}
           prompt={prompt}
           helper={helper}
         />
@@ -567,7 +575,7 @@ export default function HomeScreen() {
             />
 
             {/* Modules C+D: combined empty card when both are empty, individual modules otherwise */}
-            {(recentEntries?.items.length ?? 0) === 0 && pdpGoalsDueSoon.length === 0 ? (
+            {recentArtefacts.length === 0 && pdpGoalsDueSoon.length === 0 ? (
               <View style={styles.moduleContainer}>
                 <View style={[styles.combinedEmptyCard, { backgroundColor: colors.surface }]}>
                   <Ionicons name="layers-outline" size={24} color={colors.textSecondary} />
@@ -579,8 +587,8 @@ export default function HomeScreen() {
             ) : (
               <>
                 <RecentEntriesModule
-                  items={recentEntries?.items ?? []}
-                  total={recentEntries?.total ?? 0}
+                  items={recentArtefacts}
+                  total={recentEntriesTotal}
                   onEntryPress={handleEntryPress}
                   onSeeAll={handleSeeAllEntries}
                 />

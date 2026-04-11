@@ -22,6 +22,8 @@ export {
   finaliseArtefact,
   selectAllArtefacts,
   selectArtefactById,
+  selectRecentEntries,
+  selectRecentEntriesTotal,
 } from './artefacts';
 
 // ── Auth ──

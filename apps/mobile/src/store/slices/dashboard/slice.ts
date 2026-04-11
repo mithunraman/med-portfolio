@@ -1,4 +1,4 @@
-import type { ActiveReviewPeriodSummary, Artefact } from '@acme/shared';
+import type { ActiveReviewPeriodSummary } from '@acme/shared';
 import { createSlice } from '@reduxjs/toolkit';
 import { fetchInit } from './thunks';
 
@@ -6,16 +6,10 @@ import { fetchInit } from './thunks';
  * Fulfilled action type prefixes for mutations that affect dashboard data.
  * When any of these succeed, the dashboard is marked stale so it refetches on next focus.
  *
- * PDP goal mutations are NOT listed here — PDP goals are normalized into the
- * pdpGoals entity slice, so updates are reflected immediately without refetch.
+ * Artefact and PDP goal mutations are NOT listed here — both are normalized
+ * into their entity slices, so updates are reflected immediately without refetch.
  */
 const DASHBOARD_INVALIDATING_PREFIXES = [
-  'artefacts/createArtefact',
-  'artefacts/updateArtefactStatus',
-  'artefacts/duplicateToReview',
-  'artefacts/editArtefact',
-  'artefacts/finaliseArtefact',
-  'artefacts/restoreVersion',
   'messages/sendMessageWithRetry',
   'messages/retryFailedMessage',
   'messages/sendVoiceNoteWithRetry',
@@ -29,8 +23,9 @@ function isDashboardInvalidatingAction(actionType: string): boolean {
 }
 
 export interface DashboardState {
-  /** Recent entries — still stored as full objects (future normalization phase). */
-  recentEntries: { items: Artefact[]; total: number } | null;
+  /** Recent entries — normalized: only IDs stored here, entities in artefacts slice. */
+  recentEntryIds: string[] | null;
+  recentEntriesTotal: number;
   /** PDP goals due soon — normalized: only IDs stored here, entities in pdpGoals slice. */
   pdpGoalsDueIds: string[] | null;
   pdpGoalsDueTotal: number;
@@ -42,7 +37,8 @@ export interface DashboardState {
 }
 
 const initialState: DashboardState = {
-  recentEntries: null,
+  recentEntryIds: null,
+  recentEntriesTotal: 0,
   pdpGoalsDueIds: null,
   pdpGoalsDueTotal: 0,
   activeReviewPeriod: null,
@@ -56,7 +52,8 @@ const dashboardSlice = createSlice({
   initialState,
   reducers: {
     clearDashboard(state) {
-      state.recentEntries = null;
+      state.recentEntryIds = null;
+      state.recentEntriesTotal = 0;
       state.pdpGoalsDueIds = null;
       state.pdpGoalsDueTotal = 0;
       state.activeReviewPeriod = null;
@@ -73,12 +70,14 @@ const dashboardSlice = createSlice({
         state.loading = false;
         const dashboard = action.payload.dashboard;
         if (dashboard) {
-          state.recentEntries = dashboard.recentEntries;
+          state.recentEntryIds = dashboard.recentEntries.items.map((a) => a.id);
+          state.recentEntriesTotal = dashboard.recentEntries.total;
           state.pdpGoalsDueIds = dashboard.pdpGoalsDue.items.map((g) => g.id);
           state.pdpGoalsDueTotal = dashboard.pdpGoalsDue.total;
           state.activeReviewPeriod = dashboard.activeReviewPeriod;
         } else {
-          state.recentEntries = null;
+          state.recentEntryIds = null;
+          state.recentEntriesTotal = 0;
           state.pdpGoalsDueIds = null;
           state.pdpGoalsDueTotal = 0;
           state.activeReviewPeriod = null;

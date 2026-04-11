@@ -1,6 +1,7 @@
 import type { Artefact } from '@acme/shared';
-import { createEntityAdapter, createSlice } from '@reduxjs/toolkit';
+import { createEntityAdapter, createSelector, createSlice } from '@reduxjs/toolkit';
 import type { RootState } from '../../index';
+import { fetchInit } from '../dashboard/thunks';
 import {
   createArtefact,
   duplicateToReview,
@@ -126,6 +127,14 @@ const artefactsSlice = createSlice({
         state.saving = false;
         state.error = action.payload as string;
       })
+      // Cross-slice hydration: populate entity store from dashboard init response.
+      // Artefact type is identical between dashboard and entity store — simple upsertMany.
+      .addCase(fetchInit.fulfilled, (state, action) => {
+        const items = action.payload.dashboard?.recentEntries.items;
+        if (items?.length) {
+          artefactsAdapter.upsertMany(state, items);
+        }
+      })
       // restoreVersion
       .addCase(restoreVersion.pending, (state) => {
         state.saving = true;
@@ -147,5 +156,18 @@ export const {
   selectById: selectArtefactById,
   selectIds: selectArtefactIds,
 } = artefactsAdapter.getSelectors((state: RootState) => state.artefacts);
+
+/** Joins dashboard recent entry IDs with the normalized entity store. */
+export const selectRecentEntries = createSelector(
+  [
+    (state: RootState) => state.dashboard.recentEntryIds,
+    (state: RootState) => state.artefacts.entities,
+  ],
+  (ids, entities) =>
+    (ids ?? []).map((id) => entities[id]).filter((a): a is Artefact => !!a)
+);
+
+export const selectRecentEntriesTotal = (state: RootState) =>
+  state.dashboard.recentEntriesTotal ?? 0;
 
 export default artefactsSlice.reducer;

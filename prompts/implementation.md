@@ -1,4 +1,8 @@
-Based on the conversation, break the work into clear implementation phases. Ask questions if anything is ambiguous or needs more clarity.
+Based on the conversation,
+
+First, create a section describing the overall objective the changes are trying to achieve.
+
+Then, break the work into clear implementation phases. Ask questions if anything is ambiguous or needs more clarity.
 
 For each phase, include:
 

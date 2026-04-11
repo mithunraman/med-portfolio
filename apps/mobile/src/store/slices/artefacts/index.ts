@@ -2,7 +2,12 @@
 export { default as artefactsReducer } from './slice';
 
 // Selectors
-export { selectAllArtefacts, selectArtefactById } from './slice';
+export {
+  selectAllArtefacts,
+  selectArtefactById,
+  selectRecentEntries,
+  selectRecentEntriesTotal,
+} from './slice';
 
 // Thunks
 export {

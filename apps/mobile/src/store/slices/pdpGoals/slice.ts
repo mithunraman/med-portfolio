@@ -127,7 +127,8 @@ export const selectPdpGoalsDueSoon = createSelector(
     (state: RootState) => state.dashboard.pdpGoalsDueIds,
     (state: RootState) => state.pdpGoals.entities,
   ],
-  (ids, entities) => (ids ?? []).map((id) => entities[id]).filter(Boolean)
+  (ids, entities) =>
+    (ids ?? []).map((id) => entities[id]).filter((g): g is PdpGoalResponse => !!g)
 );
 
 export const selectPdpGoalsDueTotal = (state: RootState) =>

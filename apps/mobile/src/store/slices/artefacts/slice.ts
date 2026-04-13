@@ -24,6 +24,7 @@ export interface ArtefactsState {
   saving: boolean;
   error: string | null;
   nextCursor: string | null;
+  stale: boolean;
 }
 
 const artefactsSlice = createSlice({
@@ -35,8 +36,13 @@ const artefactsSlice = createSlice({
     saving: false,
     error: null,
     nextCursor: null,
+    stale: false,
   }),
-  reducers: {},
+  reducers: {
+    markArtefactsStale(state) {
+      state.stale = true;
+    },
+  },
   extraReducers: (builder) => {
     builder
       // createArtefact
@@ -59,6 +65,7 @@ const artefactsSlice = createSlice({
       })
       .addCase(fetchArtefacts.fulfilled, (state, action) => {
         state.loading = false;
+        state.stale = false;
         state.nextCursor = action.payload.nextCursor;
         // If no cursor was provided in the request, this is a fresh fetch — replace all
         if (!action.meta.arg?.cursor) {
@@ -95,6 +102,7 @@ const artefactsSlice = createSlice({
       })
       .addCase(finaliseArtefact.fulfilled, (state, action) => {
         state.updatingStatus = false;
+        state.stale = true;
         artefactsAdapter.upsertOne(state, action.payload);
       })
       .addCase(finaliseArtefact.rejected, (state, action) => {
@@ -150,6 +158,8 @@ const artefactsSlice = createSlice({
       });
   },
 });
+
+export const { markArtefactsStale } = artefactsSlice.actions;
 
 export const {
   selectAll: selectAllArtefacts,

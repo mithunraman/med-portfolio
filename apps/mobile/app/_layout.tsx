@@ -2,6 +2,7 @@ import { setOnQuotaUpdate, setOnUnauthorized } from '@/api/client';
 import { ErrorBoundary } from '@/components';
 import { ActiveBanner } from '@/components/ActiveBanner';
 import { useAppDispatch, useAppSelector } from '@/hooks';
+import { useBackgroundStaleTimer } from '@/hooks/useBackgroundStaleTimer';
 import { useNetworkListener } from '@/hooks/useNetworkListener';
 import {
   initializeAuth,
@@ -61,6 +62,9 @@ function RootLayoutNav() {
 
   // Subscribe to network state changes
   useNetworkListener();
+
+  // Mark data stale when app returns from background after 15+ minutes
+  useBackgroundStaleTimer();
 
   // Initialize app state on mount
   useEffect(() => {

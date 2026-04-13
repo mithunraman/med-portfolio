@@ -1,6 +1,7 @@
 import type { PdpGoalResponse } from '@acme/shared';
 import { createEntityAdapter, createSelector, createSlice } from '@reduxjs/toolkit';
 import type { RootState } from '../../index';
+import { finaliseArtefact } from '../artefacts/thunks';
 import { fetchInit } from '../dashboard/thunks';
 import {
   addPdpGoalAction,
@@ -17,6 +18,7 @@ export interface PdpGoalsState {
   mutating: boolean;
   error: string | null;
   total: number;
+  stale: boolean;
 }
 
 const pdpGoalsSlice = createSlice({
@@ -26,8 +28,13 @@ const pdpGoalsSlice = createSlice({
     mutating: false,
     error: null,
     total: 0,
+    stale: false,
   }),
-  reducers: {},
+  reducers: {
+    markPdpGoalsStale(state) {
+      state.stale = true;
+    },
+  },
   extraReducers: (builder) => {
     builder
       // fetchPdpGoals
@@ -37,6 +44,7 @@ const pdpGoalsSlice = createSlice({
       })
       .addCase(fetchPdpGoals.fulfilled, (state, action) => {
         state.loading = false;
+        state.stale = false;
         state.total = action.payload.total;
         pdpGoalsAdapter.setAll(state, action.payload.goals);
       })
@@ -112,9 +120,16 @@ const pdpGoalsSlice = createSlice({
       .addCase(updatePdpGoalAction.rejected, (state, action) => {
         state.mutating = false;
         state.error = action.payload as string;
+      })
+
+      // Cross-slice: finalising an artefact creates/archives PDP goals server-side.
+      .addCase(finaliseArtefact.fulfilled, (state) => {
+        state.stale = true;
       });
   },
 });
+
+export const { markPdpGoalsStale } = pdpGoalsSlice.actions;
 
 export const {
   selectAll: selectAllPdpGoals,

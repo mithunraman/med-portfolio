@@ -2,7 +2,7 @@
 export { default as dashboardReducer } from './slice';
 
 // Actions
-export { clearDashboard } from './slice';
+export { clearDashboard, markDashboardStale } from './slice';
 
 // Thunks
 export { fetchInit } from './thunks';

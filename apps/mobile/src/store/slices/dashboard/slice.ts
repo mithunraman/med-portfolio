@@ -16,6 +16,8 @@ const DASHBOARD_INVALIDATING_PREFIXES = [
   'reviewPeriods/createReviewPeriod',
   'reviewPeriods/updateReviewPeriod',
   'reviewPeriods/archiveReviewPeriod',
+  'artefacts/finaliseArtefact',
+  'artefacts/createArtefact',
 ];
 
 function isDashboardInvalidatingAction(actionType: string): boolean {
@@ -51,6 +53,9 @@ const dashboardSlice = createSlice({
   name: 'dashboard',
   initialState,
   reducers: {
+    markDashboardStale(state) {
+      state.stale = true;
+    },
     clearDashboard(state) {
       state.recentEntryIds = null;
       state.recentEntriesTotal = 0;
@@ -97,5 +102,5 @@ const dashboardSlice = createSlice({
   },
 });
 
-export const { clearDashboard } = dashboardSlice.actions;
+export const { clearDashboard, markDashboardStale } = dashboardSlice.actions;
 export default dashboardSlice.reducer;

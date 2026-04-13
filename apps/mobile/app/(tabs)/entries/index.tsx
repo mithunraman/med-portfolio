@@ -5,7 +5,7 @@ import { fetchArtefacts, selectAllArtefacts } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
 import { ArtefactStatus, type Artefact } from '@acme/shared';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -77,6 +77,7 @@ export default function EntriesScreen() {
   const artefacts = useAppSelector(selectAllArtefacts);
   const loading = useAppSelector((state) => state.artefacts.loading);
   const error = useAppSelector((state) => state.artefacts.error);
+  const stale = useAppSelector((state) => state.artefacts.stale);
 
   const [activeFilter, setActiveFilter] = useState<ArtefactStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -89,6 +90,15 @@ export default function EntriesScreen() {
   useEffect(() => {
     dispatch(fetchArtefacts());
   }, [dispatch]);
+
+  // Refetch entries on focus when data has been invalidated
+  useFocusEffect(
+    useCallback(() => {
+      if (stale && !loading) {
+        dispatch(fetchArtefacts());
+      }
+    }, [stale, loading, dispatch])
+  );
 
   // Refetch entries when connectivity returns, only if data is missing or errored
   useNetworkRecovery(

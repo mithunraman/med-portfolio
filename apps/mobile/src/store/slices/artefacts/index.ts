@@ -1,6 +1,9 @@
 // Reducer
 export { default as artefactsReducer } from './slice';
 
+// Actions
+export { markArtefactsStale } from './slice';
+
 // Selectors
 export {
   selectAllArtefacts,

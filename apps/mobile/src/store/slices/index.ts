@@ -20,6 +20,7 @@ export {
   fetchVersionHistory,
   restoreVersion,
   finaliseArtefact,
+  markArtefactsStale,
   selectAllArtefacts,
   selectArtefactById,
   selectRecentEntries,
@@ -73,7 +74,7 @@ export type { DeliveryStatus, OptimisticMessage, RenderableMessage } from './mes
 export { loadOnboardingState } from './onboardingSlice';
 
 // ── Dashboard ──
-export { fetchInit, clearDashboard } from './dashboard';
+export { fetchInit, clearDashboard, markDashboardStale } from './dashboard';
 
 // ── PDP Goals ──
 export {
@@ -82,6 +83,7 @@ export {
   updatePdpGoal,
   addPdpGoalAction,
   updatePdpGoalAction,
+  markPdpGoalsStale,
   selectAllPdpGoals,
   selectPdpGoalById,
   selectPdpGoalsDueSoon,

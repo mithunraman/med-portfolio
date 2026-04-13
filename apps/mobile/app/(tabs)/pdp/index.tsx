@@ -5,7 +5,7 @@ import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { fetchPdpGoals, selectAllPdpGoals } from '@/store';
 import { useTheme } from '@/theme';
 import { PdpGoalStatus, type PdpGoalResponse } from '@acme/shared';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -89,6 +89,7 @@ export default function PdpScreen() {
   const goals = useAppSelector(selectAllPdpGoals);
   const loading = useAppSelector((state) => state.pdpGoals.loading);
   const error = useAppSelector((state) => state.pdpGoals.error);
+  const stale = useAppSelector((state) => state.pdpGoals.stale);
 
   const [activeFilter, setActiveFilter] = useState<PdpGoalStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -101,6 +102,15 @@ export default function PdpScreen() {
   useEffect(() => {
     dispatch(fetchPdpGoals());
   }, [dispatch]);
+
+  // Refetch goals on focus when data has been invalidated
+  useFocusEffect(
+    useCallback(() => {
+      if (stale && !loading) {
+        dispatch(fetchPdpGoals());
+      }
+    }, [stale, loading, dispatch])
+  );
 
   // Refetch goals when connectivity returns, only if data is missing or errored
   useNetworkRecovery(

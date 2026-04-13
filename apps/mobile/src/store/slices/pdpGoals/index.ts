@@ -1,6 +1,9 @@
 // Reducer
 export { default as pdpGoalsReducer } from './slice';
 
+// Actions
+export { markPdpGoalsStale } from './slice';
+
 // Selectors
 export {
   selectAllPdpGoals,

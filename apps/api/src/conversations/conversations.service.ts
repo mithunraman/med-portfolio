@@ -585,11 +585,36 @@ export class ConversationsService {
     const artefactId = !isErr(artefactXidResult) ? (artefactXidResult.value ?? '') : '';
 
     // Compute context (server-driven action state)
-    const context = await this.contextService.computeContext(
+    let context = await this.contextService.computeContext(
       conversation._id,
       conversation.status,
       artefactId
     );
+
+    // Guard against a read-timing race: the messages query and the context query
+    // read from different collections without snapshot isolation. If the handler's
+    // transaction committed between the two reads, context may reference a question
+    // message that isn't in the messages list yet. In that case, downgrade the
+    // context to 'analysing' so the client keeps its spinner and fast-polls — the
+    // next poll (2s later) will pick up both the message and the correct context.
+    if (context.activeQuestion) {
+      const questionInList = enriched.some(
+        (m) => m.id === context.activeQuestion!.messageId
+      );
+      if (!questionInList) {
+        context = {
+          ...context,
+          phase: 'analysing',
+          activeQuestion: undefined,
+          actions: {
+            sendMessage: { allowed: false, code: 'ANALYSIS_RUNNING', reason: 'Analysis is in progress.' },
+            sendAudio: { allowed: false, code: 'ANALYSIS_RUNNING', reason: 'Analysis is in progress.' },
+            startAnalysis: { allowed: false, code: 'ANALYSIS_RUNNING', reason: 'Analysis is already in progress.' },
+            resumeAnalysis: { allowed: false, code: 'ANALYSIS_RUNNING', reason: 'Analysis is running, not paused.' },
+          },
+        };
+      }
+    }
 
     return { messages: enriched, context };
   }

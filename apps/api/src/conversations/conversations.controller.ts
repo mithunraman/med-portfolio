@@ -4,7 +4,7 @@ import type {
   Message,
   MessageListResponse,
 } from '@acme/shared';
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { UseQuota } from '../common/decorators/use-quota.decorator';
 import { ConversationsService } from './conversations.service';
@@ -13,6 +13,16 @@ import { AnalysisActionPipe, SendMessageDto } from './dto';
 @Controller('conversations')
 export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
+
+  @Delete(':conversationId/messages/:messageId')
+  @HttpCode(204)
+  async deleteMessage(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('conversationId') conversationId: string,
+    @Param('messageId') messageId: string,
+  ): Promise<void> {
+    return this.conversationsService.deleteMessage(user.userId, conversationId, messageId);
+  }
 
   @Delete(':conversationId')
   async deleteConversation(

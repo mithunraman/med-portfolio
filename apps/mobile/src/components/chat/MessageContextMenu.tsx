@@ -1,7 +1,8 @@
 import type { Message } from '@acme/shared';
+import { MessageRole } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
-import { memo, useCallback } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useMemo } from 'react';
+import { Modal, Pressable, StyleSheet, Text } from 'react-native';
 import type { ContextMenuAction } from './types';
 
 interface Action {
@@ -10,14 +11,8 @@ interface Action {
   icon: keyof typeof Ionicons.glyphMap;
 }
 
-const ACTIONS: Action[] = [
-  { id: 'react',   label: 'React',   icon: 'happy-outline' },
-  { id: 'reply',   label: 'Reply',   icon: 'return-down-back-outline' },
-  { id: 'forward', label: 'Forward', icon: 'arrow-redo-outline' },
-  { id: 'copy',    label: 'Copy',    icon: 'copy-outline' },
-  { id: 'star',    label: 'Star',    icon: 'star-outline' },
-  { id: 'delete',  label: 'Delete',  icon: 'trash-outline' },
-];
+const COPY_ACTION: Action = { id: 'copy', label: 'Copy', icon: 'copy-outline' };
+const DELETE_ACTION: Action = { id: 'delete', label: 'Delete', icon: 'trash-outline' };
 
 interface Props {
   message: Message | null;
@@ -30,6 +25,13 @@ export const MessageContextMenu = memo(function MessageContextMenu({
   onAction,
   onDismiss,
 }: Props) {
+  const actions = useMemo(() => {
+    if (!message) return [COPY_ACTION];
+    const items: Action[] = [COPY_ACTION];
+    if (message.role === MessageRole.USER) items.push(DELETE_ACTION);
+    return items;
+  }, [message]);
+
   const handleAction = useCallback(
     (action: ContextMenuAction) => {
       if (!message) return;
@@ -40,23 +42,15 @@ export const MessageContextMenu = memo(function MessageContextMenu({
   );
 
   return (
-    <Modal
-      visible={message !== null}
-      transparent
-      animationType="fade"
-      onRequestClose={onDismiss}
-    >
+    <Modal visible={message !== null} transparent animationType="fade" onRequestClose={onDismiss}>
       {/* Backdrop */}
       <Pressable style={styles.backdrop} onPress={onDismiss}>
         {/* Action row — stop propagation so tapping it doesn't dismiss */}
         <Pressable style={styles.menuContainer} onPress={() => {}}>
-          {ACTIONS.map((action, index) => (
+          {actions.map((action, index) => (
             <Pressable
               key={action.id}
-              style={[
-                styles.actionItem,
-                index < ACTIONS.length - 1 && styles.actionItemBorder,
-              ]}
+              style={[styles.actionItem, index < actions.length - 1 && styles.actionItemBorder]}
               onPress={() => handleAction(action.id)}
               accessibilityLabel={action.label}
             >

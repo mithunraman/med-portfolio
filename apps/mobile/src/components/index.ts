@@ -10,6 +10,7 @@ export { EditableTitle } from './EditableTitle';
 export { EmptyState } from './EmptyState';
 export { ExportSheet } from './ExportSheet';
 export { ErrorBoundary } from './ErrorBoundary';
+export { LoadingProvider, useLoading } from './LoadingHUD';
 export { OfflineBanner } from './OfflineBanner';
 export { FullScreenSectionEditor } from './FullScreenTextEditor';
 export { MultiSelect, type MultiSelectOption } from './MultiSelect';

@@ -1,13 +1,17 @@
-import { ChatComposer, MessageList } from '@/components';
+import { api } from '@/api/client';
+import { ChatComposer, MessageList, useLoading } from '@/components';
 import { type ActionBarState, ActionBar } from '@/components/ActionBar';
 import { ChatEmptyState } from '@/components/ChatEmptyState';
 import { CompletionCard } from '@/components/CompletionCard';
 import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
+import { useBannerOffset } from '@/hooks/useBannerOffset';
 import {
+  deleteConversation,
   fetchMessages,
   pollConversation,
   rekeyOptimisticMessages,
+  removeMessageById,
   resumeAnalysis,
   resumeAnalysisWithOptimistic,
   retryFailedMessage,
@@ -15,7 +19,6 @@ import {
   sendVoiceNoteWithRetry,
   startAnalysis,
 } from '@/store';
-import { type RenderableMessage, toRenderableMessage } from '@/store/slices/messages/slice';
 import {
   makeSelectOptimisticMessages,
   makeSelectServerMessages,
@@ -23,27 +26,27 @@ import {
   selectMessagesLoading,
   selectMessagesSending,
 } from '@/store/slices/messages/selectors';
+import { type RenderableMessage, toRenderableMessage } from '@/store/slices/messages/slice';
 import { useTheme } from '@/theme';
 import { generateIdempotencyKey } from '@/utils/idempotency';
+import { logger } from '@/utils/logger';
 import {
   type Message,
   type MultiSelectQuestion,
   type SingleSelectQuestion,
-  MessageStatus,
   MessageRole,
+  MessageStatus,
   ThinkingStep,
 } from '@acme/shared';
-import { deleteConversation } from '@/store';
-import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useActionSheet } from '@expo/react-native-action-sheet';
-import { useBannerOffset } from '@/hooks/useBannerOffset';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useHeaderHeight } from '@react-navigation/elements';
+import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { logger } from '@/utils/logger';
 
 const chatLogger = logger.createScope('ChatScreen');
 /** Minimum user words before "Start Analysis" is available */
@@ -51,10 +54,7 @@ const INITIAL_WORD_THRESHOLD = 60;
 /** Minimum user words (since the question) before "Continue Analysis" is available */
 const FOLLOWUP_WORD_THRESHOLD = 30;
 
-const TERMINAL_STATUSES = new Set([
-  MessageStatus.COMPLETE,
-  MessageStatus.FAILED,
-]);
+const TERMINAL_STATUSES = new Set([MessageStatus.COMPLETE, MessageStatus.FAILED]);
 
 // Phase-aware polling intervals (ms). null = no polling.
 function getPollInterval(
@@ -127,6 +127,8 @@ export default function ChatScreen() {
   const effectiveConversationId = realConversationId ?? conversationId ?? '';
 
   const [deleting, setDeleting] = useState(false);
+  const { showLoading, hideLoading } = useLoading();
+
   const { showActionSheetWithOptions } = useActionSheet();
 
   const handleDeleteConversation = useCallback(() => {
@@ -169,8 +171,8 @@ export default function ChatScreen() {
   const loadingMessages = useAppSelector(selectMessagesLoading);
   const sendingMessage = useAppSelector(selectMessagesSending);
   // Conversation context — server-driven action state
-  const context = useAppSelector(
-    (state) => selectContextByConversation(state, effectiveConversationId)
+  const context = useAppSelector((state) =>
+    selectContextByConversation(state, effectiveConversationId)
   );
 
   // Artefact ID comes from the server-driven context (reliable across all flows)
@@ -180,12 +182,12 @@ export default function ChatScreen() {
   const selectServerMessages = useMemo(() => makeSelectServerMessages(), []);
   const selectOptimisticMessages = useMemo(() => makeSelectOptimisticMessages(), []);
 
-  const serverMessages = useAppSelector(
-    (state) => selectServerMessages(state, effectiveConversationId)
+  const serverMessages = useAppSelector((state) =>
+    selectServerMessages(state, effectiveConversationId)
   ) as Message[];
 
-  const optimisticMessages = useAppSelector(
-    (state) => selectOptimisticMessages(state, effectiveConversationId)
+  const optimisticMessages = useAppSelector((state) =>
+    selectOptimisticMessages(state, effectiveConversationId)
   );
 
   // Merge server messages + optimistic messages, sorted newest first
@@ -221,9 +223,7 @@ export default function ChatScreen() {
   }, [conversationId, isNew, dispatch]);
 
   // Poll fast while any message is still being processed (transcription, cleaning, etc.)
-  const hasProcessingMessages = serverMessages.some(
-    (m) => !TERMINAL_STATUSES.has(m.status)
-  );
+  const hasProcessingMessages = serverMessages.some((m) => !TERMINAL_STATUSES.has(m.status));
   const pollIntervalMs = getPollInterval(context?.phase, hasProcessingMessages, hasUnsentMessages);
 
   chatLogger.debug('[poll-config]', {
@@ -292,7 +292,7 @@ export default function ChatScreen() {
           rekeyOptimisticMessages({
             oldConversationId: effectiveConversationId,
             newConversationId: result.conversationId,
-          }),
+          })
         );
         realConversationIdRef.current = result.conversationId;
         setRealConversationId(result.conversationId);
@@ -301,7 +301,7 @@ export default function ChatScreen() {
         artefactIdRef.current = result.artefactXid;
       }
     },
-    [effectiveConversationId, dispatch],
+    [effectiveConversationId, dispatch]
   );
 
   const handleSendVoiceNote = useCallback(
@@ -324,7 +324,13 @@ export default function ChatScreen() {
         applyNewConversationIds(result.payload);
       }
     },
-    [conversationId, effectiveConversationId, isPendingConversation, dispatch, applyNewConversationIds]
+    [
+      conversationId,
+      effectiveConversationId,
+      isPendingConversation,
+      dispatch,
+      applyNewConversationIds,
+    ]
   );
 
   const handleSend = useCallback(
@@ -346,7 +352,13 @@ export default function ChatScreen() {
         applyNewConversationIds(result.payload);
       }
     },
-    [conversationId, effectiveConversationId, isPendingConversation, dispatch, applyNewConversationIds]
+    [
+      conversationId,
+      effectiveConversationId,
+      isPendingConversation,
+      dispatch,
+      applyNewConversationIds,
+    ]
   );
 
   const handleRetry = useCallback(
@@ -572,6 +584,45 @@ export default function ChatScreen() {
     handleResumeAnalysis,
   ]);
 
+  const handleCopy = useCallback((message: Message) => {
+    if (!message.content) {
+      Alert.alert('Nothing to copy', 'This message has no text content.');
+      return;
+    }
+    Clipboard.setStringAsync(message.content);
+    Alert.alert('Copied', 'Message copied to clipboard.');
+  }, []);
+
+  const handleDeleteMessage = useCallback(
+    (message: Message) => {
+      Alert.alert('Delete message', 'This cannot be undone.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            showLoading('Deleting message...', { dismissibleAfterSec: 5 });
+            try {
+              await api.conversations.deleteMessage(effectiveConversationId, message.id);
+              dispatch(
+                removeMessageById({
+                  conversationId: effectiveConversationId,
+                  messageId: message.id,
+                })
+              );
+            } catch (error: any) {
+              const msg = error?.body?.message ?? error?.message ?? 'Could not delete message.';
+              Alert.alert('Error', msg);
+            } finally {
+              hideLoading();
+            }
+          },
+        },
+      ]);
+    },
+    [effectiveConversationId, dispatch, showLoading, hideLoading]
+  );
+
   const activeQuestionMessageId = context?.activeQuestion?.messageId;
 
   const isLoading = loadingMessages && mergedMessages.length === 0 && isNew !== 'true';
@@ -596,6 +647,8 @@ export default function ChatScreen() {
               activeQuestionMessageId={activeQuestionMessageId}
               onAnswerQuestion={handleAnswerQuestion}
               onRetry={handleRetry}
+              onCopy={handleCopy}
+              onDelete={handleDeleteMessage}
             />
           )}
         </View>

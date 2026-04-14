@@ -29,6 +29,10 @@ export class ConversationsClient {
     return this.client.delete<{ message: string }>(`/conversations/${conversationId}`);
   }
 
+  async deleteMessage(conversationId: string, messageId: string): Promise<void> {
+    await this.client.delete(`/conversations/${conversationId}/messages/${messageId}`);
+  }
+
   async listMessages(conversationId: string): Promise<MessageListResponse> {
     return this.client.get<MessageListResponse>(
       `/conversations/${conversationId}/messages`

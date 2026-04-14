@@ -93,7 +93,7 @@ function StartNewEntryCard({
   helper: string;
 }) {
   const { colors } = useTheme();
-  const recency = lastEntryDate ? `Last entry ${formatTimeAgo(lastEntryDate)}` : null;
+  const recency = lastEntryDate ? `Last entry ${formatTimeAgo(lastEntryDate)}` : ' ';
 
   return (
     <TouchableOpacity

@@ -7,6 +7,7 @@ export {
   clearAnalysisError,
   clearMessages,
   upsertMessage,
+  removeMessageById,
   addOptimisticMessage,
   updateOptimisticStatus,
   removeOptimisticMessage,

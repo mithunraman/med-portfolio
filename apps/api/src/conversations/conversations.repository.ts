@@ -202,7 +202,7 @@ export class ConversationsRepository implements IConversationsRepository {
   ): Promise<Result<ListMessagesResult, DBError>> {
     try {
       const messages = await this.messageModel
-        .find({ conversation: query.conversation })
+        .find({ conversation: query.conversation, status: { $ne: MessageStatus.DELETED } })
         .populate('media')
         .sort({ _id: -1 })
         .lean()
@@ -356,6 +356,41 @@ export class ConversationsRepository implements IConversationsRepository {
     } catch (error) {
       this.logger.error('Failed to find conversation ids by artefact', error);
       return err({ code: 'DB_ERROR', message: 'Failed to find conversation ids by artefact' });
+    }
+  }
+
+  async softDeleteMessage(
+    messageId: Types.ObjectId,
+    conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
+    session?: ClientSession,
+  ): Promise<Result<Message | null, DBError>> {
+    try {
+      const message = await this.messageModel
+        .findOneAndUpdate(
+          {
+            _id: messageId,
+            conversation: conversationId,
+            userId,
+            role: MessageRole.USER,
+            status: { $ne: MessageStatus.DELETED },
+          },
+          {
+            $set: {
+              status: MessageStatus.DELETED,
+              rawContent: '[deleted]',
+              cleanedContent: '[deleted]',
+              content: '[deleted]',
+            },
+            $unset: { media: '' },
+          },
+          { new: true, session: session || undefined },
+        )
+        .lean();
+      return ok(message);
+    } catch (error) {
+      this.logger.error('Failed to soft delete message', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to soft delete message' });
     }
   }
 

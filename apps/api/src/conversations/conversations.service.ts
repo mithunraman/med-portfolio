@@ -162,6 +162,53 @@ export class ConversationsService {
     return { message: 'Conversation deleted successfully' };
   }
 
+  async deleteMessage(
+    userId: string,
+    conversationXid: string,
+    messageXid: string,
+  ): Promise<void> {
+    const userOid = new Types.ObjectId(userId);
+
+    // 1. Find conversation and verify ownership
+    const convResult = await this.conversationsRepository.findConversationByXid(
+      conversationXid,
+      userOid,
+    );
+    if (isErr(convResult)) throw new InternalServerErrorException(convResult.error.message);
+    if (!convResult.value) throw new NotFoundException('Conversation not found');
+
+    const conversation = convResult.value;
+
+    // 2. Guard: only allow deletion in active conversations
+    if (conversation.status !== ConversationStatus.ACTIVE) {
+      throw new ConflictException('Messages can only be deleted while the conversation is active');
+    }
+
+    // 3. Guard: block deletion if analysis is in progress
+    const activeRun = await this.analysisRunsService.findActiveRun(conversation._id);
+    if (activeRun) {
+      throw new ConflictException('Cannot delete messages while analysis is in progress');
+    }
+
+    // 4. Resolve message xid → ObjectId
+    const msgResult = await this.conversationsRepository.findMessagesByXids(
+      [messageXid],
+      userOid,
+    );
+    if (isErr(msgResult)) throw new InternalServerErrorException(msgResult.error.message);
+    const message = msgResult.value[0];
+    if (!message) throw new NotFoundException('Message not found');
+
+    // 5. Soft-delete + anonymize
+    const deleteResult = await this.conversationsRepository.softDeleteMessage(
+      message._id,
+      conversation._id,
+      userOid,
+    );
+    if (isErr(deleteResult)) throw new InternalServerErrorException(deleteResult.error.message);
+    if (!deleteResult.value) throw new NotFoundException('Message not found');
+  }
+
   async sendMessage(userId: string, conversationId: string, dto: SendMessageDto): Promise<Message> {
     // Validate at least one of content or mediaId is provided
     if (!dto.content && !dto.mediaId)

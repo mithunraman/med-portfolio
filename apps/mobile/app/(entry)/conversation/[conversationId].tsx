@@ -3,9 +3,10 @@ import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
 import { fetchMessages } from '@/store';
 import { useTheme } from '@/theme';
 import type { Message } from '@acme/shared';
+import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useCallback, useEffect } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
 import { shallowEqual } from 'react-redux';
 
 const EMPTY_IDS: string[] = [];
@@ -33,11 +34,20 @@ export default function ConversationViewScreen() {
     }
   }, [conversationId, dispatch]);
 
+  const handleCopy = useCallback((message: Message) => {
+    if (!message.content) {
+      Alert.alert('Nothing to copy', 'This message has no text content.');
+      return;
+    }
+    Clipboard.setStringAsync(message.content);
+    Alert.alert('Copied', 'Message copied to clipboard.');
+  }, []);
+
   const isLoading = loadingMessages && messages.length === 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <MessageList messages={messages} currentUserId={user?.id ?? ''} isLoading={isLoading} />
+      <MessageList messages={messages} currentUserId={user?.id ?? ''} isLoading={isLoading} onCopy={handleCopy} />
     </View>
   );
 }

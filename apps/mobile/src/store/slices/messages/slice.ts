@@ -183,6 +183,14 @@ const messagesSlice = createSlice({
      * Must be dispatched in the same synchronous block as setRealConversationId
      * so React batches both into one render (avoids empty-state flash).
      */
+    removeMessageById(state, action: PayloadAction<{ conversationId: string; messageId: string }>) {
+      const { conversationId, messageId } = action.payload;
+      messagesAdapter.removeOne(state, messageId);
+      const ids = state.idsByConversation[conversationId];
+      if (ids) {
+        state.idsByConversation[conversationId] = ids.filter((id) => id !== messageId);
+      }
+    },
     rekeyOptimisticMessages(
       state,
       action: PayloadAction<{ oldConversationId: string; newConversationId: string }>,
@@ -299,6 +307,7 @@ export const {
   clearAnalysisError,
   clearMessages,
   upsertMessage,
+  removeMessageById,
   addOptimisticMessage,
   updateOptimisticStatus,
   removeOptimisticMessage,

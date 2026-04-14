@@ -1,5 +1,5 @@
 import { setOnQuotaUpdate, setOnUnauthorized } from '@/api/client';
-import { ErrorBoundary } from '@/components';
+import { ErrorBoundary, LoadingProvider } from '@/components';
 import { ActiveBanner } from '@/components/ActiveBanner';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useBackgroundStaleTimer } from '@/hooks/useBackgroundStaleTimer';
@@ -209,7 +209,9 @@ function RootLayout() {
           <KeyboardProvider>
             <ThemeProvider>
               <ActionSheetProvider>
-                <RootLayoutNav />
+                <LoadingProvider>
+                  <RootLayoutNav />
+                </LoadingProvider>
               </ActionSheetProvider>
             </ThemeProvider>
           </KeyboardProvider>

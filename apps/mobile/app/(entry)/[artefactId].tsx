@@ -78,8 +78,11 @@ export default function EntryDetailScreen() {
   const { showActionSheetWithOptions } = useActionSheet();
 
   const artefact = useAppSelector((state) => selectArtefactById(state, artefactId ?? ''));
-  const updatingStatus = useAppSelector((state) => state.artefacts.updatingStatus);
-  const saving = useAppSelector((state) => state.artefacts.saving);
+  const entityStatus = useAppSelector(
+    (state) => state.artefacts.statusById[artefactId ?? '']
+  );
+  const updatingStatus = entityStatus === 'updating';
+  const saving = entityStatus === 'saving';
 
   useEffect(() => {
     if (artefactId) {
@@ -482,7 +485,9 @@ export default function EntryDetailScreen() {
     updatingStatus,
   ]);
 
-  if (!artefact) {
+  const loading = entityStatus === 'loading';
+
+  if (!artefact || loading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />

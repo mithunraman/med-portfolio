@@ -19,11 +19,12 @@ const artefactsAdapter = createEntityAdapter<Artefact>({
   sortComparer: (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
 });
 
+export type EntityStatus = 'loading' | 'updating' | 'saving';
+
 export interface ArtefactsState {
   creatingArtefact: boolean;
   loading: boolean;
-  updatingStatus: boolean;
-  saving: boolean;
+  statusById: Record<string, EntityStatus>;
   error: string | null;
   nextCursor: string | null;
   stale: boolean;
@@ -34,8 +35,7 @@ const artefactsSlice = createSlice({
   initialState: artefactsAdapter.getInitialState<ArtefactsState>({
     creatingArtefact: false,
     loading: false,
-    updatingStatus: false,
-    saving: false,
+    statusById: {},
     error: null,
     nextCursor: null,
     stale: false,
@@ -81,61 +81,60 @@ const artefactsSlice = createSlice({
         state.error = action.payload as string;
       })
       // fetchArtefact (single)
+      .addCase(fetchArtefact.pending, (state, action) => {
+        state.statusById[action.meta.arg.artefactId] = 'loading';
+      })
       .addCase(fetchArtefact.fulfilled, (state, action) => {
+        delete state.statusById[action.meta.arg.artefactId];
         artefactsAdapter.upsertOne(state, action.payload);
       })
+      .addCase(fetchArtefact.rejected, (state, action) => {
+        delete state.statusById[action.meta.arg.artefactId];
+      })
       // updateArtefactStatus
-      .addCase(updateArtefactStatus.pending, (state) => {
-        state.updatingStatus = true;
-        state.error = null;
+      .addCase(updateArtefactStatus.pending, (state, action) => {
+        state.statusById[action.meta.arg.artefactId] = 'updating';
       })
       .addCase(updateArtefactStatus.fulfilled, (state, action) => {
-        state.updatingStatus = false;
+        delete state.statusById[action.meta.arg.artefactId];
         artefactsAdapter.upsertOne(state, action.payload);
       })
       .addCase(updateArtefactStatus.rejected, (state, action) => {
-        state.updatingStatus = false;
-        state.error = action.payload as string;
+        delete state.statusById[action.meta.arg.artefactId];
       })
       // finaliseArtefact
-      .addCase(finaliseArtefact.pending, (state) => {
-        state.updatingStatus = true;
-        state.error = null;
+      .addCase(finaliseArtefact.pending, (state, action) => {
+        state.statusById[action.meta.arg.artefactId] = 'updating';
       })
       .addCase(finaliseArtefact.fulfilled, (state, action) => {
-        state.updatingStatus = false;
+        delete state.statusById[action.meta.arg.artefactId];
         state.stale = true;
         artefactsAdapter.upsertOne(state, action.payload);
       })
       .addCase(finaliseArtefact.rejected, (state, action) => {
-        state.updatingStatus = false;
-        state.error = action.payload as string;
+        delete state.statusById[action.meta.arg.artefactId];
       })
       // duplicateToReview
-      .addCase(duplicateToReview.pending, (state) => {
-        state.updatingStatus = true;
-        state.error = null;
+      .addCase(duplicateToReview.pending, (state, action) => {
+        state.statusById[action.meta.arg.artefactId] = 'updating';
       })
       .addCase(duplicateToReview.fulfilled, (state, action) => {
-        state.updatingStatus = false;
+        delete state.statusById[action.meta.arg.artefactId];
         artefactsAdapter.upsertOne(state, action.payload);
       })
       .addCase(duplicateToReview.rejected, (state, action) => {
-        state.updatingStatus = false;
-        state.error = action.payload as string;
+        delete state.statusById[action.meta.arg.artefactId];
       })
       // editArtefact
-      .addCase(editArtefact.pending, (state) => {
-        state.saving = true;
-        state.error = null;
+      .addCase(editArtefact.pending, (state, action) => {
+        state.statusById[action.meta.arg.artefactId] = 'saving';
       })
       .addCase(editArtefact.fulfilled, (state, action) => {
-        state.saving = false;
+        delete state.statusById[action.meta.arg.artefactId];
         artefactsAdapter.upsertOne(state, action.payload);
       })
       .addCase(editArtefact.rejected, (state, action) => {
-        state.saving = false;
-        state.error = action.payload as string;
+        delete state.statusById[action.meta.arg.artefactId];
       })
       // Cross-slice hydration: populate entity store from dashboard init response.
       // Artefact type is identical between dashboard and entity store — simple upsertMany.
@@ -146,30 +145,26 @@ const artefactsSlice = createSlice({
         }
       })
       // restoreVersion
-      .addCase(restoreVersion.pending, (state) => {
-        state.saving = true;
-        state.error = null;
+      .addCase(restoreVersion.pending, (state, action) => {
+        state.statusById[action.meta.arg.artefactId] = 'saving';
       })
       .addCase(restoreVersion.fulfilled, (state, action) => {
-        state.saving = false;
+        delete state.statusById[action.meta.arg.artefactId];
         artefactsAdapter.upsertOne(state, action.payload);
       })
       .addCase(restoreVersion.rejected, (state, action) => {
-        state.saving = false;
-        state.error = action.payload as string;
+        delete state.statusById[action.meta.arg.artefactId];
       })
       // deleteArtefact
-      .addCase(deleteArtefact.pending, (state) => {
-        state.updatingStatus = true;
-        state.error = null;
+      .addCase(deleteArtefact.pending, (state, action) => {
+        state.statusById[action.meta.arg.artefactId] = 'updating';
       })
       .addCase(deleteArtefact.fulfilled, (state, action) => {
-        state.updatingStatus = false;
+        delete state.statusById[action.payload];
         artefactsAdapter.removeOne(state, action.payload);
       })
       .addCase(deleteArtefact.rejected, (state, action) => {
-        state.updatingStatus = false;
-        state.error = action.payload as string;
+        delete state.statusById[action.meta.arg.artefactId];
       })
       // Cross-slice: deleting a conversation cascades to its artefact server-side.
       .addCase(deleteConversation.fulfilled, (state) => {
@@ -192,8 +187,7 @@ export const selectRecentEntries = createSelector(
     (state: RootState) => state.dashboard.recentEntryIds,
     (state: RootState) => state.artefacts.entities,
   ],
-  (ids, entities) =>
-    (ids ?? []).map((id) => entities[id]).filter((a): a is Artefact => !!a)
+  (ids, entities) => (ids ?? []).map((id) => entities[id]).filter((a): a is Artefact => !!a)
 );
 
 export const selectRecentEntriesTotal = (state: RootState) =>

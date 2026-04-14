@@ -276,7 +276,10 @@ export default function PdpGoalDetailScreen() {
   const goal = useAppSelector((state) => selectPdpGoalById(state, goalId ?? '')) as
     | PdpGoalResponse
     | undefined;
-  const mutating = useAppSelector((state) => state.pdpGoals.mutating);
+  const entityStatus = useAppSelector(
+    (state) => state.pdpGoals.statusById[goalId ?? '']
+  );
+  const mutating = entityStatus === 'updating';
 
   useEffect(() => {
     if (goalId) {

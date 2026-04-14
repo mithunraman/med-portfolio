@@ -16,9 +16,11 @@ import {
 
 const pdpGoalsAdapter = createEntityAdapter<PdpGoalResponse>();
 
+export type PdpGoalEntityStatus = 'loading' | 'updating';
+
 export interface PdpGoalsState {
   loading: boolean;
-  mutating: boolean;
+  statusById: Record<string, PdpGoalEntityStatus>;
   error: string | null;
   total: number;
   stale: boolean;
@@ -28,7 +30,7 @@ const pdpGoalsSlice = createSlice({
   name: 'pdpGoals',
   initialState: pdpGoalsAdapter.getInitialState<PdpGoalsState>({
     loading: false,
-    mutating: false,
+    statusById: {},
     error: null,
     total: 0,
     stale: false,
@@ -57,36 +59,39 @@ const pdpGoalsSlice = createSlice({
       })
 
       // fetchPdpGoal
+      .addCase(fetchPdpGoal.pending, (state, action) => {
+        state.statusById[action.meta.arg.goalId] = 'loading';
+      })
       .addCase(fetchPdpGoal.fulfilled, (state, action) => {
+        delete state.statusById[action.meta.arg.goalId];
         pdpGoalsAdapter.upsertOne(state, action.payload);
+      })
+      .addCase(fetchPdpGoal.rejected, (state, action) => {
+        delete state.statusById[action.meta.arg.goalId];
       })
 
       // updatePdpGoal
-      .addCase(updatePdpGoal.pending, (state) => {
-        state.mutating = true;
-        state.error = null;
+      .addCase(updatePdpGoal.pending, (state, action) => {
+        state.statusById[action.meta.arg.goalId] = 'updating';
       })
       .addCase(updatePdpGoal.fulfilled, (state, action) => {
-        state.mutating = false;
+        delete state.statusById[action.meta.arg.goalId];
         pdpGoalsAdapter.upsertOne(state, action.payload);
       })
       .addCase(updatePdpGoal.rejected, (state, action) => {
-        state.mutating = false;
-        state.error = action.payload as string;
+        delete state.statusById[action.meta.arg.goalId];
       })
 
       // addPdpGoalAction
-      .addCase(addPdpGoalAction.pending, (state) => {
-        state.mutating = true;
-        state.error = null;
+      .addCase(addPdpGoalAction.pending, (state, action) => {
+        state.statusById[action.meta.arg.goalId] = 'updating';
       })
       .addCase(addPdpGoalAction.fulfilled, (state, action) => {
-        state.mutating = false;
+        delete state.statusById[action.meta.arg.goalId];
         pdpGoalsAdapter.upsertOne(state, action.payload);
       })
       .addCase(addPdpGoalAction.rejected, (state, action) => {
-        state.mutating = false;
-        state.error = action.payload as string;
+        delete state.statusById[action.meta.arg.goalId];
       })
 
       // Cross-slice hydration: populate entity store from dashboard init response.
@@ -112,32 +117,28 @@ const pdpGoalsSlice = createSlice({
       })
 
       // updatePdpGoalAction
-      .addCase(updatePdpGoalAction.pending, (state) => {
-        state.mutating = true;
-        state.error = null;
+      .addCase(updatePdpGoalAction.pending, (state, action) => {
+        state.statusById[action.meta.arg.goalId] = 'updating';
       })
       .addCase(updatePdpGoalAction.fulfilled, (state, action) => {
-        state.mutating = false;
+        delete state.statusById[action.meta.arg.goalId];
         pdpGoalsAdapter.upsertOne(state, action.payload);
       })
       .addCase(updatePdpGoalAction.rejected, (state, action) => {
-        state.mutating = false;
-        state.error = action.payload as string;
+        delete state.statusById[action.meta.arg.goalId];
       })
 
       // deletePdpGoal
-      .addCase(deletePdpGoal.pending, (state) => {
-        state.mutating = true;
-        state.error = null;
+      .addCase(deletePdpGoal.pending, (state, action) => {
+        state.statusById[action.meta.arg.goalId] = 'updating';
       })
       .addCase(deletePdpGoal.fulfilled, (state, action) => {
-        state.mutating = false;
+        delete state.statusById[action.payload];
         pdpGoalsAdapter.removeOne(state, action.payload);
         state.total = Math.max(0, state.total - 1);
       })
       .addCase(deletePdpGoal.rejected, (state, action) => {
-        state.mutating = false;
-        state.error = action.payload as string;
+        delete state.statusById[action.meta.arg.goalId];
       })
 
       // Cross-slice: finalising an artefact creates/archives PDP goals server-side.

@@ -30,4 +30,4 @@ Output format:
 - Present the response phase by phase
 - Use concise but actionable language
 - Make recommendations that are implementation-ready
-- Do not write or create a new file for this plan. Print it inline.
+- Do not create a new file for this implementation plan. Print it inline.

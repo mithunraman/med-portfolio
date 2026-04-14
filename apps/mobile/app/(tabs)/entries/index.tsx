@@ -123,7 +123,7 @@ export default function EntriesScreen() {
     setRefreshing(true);
     const result = await dispatch(fetchArtefacts());
     setRefreshing(false);
-    if (fetchArtefacts.rejected.match(result) && artefacts.length > 0) {
+    if (fetchArtefacts.rejected.match(result) && !result.meta.condition && artefacts.length > 0) {
       const err = result.payload as TypedError | undefined;
       const message =
         err?.kind === 'network'

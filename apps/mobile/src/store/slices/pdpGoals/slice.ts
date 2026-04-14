@@ -1,5 +1,6 @@
 import type { PdpGoalResponse } from '@acme/shared';
 import { createEntityAdapter, createSelector, createSlice } from '@reduxjs/toolkit';
+import type { TypedError } from '../../../utils/classifyError';
 import type { RootState } from '../../index';
 import { finaliseArtefact } from '../artefacts/thunks';
 import { fetchInit } from '../dashboard/thunks';
@@ -21,9 +22,10 @@ export type PdpGoalEntityStatus = 'loading' | 'updating';
 export interface PdpGoalsState {
   loading: boolean;
   statusById: Record<string, PdpGoalEntityStatus>;
-  error: string | null;
+  error: TypedError | null;
   total: number;
   stale: boolean;
+  lastFetchedAt: number | null;
 }
 
 const pdpGoalsSlice = createSlice({
@@ -34,6 +36,7 @@ const pdpGoalsSlice = createSlice({
     error: null,
     total: 0,
     stale: false,
+    lastFetchedAt: null,
   }),
   reducers: {
     markPdpGoalsStale(state) {
@@ -50,12 +53,15 @@ const pdpGoalsSlice = createSlice({
       .addCase(fetchPdpGoals.fulfilled, (state, action) => {
         state.loading = false;
         state.stale = false;
+        state.lastFetchedAt = action.payload.fetchedAt;
         state.total = action.payload.total;
         pdpGoalsAdapter.setAll(state, action.payload.goals);
       })
       .addCase(fetchPdpGoals.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
+        if (!action.meta.condition) {
+          state.loading = false;
+          state.error = (action.payload as TypedError) ?? null;
+        }
       })
 
       // fetchPdpGoal

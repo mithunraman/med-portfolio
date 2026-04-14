@@ -14,7 +14,7 @@ import {
   restoreVersion,
   updateArtefactStatus,
 } from './thunks';
-import type { TypedError } from './thunks';
+import type { TypedError } from '../../../utils/classifyError';
 
 const artefactsAdapter = createEntityAdapter<Artefact>({
   sortComparer: (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
@@ -81,8 +81,10 @@ const artefactsSlice = createSlice({
         }
       })
       .addCase(fetchArtefacts.rejected, (state, action) => {
-        state.loading = false;
-        state.error = (action.payload as TypedError) ?? null;
+        if (!action.meta.condition) {
+          state.loading = false;
+          state.error = (action.payload as TypedError) ?? null;
+        }
       })
       // fetchArtefact (single)
       .addCase(fetchArtefact.pending, (state, action) => {

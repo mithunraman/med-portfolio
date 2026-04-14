@@ -6,6 +6,7 @@ import type {
 } from '@acme/shared';
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { api } from '../../../api/client';
+import { classifyError } from '../../../utils/classifyError';
 import { logger } from '../../../utils/logger';
 import { retryRead } from '../../../utils/retry';
 
@@ -21,9 +22,8 @@ export const deletePdpGoal = createAsyncThunk(
       pdpGoalsLogger.info('Deleted PDP goal', { goalId: params.goalId });
       return params.goalId;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete goal';
-      pdpGoalsLogger.error('Failed to delete PDP goal', { error: message });
-      return rejectWithValue(message);
+      pdpGoalsLogger.error('Failed to delete PDP goal', { error });
+      return rejectWithValue(classifyError(error));
     }
   }
 );
@@ -35,12 +35,17 @@ export const fetchPdpGoals = createAsyncThunk(
     try {
       const response = await retryRead(() => api.pdpGoals.listGoals(params?.statuses));
       pdpGoalsLogger.info('Fetched PDP goals', { count: response.goals.length });
-      return response;
+      return { ...response, fetchedAt: Date.now() };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch PDP goals';
-      pdpGoalsLogger.error('Failed to fetch PDP goals', { error: message });
-      return rejectWithValue(message);
+      pdpGoalsLogger.error('Failed to fetch PDP goals', { error });
+      return rejectWithValue(classifyError(error));
     }
+  },
+  {
+    condition: (_, { getState }) => {
+      const { pdpGoals } = getState() as { pdpGoals: { loading: boolean } };
+      return !pdpGoals.loading;
+    },
   }
 );
 
@@ -52,9 +57,8 @@ export const fetchPdpGoal = createAsyncThunk(
       const response = await retryRead(() => api.pdpGoals.getGoal(params.goalId));
       return response;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch PDP goal';
-      pdpGoalsLogger.error('Failed to fetch PDP goal', { error: message });
-      return rejectWithValue(message);
+      pdpGoalsLogger.error('Failed to fetch PDP goal', { error });
+      return rejectWithValue(classifyError(error));
     }
   }
 );
@@ -70,9 +74,8 @@ export const updatePdpGoal = createAsyncThunk(
       const response = await api.pdpGoals.updateGoal(params.goalId, params.data);
       return response;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update PDP goal';
-      pdpGoalsLogger.error('Failed to update PDP goal', { error: message });
-      return rejectWithValue(message);
+      pdpGoalsLogger.error('Failed to update PDP goal', { error });
+      return rejectWithValue(classifyError(error));
     }
   }
 );
@@ -88,9 +91,8 @@ export const addPdpGoalAction = createAsyncThunk(
       const response = await api.pdpGoals.addAction(params.goalId, params.data);
       return response;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to add action';
-      pdpGoalsLogger.error('Failed to add action', { error: message });
-      return rejectWithValue(message);
+      pdpGoalsLogger.error('Failed to add action', { error });
+      return rejectWithValue(classifyError(error));
     }
   }
 );
@@ -113,9 +115,8 @@ export const updatePdpGoalAction = createAsyncThunk(
       );
       return response;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update action';
-      pdpGoalsLogger.error('Failed to update action', { error: message });
-      return rejectWithValue(message);
+      pdpGoalsLogger.error('Failed to update action', { error });
+      return rejectWithValue(classifyError(error));
     }
   }
 );

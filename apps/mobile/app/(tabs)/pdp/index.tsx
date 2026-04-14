@@ -1,22 +1,25 @@
 import { EmptyState, StatusPill } from '@/components';
 import type { StatusVariant } from '@/components';
+import { STALE_THRESHOLD_MS } from '@/constants/staleness';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
-import { fetchPdpGoals, selectAllPdpGoals } from '@/store';
+import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
+import { fetchPdpGoals, selectAllPdpGoals, type TypedError } from '@/store';
 import { useTheme } from '@/theme';
 import { PdpGoalStatus, type PdpGoalResponse } from '@acme/shared';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -90,6 +93,7 @@ export default function PdpScreen() {
   const loading = useAppSelector((state) => state.pdpGoals.loading);
   const error = useAppSelector((state) => state.pdpGoals.error);
   const stale = useAppSelector((state) => state.pdpGoals.stale);
+  const lastFetchedAt = useAppSelector((state) => state.pdpGoals.lastFetchedAt);
 
   const [activeFilter, setActiveFilter] = useState<PdpGoalStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -103,13 +107,14 @@ export default function PdpScreen() {
     dispatch(fetchPdpGoals());
   }, [dispatch]);
 
-  // Refetch goals on focus when data has been invalidated
+  // Refetch goals on focus when data has been invalidated or is older than STALE_THRESHOLD_MS
   useFocusEffect(
     useCallback(() => {
-      if (stale && !loading) {
+      const isExpired = lastFetchedAt != null && Date.now() - lastFetchedAt > STALE_THRESHOLD_MS;
+      if ((stale || isExpired) && !loading) {
         dispatch(fetchPdpGoals());
       }
-    }, [stale, loading, dispatch])
+    }, [stale, loading, lastFetchedAt, dispatch])
   );
 
   // Refetch goals when connectivity returns, only if data is missing or errored
@@ -128,9 +133,17 @@ export default function PdpScreen() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await dispatch(fetchPdpGoals());
+    const result = await dispatch(fetchPdpGoals());
     setRefreshing(false);
-  }, [dispatch]);
+    if (fetchPdpGoals.rejected.match(result) && !result.meta.condition && goals.length > 0) {
+      const err = result.payload as TypedError | undefined;
+      const message =
+        err?.kind === 'network'
+          ? 'Check your connection and try again.'
+          : err?.message ?? 'Something went wrong.';
+      Alert.alert('Couldn\u2019t refresh', message);
+    }
+  }, [dispatch, goals.length]);
 
   const handleGoalPress = useCallback(
     (goal: PdpGoalResponse) => {
@@ -190,13 +203,23 @@ export default function PdpScreen() {
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : error && goals.length === 0 ? (
-        <EmptyState
-          icon="alert-circle-outline"
-          title="Something went wrong"
-          description={error}
-          actionLabel="Try again"
-          onAction={() => dispatch(fetchPdpGoals())}
-        />
+        error.kind === 'network' ? (
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="You're offline"
+            description="Check your connection and try again."
+            actionLabel="Retry"
+            onAction={() => dispatch(fetchPdpGoals())}
+          />
+        ) : (
+          <EmptyState
+            icon="alert-circle-outline"
+            title="Something went wrong"
+            description={error.message}
+            actionLabel={error.retryable ? 'Try again' : undefined}
+            onAction={error.retryable ? () => dispatch(fetchPdpGoals()) : undefined}
+          />
+        )
       ) : filteredGoals.length === 0 ? (
         <EmptyState
           icon="checkbox-outline"
@@ -213,6 +236,9 @@ export default function PdpScreen() {
           keyExtractor={keyExtractor}
           renderItem={renderItem}
           contentContainerStyle={listContentStyle}
+          maxToRenderPerBatch={15}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

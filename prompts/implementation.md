@@ -1,6 +1,6 @@
 Based on the conversation,
 
-Ask questions if anything is ambiguous or needs more clarity.
+If anything is ambiguous or needs more clarity, ask questions.
 
 Then, Create a section describing the overall objective the changes are trying to achieve.
 
@@ -30,3 +30,4 @@ Output format:
 - Present the response phase by phase
 - Use concise but actionable language
 - Make recommendations that are implementation-ready
+- Do not write or create a new file for this plan. Print it inline.

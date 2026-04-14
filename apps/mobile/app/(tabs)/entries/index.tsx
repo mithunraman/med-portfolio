@@ -1,7 +1,7 @@
 import { EmptyState, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
-import { fetchArtefacts, selectAllArtefacts } from '@/store';
+import { fetchArtefacts, selectAllArtefacts, type TypedError } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
 import { ArtefactStatus, type Artefact } from '@acme/shared';
@@ -9,7 +9,9 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
@@ -17,6 +19,7 @@ import {
   View,
 } from 'react-native';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
+import { STALE_THRESHOLD_MS } from '@/constants/staleness';
 
 // Status filter options — using null to mean "All"
 const STATUS_FILTERS: { label: string; value: ArtefactStatus | null }[] = [
@@ -78,6 +81,7 @@ export default function EntriesScreen() {
   const loading = useAppSelector((state) => state.artefacts.loading);
   const error = useAppSelector((state) => state.artefacts.error);
   const stale = useAppSelector((state) => state.artefacts.stale);
+  const lastFetchedAt = useAppSelector((state) => state.artefacts.lastFetchedAt);
 
   const [activeFilter, setActiveFilter] = useState<ArtefactStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -91,13 +95,14 @@ export default function EntriesScreen() {
     dispatch(fetchArtefacts());
   }, [dispatch]);
 
-  // Refetch entries on focus when data has been invalidated
+  // Refetch entries on focus when data has been invalidated or is older than STALE_THRESHOLD_MS
   useFocusEffect(
     useCallback(() => {
-      if (stale && !loading) {
+      const isExpired = lastFetchedAt != null && Date.now() - lastFetchedAt > STALE_THRESHOLD_MS;
+      if ((stale || isExpired) && !loading) {
         dispatch(fetchArtefacts());
       }
-    }, [stale, loading, dispatch])
+    }, [stale, loading, lastFetchedAt, dispatch])
   );
 
   // Refetch entries when connectivity returns, only if data is missing or errored
@@ -116,9 +121,17 @@ export default function EntriesScreen() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await dispatch(fetchArtefacts());
+    const result = await dispatch(fetchArtefacts());
     setRefreshing(false);
-  }, [dispatch]);
+    if (fetchArtefacts.rejected.match(result) && artefacts.length > 0) {
+      const err = result.payload as TypedError | undefined;
+      const message =
+        err?.kind === 'network'
+          ? 'Check your connection and try again.'
+          : err?.message ?? 'Something went wrong.';
+      Alert.alert('Couldn\u2019t refresh', message);
+    }
+  }, [dispatch, artefacts.length]);
 
   const handleEntryPress = useCallback(
     (item: Artefact) => {
@@ -183,13 +196,23 @@ export default function EntriesScreen() {
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : error && artefacts.length === 0 ? (
-        <EmptyState
-          icon="alert-circle-outline"
-          title="Something went wrong"
-          description={error}
-          actionLabel="Try again"
-          onAction={() => dispatch(fetchArtefacts())}
-        />
+        error.kind === 'network' ? (
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="You're offline"
+            description="Check your connection and try again."
+            actionLabel="Retry"
+            onAction={() => dispatch(fetchArtefacts())}
+          />
+        ) : (
+          <EmptyState
+            icon="alert-circle-outline"
+            title="Something went wrong"
+            description={error.message}
+            actionLabel={error.retryable ? 'Try again' : undefined}
+            onAction={error.retryable ? () => dispatch(fetchArtefacts()) : undefined}
+          />
+        )
       ) : filteredArtefacts.length === 0 ? (
         <EmptyState
           icon="document-text-outline"
@@ -206,6 +229,9 @@ export default function EntriesScreen() {
           keyExtractor={keyExtractor}
           renderItem={renderItem}
           contentContainerStyle={listContentStyle}
+          maxToRenderPerBatch={15}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

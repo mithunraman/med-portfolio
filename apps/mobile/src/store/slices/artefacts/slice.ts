@@ -14,6 +14,7 @@ import {
   restoreVersion,
   updateArtefactStatus,
 } from './thunks';
+import type { TypedError } from './thunks';
 
 const artefactsAdapter = createEntityAdapter<Artefact>({
   sortComparer: (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
@@ -25,9 +26,10 @@ export interface ArtefactsState {
   creatingArtefact: boolean;
   loading: boolean;
   statusById: Record<string, EntityStatus>;
-  error: string | null;
+  error: TypedError | null;
   nextCursor: string | null;
   stale: boolean;
+  lastFetchedAt: number | null;
 }
 
 const artefactsSlice = createSlice({
@@ -39,6 +41,7 @@ const artefactsSlice = createSlice({
     error: null,
     nextCursor: null,
     stale: false,
+    lastFetchedAt: null,
   }),
   reducers: {
     markArtefactsStale(state) {
@@ -58,7 +61,7 @@ const artefactsSlice = createSlice({
       })
       .addCase(createArtefact.rejected, (state, action) => {
         state.creatingArtefact = false;
-        state.error = action.payload as string;
+        state.error = (action.payload as TypedError) ?? null;
       })
       // fetchArtefacts
       .addCase(fetchArtefacts.pending, (state) => {
@@ -68,6 +71,7 @@ const artefactsSlice = createSlice({
       .addCase(fetchArtefacts.fulfilled, (state, action) => {
         state.loading = false;
         state.stale = false;
+        state.lastFetchedAt = action.payload.fetchedAt;
         state.nextCursor = action.payload.nextCursor;
         // If no cursor was provided in the request, this is a fresh fetch — replace all
         if (!action.meta.arg?.cursor) {
@@ -78,7 +82,7 @@ const artefactsSlice = createSlice({
       })
       .addCase(fetchArtefacts.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
+        state.error = (action.payload as TypedError) ?? null;
       })
       // fetchArtefact (single)
       .addCase(fetchArtefact.pending, (state, action) => {

@@ -27,6 +27,7 @@ export {
   selectRecentEntries,
   selectRecentEntriesTotal,
 } from './artefacts';
+export type { TypedError, ErrorKind } from './artefacts';
 
 // ── Auth ──
 export {

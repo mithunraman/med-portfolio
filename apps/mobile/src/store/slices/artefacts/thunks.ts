@@ -1,11 +1,48 @@
-import type { ArtefactVersionHistoryResponse, EditArtefactRequest, PdpGoalSelection } from '@acme/shared';
+import type { EditArtefactRequest, PdpGoalSelection } from '@acme/shared';
 import { ArtefactStatus } from '@acme/shared';
+import { ApiError, NetworkError } from '@acme/api-client';
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { api } from '../../../api/client';
 import { logger } from '../../../utils/logger';
 import { retryRead } from '../../../utils/retry';
 
 const artefactsLogger = logger.createScope('ArtefactsThunks');
+
+// ---------------------------------------------------------------------------
+// Typed error classification
+// ---------------------------------------------------------------------------
+
+export type ErrorKind = 'network' | 'server' | 'unknown';
+
+export interface TypedError {
+  kind: ErrorKind;
+  message: string;
+  status?: number;
+  retryable: boolean;
+}
+
+export function classifyError(error: unknown): TypedError {
+  if (error instanceof NetworkError) {
+    return { kind: 'network', message: 'No internet connection', retryable: true };
+  }
+  if (error instanceof ApiError) {
+    if (error.status >= 500) {
+      return { kind: 'server', message: 'Server error — try again shortly', status: error.status, retryable: true };
+    }
+    // 408 Request Timeout and 429 Too Many Requests are retryable; other 4xx are not
+    const retryable = error.status === 408 || error.status === 429;
+    return { kind: 'unknown', message: error.message, status: error.status, retryable };
+  }
+  return {
+    kind: 'unknown',
+    message: error instanceof Error ? error.message : 'Something went wrong',
+    retryable: true,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Thunks
+// ---------------------------------------------------------------------------
 
 /**
  * Create a new artefact with its associated conversation.
@@ -25,9 +62,8 @@ export const createArtefact = createAsyncThunk(
       });
       return response;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create artefact';
-      artefactsLogger.error('Failed to create artefact', { error: message });
-      return rejectWithValue(message);
+      artefactsLogger.error('Failed to create artefact', { error });
+      return rejectWithValue(classifyError(error));
     }
   }
 );
@@ -46,12 +82,19 @@ export const fetchArtefacts = createAsyncThunk(
     try {
       const response = await retryRead(() => api.artefacts.listArtefacts(params));
       artefactsLogger.info('Fetched artefacts', { count: response.artefacts.length });
-      return response;
+      return { ...response, fetchedAt: Date.now() };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch artefacts';
-      artefactsLogger.error('Failed to fetch artefacts', { error: message });
-      return rejectWithValue(message);
+      artefactsLogger.error('Failed to fetch artefacts', { error });
+      return rejectWithValue(classifyError(error));
     }
+  },
+  {
+    condition: (params, { getState }) => {
+      const { artefacts } = getState() as { artefacts: { loading: boolean } };
+      // Allow paginated fetches (with cursor) to proceed even if loading
+      if (params?.cursor) return true;
+      return !artefacts.loading;
+    },
   }
 );
 
@@ -68,9 +111,8 @@ export const fetchArtefact = createAsyncThunk(
       artefactsLogger.info('Fetched artefact', { artefactId: response.id });
       return response;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch artefact';
-      artefactsLogger.error('Failed to fetch artefact', { error: message });
-      return rejectWithValue(message);
+      artefactsLogger.error('Failed to fetch artefact', { error });
+      return rejectWithValue(classifyError(error));
     }
   }
 );
@@ -94,9 +136,8 @@ export const updateArtefactStatus = createAsyncThunk(
       artefactsLogger.info('Updated artefact status', { id: response.id, status: response.status });
       return response;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update artefact status';
-      artefactsLogger.error('Failed to update artefact status', { error: message });
-      return rejectWithValue(message);
+      artefactsLogger.error('Failed to update artefact status', { error });
+      return rejectWithValue(classifyError(error));
     }
   }
 );
@@ -114,9 +155,8 @@ export const duplicateToReview = createAsyncThunk(
       artefactsLogger.info('Duplicated artefact to review', { id: response.id });
       return response;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to duplicate artefact';
-      artefactsLogger.error('Failed to duplicate artefact to review', { error: message });
-      return rejectWithValue(message);
+      artefactsLogger.error('Failed to duplicate artefact to review', { error });
+      return rejectWithValue(classifyError(error));
     }
   }
 );
@@ -138,9 +178,8 @@ export const editArtefact = createAsyncThunk(
       artefactsLogger.info('Edited artefact', { id: response.id });
       return response;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to edit artefact';
-      artefactsLogger.error('Failed to edit artefact', { error: message });
-      return rejectWithValue(message);
+      artefactsLogger.error('Failed to edit artefact', { error });
+      return rejectWithValue(classifyError(error));
     }
   }
 );
@@ -158,9 +197,8 @@ export const fetchVersionHistory = createAsyncThunk(
       artefactsLogger.info('Fetched version history', { count: response.versions.length });
       return response;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch version history';
-      artefactsLogger.error('Failed to fetch version history', { error: message });
-      return rejectWithValue(message);
+      artefactsLogger.error('Failed to fetch version history', { error });
+      return rejectWithValue(classifyError(error));
     }
   }
 );
@@ -180,9 +218,8 @@ export const restoreVersion = createAsyncThunk(
       artefactsLogger.info('Restored version', { id: response.id });
       return response;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to restore version';
-      artefactsLogger.error('Failed to restore version', { error: message });
-      return rejectWithValue(message);
+      artefactsLogger.error('Failed to restore version', { error });
+      return rejectWithValue(classifyError(error));
     }
   }
 );
@@ -200,9 +237,8 @@ export const deleteArtefact = createAsyncThunk(
       artefactsLogger.info('Deleted artefact', { artefactId: params.artefactId });
       return params.artefactId;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete entry';
-      artefactsLogger.error('Failed to delete artefact', { error: message });
-      return rejectWithValue(message);
+      artefactsLogger.error('Failed to delete artefact', { error });
+      return rejectWithValue(classifyError(error));
     }
   }
 );
@@ -225,9 +261,8 @@ export const finaliseArtefact = createAsyncThunk(
       artefactsLogger.info('Finalised artefact', { id: response.id, status: response.status });
       return response;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to finalise artefact';
-      artefactsLogger.error('Failed to finalise artefact', { error: message });
-      return rejectWithValue(message);
+      artefactsLogger.error('Failed to finalise artefact', { error });
+      return rejectWithValue(classifyError(error));
     }
   }
 );

@@ -12,6 +12,9 @@ export {
   selectRecentEntriesTotal,
 } from './slice';
 
+// Types
+export type { TypedError, ErrorKind } from './thunks';
+
 // Thunks
 export {
   createArtefact,

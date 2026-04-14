@@ -1,11 +1,11 @@
 import { MessageRole, MessageStatus, MessageType } from '@acme/shared';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
-import { Test } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Model, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
 import { ConversationsRepository } from '../conversations.repository';
-import { Conversation, ConversationDocument, ConversationSchema } from '../schemas/conversation.schema';
+import { Conversation, ConversationSchema } from '../schemas/conversation.schema';
 import { Message, MessageDocument, MessageSchema } from '../schemas/message.schema';
 import { Media, MediaSchema } from '../../media/schemas/media.schema';
 
@@ -15,7 +15,7 @@ import { Media, MediaSchema } from '../../media/schemas/media.schema';
  */
 describe('ConversationsRepository — deleted message filtering', () => {
   let mongod: MongoMemoryServer;
-  let module: any;
+  let module: TestingModule;
   let repo: ConversationsRepository;
   let messageModel: Model<MessageDocument>;
   const userId = new Types.ObjectId();

@@ -1,13 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
+import { STALE_THRESHOLD_MS } from '../constants/staleness';
 import { markArtefactsStale, markDashboardStale, markPdpGoalsStale } from '../store';
 import { useAppDispatch } from './useAppDispatch';
 
-const STALE_THRESHOLD_MS = 15 * 60 * 1000;
-
 /**
  * Marks artefacts, PDP goals, and dashboard data as stale when
- * the app returns from background after more than 15 minutes.
+ * the app returns from background after more than 5 minutes.
  * List screens will refetch on next focus via useFocusEffect.
  */
 export function useBackgroundStaleTimer() {

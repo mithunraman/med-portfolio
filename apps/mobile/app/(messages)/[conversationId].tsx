@@ -205,13 +205,24 @@ export default function ChatScreen() {
   // mergedMessages is sorted newest-first, so we walk forward until we hit an assistant message.
   const segmentWordCount = useMemo(() => {
     let count = 0;
+    chatLogger.debug('[segmentWordCount] computing', {
+      totalMessages: mergedMessages.length,
+      firstMsgRole: mergedMessages[0]?.role,
+      firstMsgContent: mergedMessages[0]?.content?.slice(0, 50),
+    });
     for (const m of mergedMessages) {
       // Stop at the first assistant message — that's the segment boundary
-      if (m.role === MessageRole.ASSISTANT) break;
+      if (m.role === MessageRole.ASSISTANT) {
+        chatLogger.debug('[segmentWordCount] hit assistant message, breaking', { msgId: m.id });
+        break;
+      }
       if (m.role === MessageRole.USER && m.content) {
-        count += m.content.split(/\s+/).filter(Boolean).length;
+        const words = m.content.split(/\s+/).filter(Boolean).length;
+        chatLogger.debug('[segmentWordCount] counting user message', { msgId: m.id, words, status: m.status, contentPreview: m.content.slice(0, 50) });
+        count += words;
       }
     }
+    chatLogger.debug('[segmentWordCount] result', { count });
     return count;
   }, [mergedMessages]);
 

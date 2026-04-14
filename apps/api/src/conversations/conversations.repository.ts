@@ -245,7 +245,7 @@ export class ConversationsRepository implements IConversationsRepository {
         .countDocuments({
           conversation: conversationId,
           role: MessageRole.USER,
-          status: { $lt: MessageStatus.COMPLETE },
+          status: { $gt: MessageStatus.DELETED, $lt: MessageStatus.COMPLETE },
         })
         .limit(1)
         .session(session || null);
@@ -263,7 +263,7 @@ export class ConversationsRepository implements IConversationsRepository {
   ): Promise<Result<MessageRole | null, DBError>> {
     try {
       const lastMessage = await this.messageModel
-        .findOne({ conversation: conversationId })
+        .findOne({ conversation: conversationId, status: { $ne: MessageStatus.DELETED } })
         .sort({ _id: -1 })
         .select('role')
         .lean()

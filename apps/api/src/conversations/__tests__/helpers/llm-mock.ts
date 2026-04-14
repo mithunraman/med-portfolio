@@ -96,6 +96,7 @@ export class SequentialLLMMock {
  */
 export function classifyResponse(
   overrides: Partial<{
+    isRelevant: boolean;
     entryType: string;
     confidence: number;
     reasoning: string;
@@ -104,6 +105,7 @@ export function classifyResponse(
   }> = {}
 ) {
   return {
+    isRelevant: overrides.isRelevant ?? true,
     entryType: overrides.entryType ?? 'CLINICAL_CASE_REVIEW',
     confidence: overrides.confidence ?? 0.92,
     reasoning: overrides.reasoning ?? 'Patient presentation with clinical details',

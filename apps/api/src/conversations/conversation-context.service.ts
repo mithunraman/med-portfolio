@@ -8,7 +8,7 @@ import {
   type QuestionType,
   type ThinkingStep,
 } from '@acme/shared';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { AnalysisRunsService } from '../analysis-runs/analysis-runs.service';
 import type { AnalysisRun } from '../analysis-runs/schemas/analysis-run.schema';
@@ -28,6 +28,8 @@ const denied = (code: string, reason: string): ActionState => ({
 
 @Injectable()
 export class ConversationContextService {
+  private readonly logger = new Logger(ConversationContextService.name);
+
   constructor(
     @Inject(CONVERSATIONS_REPOSITORY)
     private readonly conversationsRepository: IConversationsRepository,
@@ -54,6 +56,7 @@ export class ConversationContextService {
     }
 
     const latestRun = await this.analysisRunsService.findLatestRun(conversationOid);
+    this.logger.debug(`[computeContext] conversationId=${conversationOid} latestRun=${latestRun ? JSON.stringify({ status: latestRun.status, xid: latestRun.xid }) : 'null'}`);
 
     // Check for queued outbox work only when the run is AWAITING_INPUT —
     // a pending outbox entry means the graph is about to resume, so the
@@ -82,6 +85,7 @@ export class ConversationContextService {
       ]);
       hasProcessing = !isErr(processingResult) && processingResult.value;
       hasComplete = !isErr(completeResult) && completeResult.value;
+      this.logger.debug(`[computeContext] composing checks: hasProcessing=${hasProcessing} hasComplete=${hasComplete}`);
     } else if (isFreeTextAwait) {
       const [processingResult, lastRoleResult] = await Promise.all([
         this.conversationsRepository.hasProcessingMessages(conversationOid),
@@ -139,19 +143,31 @@ export class ConversationContextService {
     lastMessageIsUser: boolean
   ) {
     switch (phase) {
-      case 'composing':
+      case 'composing': {
+        const startDeniedReason = hasProcessing
+          ? 'MESSAGES_PROCESSING'
+          : !hasComplete
+            ? 'NO_MESSAGES'
+            : latestRun && latestRun.status !== AnalysisRunStatus.FAILED
+              ? 'ANALYSIS_ALREADY_STARTED'
+              : null;
+        this.logger.debug(`[buildActions] composing startAnalysis: ${startDeniedReason ?? 'allowed'} (hasProcessing=${hasProcessing} hasComplete=${hasComplete} latestRunStatus=${latestRun?.status ?? 'none'})`);
         return {
           sendMessage: allowed(),
           sendAudio: allowed(),
-          startAnalysis: hasProcessing
-            ? denied('MESSAGES_PROCESSING', 'Messages are still being processed.')
-            : !hasComplete
-              ? denied('NO_MESSAGES', 'Send at least one message before starting analysis.')
-              : latestRun && latestRun.status !== AnalysisRunStatus.FAILED
-                ? denied('ANALYSIS_ALREADY_STARTED', 'Analysis already started.')
-                : allowed(),
+          startAnalysis: startDeniedReason
+            ? denied(
+                startDeniedReason,
+                startDeniedReason === 'MESSAGES_PROCESSING'
+                  ? 'Messages are still being processed.'
+                  : startDeniedReason === 'NO_MESSAGES'
+                    ? 'Send at least one message before starting analysis.'
+                    : 'Analysis already started.',
+              )
+            : allowed(),
           resumeAnalysis: denied('NO_ACTIVE_QUESTION', 'No analysis to resume.'),
         };
+      }
 
       case 'analysing':
         return {

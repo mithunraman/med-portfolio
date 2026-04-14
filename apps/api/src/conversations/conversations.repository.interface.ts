@@ -162,6 +162,31 @@ export interface IConversationsRepository {
   ): Promise<Result<Types.ObjectId[], DBError>>;
 
   /**
+   * Return message IDs for a conversation.
+   */
+  findMessageIdsByConversation(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<Types.ObjectId[], DBError>>;
+
+  /**
+   * Find conversation IDs linked to an artefact.
+   */
+  findConversationIdsByArtefact(
+    artefactId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<Types.ObjectId[], DBError>>;
+
+  /**
+   * Anonymize a single conversation and all its messages.
+   * Returns the total number of modified documents.
+   */
+  anonymizeConversation(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<number, DBError>>;
+
+  /**
    * Anonymize all conversations and messages belonging to a user.
    * Returns the total number of modified documents.
    */

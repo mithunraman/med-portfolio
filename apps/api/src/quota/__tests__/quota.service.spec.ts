@@ -1,10 +1,13 @@
 import { UserRole } from '@acme/shared';
 import { Types } from 'mongoose';
 import { ok } from '../../common/utils/result.util';
+import { quotaPlans } from '../../config/quota.config';
 import { QuotaService } from '../quota.service';
 
 // ── Helpers ──
 
+const guestPlan = quotaPlans[UserRole.USER_GUEST];
+const userPlan = quotaPlans[UserRole.USER];
 const userId = new Types.ObjectId();
 const userIdStr = userId.toString();
 
@@ -37,16 +40,16 @@ describe('QuotaService', () => {
       const status = await service.checkQuota(userIdStr, UserRole.USER);
 
       expect(status.shortWindow.used).toBe(5);
-      expect(status.shortWindow.limit).toBe(40);
+      expect(status.shortWindow.limit).toBe(userPlan.shortWindow);
       expect(status.weeklyWindow.used).toBe(10);
-      expect(status.weeklyWindow.limit).toBe(200);
+      expect(status.weeklyWindow.limit).toBe(userPlan.weeklyWindow);
     });
 
     it('should throw 429 when short window exceeded', async () => {
       const { service, repo } = createService();
       const oldestDate = new Date(Date.now() - 3 * 60 * 60 * 1000); // 3 hours ago
       repo.countSince
-        .mockResolvedValueOnce(ok(40)) // short window at limit
+        .mockResolvedValueOnce(ok(userPlan.shortWindow)) // short window at limit
         .mockResolvedValueOnce(ok(50)); // weekly under limit
       repo.findOldestInWindow.mockResolvedValue(ok(oldestDate));
 
@@ -57,7 +60,7 @@ describe('QuotaService', () => {
         expect(error.status).toBe(429);
         expect(error.response.code).toBe('QUOTA_EXCEEDED');
         expect(error.response.retryAfter).toBeGreaterThan(0);
-        expect(error.response.quota.shortWindow.used).toBe(40);
+        expect(error.response.quota.shortWindow.used).toBe(userPlan.shortWindow);
       }
     });
 
@@ -65,7 +68,7 @@ describe('QuotaService', () => {
       const { service, repo } = createService();
       repo.countSince
         .mockResolvedValueOnce(ok(10)) // short window under
-        .mockResolvedValueOnce(ok(200)); // weekly at limit
+        .mockResolvedValueOnce(ok(userPlan.weeklyWindow)); // weekly at limit
 
       try {
         await service.checkQuota(userIdStr, UserRole.USER);
@@ -73,14 +76,14 @@ describe('QuotaService', () => {
       } catch (error: any) {
         expect(error.status).toBe(429);
         expect(error.response.code).toBe('QUOTA_EXCEEDED');
-        expect(error.response.quota.weeklyWindow.used).toBe(200);
+        expect(error.response.quota.weeklyWindow.used).toBe(userPlan.weeklyWindow);
       }
     });
 
     it('should use guest limits for USER_GUEST', async () => {
       const { service, repo } = createService();
       repo.countSince
-        .mockResolvedValueOnce(ok(20)) // short window at guest limit
+        .mockResolvedValueOnce(ok(guestPlan.shortWindow)) // short window at guest limit
         .mockResolvedValueOnce(ok(30)); // weekly under
 
       try {
@@ -88,20 +91,20 @@ describe('QuotaService', () => {
         fail('Should have thrown');
       } catch (error: any) {
         expect(error.status).toBe(429);
-        expect(error.response.quota.shortWindow.limit).toBe(20);
+        expect(error.response.quota.shortWindow.limit).toBe(guestPlan.shortWindow);
       }
     });
 
     it('should pass for registered user at guest limit', async () => {
       const { service, repo } = createService();
       repo.countSince
-        .mockResolvedValueOnce(ok(20)) // 20 — over guest limit but under registered
+        .mockResolvedValueOnce(ok(guestPlan.shortWindow)) // at guest limit but under registered
         .mockResolvedValueOnce(ok(30));
 
       const status = await service.checkQuota(userIdStr, UserRole.USER);
 
-      expect(status.shortWindow.used).toBe(20);
-      expect(status.shortWindow.limit).toBe(40);
+      expect(status.shortWindow.used).toBe(guestPlan.shortWindow);
+      expect(status.shortWindow.limit).toBe(userPlan.shortWindow);
     });
   });
 
@@ -127,10 +130,10 @@ describe('QuotaService', () => {
       const status = await service.getQuotaStatus(userIdStr, UserRole.USER);
 
       expect(status.shortWindow.used).toBe(12);
-      expect(status.shortWindow.limit).toBe(40);
+      expect(status.shortWindow.limit).toBe(userPlan.shortWindow);
       expect(status.shortWindow.windowType).toBe('rolling');
       expect(status.weeklyWindow.used).toBe(85);
-      expect(status.weeklyWindow.limit).toBe(200);
+      expect(status.weeklyWindow.limit).toBe(userPlan.weeklyWindow);
       expect(status.weeklyWindow.windowType).toBe('fixed');
       expect(status.weeklyWindow.resetsAt).toBeDefined();
     });

@@ -41,5 +41,10 @@ export interface IMediaRepository {
 
   findByUser(userId: Types.ObjectId): Promise<Result<Media[], DBError>>;
 
+  markDeletedByMessageIds(
+    messageIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>>;
+
   anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
 }

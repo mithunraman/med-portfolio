@@ -10,6 +10,7 @@ import {
 } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
+  deleteArtefact,
   duplicateToReview,
   editArtefact,
   fetchArtefact,
@@ -100,8 +101,7 @@ export default function EntryDetailScreen() {
   const [exportSheetVisible, setExportSheetVisible] = useState(false);
   const isEditable = artefact?.status === ArtefactStatus.IN_REVIEW;
   const canExport =
-    artefact?.status === ArtefactStatus.IN_REVIEW ||
-    artefact?.status === ArtefactStatus.COMPLETED;
+    artefact?.status === ArtefactStatus.IN_REVIEW || artefact?.status === ArtefactStatus.COMPLETED;
 
   const hasChanges = editedTitle !== null || editedReflection !== null;
 
@@ -355,58 +355,95 @@ export default function EntryDetailScreen() {
     }
   }, [artefactId, dispatch, hasActivePdpGoals]);
 
+  // ── Delete Entry ──
+
+  const handleDelete = useCallback(() => {
+    if (!artefactId) return;
+    Alert.alert(
+      'Delete Entry',
+      'This will permanently delete this entry, its conversation, and all linked goals. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            dispatch(deleteArtefact({ artefactId }))
+              .unwrap()
+              .then(() => router.back())
+              .catch(() => Alert.alert('Error', 'Failed to delete entry. Please try again.'));
+          },
+        },
+      ]
+    );
+  }, [artefactId, dispatch, router]);
+
   // ── Duplicate to Review ──
 
   const handleClone = useCallback(() => {
     if (!artefactId) return;
-    Alert.alert('Duplicate to Review', 'Duplicate this entry and all its data into a new artefact in review?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Duplicate',
-        onPress: async () => {
-          const result = await dispatch(duplicateToReview({ artefactId }));
-          if (duplicateToReview.fulfilled.match(result)) {
-            router.replace(`/(entry)/${result.payload.id}`);
-          }
+    Alert.alert(
+      'Duplicate Entry',
+      'Duplicate this entry and all its data into a new artefact in review?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Duplicate',
+          onPress: async () => {
+            const result = await dispatch(duplicateToReview({ artefactId }));
+            if (duplicateToReview.fulfilled.match(result)) {
+              router.replace(`/(entry)/${result.payload.id}`);
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   }, [artefactId, dispatch, router]);
 
   // ── Header overflow menu ──
 
   const showHeaderMenu =
-    artefact?.status === ArtefactStatus.COMPLETED ||
-    (artefact?.status !== ArtefactStatus.ARCHIVED && artefact?.status !== undefined);
+    artefact?.status !== undefined && artefact?.status !== ArtefactStatus.IN_CONVERSATION;
 
   const handleShowMenu = useCallback(() => {
     if (artefact?.status === ArtefactStatus.COMPLETED) {
       showActionSheetWithOptions(
         {
-          options: ['Archive entry', 'Duplicate to Review', 'Cancel'],
-          destructiveButtonIndex: 0,
-          cancelButtonIndex: 2,
+          options: ['Archive entry', 'Duplicate entry', 'Delete entry', 'Cancel'],
+          destructiveButtonIndex: 2,
+          cancelButtonIndex: 3,
         },
         (index) => {
           if (index === 0) handleArchive();
           if (index === 1) handleClone();
+          if (index === 2) handleDelete();
         }
       );
-    } else if (
-      artefact?.status !== ArtefactStatus.ARCHIVED
-    ) {
+    } else if (artefact?.status === ArtefactStatus.ARCHIVED) {
       showActionSheetWithOptions(
         {
-          options: ['Archive entry', 'Cancel'],
+          options: ['Delete entry', 'Cancel'],
           destructiveButtonIndex: 0,
           cancelButtonIndex: 1,
         },
         (index) => {
+          if (index === 0) handleDelete();
+        }
+      );
+    } else if (artefact?.status !== undefined) {
+      showActionSheetWithOptions(
+        {
+          options: ['Archive entry', 'Delete entry', 'Cancel'],
+          destructiveButtonIndex: 1,
+          cancelButtonIndex: 2,
+        },
+        (index) => {
           if (index === 0) handleArchive();
+          if (index === 1) handleDelete();
         }
       );
     }
-  }, [artefact?.status, showActionSheetWithOptions, handleArchive, handleClone]);
+  }, [artefact?.status, showActionSheetWithOptions, handleArchive, handleClone, handleDelete]);
 
   useEffect(() => {
     if (!artefact) return;
@@ -419,14 +456,31 @@ export default function EntryDetailScreen() {
             </Pressable>
           )}
           {showHeaderMenu && (
-            <Pressable onPress={updatingStatus ? undefined : handleShowMenu} hitSlop={8} disabled={updatingStatus}>
-              <Ionicons name="ellipsis-vertical" size={22} color={updatingStatus ? colors.textSecondary : colors.text} />
+            <Pressable
+              onPress={updatingStatus ? undefined : handleShowMenu}
+              hitSlop={8}
+              disabled={updatingStatus}
+            >
+              <Ionicons
+                name="ellipsis-vertical"
+                size={22}
+                color={updatingStatus ? colors.textSecondary : colors.text}
+              />
             </Pressable>
           )}
         </View>
       ),
     });
-  }, [artefact, canExport, showHeaderMenu, navigation, colors.text, colors.textSecondary, handleShowMenu, updatingStatus]);
+  }, [
+    artefact,
+    canExport,
+    showHeaderMenu,
+    navigation,
+    colors.text,
+    colors.textSecondary,
+    handleShowMenu,
+    updatingStatus,
+  ]);
 
   if (!artefact) {
     return (
@@ -451,11 +505,7 @@ export default function EntryDetailScreen() {
       >
         {/* Header */}
         <View style={styles.section}>
-          <EditableTitle
-            value={displayTitle}
-            onChange={handleTitleChange}
-            editable={isEditable}
-          />
+          <EditableTitle value={displayTitle} onChange={handleTitleChange} editable={isEditable} />
           <View style={styles.headerMeta}>
             {artefact.artefactTypeLabel && (
               <View style={[styles.typeBadge, { backgroundColor: colors.surface }]}>
@@ -536,10 +586,12 @@ export default function EntryDetailScreen() {
         <FullScreenSectionEditor
           visible={editingSectionIndex !== null}
           sectionTitle={
-            editingSectionIndex !== null ? displayReflection[editingSectionIndex]?.title ?? '' : ''
+            editingSectionIndex !== null
+              ? (displayReflection[editingSectionIndex]?.title ?? '')
+              : ''
           }
           sectionText={
-            editingSectionIndex !== null ? displayReflection[editingSectionIndex]?.text ?? '' : ''
+            editingSectionIndex !== null ? (displayReflection[editingSectionIndex]?.text ?? '') : ''
           }
           onSave={handleSectionSave}
           onClose={() => setEditingSectionIndex(null)}
@@ -550,93 +602,101 @@ export default function EntryDetailScreen() {
           (canMarkAsFinal
             ? artefact.pdpGoals.length > 0
             : artefact.pdpGoals.some((g) => g.status !== PdpGoalStatus.ARCHIVED)) && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>PDP Goals</Text>
-            {canMarkAsFinal ? (
-              <PdpGoalSelector
-                goals={artefact.pdpGoals}
-                selections={goalSelections}
-                onToggleGoal={handleToggleGoal}
-                onToggleAction={handleToggleAction}
-                onSetReviewDate={handleSetReviewDate}
-                disabled={updatingStatus}
-              />
-            ) : (
-              artefact.pdpGoals
-                .filter((goal) => goal.status !== PdpGoalStatus.ARCHIVED)
-                .map((goal) => {
-                  const goalStatus = getPdpGoalStatusDisplay(goal.status);
-                  const visibleActions = goal.actions.filter(
-                    (a) => a.status !== PdpGoalStatus.ARCHIVED
-                  );
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>PDP Goals</Text>
+              {canMarkAsFinal ? (
+                <PdpGoalSelector
+                  goals={artefact.pdpGoals}
+                  selections={goalSelections}
+                  onToggleGoal={handleToggleGoal}
+                  onToggleAction={handleToggleAction}
+                  onSetReviewDate={handleSetReviewDate}
+                  disabled={updatingStatus}
+                />
+              ) : (
+                artefact.pdpGoals
+                  .filter((goal) => goal.status !== PdpGoalStatus.ARCHIVED)
+                  .map((goal) => {
+                    const goalStatus = getPdpGoalStatusDisplay(goal.status);
+                    const visibleActions = goal.actions.filter(
+                      (a) => a.status !== PdpGoalStatus.ARCHIVED
+                    );
 
-                  return (
-                    <View
-                      key={goal.id}
-                      style={[styles.pdpGoalCard, { backgroundColor: colors.surface }]}
-                    >
-                      <View style={styles.pdpGoalHeader}>
-                        <Text style={[styles.cardTitle, { color: colors.text }]}>{goal.goal}</Text>
-                        <StatusPill label={goalStatus.label} variant={goalStatus.variant} />
-                      </View>
-
-                      {goal.reviewDate && (
-                        <View style={styles.pdpReviewDateRow}>
-                          <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-                          <Text style={[styles.pdpReviewDateText, { color: colors.textSecondary }]}>
-                            Review by {formatGoalDate(goal.reviewDate)}
+                    return (
+                      <View
+                        key={goal.id}
+                        style={[styles.pdpGoalCard, { backgroundColor: colors.surface }]}
+                      >
+                        <View style={styles.pdpGoalHeader}>
+                          <Text style={[styles.cardTitle, { color: colors.text }]}>
+                            {goal.goal}
                           </Text>
+                          <StatusPill label={goalStatus.label} variant={goalStatus.variant} />
                         </View>
-                      )}
 
-                      <View style={styles.pdpActions}>
-                        {visibleActions.map((action, actionIndex) => {
-                          const actionActive = action.status === PdpGoalStatus.STARTED;
-
-                          return (
-                            <View
-                              key={action.id}
-                              style={[
-                                styles.pdpRow,
-                                actionIndex === visibleActions.length - 1 && styles.pdpRowLast,
-                              ]}
+                        {goal.reviewDate && (
+                          <View style={styles.pdpReviewDateRow}>
+                            <Ionicons
+                              name="calendar-outline"
+                              size={14}
+                              color={colors.textSecondary}
+                            />
+                            <Text
+                              style={[styles.pdpReviewDateText, { color: colors.textSecondary }]}
                             >
-                              {actionActive ? (
-                                <View
-                                  style={[
-                                    styles.pdpActionCheckbox,
-                                    {
-                                      borderColor: colors.primary,
-                                      backgroundColor: colors.primary,
-                                    },
-                                  ]}
-                                >
-                                  <Feather name="check" size={14} color="#ffffff" />
-                                </View>
-                              ) : (
-                                <View
-                                  style={[
-                                    styles.pdpActionCheckbox,
-                                    {
-                                      borderColor: colors.textSecondary,
-                                      backgroundColor: 'transparent',
-                                    },
-                                  ]}
-                                />
-                              )}
-                              <Text style={[styles.pdpText, { color: colors.text }]}>
-                                {action.action}
-                              </Text>
-                            </View>
-                          );
-                        })}
+                              Review by {formatGoalDate(goal.reviewDate)}
+                            </Text>
+                          </View>
+                        )}
+
+                        <View style={styles.pdpActions}>
+                          {visibleActions.map((action, actionIndex) => {
+                            const actionActive = action.status === PdpGoalStatus.STARTED;
+
+                            return (
+                              <View
+                                key={action.id}
+                                style={[
+                                  styles.pdpRow,
+                                  actionIndex === visibleActions.length - 1 && styles.pdpRowLast,
+                                ]}
+                              >
+                                {actionActive ? (
+                                  <View
+                                    style={[
+                                      styles.pdpActionCheckbox,
+                                      {
+                                        borderColor: colors.primary,
+                                        backgroundColor: colors.primary,
+                                      },
+                                    ]}
+                                  >
+                                    <Feather name="check" size={14} color="#ffffff" />
+                                  </View>
+                                ) : (
+                                  <View
+                                    style={[
+                                      styles.pdpActionCheckbox,
+                                      {
+                                        borderColor: colors.textSecondary,
+                                        backgroundColor: 'transparent',
+                                      },
+                                    ]}
+                                  />
+                                )}
+                                <Text style={[styles.pdpText, { color: colors.text }]}>
+                                  {action.action}
+                                </Text>
+                              </View>
+                            );
+                          })}
+                        </View>
                       </View>
-                    </View>
-                  );
-                })
-            )}
-          </View>
-        )}
+                    );
+                  })
+              )}
+            </View>
+          )}
 
         {/* Actions — hidden when there are unsaved changes */}
         {!hasChanges && (
@@ -649,7 +709,9 @@ export default function EntryDetailScreen() {
                   style={styles.navRow}
                 >
                   <Ionicons name="chatbubble-outline" size={18} color={colors.textSecondary} />
-                  <Text style={[styles.navRowLabel, { color: colors.text }]}>View conversation</Text>
+                  <Text style={[styles.navRowLabel, { color: colors.text }]}>
+                    View conversation
+                  </Text>
                   <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
                 </Pressable>
                 {artefact.versionCount > 0 && (
@@ -660,7 +722,9 @@ export default function EntryDetailScreen() {
                       style={styles.navRow}
                     >
                       <Feather name="clock" size={18} color={colors.textSecondary} />
-                      <Text style={[styles.navRowLabel, { color: colors.text }]}>Version history</Text>
+                      <Text style={[styles.navRowLabel, { color: colors.text }]}>
+                        Version history
+                      </Text>
                       <View style={styles.navRowRight}>
                         <Text style={[styles.navBadge, { color: colors.textSecondary }]}>
                           {artefact.versionCount}

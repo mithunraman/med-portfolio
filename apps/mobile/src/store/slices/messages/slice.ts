@@ -1,6 +1,7 @@
 import type { ConversationContext, Message } from '@acme/shared';
 import { MessageRole, MessageStatus, MessageType } from '@acme/shared';
 import { createEntityAdapter, createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { deleteConversation } from '../conversations/thunks';
 import {
   fetchMessages,
   pollConversation,
@@ -272,6 +273,23 @@ const messagesSlice = createSlice({
       .addCase(resumeAnalysisWithOptimistic.fulfilled, (state, action) => {
         const { conversationId, context } = action.payload;
         state.contextByConversation[conversationId] = context;
+      })
+
+      // Cross-slice: deleting a conversation — clear all messages and context
+      .addCase(deleteConversation.fulfilled, (state, action) => {
+        const conversationId = action.payload;
+        const staleIds = state.ids.filter(
+          (id) => state.entities[id]?.conversationId === conversationId,
+        );
+        messagesAdapter.removeMany(state, staleIds);
+        delete state.idsByConversation[conversationId];
+        delete state.contextByConversation[conversationId];
+        // Clear optimistic messages for this conversation
+        for (const [localId, opt] of Object.entries(state.optimisticMessages)) {
+          if (opt && opt.conversationId === conversationId) {
+            delete state.optimisticMessages[localId];
+          }
+        }
       });
   },
 });

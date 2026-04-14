@@ -56,6 +56,21 @@ export class PdpGoalsService {
     private readonly pdpGoalsRepository: IPdpGoalsRepository
   ) {}
 
+  async deleteGoal(userId: string, goalXid: string): Promise<{ message: string }> {
+    const userOid = new Types.ObjectId(userId);
+
+    const result = await this.pdpGoalsRepository.findOneWithArtefact(goalXid, userOid);
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
+    if (!result.value || result.value.status === PdpGoalStatus.DELETED) {
+      throw new NotFoundException('PDP goal not found');
+    }
+
+    const anonResult = await this.pdpGoalsRepository.anonymizeGoal(goalXid, userOid);
+    if (isErr(anonResult)) throw new InternalServerErrorException(anonResult.error.message);
+
+    return { message: 'Goal deleted successfully' };
+  }
+
   async listGoals(userId: string, statuses?: PdpGoalStatus[]): Promise<ListPdpGoalsResponse> {
     const effectiveStatuses = statuses && statuses.length > 0 ? statuses : DEFAULT_STATUSES;
     const userId$ = new Types.ObjectId(userId);

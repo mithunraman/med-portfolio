@@ -1,9 +1,11 @@
 import type { Artefact } from '@acme/shared';
 import { createEntityAdapter, createSelector, createSlice } from '@reduxjs/toolkit';
 import type { RootState } from '../../index';
+import { deleteConversation } from '../conversations/thunks';
 import { fetchInit } from '../dashboard/thunks';
 import {
   createArtefact,
+  deleteArtefact,
   duplicateToReview,
   editArtefact,
   fetchArtefact,
@@ -155,6 +157,23 @@ const artefactsSlice = createSlice({
       .addCase(restoreVersion.rejected, (state, action) => {
         state.saving = false;
         state.error = action.payload as string;
+      })
+      // deleteArtefact
+      .addCase(deleteArtefact.pending, (state) => {
+        state.updatingStatus = true;
+        state.error = null;
+      })
+      .addCase(deleteArtefact.fulfilled, (state, action) => {
+        state.updatingStatus = false;
+        artefactsAdapter.removeOne(state, action.payload);
+      })
+      .addCase(deleteArtefact.rejected, (state, action) => {
+        state.updatingStatus = false;
+        state.error = action.payload as string;
+      })
+      // Cross-slice: deleting a conversation cascades to its artefact server-side.
+      .addCase(deleteConversation.fulfilled, (state) => {
+        state.stale = true;
       });
   },
 });

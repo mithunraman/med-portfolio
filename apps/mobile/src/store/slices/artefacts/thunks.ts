@@ -188,6 +188,26 @@ export const restoreVersion = createAsyncThunk(
 );
 
 /**
+ * Delete an artefact and all its associated data (conversation, messages, PDP goals).
+ */
+export const deleteArtefact = createAsyncThunk(
+  'artefacts/deleteArtefact',
+  async (params: { artefactId: string }, { rejectWithValue }) => {
+    artefactsLogger.info('Deleting artefact', { artefactId: params.artefactId });
+
+    try {
+      await api.artefacts.deleteArtefact(params.artefactId);
+      artefactsLogger.info('Deleted artefact', { artefactId: params.artefactId });
+      return params.artefactId;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete entry';
+      artefactsLogger.error('Failed to delete artefact', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
  * Finalise an artefact — marks it FINAL and activates/archives PDP goals.
  */
 export const finaliseArtefact = createAsyncThunk(

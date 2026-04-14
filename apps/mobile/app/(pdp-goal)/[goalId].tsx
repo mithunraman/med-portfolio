@@ -3,6 +3,7 @@ import { Button, EmptyState, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
   addPdpGoalAction,
+  deletePdpGoal,
   fetchPdpGoal,
   selectPdpGoalById,
   updatePdpGoal,
@@ -341,18 +342,40 @@ export default function PdpGoalDetailScreen() {
     ]);
   }, [goalId, dispatch]);
 
+  const handleDelete = useCallback(() => {
+    if (!goalId) return;
+    Alert.alert(
+      'Delete Goal',
+      'This will permanently delete this goal and all its actions. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            dispatch(deletePdpGoal({ goalId }))
+              .unwrap()
+              .then(() => router.back())
+              .catch(() => Alert.alert('Error', 'Failed to delete goal. Please try again.'));
+          },
+        },
+      ]
+    );
+  }, [goalId, dispatch, router]);
+
   const handleShowMenu = useCallback(() => {
     showActionSheetWithOptions(
       {
-        options: ['Archive goal', 'Cancel'],
-        destructiveButtonIndex: 0,
-        cancelButtonIndex: 1,
+        options: ['Archive goal', 'Delete goal', 'Cancel'],
+        destructiveButtonIndex: 1,
+        cancelButtonIndex: 2,
       },
       (index) => {
         if (index === 0) handleArchive();
+        if (index === 1) handleDelete();
       }
     );
-  }, [showActionSheetWithOptions, handleArchive]);
+  }, [showActionSheetWithOptions, handleArchive, handleDelete]);
 
   // Set header right button once goal is loaded and not archived
   useEffect(() => {

@@ -8,4 +8,4 @@ export { setActiveConversation, clearConversations } from './slice';
 export { conversationSelectors } from './slice';
 
 // Thunks
-export { fetchConversations } from './thunks';
+export { deleteConversation, fetchConversations } from './thunks';

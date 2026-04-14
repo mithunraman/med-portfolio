@@ -19,6 +19,10 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectModel } from '@nestjs/mongoose';
 import { format } from 'date-fns';
 import { ClientSession, Model, Types } from 'mongoose';
+import {
+  ANALYSIS_RUNS_REPOSITORY,
+  IAnalysisRunsRepository,
+} from '../analysis-runs/analysis-runs.repository.interface';
 import { ARTEFACT_STATE_CHANGED, type ArtefactStateChangedEvent } from '../common/events';
 import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { isErr } from '../common/utils/result.util';
@@ -28,6 +32,8 @@ import {
   IConversationsRepository,
 } from '../conversations/conversations.repository.interface';
 import { TransactionService } from '../database';
+import { IMediaRepository, MEDIA_REPOSITORY } from '../media/media.repository.interface';
+import { IOutboxRepository, OUTBOX_REPOSITORY } from '../outbox/outbox.repository.interface';
 import {
   CreatePdpGoalData,
   IPdpGoalsRepository,
@@ -57,6 +63,12 @@ export class ArtefactsService {
     private readonly conversationsRepository: IConversationsRepository,
     @Inject(PDP_GOALS_REPOSITORY)
     private readonly pdpGoalsRepository: IPdpGoalsRepository,
+    @Inject(MEDIA_REPOSITORY)
+    private readonly mediaRepository: IMediaRepository,
+    @Inject(ANALYSIS_RUNS_REPOSITORY)
+    private readonly analysisRunsRepository: IAnalysisRunsRepository,
+    @Inject(OUTBOX_REPOSITORY)
+    private readonly outboxRepository: IOutboxRepository,
     @InjectModel(User.name)
     private readonly userModel: Model<UserDocument>,
     private readonly transactionService: TransactionService,
@@ -131,6 +143,92 @@ export class ArtefactsService {
       },
       { context: 'createArtefact' }
     );
+  }
+
+  async deleteArtefact(userId: string, xid: string): Promise<{ message: string }> {
+    const userOid = new Types.ObjectId(userId);
+
+    const findResult = await this.artefactsRepository.findByXid(xid, userOid);
+    if (isErr(findResult)) throw new InternalServerErrorException(findResult.error.message);
+    if (!findResult.value) throw new NotFoundException('Entry not found');
+
+    const artefact = findResult.value;
+
+    if (artefact.status === ArtefactStatus.IN_CONVERSATION) {
+      throw new BadRequestException(
+        'Use conversation delete while entry is in progress'
+      );
+    }
+    if (artefact.status === ArtefactStatus.DELETED) {
+      throw new NotFoundException('Entry not found');
+    }
+
+    // Find all conversations linked to this artefact
+    const convIdsResult = await this.conversationsRepository.findConversationIdsByArtefact(
+      artefact._id
+    );
+    if (isErr(convIdsResult))
+      throw new InternalServerErrorException(convIdsResult.error.message);
+    const conversationIds = convIdsResult.value;
+
+    // Collect message IDs across all conversations for media cleanup
+    const allMessageIds: Types.ObjectId[] = [];
+    for (const convId of conversationIds) {
+      const msgIdsResult = await this.conversationsRepository.findMessageIdsByConversation(convId);
+      if (!isErr(msgIdsResult)) {
+        allMessageIds.push(...msgIdsResult.value);
+      }
+    }
+
+    await this.transactionService.withTransaction(
+      async (session) => {
+        // Cancel outbox entries for all conversations
+        for (const convId of conversationIds) {
+          const cancelResult = await this.outboxRepository.cancelByConversationId(
+            convId.toString(),
+            session
+          );
+          if (isErr(cancelResult))
+            throw new InternalServerErrorException(cancelResult.error.message);
+        }
+
+        // Mark media as deleted
+        if (allMessageIds.length > 0) {
+          const mediaResult = await this.mediaRepository.markDeletedByMessageIds(
+            allMessageIds,
+            session
+          );
+          if (isErr(mediaResult))
+            throw new InternalServerErrorException(mediaResult.error.message);
+        }
+
+        // Anonymize all conversations + messages
+        for (const convId of conversationIds) {
+          const convAnon = await this.conversationsRepository.anonymizeConversation(convId, session);
+          if (isErr(convAnon)) throw new InternalServerErrorException(convAnon.error.message);
+        }
+
+        // Anonymize artefact
+        const artAnon = await this.artefactsRepository.anonymizeArtefact(artefact._id, session);
+        if (isErr(artAnon)) throw new InternalServerErrorException(artAnon.error.message);
+
+        // Anonymize all linked PDP goals
+        const goalsAnon = await this.pdpGoalsRepository.anonymizeByArtefactId(
+          artefact._id,
+          session
+        );
+        if (isErr(goalsAnon)) throw new InternalServerErrorException(goalsAnon.error.message);
+      },
+      { context: `deleteArtefact:${xid}` }
+    );
+
+    // Best-effort outside transaction
+    if (conversationIds.length > 0) {
+      await this.analysisRunsRepository.anonymizeByConversationIds(conversationIds);
+    }
+
+    this.emitStateChanged(userId);
+    return { message: 'Entry deleted successfully' };
   }
 
   async getArtefact(userId: string, xid: string): Promise<Artefact> {

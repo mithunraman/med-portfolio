@@ -7,6 +7,7 @@ interface StatusDisplay {
 }
 
 const STATUS_MAP: Record<ArtefactStatus, StatusDisplay> = {
+  [ArtefactStatus.DELETED]: { label: 'Deleted', variant: 'default' },
   [ArtefactStatus.ARCHIVED]: { label: 'Archived', variant: 'default' },
   [ArtefactStatus.IN_CONVERSATION]: { label: 'In progress', variant: 'default' },
   [ArtefactStatus.IN_REVIEW]: { label: 'Needs review', variant: 'warning' },

@@ -5,6 +5,7 @@ import { ArtefactsModule } from '../artefacts/artefacts.module';
 import { DatabaseModule } from '../database';
 import { MediaModule } from '../media';
 import { OutboxModule } from '../outbox/outbox.module';
+import { PdpGoalsModule } from '../pdp-goals/pdp-goals.module';
 import { PortfolioGraphModule } from '../portfolio-graph';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsRepository } from './conversations.repository';
@@ -23,6 +24,7 @@ import { Message, MessageSchema } from './schemas/message.schema';
     ]),
     MediaModule,
     AnalysisRunsModule,
+    PdpGoalsModule,
     forwardRef(() => OutboxModule),
     forwardRef(() => ArtefactsModule),
     forwardRef(() => PortfolioGraphModule),

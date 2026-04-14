@@ -68,12 +68,16 @@ const mockArtefactsRepo = {
   upsertArtefact: jest.fn(),
   listArtefacts: jest.fn(),
   countByUser: jest.fn(),
+  anonymizeArtefact: jest.fn(),
 };
 
 const mockConversationsRepo = {
   findActiveConversationByArtefact: jest.fn(),
   findActiveConversationsByArtefacts: jest.fn(),
   createConversation: jest.fn(),
+  findConversationIdsByArtefact: jest.fn(),
+  findMessageIdsByConversation: jest.fn(),
+  anonymizeConversation: jest.fn(),
 };
 
 const mockPdpGoalsRepo = {
@@ -84,6 +88,19 @@ const mockPdpGoalsRepo = {
   updateManyByArtefactId: jest.fn(),
   findByUserId: jest.fn(),
   countByUserId: jest.fn(),
+  anonymizeByArtefactId: jest.fn(),
+};
+
+const mockMediaRepo = {
+  markDeletedByMessageIds: jest.fn(),
+};
+
+const mockAnalysisRunsRepo = {
+  anonymizeByConversationIds: jest.fn(),
+};
+
+const mockOutboxRepo = {
+  cancelByConversationId: jest.fn(),
 };
 
 const mockTransactionService = {
@@ -112,6 +129,9 @@ function createService(): ArtefactsService {
     mockArtefactsRepo as any,
     mockConversationsRepo as any,
     mockPdpGoalsRepo as any,
+    mockMediaRepo as any,
+    mockAnalysisRunsRepo as any,
+    mockOutboxRepo as any,
     mockUserModel as any,
     mockTransactionService as any,
     mockVersionHistoryService as any,
@@ -139,6 +159,98 @@ describe('ArtefactsService', () => {
       (fn: (session: any) => Promise<any>) => fn({}),
     );
     service = createService();
+  });
+
+  // ─── deleteArtefact ───
+
+  describe('deleteArtefact', () => {
+    it('throws NotFoundException when artefact does not exist', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(null));
+
+      await expect(service.deleteArtefact(userIdStr, 'art_abc123')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('throws BadRequestException when artefact is IN_CONVERSATION', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(
+        ok(makeArtefactDoc({ status: ArtefactStatus.IN_CONVERSATION })),
+      );
+
+      await expect(service.deleteArtefact(userIdStr, 'art_abc123')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('throws NotFoundException when artefact is already DELETED', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(
+        ok(makeArtefactDoc({ status: ArtefactStatus.DELETED })),
+      );
+
+      await expect(service.deleteArtefact(userIdStr, 'art_abc123')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('anonymizes artefact, conversations, goals, and media in transaction', async () => {
+      const convId = oid();
+      const msgId = oid();
+      const artefact = makeArtefactDoc({ status: ArtefactStatus.COMPLETED });
+
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockConversationsRepo.findConversationIdsByArtefact = jest
+        .fn()
+        .mockResolvedValue(ok([convId]));
+      mockConversationsRepo.findMessageIdsByConversation = jest
+        .fn()
+        .mockResolvedValue(ok([msgId]));
+      mockOutboxRepo.cancelByConversationId.mockResolvedValue(ok(1));
+      mockMediaRepo.markDeletedByMessageIds.mockResolvedValue(ok(1));
+      mockConversationsRepo.anonymizeConversation = jest.fn().mockResolvedValue(ok(2));
+      mockArtefactsRepo.anonymizeArtefact = jest.fn().mockResolvedValue(ok(undefined));
+      mockPdpGoalsRepo.anonymizeByArtefactId = jest.fn().mockResolvedValue(ok(1));
+      mockAnalysisRunsRepo.anonymizeByConversationIds.mockResolvedValue(ok(1));
+
+      const result = await service.deleteArtefact(userIdStr, 'art_abc123');
+
+      expect(result).toEqual({ message: 'Entry deleted successfully' });
+      expect(mockOutboxRepo.cancelByConversationId).toHaveBeenCalledWith(
+        convId.toString(),
+        expect.anything(),
+      );
+      expect(mockMediaRepo.markDeletedByMessageIds).toHaveBeenCalledWith(
+        [msgId],
+        expect.anything(),
+      );
+      expect(mockConversationsRepo.anonymizeConversation).toHaveBeenCalledWith(
+        convId,
+        expect.anything(),
+      );
+      expect(mockArtefactsRepo.anonymizeArtefact).toHaveBeenCalledWith(
+        artefact._id,
+        expect.anything(),
+      );
+      expect(mockPdpGoalsRepo.anonymizeByArtefactId).toHaveBeenCalledWith(
+        artefact._id,
+        expect.anything(),
+      );
+      expect(mockAnalysisRunsRepo.anonymizeByConversationIds).toHaveBeenCalledWith([convId]);
+      expect(mockEventEmitter.emit).toHaveBeenCalled();
+    });
+
+    it('succeeds for ARCHIVED artefacts', async () => {
+      const artefact = makeArtefactDoc({ status: ArtefactStatus.ARCHIVED });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockConversationsRepo.findConversationIdsByArtefact = jest
+        .fn()
+        .mockResolvedValue(ok([]));
+      mockArtefactsRepo.anonymizeArtefact = jest.fn().mockResolvedValue(ok(undefined));
+      mockPdpGoalsRepo.anonymizeByArtefactId = jest.fn().mockResolvedValue(ok(0));
+
+      const result = await service.deleteArtefact(userIdStr, 'art_abc123');
+
+      expect(result).toEqual({ message: 'Entry deleted successfully' });
+    });
   });
 
   // ─── getArtefact ───

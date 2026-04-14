@@ -12,6 +12,7 @@ export { default as networkReducer } from './networkSlice';
 // ── Artefacts ──
 export {
   createArtefact,
+  deleteArtefact,
   fetchArtefact,
   fetchArtefacts,
   updateArtefactStatus,
@@ -44,7 +45,7 @@ export {
 export type { AuthStatus, AuthState } from './authSlice';
 
 // ── Conversations ──
-export { fetchConversations, conversationSelectors } from './conversations';
+export { deleteConversation, fetchConversations, conversationSelectors } from './conversations';
 
 // ── Messages ──
 export {
@@ -78,6 +79,7 @@ export { fetchInit, clearDashboard, markDashboardStale } from './dashboard';
 
 // ── PDP Goals ──
 export {
+  deletePdpGoal,
   fetchPdpGoals,
   fetchPdpGoal,
   updatePdpGoal,

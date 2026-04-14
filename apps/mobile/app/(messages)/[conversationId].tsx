@@ -33,12 +33,14 @@ import {
   MessageRole,
   ThinkingStep,
 } from '@acme/shared';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { deleteConversation } from '@/store';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useActionSheet } from '@expo/react-native-action-sheet';
 import { useBannerOffset } from '@/hooks/useBannerOffset';
 import { useHeaderHeight } from '@react-navigation/elements';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Platform, StyleSheet, View } from 'react-native';
+import { Alert, AppState, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { logger } from '@/utils/logger';
@@ -108,6 +110,7 @@ export default function ChatScreen() {
   }>();
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const navigation = useNavigation();
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -122,6 +125,46 @@ export default function ChatScreen() {
   const isPendingConversation = isNew === 'true' && !realConversationId;
   // Use real conversation ID if available, otherwise use URL param
   const effectiveConversationId = realConversationId ?? conversationId ?? '';
+
+  const [deleting, setDeleting] = useState(false);
+  const { showActionSheetWithOptions } = useActionSheet();
+
+  const handleDeleteConversation = useCallback(() => {
+    Alert.alert(
+      'Delete Conversation',
+      'This will permanently delete this conversation and the associated entry. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setDeleting(true);
+            dispatch(deleteConversation({ conversationId: effectiveConversationId }))
+              .unwrap()
+              .then(() => router.replace('/(tabs)'))
+              .catch(() => {
+                setDeleting(false);
+                Alert.alert('Error', 'Failed to delete conversation. Please try again.');
+              });
+          },
+        },
+      ]
+    );
+  }, [effectiveConversationId, dispatch, router]);
+
+  const handleShowMenu = useCallback(() => {
+    showActionSheetWithOptions(
+      {
+        options: ['Delete conversation', 'Cancel'],
+        destructiveButtonIndex: 0,
+        cancelButtonIndex: 1,
+      },
+      (index) => {
+        if (index === 0) handleDeleteConversation();
+      }
+    );
+  }, [showActionSheetWithOptions, handleDeleteConversation]);
 
   const loadingMessages = useAppSelector(selectMessagesLoading);
   const sendingMessage = useAppSelector(selectMessagesSending);
@@ -341,6 +384,20 @@ export default function ChatScreen() {
   const canStartAnalysis = context?.actions.startAnalysis.allowed ?? false;
   const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
+
+  // Show delete button in header when conversation is deletable (not completed/closed)
+  useEffect(() => {
+    const showMenu = phase !== 'completed' && phase !== 'closed' && !deleting;
+    navigation.setOptions({
+      headerRight: showMenu
+        ? () => (
+            <Pressable onPress={handleShowMenu} hitSlop={8}>
+              <Ionicons name="ellipsis-vertical" size={22} color={colors.text} />
+            </Pressable>
+          )
+        : undefined,
+    });
+  }, [phase, deleting, navigation, colors.text, handleShowMenu]);
 
   // Clear the optimistic flag when the server phase leaves 'analysing'.
   // This works for both start and resume because the server now returns

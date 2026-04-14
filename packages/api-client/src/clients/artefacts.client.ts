@@ -52,6 +52,10 @@ export class ArtefactsClient {
     return this.client.post<Artefact>(`/artefacts/${id}/versions/restore`, data);
   }
 
+  async deleteArtefact(id: string): Promise<{ message: string }> {
+    return this.client.delete<{ message: string }>(`/artefacts/${id}`);
+  }
+
   async listArtefacts(params?: ListArtefactsParams): Promise<ArtefactListResponse> {
     const searchParams = new URLSearchParams();
     if (params?.limit !== undefined) searchParams.set('limit', String(params.limit));

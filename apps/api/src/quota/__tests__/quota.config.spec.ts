@@ -4,6 +4,7 @@ import {
   getShortWindowStart,
   getWeeklyWindowReset,
   getWeeklyWindowStart,
+  quotaPlans,
 } from '../../config/quota.config';
 
 describe('quota.config', () => {
@@ -80,20 +81,20 @@ describe('quota.config', () => {
   describe('getPlanForRole', () => {
     it('should return guest limits for USER_GUEST', () => {
       const plan = getPlanForRole(UserRole.USER_GUEST);
-      expect(plan.shortWindow).toBe(20);
-      expect(plan.weeklyWindow).toBe(100);
+      expect(plan.shortWindow).toBe(quotaPlans[UserRole.USER_GUEST].shortWindow);
+      expect(plan.weeklyWindow).toBe(quotaPlans[UserRole.USER_GUEST].weeklyWindow);
     });
 
     it('should return registered limits for USER', () => {
       const plan = getPlanForRole(UserRole.USER);
-      expect(plan.shortWindow).toBe(40);
-      expect(plan.weeklyWindow).toBe(200);
+      expect(plan.shortWindow).toBe(quotaPlans[UserRole.USER].shortWindow);
+      expect(plan.weeklyWindow).toBe(quotaPlans[UserRole.USER].weeklyWindow);
     });
 
     it('should fallback to guest limits for unknown role', () => {
       const plan = getPlanForRole(999 as UserRole);
-      expect(plan.shortWindow).toBe(20);
-      expect(plan.weeklyWindow).toBe(100);
+      expect(plan.shortWindow).toBe(quotaPlans[UserRole.USER_GUEST].shortWindow);
+      expect(plan.weeklyWindow).toBe(quotaPlans[UserRole.USER_GUEST].weeklyWindow);
     });
   });
 });

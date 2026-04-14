@@ -3,8 +3,11 @@ import { createEntityAdapter, createSelector, createSlice } from '@reduxjs/toolk
 import type { RootState } from '../../index';
 import { finaliseArtefact } from '../artefacts/thunks';
 import { fetchInit } from '../dashboard/thunks';
+import { deleteArtefact } from '../artefacts/thunks';
+import { deleteConversation } from '../conversations/thunks';
 import {
   addPdpGoalAction,
+  deletePdpGoal,
   fetchPdpGoal,
   fetchPdpGoals,
   updatePdpGoal,
@@ -122,8 +125,33 @@ const pdpGoalsSlice = createSlice({
         state.error = action.payload as string;
       })
 
+      // deletePdpGoal
+      .addCase(deletePdpGoal.pending, (state) => {
+        state.mutating = true;
+        state.error = null;
+      })
+      .addCase(deletePdpGoal.fulfilled, (state, action) => {
+        state.mutating = false;
+        pdpGoalsAdapter.removeOne(state, action.payload);
+        state.total = Math.max(0, state.total - 1);
+      })
+      .addCase(deletePdpGoal.rejected, (state, action) => {
+        state.mutating = false;
+        state.error = action.payload as string;
+      })
+
       // Cross-slice: finalising an artefact creates/archives PDP goals server-side.
       .addCase(finaliseArtefact.fulfilled, (state) => {
+        state.stale = true;
+      })
+
+      // Cross-slice: deleting an artefact cascades to its PDP goals server-side.
+      .addCase(deleteArtefact.fulfilled, (state) => {
+        state.stale = true;
+      })
+
+      // Cross-slice: deleting a conversation cascades to artefact + PDP goals.
+      .addCase(deleteConversation.fulfilled, (state) => {
         state.stale = true;
       });
   },

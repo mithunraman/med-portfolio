@@ -1,5 +1,5 @@
 import type { ListPdpGoalsResponse, PdpGoalResponse } from '@acme/shared';
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import {
   AddPdpGoalActionDto,
@@ -12,6 +12,14 @@ import { PdpGoalsService } from './pdp-goals.service';
 @Controller('pdp-goals')
 export class PdpGoalsController {
   constructor(private readonly pdpGoalsService: PdpGoalsService) {}
+
+  @Delete(':xid')
+  async deleteGoal(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('xid') xid: string,
+  ): Promise<{ message: string }> {
+    return this.pdpGoalsService.deleteGoal(user.userId, xid);
+  }
 
   @Get()
   async listGoals(

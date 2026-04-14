@@ -11,6 +11,23 @@ import { retryRead } from '../../../utils/retry';
 
 const pdpGoalsLogger = logger.createScope('PdpGoalsThunks');
 
+export const deletePdpGoal = createAsyncThunk(
+  'pdpGoals/deletePdpGoal',
+  async (params: { goalId: string }, { rejectWithValue }) => {
+    pdpGoalsLogger.info('Deleting PDP goal', { goalId: params.goalId });
+
+    try {
+      await api.pdpGoals.deleteGoal(params.goalId);
+      pdpGoalsLogger.info('Deleted PDP goal', { goalId: params.goalId });
+      return params.goalId;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete goal';
+      pdpGoalsLogger.error('Failed to delete PDP goal', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
 export const fetchPdpGoals = createAsyncThunk(
   'pdpGoals/fetchPdpGoals',
   async (params: { statuses?: PdpGoalStatus[] } | undefined, { rejectWithValue }) => {

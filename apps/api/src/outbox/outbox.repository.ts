@@ -211,6 +211,26 @@ export class OutboxRepository implements IOutboxRepository {
     }
   }
 
+  async cancelByConversationId(
+    conversationId: string,
+    session?: ClientSession
+  ): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.outboxModel.updateMany(
+        {
+          status: { $in: [OutboxStatus.PENDING, OutboxStatus.PROCESSING] },
+          'payload.conversationId': conversationId,
+        },
+        { $set: { status: OutboxStatus.FAILED, lastError: 'Entity deleted' } },
+        { session }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to cancel outbox entries for conversation', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to cancel outbox entries' });
+    }
+  }
+
   async cancelByUser(
     userId: Types.ObjectId,
     conversationIds: string[]

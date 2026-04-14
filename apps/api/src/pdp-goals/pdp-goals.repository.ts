@@ -341,6 +341,61 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     }
   }
 
+  async anonymizeByArtefactId(
+    artefactId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.pdpGoalModel.updateMany(
+        { artefactId },
+        {
+          $set: {
+            goal: '[deleted]',
+            completionReview: null,
+            status: PdpGoalStatus.DELETED,
+            'actions.$[].action': '[deleted]',
+            'actions.$[].intendedEvidence': '[deleted]',
+            'actions.$[].completionReview': null,
+            'actions.$[].status': PdpGoalStatus.DELETED,
+          },
+        },
+        { session }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to anonymize PDP goals by artefact', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to anonymize PDP goals by artefact' });
+    }
+  }
+
+  async anonymizeGoal(
+    xid: string,
+    userId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<boolean, DBError>> {
+    try {
+      const result = await this.pdpGoalModel.updateOne(
+        { xid, userId },
+        {
+          $set: {
+            goal: '[deleted]',
+            completionReview: null,
+            status: PdpGoalStatus.DELETED,
+            'actions.$[].action': '[deleted]',
+            'actions.$[].intendedEvidence': '[deleted]',
+            'actions.$[].completionReview': null,
+            'actions.$[].status': PdpGoalStatus.DELETED,
+          },
+        },
+        { session }
+      );
+      return ok(result.modifiedCount > 0);
+    } catch (error) {
+      this.logger.error(`Failed to anonymize PDP goal ${xid}`, error);
+      return err({ code: 'DB_ERROR', message: 'Failed to anonymize PDP goal' });
+    }
+  }
+
   async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
     try {
       const result = await this.pdpGoalModel.updateMany(

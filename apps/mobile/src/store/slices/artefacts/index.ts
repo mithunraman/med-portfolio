@@ -15,6 +15,7 @@ export {
 // Thunks
 export {
   createArtefact,
+  deleteArtefact,
   fetchArtefact,
   fetchArtefacts,
   updateArtefactStatus,

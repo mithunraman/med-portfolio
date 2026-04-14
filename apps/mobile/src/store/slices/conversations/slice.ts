@@ -1,6 +1,6 @@
 import type { Conversation } from '@acme/shared';
 import { createEntityAdapter, createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { fetchConversations } from './thunks';
+import { deleteConversation, fetchConversations } from './thunks';
 
 const conversationsAdapter = createEntityAdapter<Conversation>({
   // RTK uses the 'id' field automatically — no selectId needed
@@ -54,6 +54,10 @@ const conversationsSlice = createSlice({
       .addCase(fetchConversations.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      })
+      // deleteConversation
+      .addCase(deleteConversation.fulfilled, (state, action) => {
+        conversationsAdapter.removeOne(state, action.payload);
       });
   },
 });

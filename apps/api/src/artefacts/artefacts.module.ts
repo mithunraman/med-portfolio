@@ -1,7 +1,10 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { AnalysisRunsModule } from '../analysis-runs';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { DatabaseModule } from '../database';
+import { MediaModule } from '../media';
+import { OutboxModule } from '../outbox/outbox.module';
 import { PdpGoalsModule } from '../pdp-goals/pdp-goals.module';
 import { VersionHistoryModule } from '../version-history';
 import { ArtefactsController } from './artefacts.controller';
@@ -19,8 +22,11 @@ import { Artefact, ArtefactSchema } from './schemas/artefact.schema';
       { name: User.name, schema: UserSchema },
     ]),
     PdpGoalsModule,
+    MediaModule,
+    AnalysisRunsModule,
     VersionHistoryModule,
     forwardRef(() => ConversationsModule),
+    forwardRef(() => OutboxModule),
   ],
   controllers: [ArtefactsController],
   providers: [

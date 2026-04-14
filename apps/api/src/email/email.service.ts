@@ -44,7 +44,7 @@ export class EmailService implements OnModuleInit {
   }
 
   async sendOtp(to: string, code: string, expiryMinutes: number): Promise<void> {
-    if (this.isEnabled) {
+    if (!this.isEnabled) {
       this.logger.warn(`Email disabled — OTP for ${to} not sent`);
       return;
     }

@@ -25,6 +25,10 @@ export class ConversationsClient {
     return this.client.get<ConversationListResponse>(`/conversations${query ? `?${query}` : ''}`);
   }
 
+  async deleteConversation(conversationId: string): Promise<{ message: string }> {
+    return this.client.delete<{ message: string }>(`/conversations/${conversationId}`);
+  }
+
   async listMessages(conversationId: string): Promise<MessageListResponse> {
     return this.client.get<MessageListResponse>(
       `/conversations/${conversationId}/messages`

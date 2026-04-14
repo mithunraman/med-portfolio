@@ -78,4 +78,12 @@ export interface IOutboxRepository {
     userId: Types.ObjectId,
     conversationIds: string[]
   ): Promise<Result<number, DBError>>;
+
+  /**
+   * Cancel pending/processing entries for a specific conversation.
+   */
+  cancelByConversationId(
+    conversationId: string,
+    session?: ClientSession
+  ): Promise<Result<number, DBError>>;
 }

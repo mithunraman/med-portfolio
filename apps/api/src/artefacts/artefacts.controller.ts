@@ -1,5 +1,5 @@
 import type { Artefact, ArtefactListResponse, ArtefactVersionHistoryResponse } from '@acme/shared';
-import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ArtefactsService } from './artefacts.service';
 import {
@@ -21,6 +21,14 @@ export class ArtefactsController {
     @Body() dto: CreateArtefactDto
   ): Promise<Artefact> {
     return this.artefactsService.createArtefact(user.userId, dto);
+  }
+
+  @Delete(':id')
+  async deleteArtefact(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string,
+  ): Promise<{ message: string }> {
+    return this.artefactsService.deleteArtefact(user.userId, id);
   }
 
   @Get()

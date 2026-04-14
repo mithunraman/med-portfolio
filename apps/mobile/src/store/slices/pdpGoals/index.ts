@@ -14,6 +14,7 @@ export {
 
 // Thunks
 export {
+  deletePdpGoal,
   fetchPdpGoals,
   fetchPdpGoal,
   updatePdpGoal,

@@ -11,6 +11,10 @@ import { BaseApiClient } from '../core/api-client';
 export class PdpGoalsClient {
   constructor(private readonly client: BaseApiClient) {}
 
+  async deleteGoal(goalId: string): Promise<{ message: string }> {
+    return this.client.delete<{ message: string }>(`/pdp-goals/${goalId}`);
+  }
+
   async listGoals(statuses?: PdpGoalStatus[]): Promise<ListPdpGoalsResponse> {
     const query = statuses && statuses.length > 0 ? `?status=${statuses.join(',')}` : '';
     return this.client.get<ListPdpGoalsResponse>(`/pdp-goals${query}`);

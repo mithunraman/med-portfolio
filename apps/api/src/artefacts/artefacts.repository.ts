@@ -162,6 +162,31 @@ export class ArtefactsRepository implements IArtefactsRepository {
     }
   }
 
+  async anonymizeArtefact(
+    artefactId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<void, DBError>> {
+    try {
+      await this.artefactModel.updateOne(
+        { _id: artefactId },
+        {
+          $set: {
+            title: '[deleted]',
+            reflection: [],
+            capabilities: [],
+            tags: {},
+            status: ArtefactStatus.DELETED,
+          },
+        },
+        { session }
+      );
+      return ok(undefined);
+    } catch (error) {
+      this.logger.error('Failed to anonymize artefact', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to anonymize artefact' });
+    }
+  }
+
   async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
     try {
       const result = await this.artefactModel.updateMany(

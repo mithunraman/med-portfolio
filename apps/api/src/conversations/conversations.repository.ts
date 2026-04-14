@@ -327,6 +327,68 @@ export class ConversationsRepository implements IConversationsRepository {
     }
   }
 
+  async findMessageIdsByConversation(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<Types.ObjectId[], DBError>> {
+    try {
+      const ids = await this.messageModel
+        .find({ conversation: conversationId })
+        .distinct('_id')
+        .session(session || null);
+      return ok(ids);
+    } catch (error) {
+      this.logger.error('Failed to find message ids by conversation', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find message ids by conversation' });
+    }
+  }
+
+  async findConversationIdsByArtefact(
+    artefactId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<Types.ObjectId[], DBError>> {
+    try {
+      const ids = await this.conversationModel
+        .find({ artefact: artefactId })
+        .distinct('_id')
+        .session(session || null);
+      return ok(ids);
+    } catch (error) {
+      this.logger.error('Failed to find conversation ids by artefact', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find conversation ids by artefact' });
+    }
+  }
+
+  async anonymizeConversation(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<number, DBError>> {
+    try {
+      const convResult = await this.conversationModel.updateOne(
+        { _id: conversationId },
+        { $set: { title: '[deleted]', status: ConversationStatus.DELETED } },
+        { session }
+      );
+      const msgResult = await this.messageModel.updateMany(
+        { conversation: conversationId },
+        {
+          $set: {
+            rawContent: '[deleted]',
+            cleanedContent: '[deleted]',
+            content: '[deleted]',
+            status: MessageStatus.DELETED,
+          },
+          $unset: { question: '', answer: '' },
+        },
+        { session }
+      );
+      return ok(convResult.modifiedCount + msgResult.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to anonymize conversation', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to anonymize conversation' });
+    }
+  }
+
   async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
     try {
       const convResult = await this.conversationModel.updateMany(

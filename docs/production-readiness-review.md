@@ -26,7 +26,15 @@
 
 - **Status:** Not applicable. The app uses OTP-based passwordless authentication — there are no passwords to reset.
 
-### 3. Privacy Policy is a placeholder alert
+### 3. No production deployment infrastructure
+
+- **What's missing:** No Dockerfile, Docker Compose, CI/CD pipeline, or server provisioning exists. The API has no way to run in production.
+- **Why it matters:** Without deployment infrastructure, the app cannot launch. No TLS, no automated deploys, no rollback capability.
+- **Plan:** Docker Compose on a Linode Nanode ($5/mo) with Caddy (auto-TLS), GitHub Actions CI/CD, MongoDB Atlas. Existing observability (Sentry, OpenTelemetry → Grafana Cloud, Pino) works unchanged — all telemetry ships to external services over HTTPS.
+- **Details:** See [Linode Deployment Plan](production/linode-deployment-plan.md) for full 5-phase implementation plan.
+- **Impact:** Complete launch blocker.
+
+### 4. Privacy Policy is a placeholder alert
 
 - **What's missing:** `profile.tsx` shows `Alert.alert('Privacy Policy', 'Privacy policy will be available soon.')`.
 - **Why it matters:** App Store / Play Store review requires a working privacy policy URL. GDPR/UK-GDPR compliance requires transparent data processing disclosure.
@@ -108,6 +116,13 @@
 - **What's missing:** The version preview modal shows the version's content but doesn't compare it with the current version.
 - **Fix:** Add a simple text-diff view or at minimum show "Changed fields" indicators.
 
+### 24. No repository-level integration tests for non-trivial MongoDB queries
+
+- **What's missing:** All service tests mock the repository layer, so actual Mongoose queries (filters, `$set`, `$in`, `$[]` positional operators, enum comparisons) are never executed against a real database. A recent bug — `refCollection: 'messages'` instead of `MediaRefCollection.MESSAGES` (string vs numeric enum `100`) — passed all unit tests but caused a 500 in production.
+- **Why it matters:** The repository layer is the boundary between application code and MongoDB. Type mismatches, wrong field names, and operator bugs are silent at the unit test level because the repo is mocked. These bugs only surface at runtime.
+- **Fix:** Add integration tests (using `jest.config.ts` / real MongoDB) for non-trivial repo methods: `anonymizeConversation`, `anonymizeArtefact`, `anonymizeGoal`, `anonymizeByArtefactId`, `markDeletedByMessageIds`, and any method using `updateMany`, `$[]`, or multi-field `$set`/`$unset`. Simple `findOne`/`findById` lookups don't need this.
+- **Impact:** Silent data corruption or 500 errors from untested queries.
+
 ---
 
 ## LOW (Nice-to-have before launch)
@@ -163,15 +178,16 @@
 
 Since the initial review, **11 of 18 open items have been fixed/removed** and **4 have been deferred to post-MVP** (#10 Toast system, #12 Dashboard skeletons, #15 Haptic feedback, #17 Version diff).
 
-**1 critical item** still blocks production release:
+**2 critical items** still block production release:
 
-1. **No privacy policy** — needs legal content + hosting
+1. **No production deployment infrastructure** — needs Dockerfile, Docker Compose, CI/CD, server provisioning ([plan](production/linode-deployment-plan.md))
+2. **No privacy policy** — needs legal content + hosting
 
 **Remaining open items for MVP (by priority):**
 
 | Priority | Count | Items |
 |----------|-------|-------|
-| Critical | 1 | #3 Privacy Policy |
+| Critical | 2 | #3 Deployment infrastructure, #4 Privacy Policy |
 | High | 1 | #9 Help & Feedback placeholder email |
 | Medium | 0 | — |
 | Low | 2 | #20 Deep linking, #23 Terms of Service |
@@ -182,4 +198,4 @@ Since the initial review, **11 of 18 open items have been fixed/removed** and **
 |-------|
 | #10 Toast/snackbar system, #12 Dashboard skeletons, #15 Haptic feedback, #17 Version diff |
 
-**Estimated effort to reach minimum viable production release: 1 day** for the critical item (privacy policy content + hosting).
+**Estimated effort to reach minimum viable production release:** Privacy policy (1 day) + deployment infrastructure (2-3 days for all 5 phases).

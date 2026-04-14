@@ -1,4 +1,4 @@
-import { MediaStatus } from '@acme/shared';
+import { MediaRefCollection, MediaStatus } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
@@ -107,6 +107,24 @@ export class MediaRepository implements IMediaRepository {
     } catch (error) {
       this.logger.error('Failed to find media by user', error);
       return err({ code: 'DB_ERROR', message: 'Failed to find media by user' });
+    }
+  }
+
+  async markDeletedByMessageIds(
+    messageIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>> {
+    try {
+      if (messageIds.length === 0) return ok(0);
+      const result = await this.mediaModel.updateMany(
+        { refDocumentId: { $in: messageIds }, refCollection: MediaRefCollection.MESSAGES },
+        { $set: { status: MediaStatus.DELETED } },
+        { session }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to mark media deleted by message ids', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to mark media deleted' });
     }
   }
 

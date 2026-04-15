@@ -74,7 +74,7 @@ export class ArtefactsRepository implements IArtefactsRepository {
     try {
       const filter: {
         userId: Types.ObjectId;
-        status?: ArtefactStatus;
+        status?: ArtefactStatus | { $ne: ArtefactStatus };
         _id?: { $lt: Types.ObjectId };
       } = {
         userId: query.userId,
@@ -82,6 +82,8 @@ export class ArtefactsRepository implements IArtefactsRepository {
 
       if (query.status !== undefined) {
         filter.status = query.status;
+      } else {
+        filter.status = { $ne: ArtefactStatus.DELETED };
       }
 
       if (query.cursor) {

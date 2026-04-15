@@ -22,12 +22,17 @@ export {
   restoreVersion,
   finaliseArtefact,
   markArtefactsStale,
+  resetView,
+  resetAllViews,
   selectAllArtefacts,
   selectArtefactById,
+  selectArtefactsByView,
+  selectFilterView,
   selectRecentEntries,
   selectRecentEntriesTotal,
+  viewKey,
 } from './artefacts';
-export type { TypedError, ErrorKind } from './artefacts';
+export type { FilterView, TypedError, ErrorKind } from './artefacts';
 
 // ── Auth ──
 export {

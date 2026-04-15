@@ -1,5 +1,12 @@
 import type { Artefact } from '@acme/shared';
-import { createEntityAdapter, createSelector, createSlice } from '@reduxjs/toolkit';
+import { ArtefactStatus } from '@acme/shared';
+import {
+  createEntityAdapter,
+  createSelector,
+  createSlice,
+  type PayloadAction,
+} from '@reduxjs/toolkit';
+import type { TypedError } from '../../../utils/classifyError';
 import type { RootState } from '../../index';
 import { deleteConversation } from '../conversations/thunks';
 import { fetchInit } from '../dashboard/thunks';
@@ -14,38 +21,87 @@ import {
   restoreVersion,
   updateArtefactStatus,
 } from './thunks';
-import type { TypedError } from '../../../utils/classifyError';
 
-const artefactsAdapter = createEntityAdapter<Artefact>({
-  sortComparer: (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-});
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface FilterView {
+  ids: string[];
+  nextCursor: string | null;
+  status: 'idle' | 'loading' | 'loadingMore';
+}
 
 export type EntityStatus = 'loading' | 'updating' | 'saving';
 
 export interface ArtefactsState {
   creatingArtefact: boolean;
-  loading: boolean;
   statusById: Record<string, EntityStatus>;
   error: TypedError | null;
-  nextCursor: string | null;
   stale: boolean;
   lastFetchedAt: number | null;
+  views: Record<string, FilterView>;
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+export const viewKey = (status?: ArtefactStatus | null): string =>
+  status == null ? 'all' : String(status);
+
+function removeIdFromView(state: ArtefactsState, key: string, id: string): void {
+  const view = state.views[key];
+  if (!view) return;
+  const idx = view.ids.indexOf(id);
+  if (idx !== -1) view.ids.splice(idx, 1);
+}
+
+function invalidateView(state: ArtefactsState, key: string): void {
+  delete state.views[key];
+}
+
+/** Shared logic for mutations that change an artefact's status. */
+function handleStatusChange(
+  state: ArtefactsState & { entities: Record<string, Artefact | undefined> },
+  id: string,
+  newStatus: ArtefactStatus
+): void {
+  const oldStatus = state.entities[id]?.status;
+  if (oldStatus !== undefined) {
+    removeIdFromView(state, viewKey(oldStatus), id);
+  }
+  invalidateView(state, viewKey(newStatus));
+  invalidateView(state, viewKey(null));
+}
+
+// ---------------------------------------------------------------------------
+// Adapter & Slice
+// ---------------------------------------------------------------------------
+
+const artefactsAdapter = createEntityAdapter<Artefact>({
+  sortComparer: (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+});
 
 const artefactsSlice = createSlice({
   name: 'artefacts',
   initialState: artefactsAdapter.getInitialState<ArtefactsState>({
     creatingArtefact: false,
-    loading: false,
     statusById: {},
     error: null,
-    nextCursor: null,
     stale: false,
     lastFetchedAt: null,
+    views: {},
   }),
   reducers: {
     markArtefactsStale(state) {
       state.stale = true;
+    },
+    resetView(state, action: PayloadAction<string>) {
+      invalidateView(state, action.payload);
+    },
+    resetAllViews(state) {
+      state.views = {};
     },
   },
   extraReducers: (builder) => {
@@ -58,34 +114,61 @@ const artefactsSlice = createSlice({
       .addCase(createArtefact.fulfilled, (state, action) => {
         state.creatingArtefact = false;
         artefactsAdapter.upsertOne(state, action.payload);
+        invalidateView(state, viewKey(ArtefactStatus.IN_CONVERSATION));
+        invalidateView(state, viewKey(null));
       })
       .addCase(createArtefact.rejected, (state, action) => {
         state.creatingArtefact = false;
         state.error = (action.payload as TypedError) ?? null;
       })
+
       // fetchArtefacts
-      .addCase(fetchArtefacts.pending, (state) => {
-        state.loading = true;
+      .addCase(fetchArtefacts.pending, (state, action) => {
+        const key = viewKey(action.meta.arg?.status);
+        const existing = state.views[key];
+        if (action.meta.arg?.cursor && existing) {
+          existing.status = 'loadingMore';
+        } else {
+          state.views[key] = {
+            ids: existing?.ids ?? [],
+            nextCursor: existing?.nextCursor ?? null,
+            status: 'loading',
+          };
+        }
         state.error = null;
       })
       .addCase(fetchArtefacts.fulfilled, (state, action) => {
-        state.loading = false;
+        const key = viewKey(action.meta.arg?.status);
+        const resultIds = action.payload.artefacts.map((a) => a.id);
+
+        if (!action.meta.arg?.cursor) {
+          state.views[key] = {
+            ids: resultIds,
+            nextCursor: action.payload.nextCursor,
+            status: 'idle',
+          };
+        } else {
+          const view = state.views[key];
+          if (view) {
+            view.ids.push(...resultIds);
+            view.nextCursor = action.payload.nextCursor;
+            view.status = 'idle';
+          }
+        }
+
         state.stale = false;
         state.lastFetchedAt = action.payload.fetchedAt;
-        state.nextCursor = action.payload.nextCursor;
-        // If no cursor was provided in the request, this is a fresh fetch — replace all
-        if (!action.meta.arg?.cursor) {
-          artefactsAdapter.setAll(state, action.payload.artefacts);
-        } else {
-          artefactsAdapter.upsertMany(state, action.payload.artefacts);
-        }
+        artefactsAdapter.upsertMany(state, action.payload.artefacts);
       })
       .addCase(fetchArtefacts.rejected, (state, action) => {
         if (!action.meta.condition) {
-          state.loading = false;
+          const key = viewKey(action.meta.arg?.status);
+          const view = state.views[key];
+          if (view) view.status = 'idle';
           state.error = (action.payload as TypedError) ?? null;
         }
       })
+
       // fetchArtefact (single)
       .addCase(fetchArtefact.pending, (state, action) => {
         state.statusById[action.meta.arg.artefactId] = 'loading';
@@ -97,29 +180,33 @@ const artefactsSlice = createSlice({
       .addCase(fetchArtefact.rejected, (state, action) => {
         delete state.statusById[action.meta.arg.artefactId];
       })
+
       // updateArtefactStatus
       .addCase(updateArtefactStatus.pending, (state, action) => {
         state.statusById[action.meta.arg.artefactId] = 'updating';
       })
       .addCase(updateArtefactStatus.fulfilled, (state, action) => {
         delete state.statusById[action.meta.arg.artefactId];
+        handleStatusChange(state, action.payload.id, action.payload.status);
         artefactsAdapter.upsertOne(state, action.payload);
       })
       .addCase(updateArtefactStatus.rejected, (state, action) => {
         delete state.statusById[action.meta.arg.artefactId];
       })
+
       // finaliseArtefact
       .addCase(finaliseArtefact.pending, (state, action) => {
         state.statusById[action.meta.arg.artefactId] = 'updating';
       })
       .addCase(finaliseArtefact.fulfilled, (state, action) => {
         delete state.statusById[action.meta.arg.artefactId];
-        state.stale = true;
+        handleStatusChange(state, action.payload.id, action.payload.status);
         artefactsAdapter.upsertOne(state, action.payload);
       })
       .addCase(finaliseArtefact.rejected, (state, action) => {
         delete state.statusById[action.meta.arg.artefactId];
       })
+
       // duplicateToReview
       .addCase(duplicateToReview.pending, (state, action) => {
         state.statusById[action.meta.arg.artefactId] = 'updating';
@@ -127,11 +214,14 @@ const artefactsSlice = createSlice({
       .addCase(duplicateToReview.fulfilled, (state, action) => {
         delete state.statusById[action.meta.arg.artefactId];
         artefactsAdapter.upsertOne(state, action.payload);
+        invalidateView(state, viewKey(ArtefactStatus.IN_REVIEW));
+        invalidateView(state, viewKey(null));
       })
       .addCase(duplicateToReview.rejected, (state, action) => {
         delete state.statusById[action.meta.arg.artefactId];
       })
-      // editArtefact
+
+      // editArtefact — content changes only, no view impact
       .addCase(editArtefact.pending, (state, action) => {
         state.statusById[action.meta.arg.artefactId] = 'saving';
       })
@@ -142,15 +232,17 @@ const artefactsSlice = createSlice({
       .addCase(editArtefact.rejected, (state, action) => {
         delete state.statusById[action.meta.arg.artefactId];
       })
+
       // Cross-slice hydration: populate entity store from dashboard init response.
-      // Artefact type is identical between dashboard and entity store — simple upsertMany.
+      // No view insertion — dashboard items are not a complete page for any filter.
       .addCase(fetchInit.fulfilled, (state, action) => {
         const items = action.payload.dashboard?.recentEntries.items;
         if (items?.length) {
           artefactsAdapter.upsertMany(state, items);
         }
       })
-      // restoreVersion
+
+      // restoreVersion — content changes only, no view impact
       .addCase(restoreVersion.pending, (state, action) => {
         state.statusById[action.meta.arg.artefactId] = 'saving';
       })
@@ -161,31 +253,65 @@ const artefactsSlice = createSlice({
       .addCase(restoreVersion.rejected, (state, action) => {
         delete state.statusById[action.meta.arg.artefactId];
       })
-      // deleteArtefact
+
+      // deleteArtefact — remove from all views that contain it
       .addCase(deleteArtefact.pending, (state, action) => {
         state.statusById[action.meta.arg.artefactId] = 'updating';
       })
       .addCase(deleteArtefact.fulfilled, (state, action) => {
-        delete state.statusById[action.payload];
-        artefactsAdapter.removeOne(state, action.payload);
+        const id = action.payload;
+        const oldStatus = state.entities[id]?.status;
+        delete state.statusById[id];
+        artefactsAdapter.removeOne(state, id);
+        if (oldStatus !== undefined) {
+          removeIdFromView(state, viewKey(oldStatus), id);
+        }
+        removeIdFromView(state, viewKey(null), id);
       })
       .addCase(deleteArtefact.rejected, (state, action) => {
         delete state.statusById[action.meta.arg.artefactId];
       })
+
       // Cross-slice: deleting a conversation cascades to its artefact server-side.
-      .addCase(deleteConversation.fulfilled, (state) => {
-        state.stale = true;
+      // Guaranteed IN_CONVERSATION — entity scan to find the artefact by conversation ID.
+      .addCase(deleteConversation.fulfilled, (state, action) => {
+        const conversationId = action.payload;
+        const artefact = Object.values(state.entities).find(
+          (a) => a?.conversation?.id === conversationId
+        );
+        if (artefact) {
+          removeIdFromView(state, viewKey(ArtefactStatus.IN_CONVERSATION), artefact.id);
+          removeIdFromView(state, viewKey(null), artefact.id);
+          artefactsAdapter.removeOne(state, artefact.id);
+        }
       });
   },
 });
 
-export const { markArtefactsStale } = artefactsSlice.actions;
+export const { markArtefactsStale, resetView, resetAllViews } = artefactsSlice.actions;
+
+// ---------------------------------------------------------------------------
+// Selectors
+// ---------------------------------------------------------------------------
 
 export const {
   selectAll: selectAllArtefacts,
   selectById: selectArtefactById,
   selectIds: selectArtefactIds,
 } = artefactsAdapter.getSelectors((state: RootState) => state.artefacts);
+
+export const selectFilterView = (state: RootState, key: string): FilterView | undefined =>
+  state.artefacts.views[key];
+
+export const selectArtefactsByView = createSelector(
+  [
+    (state: RootState, key: string) => state.artefacts.views[key],
+    (state: RootState) => state.artefacts.entities,
+  ],
+  (view, entities) => {
+    return view ? view.ids.map((id) => entities[id]).filter((a): a is Artefact => !!a) : [];
+  }
+);
 
 /** Joins dashboard recent entry IDs with the normalized entity store. */
 export const selectRecentEntries = createSelector(

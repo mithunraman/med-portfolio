@@ -60,10 +60,13 @@ export const fetchArtefacts = createAsyncThunk(
   },
   {
     condition: (params, { getState }) => {
-      const { artefacts } = getState() as { artefacts: { loading: boolean } };
-      // Allow paginated fetches (with cursor) to proceed even if loading
-      if (params?.cursor) return true;
-      return !artefacts.loading;
+      const { artefacts } = getState() as {
+        artefacts: { views: Record<string, { status: string }> };
+      };
+      const key = params?.status == null ? 'all' : String(params.status);
+      const view = artefacts.views[key];
+      if (!view) return true;
+      return view.status === 'idle';
     },
   }
 );

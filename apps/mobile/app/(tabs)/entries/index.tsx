@@ -10,13 +10,21 @@ import { STALE_THRESHOLD_MS } from '@/constants/staleness';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
-import { fetchArtefacts, selectAllArtefacts, type TypedError } from '@/store';
+import {
+  fetchArtefacts,
+  resetView,
+  selectArtefactsByView,
+  selectFilterView,
+  viewKey,
+  type TypedError,
+} from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
 import { ArtefactStatus, type Artefact } from '@acme/shared';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Platform,
   RefreshControl,
@@ -82,26 +90,22 @@ export default function EntriesScreen() {
   const dispatch = useAppDispatch();
   const router = useRouter();
 
-  const artefacts = useAppSelector(selectAllArtefacts);
-  const loading = useAppSelector((state) => state.artefacts.loading);
-  const error = useAppSelector((state) => state.artefacts.error);
-  const stale = useAppSelector((state) => state.artefacts.stale);
-  const lastFetchedAt = useAppSelector((state) => state.artefacts.lastFetchedAt);
-
   const [activeFilter, setActiveFilter] = useState<ArtefactStatus | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const fetchingRef = useRef(false);
   const [fetchError, setFetchError] = useState<TypedError | null>(null);
 
+  const key = viewKey(activeFilter);
+  const currentView = useAppSelector((state) => selectFilterView(state, key));
+  const displayedArtefacts = useAppSelector((state) => selectArtefactsByView(state, key));
+  const error = useAppSelector((state) => state.artefacts.error);
+  const stale = useAppSelector((state) => state.artefacts.stale);
+  const lastFetchedAt = useAppSelector((state) => state.artefacts.lastFetchedAt);
+
   const listContentStyle = useMemo(
     () => [styles.listContent, { paddingBottom: insets.bottom + 16 }],
     [insets.bottom]
   );
-
-  const filteredArtefacts = useMemo(() => {
-    if (activeFilter === null) return artefacts;
-    return artefacts.filter((a) => a.status === activeFilter);
-  }, [artefacts, activeFilter]);
 
   const doFetch = useCallback(async () => {
     if (fetchingRef.current) return;
@@ -109,40 +113,68 @@ export default function EntriesScreen() {
     setIsFetching(true);
     setFetchError(null);
 
-    const result = await dispatch(fetchArtefacts());
+    const result = await dispatch(fetchArtefacts({ status: activeFilter ?? undefined }));
 
     fetchingRef.current = false;
     setIsFetching(false);
 
-    if (fetchArtefacts.rejected.match(result) && !result.meta.condition && artefacts.length > 0) {
+    if (fetchArtefacts.rejected.match(result) && !result.meta.condition) {
       setFetchError(result.payload as TypedError);
     }
-  }, [dispatch, artefacts.length]);
+  }, [dispatch, activeFilter]);
 
   const doFetchRef = useRef(doFetch);
   doFetchRef.current = doFetch;
 
+  // Fetch on mount and on filter change if no cached view
   useEffect(() => {
-    doFetchRef.current();
-  }, []);
+    if (!currentView) {
+      doFetchRef.current();
+    }
+  }, [activeFilter, currentView]);
 
+  // Refetch on focus if stale
   useFocusEffect(
     useCallback(() => {
       const isExpired = lastFetchedAt != null && Date.now() - lastFetchedAt > STALE_THRESHOLD_MS;
-      if ((stale || isExpired) && !loading) {
+      if ((stale || isExpired) && currentView?.status === 'idle') {
+        dispatch(resetView(key));
         doFetchRef.current();
       }
-    }, [stale, loading, lastFetchedAt])
+    }, [stale, lastFetchedAt, currentView?.status, dispatch, key])
   );
 
+  // Refetch on network recovery
   useNetworkRecovery(
     useCallback(() => {
-      if (!loading && (artefacts.length === 0 || error)) {
+      if (
+        (!currentView || currentView.status === 'idle') &&
+        (displayedArtefacts.length === 0 || error)
+      ) {
         doFetchRef.current();
       }
-    }, [loading, artefacts.length, error])
+    }, [currentView, displayedArtefacts.length, error])
   );
 
+  // -- Pull to refresh --
+  const handleRefresh = useCallback(() => {
+    if (fetchingRef.current) return;
+    dispatch(resetView(viewKey(activeFilter)));
+    doFetchRef.current();
+  }, [dispatch, activeFilter]);
+
+  // -- Infinite scroll --
+  const handleLoadMore = useCallback(() => {
+    if (!currentView || currentView.status !== 'idle' || !currentView.nextCursor) return;
+    dispatch(
+      fetchArtefacts({
+        status: activeFilter ?? undefined,
+        cursor: currentView.nextCursor,
+      })
+    );
+  }, [dispatch, activeFilter, currentView]);
+
+  // -- Navigation --
   const handleEntryPress = useCallback(
     (item: Artefact) => {
       if (item.status >= ArtefactStatus.IN_REVIEW) {
@@ -163,8 +195,17 @@ export default function EntriesScreen() {
 
   const keyExtractor = useCallback((item: Artefact) => item.id, []);
 
-  const isInitialLoad = loading && artefacts.length === 0;
-  const showDot = isFetching && artefacts.length > 0;
+  // -- Derived state --
+  const isInitialLoad =
+    (currentView?.status === 'loading' && displayedArtefacts.length === 0) ||
+    (!currentView && !error);
+  const showDot =
+    currentView?.status === 'loadingMore' || (isFetching && displayedArtefacts.length > 0);
+
+  const renderFooter = useCallback(() => {
+    if (currentView?.status !== 'loadingMore') return null;
+    return <ActivityIndicator style={styles.footerSpinner} color={colors.primary} />;
+  }, [currentView?.status, colors.primary]);
 
   return (
     <View
@@ -206,21 +247,21 @@ export default function EntriesScreen() {
         {showDot && <WaveDots color={colors.primary} />}
       </View>
 
-      {fetchError && artefacts.length > 0 && (
+      {fetchError && displayedArtefacts.length > 0 && (
         <FetchErrorBanner error={fetchError} onDismiss={() => setFetchError(null)} />
       )}
 
       {/* Content */}
       {isInitialLoad ? (
         <SkeletonList />
-      ) : error && artefacts.length === 0 ? (
+      ) : error && displayedArtefacts.length === 0 ? (
         error.kind === 'network' ? (
           <EmptyState
             icon="cloud-offline-outline"
             title="You're offline"
             description="Check your connection and try again."
             actionLabel="Retry"
-            onAction={() => dispatch(fetchArtefacts())}
+            onAction={() => doFetchRef.current()}
           />
         ) : (
           <EmptyState
@@ -228,10 +269,10 @@ export default function EntriesScreen() {
             title="Something went wrong"
             description={error.message}
             actionLabel={error.retryable ? 'Try again' : undefined}
-            onAction={error.retryable ? () => dispatch(fetchArtefacts()) : undefined}
+            onAction={error.retryable ? () => doFetchRef.current() : undefined}
           />
         )
-      ) : filteredArtefacts.length === 0 ? (
+      ) : displayedArtefacts.length === 0 ? (
         <EmptyState
           icon="document-text-outline"
           title={activeFilter !== null ? 'No entries with this status' : 'No entries yet'}
@@ -243,7 +284,7 @@ export default function EntriesScreen() {
         />
       ) : (
         <FlatList
-          data={filteredArtefacts}
+          data={displayedArtefacts}
           keyExtractor={keyExtractor}
           renderItem={renderItem}
           contentContainerStyle={listContentStyle}
@@ -251,10 +292,13 @@ export default function EntriesScreen() {
           windowSize={5}
           removeClippedSubviews={Platform.OS === 'android'}
           showsVerticalScrollIndicator={false}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={renderFooter}
           refreshControl={
             <RefreshControl
               refreshing={false}
-              onRefresh={() => doFetch()}
+              onRefresh={handleRefresh}
               tintColor="transparent"
               colors={['transparent']}
             />
@@ -309,10 +353,8 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
   },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  footerSpinner: {
+    paddingVertical: 16,
   },
   listContent: {
     paddingHorizontal: 16,

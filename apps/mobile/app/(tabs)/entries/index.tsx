@@ -177,7 +177,7 @@ export default function EntriesScreen() {
   // -- Navigation --
   const handleEntryPress = useCallback(
     (item: Artefact) => {
-      if (item.status >= ArtefactStatus.IN_REVIEW) {
+      if (item.status >= ArtefactStatus.IN_REVIEW || item.status === ArtefactStatus.ARCHIVED) {
         router.push(`/(entry)/${item.id}`);
       } else {
         router.push(`/(messages)/${item.conversation.id}`);

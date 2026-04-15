@@ -497,6 +497,7 @@ export default function EntryDetailScreen() {
 
   const statusDisplay = getArtefactStatusDisplay(artefact.status);
   const canMarkAsFinal = artefact.status === ArtefactStatus.IN_REVIEW;
+  const isArchivedEntry = artefact.status === ArtefactStatus.ARCHIVED;
 
   return (
     <KeyboardAvoidingView
@@ -604,7 +605,7 @@ export default function EntryDetailScreen() {
 
         {/* PDP Goals */}
         {artefact.pdpGoals &&
-          (canMarkAsFinal
+          (canMarkAsFinal || isArchivedEntry
             ? artefact.pdpGoals.length > 0
             : artefact.pdpGoals.some((g) => g.status !== PdpGoalStatus.ARCHIVED)) && (
             <View style={styles.section}>
@@ -620,12 +621,12 @@ export default function EntryDetailScreen() {
                 />
               ) : (
                 artefact.pdpGoals
-                  .filter((goal) => goal.status !== PdpGoalStatus.ARCHIVED)
+                  .filter((goal) => isArchivedEntry || goal.status !== PdpGoalStatus.ARCHIVED)
                   .map((goal) => {
                     const goalStatus = getPdpGoalStatusDisplay(goal.status);
-                    const visibleActions = goal.actions.filter(
-                      (a) => a.status !== PdpGoalStatus.ARCHIVED
-                    );
+                    const visibleActions = isArchivedEntry
+                      ? goal.actions
+                      : goal.actions.filter((a) => a.status !== PdpGoalStatus.ARCHIVED);
 
                     return (
                       <View

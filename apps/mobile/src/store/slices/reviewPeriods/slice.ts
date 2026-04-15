@@ -100,6 +100,7 @@ const reviewPeriodsSlice = createSlice({
       })
       .addCase(fetchCoverage.fulfilled, (state, action) => {
         state.coverageLoading = false;
+        state.stale = false;
         state.coverageByXid[action.payload.xid] = action.payload.coverage;
         reviewPeriodsAdapter.upsertOne(state, action.payload.coverage.period);
       })

@@ -1,5 +1,5 @@
 import type { StatusVariant } from '@/components';
-import { Button, CoverageRing, StatusPill } from '@/components';
+import { Button, CoverageRing, StatusPill, WaveDots } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
   archiveReviewPeriod,
@@ -12,7 +12,7 @@ import { useTheme } from '@/theme';
 import { ReviewPeriodStatus, type CoverageResponse, type DomainCoverage } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -145,12 +145,21 @@ export default function ReviewPeriodDetailScreen() {
   );
   const coverageLoading = useAppSelector((state) => state.reviewPeriods.coverageLoading);
   const mutating = useAppSelector((state) => state.reviewPeriods.mutating);
+  const stale = useAppSelector((state) => state.reviewPeriods.stale);
 
   useEffect(() => {
     if (xid) {
       dispatch(fetchCoverage(xid));
     }
   }, [xid, dispatch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (stale && xid) {
+        dispatch(fetchCoverage(xid));
+      }
+    }, [stale, xid, dispatch])
+  );
 
   // Update header title with period name
   useEffect(() => {
@@ -228,6 +237,13 @@ export default function ReviewPeriodDetailScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
     >
+      {/* Background refresh indicator */}
+      {coverageLoading && coverage && (
+        <View style={styles.refreshIndicator}>
+          <WaveDots />
+        </View>
+      )}
+
       {/* Coverage Ring Header */}
       {coverage && (
         <View style={styles.coverageHeader}>
@@ -289,6 +305,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  refreshIndicator: {
+    alignItems: 'center',
+    marginTop: 32,
   },
   coverageHeader: {
     alignItems: 'center',

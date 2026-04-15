@@ -250,6 +250,7 @@ export default function EntriesScreen() {
           maxToRenderPerBatch={15}
           windowSize={5}
           removeClippedSubviews={Platform.OS === 'android'}
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={false}

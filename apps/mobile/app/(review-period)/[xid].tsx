@@ -1,19 +1,15 @@
-import { Button, CoverageRing, StatusPill } from '@/components';
 import type { StatusVariant } from '@/components';
+import { Button, CoverageRing, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
   archiveReviewPeriod,
   fetchCoverage,
-  fetchInit,
   fetchReviewPeriods,
+  markDashboardStale,
   selectReviewPeriodById,
 } from '@/store';
 import { useTheme } from '@/theme';
-import {
-  ReviewPeriodStatus,
-  type CoverageResponse,
-  type DomainCoverage,
-} from '@acme/shared';
+import { ReviewPeriodStatus, type CoverageResponse, type DomainCoverage } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
@@ -115,7 +111,9 @@ function DomainSection({ domain }: { domain: DomainCoverage }) {
                   {cap.name}
                 </Text>
                 {isCovered && cap.entryCount > 0 && (
-                  <View style={[styles.entryCountBadge, { backgroundColor: colors.primary + '20' }]}>
+                  <View
+                    style={[styles.entryCountBadge, { backgroundColor: colors.primary + '20' }]}
+                  >
                     <Text style={[styles.entryCountText, { color: colors.primary }]}>
                       {cap.entryCount}
                     </Text>
@@ -141,11 +139,9 @@ export default function ReviewPeriodDetailScreen() {
   const navigation = useNavigation();
   const { showActionSheetWithOptions } = useActionSheet();
 
-  const period = useAppSelector((state) =>
-    xid ? selectReviewPeriodById(state, xid) : undefined
-  );
-  const coverage: CoverageResponse | undefined = useAppSelector(
-    (state) => (xid ? state.reviewPeriods.coverageByXid[xid] : undefined)
+  const period = useAppSelector((state) => (xid ? selectReviewPeriodById(state, xid) : undefined));
+  const coverage: CoverageResponse | undefined = useAppSelector((state) =>
+    xid ? state.reviewPeriods.coverageByXid[xid] : undefined
   );
   const coverageLoading = useAppSelector((state) => state.reviewPeriods.coverageLoading);
   const mutating = useAppSelector((state) => state.reviewPeriods.mutating);
@@ -178,7 +174,7 @@ export default function ReviewPeriodDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             await dispatch(archiveReviewPeriod(xid));
-            dispatch(fetchInit());
+            dispatch(markDashboardStale());
             dispatch(fetchReviewPeriods());
             router.back();
           },
@@ -199,14 +195,11 @@ export default function ReviewPeriodDetailScreen() {
     const destructiveButtonIndex = isActive ? 1 : undefined;
     const cancelButtonIndex = isActive ? 2 : 0;
 
-    showActionSheetWithOptions(
-      { options, destructiveButtonIndex, cancelButtonIndex },
-      (index) => {
-        if (!isActive) return;
-        if (index === 0) handleEdit();
-        if (index === 1) handleArchive();
-      }
-    );
+    showActionSheetWithOptions({ options, destructiveButtonIndex, cancelButtonIndex }, (index) => {
+      if (!isActive) return;
+      if (index === 0) handleEdit();
+      if (index === 1) handleArchive();
+    });
   }, [isActive, showActionSheetWithOptions, handleEdit, handleArchive]);
 
   // Set header right button
@@ -373,5 +366,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-
 });

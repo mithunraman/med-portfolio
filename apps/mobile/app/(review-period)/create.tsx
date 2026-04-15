@@ -2,8 +2,8 @@ import { Button } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
   createReviewPeriod,
-  fetchInit,
   fetchReviewPeriods,
+  markDashboardStale,
   selectReviewPeriodById,
   updateReviewPeriod,
 } from '@/store';
@@ -89,7 +89,9 @@ function DatePickerModal({
           <Calendar
             minDate={minDate}
             markedDates={
-              selected ? { [selected]: { selected: true, selectedColor: colors.primary } } : undefined
+              selected
+                ? { [selected]: { selected: true, selectedColor: colors.primary } }
+                : undefined
             }
             onDayPress={(day: { dateString: string }) => {
               onSelect(toISODateString(day.dateString));
@@ -195,7 +197,7 @@ export default function CreateReviewPeriodScreen() {
       }
 
       // Refresh data in the background
-      dispatch(fetchInit());
+      dispatch(markDashboardStale());
       dispatch(fetchReviewPeriods());
 
       router.back();

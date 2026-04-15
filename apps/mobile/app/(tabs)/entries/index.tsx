@@ -1,15 +1,22 @@
-import { EmptyState, StatusPill } from '@/components';
+import {
+  EmptyState,
+  FetchErrorBanner,
+  LastUpdatedLabel,
+  SkeletonList,
+  StatusPill,
+  WaveDots,
+} from '@/components';
+import { STALE_THRESHOLD_MS } from '@/constants/staleness';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
+import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 import { fetchArtefacts, selectAllArtefacts, type TypedError } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
 import { ArtefactStatus, type Artefact } from '@acme/shared';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
   FlatList,
   Platform,
   RefreshControl,
@@ -18,8 +25,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
-import { STALE_THRESHOLD_MS } from '@/constants/staleness';
 
 // Status filter options — using null to mean "All"
 const STATUS_FILTERS: { label: string; value: ArtefactStatus | null }[] = [
@@ -84,34 +89,13 @@ export default function EntriesScreen() {
   const lastFetchedAt = useAppSelector((state) => state.artefacts.lastFetchedAt);
 
   const [activeFilter, setActiveFilter] = useState<ArtefactStatus | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
+  const fetchingRef = useRef(false);
+  const [fetchError, setFetchError] = useState<TypedError | null>(null);
 
   const listContentStyle = useMemo(
     () => [styles.listContent, { paddingBottom: insets.bottom + 16 }],
-    [insets.bottom],
-  );
-
-  useEffect(() => {
-    dispatch(fetchArtefacts());
-  }, [dispatch]);
-
-  // Refetch entries on focus when data has been invalidated or is older than STALE_THRESHOLD_MS
-  useFocusEffect(
-    useCallback(() => {
-      const isExpired = lastFetchedAt != null && Date.now() - lastFetchedAt > STALE_THRESHOLD_MS;
-      if ((stale || isExpired) && !loading) {
-        dispatch(fetchArtefacts());
-      }
-    }, [stale, loading, lastFetchedAt, dispatch])
-  );
-
-  // Refetch entries when connectivity returns, only if data is missing or errored
-  useNetworkRecovery(
-    useCallback(() => {
-      if (!loading && (artefacts.length === 0 || error)) {
-        dispatch(fetchArtefacts());
-      }
-    }, [dispatch, loading, artefacts.length, error])
+    [insets.bottom]
   );
 
   const filteredArtefacts = useMemo(() => {
@@ -119,19 +103,45 @@ export default function EntriesScreen() {
     return artefacts.filter((a) => a.status === activeFilter);
   }, [artefacts, activeFilter]);
 
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
+  const doFetch = useCallback(async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    setIsFetching(true);
+    setFetchError(null);
+
     const result = await dispatch(fetchArtefacts());
-    setRefreshing(false);
+
+    fetchingRef.current = false;
+    setIsFetching(false);
+
     if (fetchArtefacts.rejected.match(result) && !result.meta.condition && artefacts.length > 0) {
-      const err = result.payload as TypedError | undefined;
-      const message =
-        err?.kind === 'network'
-          ? 'Check your connection and try again.'
-          : err?.message ?? 'Something went wrong.';
-      Alert.alert('Couldn\u2019t refresh', message);
+      setFetchError(result.payload as TypedError);
     }
   }, [dispatch, artefacts.length]);
+
+  const doFetchRef = useRef(doFetch);
+  doFetchRef.current = doFetch;
+
+  useEffect(() => {
+    doFetchRef.current();
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const isExpired = lastFetchedAt != null && Date.now() - lastFetchedAt > STALE_THRESHOLD_MS;
+      if ((stale || isExpired) && !loading) {
+        doFetchRef.current();
+      }
+    }, [stale, loading, lastFetchedAt])
+  );
+
+  useNetworkRecovery(
+    useCallback(() => {
+      if (!loading && (artefacts.length === 0 || error)) {
+        doFetchRef.current();
+      }
+    }, [loading, artefacts.length, error])
+  );
 
   const handleEntryPress = useCallback(
     (item: Artefact) => {
@@ -154,6 +164,7 @@ export default function EntriesScreen() {
   const keyExtractor = useCallback((item: Artefact) => item.id, []);
 
   const isInitialLoad = loading && artefacts.length === 0;
+  const showDot = isFetching && artefacts.length > 0;
 
   return (
     <View
@@ -161,6 +172,7 @@ export default function EntriesScreen() {
     >
       <View style={styles.header}>
         <Text style={[styles.pageTitle, { color: colors.text }]}>Entries</Text>
+        <LastUpdatedLabel timestamp={lastFetchedAt} />
       </View>
 
       {/* Status filter pills */}
@@ -190,11 +202,21 @@ export default function EntriesScreen() {
         ))}
       </View>
 
+      <View style={[styles.waveDotsRow, !showDot && styles.waveDotsHidden]}>
+        {showDot && <WaveDots color={colors.primary} />}
+      </View>
+
+      {fetchError && artefacts.length > 0 && (
+        <FetchErrorBanner
+          error={fetchError}
+          onRetry={() => doFetch()}
+          onDismiss={() => setFetchError(null)}
+        />
+      )}
+
       {/* Content */}
       {isInitialLoad ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <SkeletonList />
       ) : error && artefacts.length === 0 ? (
         error.kind === 'network' ? (
           <EmptyState
@@ -234,9 +256,10 @@ export default function EntriesScreen() {
           removeClippedSubviews={Platform.OS === 'android'}
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.primary}
+              refreshing={false}
+              onRefresh={() => doFetch()}
+              tintColor="transparent"
+              colors={['transparent']}
             />
           }
         />
@@ -250,6 +273,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 16,
     marginBottom: 8,
@@ -274,6 +300,17 @@ const styles = StyleSheet.create({
   filterPillText: {
     fontSize: 13,
     fontWeight: '500',
+  },
+  waveDotsRow: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 20,
+    overflow: 'hidden',
+  },
+  waveDotsHidden: {
+    height: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
   loadingContainer: {
     flex: 1,

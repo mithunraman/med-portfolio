@@ -1,5 +1,12 @@
-import { EmptyState, StatusPill } from '@/components';
 import type { StatusVariant } from '@/components';
+import {
+  EmptyState,
+  FetchErrorBanner,
+  LastUpdatedLabel,
+  SkeletonList,
+  StatusPill,
+  WaveDots,
+} from '@/components';
 import { STALE_THRESHOLD_MS } from '@/constants/staleness';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
@@ -8,10 +15,8 @@ import { fetchPdpGoals, selectAllPdpGoals, type TypedError } from '@/store';
 import { useTheme } from '@/theme';
 import { PdpGoalStatus, type PdpGoalResponse } from '@acme/shared';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
   FlatList,
   Platform,
   RefreshControl,
@@ -96,34 +101,13 @@ export default function PdpScreen() {
   const lastFetchedAt = useAppSelector((state) => state.pdpGoals.lastFetchedAt);
 
   const [activeFilter, setActiveFilter] = useState<PdpGoalStatus | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
+  const fetchingRef = useRef(false);
+  const [fetchError, setFetchError] = useState<TypedError | null>(null);
 
   const listContentStyle = useMemo(
     () => [styles.listContent, { paddingBottom: insets.bottom + 16 }],
-    [insets.bottom],
-  );
-
-  useEffect(() => {
-    dispatch(fetchPdpGoals());
-  }, [dispatch]);
-
-  // Refetch goals on focus when data has been invalidated or is older than STALE_THRESHOLD_MS
-  useFocusEffect(
-    useCallback(() => {
-      const isExpired = lastFetchedAt != null && Date.now() - lastFetchedAt > STALE_THRESHOLD_MS;
-      if ((stale || isExpired) && !loading) {
-        dispatch(fetchPdpGoals());
-      }
-    }, [stale, loading, lastFetchedAt, dispatch])
-  );
-
-  // Refetch goals when connectivity returns, only if data is missing or errored
-  useNetworkRecovery(
-    useCallback(() => {
-      if (!loading && (goals.length === 0 || error)) {
-        dispatch(fetchPdpGoals());
-      }
-    }, [dispatch, loading, goals.length, error])
+    [insets.bottom]
   );
 
   const filteredGoals = useMemo(() => {
@@ -131,19 +115,45 @@ export default function PdpScreen() {
     return goals.filter((g) => g.status === activeFilter);
   }, [goals, activeFilter]);
 
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
+  const doFetch = useCallback(async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    setIsFetching(true);
+    setFetchError(null);
+
     const result = await dispatch(fetchPdpGoals());
-    setRefreshing(false);
+
+    fetchingRef.current = false;
+    setIsFetching(false);
+
     if (fetchPdpGoals.rejected.match(result) && !result.meta.condition && goals.length > 0) {
-      const err = result.payload as TypedError | undefined;
-      const message =
-        err?.kind === 'network'
-          ? 'Check your connection and try again.'
-          : err?.message ?? 'Something went wrong.';
-      Alert.alert('Couldn\u2019t refresh', message);
+      setFetchError(result.payload as TypedError);
     }
   }, [dispatch, goals.length]);
+
+  const doFetchRef = useRef(doFetch);
+  doFetchRef.current = doFetch;
+
+  useEffect(() => {
+    doFetchRef.current();
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const isExpired = lastFetchedAt != null && Date.now() - lastFetchedAt > STALE_THRESHOLD_MS;
+      if ((stale || isExpired) && !loading) {
+        doFetchRef.current();
+      }
+    }, [stale, loading, lastFetchedAt])
+  );
+
+  useNetworkRecovery(
+    useCallback(() => {
+      if (!loading && (goals.length === 0 || error)) {
+        doFetchRef.current();
+      }
+    }, [loading, goals.length, error])
+  );
 
   const handleGoalPress = useCallback(
     (goal: PdpGoalResponse) => {
@@ -162,6 +172,7 @@ export default function PdpScreen() {
   const keyExtractor = useCallback((item: PdpGoalResponse) => item.id, []);
 
   const isInitialLoad = loading && goals.length === 0;
+  const showDot = isFetching && goals.length > 0;
 
   return (
     <View
@@ -169,6 +180,7 @@ export default function PdpScreen() {
     >
       <View style={styles.header}>
         <Text style={[styles.pageTitle, { color: colors.text }]}>PDP</Text>
+        <LastUpdatedLabel timestamp={lastFetchedAt} />
       </View>
 
       {/* Status filter pills */}
@@ -198,10 +210,20 @@ export default function PdpScreen() {
         ))}
       </View>
 
+      <View style={[styles.waveDotsRow, !showDot && styles.waveDotsHidden]}>
+        {showDot && <WaveDots color={colors.primary} />}
+      </View>
+
+      {fetchError && goals.length > 0 && (
+        <FetchErrorBanner
+          error={fetchError}
+          onRetry={() => doFetch()}
+          onDismiss={() => setFetchError(null)}
+        />
+      )}
+
       {isInitialLoad ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <SkeletonList />
       ) : error && goals.length === 0 ? (
         error.kind === 'network' ? (
           <EmptyState
@@ -241,9 +263,10 @@ export default function PdpScreen() {
           removeClippedSubviews={Platform.OS === 'android'}
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.primary}
+              refreshing={false}
+              onRefresh={() => doFetch()}
+              tintColor="transparent"
+              colors={['transparent']}
             />
           }
         />
@@ -257,6 +280,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 16,
     marginBottom: 8,
@@ -281,6 +307,17 @@ const styles = StyleSheet.create({
   filterPillText: {
     fontSize: 13,
     fontWeight: '500',
+  },
+  waveDotsRow: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 20,
+    overflow: 'hidden',
+  },
+  waveDotsHidden: {
+    height: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
   loadingContainer: {
     flex: 1,

@@ -209,7 +209,6 @@ export default function EntriesScreen() {
       {fetchError && artefacts.length > 0 && (
         <FetchErrorBanner
           error={fetchError}
-          onRetry={() => doFetch()}
           onDismiss={() => setFetchError(null)}
         />
       )}

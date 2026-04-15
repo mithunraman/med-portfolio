@@ -217,7 +217,6 @@ export default function PdpScreen() {
       {fetchError && goals.length > 0 && (
         <FetchErrorBanner
           error={fetchError}
-          onRetry={() => doFetch()}
           onDismiss={() => setFetchError(null)}
         />
       )}

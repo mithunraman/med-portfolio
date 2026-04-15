@@ -5,7 +5,7 @@ import { fetchReviewPeriods, selectAllReviewPeriods } from '@/store';
 import { useTheme } from '@/theme';
 import { ReviewPeriodStatus, type ReviewPeriod } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -92,6 +92,7 @@ export default function ReviewPeriodListScreen() {
   const periods = useAppSelector(selectAllReviewPeriods);
   const loading = useAppSelector((state) => state.reviewPeriods.loading);
   const error = useAppSelector((state) => state.reviewPeriods.error);
+  const stale = useAppSelector((state) => state.reviewPeriods.stale);
 
   const [activeFilter, setActiveFilter] = useState<ReviewPeriodStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -99,6 +100,14 @@ export default function ReviewPeriodListScreen() {
   useEffect(() => {
     dispatch(fetchReviewPeriods());
   }, [dispatch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (stale) {
+        dispatch(fetchReviewPeriods());
+      }
+    }, [stale, dispatch])
+  );
 
   const filteredPeriods = useMemo(() => {
     if (activeFilter === null) return periods;

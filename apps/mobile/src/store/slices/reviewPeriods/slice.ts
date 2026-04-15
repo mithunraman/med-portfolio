@@ -17,6 +17,7 @@ export interface ReviewPeriodsState {
   error: string | null;
   coverageByXid: Record<string, CoverageResponse>;
   coverageLoading: boolean;
+  stale: boolean;
 }
 
 const reviewPeriodsSlice = createSlice({
@@ -27,8 +28,13 @@ const reviewPeriodsSlice = createSlice({
     error: null,
     coverageByXid: {},
     coverageLoading: false,
+    stale: false,
   }),
-  reducers: {},
+  reducers: {
+    markReviewPeriodsStale(state) {
+      state.stale = true;
+    },
+  },
   extraReducers: (builder) => {
     builder
       // fetchReviewPeriods
@@ -38,6 +44,7 @@ const reviewPeriodsSlice = createSlice({
       })
       .addCase(fetchReviewPeriods.fulfilled, (state, action) => {
         state.loading = false;
+        state.stale = false;
         reviewPeriodsAdapter.setAll(state, action.payload.reviewPeriods);
       })
       .addCase(fetchReviewPeriods.rejected, (state, action) => {
@@ -94,6 +101,7 @@ const reviewPeriodsSlice = createSlice({
       .addCase(fetchCoverage.fulfilled, (state, action) => {
         state.coverageLoading = false;
         state.coverageByXid[action.payload.xid] = action.payload.coverage;
+        reviewPeriodsAdapter.upsertOne(state, action.payload.coverage.period);
       })
       .addCase(fetchCoverage.rejected, (state) => {
         state.coverageLoading = false;
@@ -106,5 +114,7 @@ export const {
   selectAll: selectAllReviewPeriods,
   selectById: selectReviewPeriodById,
 } = reviewPeriodsAdapter.getSelectors((state: RootState) => state.reviewPeriods);
+
+export const { markReviewPeriodsStale } = reviewPeriodsSlice.actions;
 
 export default reviewPeriodsSlice.reducer;

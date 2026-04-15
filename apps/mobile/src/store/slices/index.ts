@@ -103,6 +103,7 @@ export {
   fetchCoverage,
   selectAllReviewPeriods,
   selectReviewPeriodById,
+  markReviewPeriodsStale,
 } from './reviewPeriods';
 
 // ── Network ──

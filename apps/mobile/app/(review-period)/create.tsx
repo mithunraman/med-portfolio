@@ -2,8 +2,8 @@ import { Button } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
   createReviewPeriod,
-  fetchReviewPeriods,
   markDashboardStale,
+  markReviewPeriodsStale,
   selectReviewPeriodById,
   updateReviewPeriod,
 } from '@/store';
@@ -198,7 +198,7 @@ export default function CreateReviewPeriodScreen() {
 
       // Refresh data in the background
       dispatch(markDashboardStale());
-      dispatch(fetchReviewPeriods());
+      dispatch(markReviewPeriodsStale());
 
       router.back();
     } catch (error) {

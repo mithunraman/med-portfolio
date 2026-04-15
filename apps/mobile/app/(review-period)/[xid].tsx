@@ -4,8 +4,8 @@ import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
   archiveReviewPeriod,
   fetchCoverage,
-  fetchReviewPeriods,
   markDashboardStale,
+  markReviewPeriodsStale,
   selectReviewPeriodById,
 } from '@/store';
 import { useTheme } from '@/theme';
@@ -149,7 +149,6 @@ export default function ReviewPeriodDetailScreen() {
   useEffect(() => {
     if (xid) {
       dispatch(fetchCoverage(xid));
-      dispatch(fetchReviewPeriods());
     }
   }, [xid, dispatch]);
 
@@ -175,7 +174,7 @@ export default function ReviewPeriodDetailScreen() {
           onPress: async () => {
             await dispatch(archiveReviewPeriod(xid));
             dispatch(markDashboardStale());
-            dispatch(fetchReviewPeriods());
+            dispatch(markReviewPeriodsStale());
             router.back();
           },
         },

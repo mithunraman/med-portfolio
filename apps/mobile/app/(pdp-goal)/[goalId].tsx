@@ -1,4 +1,4 @@
-import { Button, EmptyState, StatusPill } from '@/components';
+import { Button, EmptyState, SkeletonBone, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
   addPdpGoalAction,
@@ -255,6 +255,7 @@ export default function PdpGoalDetailScreen() {
   const entityStatus = useAppSelector(
     (state) => state.pdpGoals.statusById[goalId ?? '']
   );
+  const fetching = entityStatus === 'loading';
   const mutating = entityStatus === 'updating';
 
   useEffect(() => {
@@ -269,12 +270,15 @@ export default function PdpGoalDetailScreen() {
   const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, PdpGoalStatus>>({});
   const [pendingActionIds, setPendingActionIds] = useState<Set<string>>(new Set());
 
+  const isGoalArchived = goal?.status === PdpGoalStatus.ARCHIVED;
   const visibleActions = useMemo(
     () =>
-      goal?.actions.filter(
-        (a) => (optimisticStatuses[a.id] ?? a.status) !== PdpGoalStatus.ARCHIVED
-      ) ?? [],
-    [goal?.actions, optimisticStatuses]
+      isGoalArchived
+        ? goal?.actions ?? []
+        : goal?.actions.filter(
+            (a) => (optimisticStatuses[a.id] ?? a.status) !== PdpGoalStatus.ARCHIVED
+          ) ?? [],
+    [goal?.actions, optimisticStatuses, isGoalArchived]
   );
 
   const handleSetReviewDate = useCallback(
@@ -508,7 +512,7 @@ export default function PdpGoalDetailScreen() {
         {/* Goal header */}
         <View style={styles.section}>
           <Text style={[styles.goalText, { color: colors.text }]}>{goal.goal}</Text>
-          {!!goal.artefactId && (
+          {!!goal.artefactId ? (
             <TouchableOpacity style={styles.provenanceRow} onPress={handleViewEntry}>
               <Ionicons
                 name="document-text-outline"
@@ -529,7 +533,9 @@ export default function PdpGoalDetailScreen() {
                 style={styles.provenanceIcon}
               />
             </TouchableOpacity>
-          )}
+          ) : fetching ? (
+            <SkeletonBone width="60%" height={14} style={{ marginTop: 8 }} />
+          ) : null}
           <View style={styles.metaRow}>
             <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />
             {isCompleted && goal.completedAt && (

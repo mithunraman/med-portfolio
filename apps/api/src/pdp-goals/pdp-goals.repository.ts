@@ -5,10 +5,12 @@ import { ClientSession, Model, Types } from 'mongoose';
 import type { DBError } from '../artefacts/artefacts.repository.interface';
 import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { Result, err, ok } from '../common/utils/result.util';
+import { buildPdpGoalCursor, parsePdpGoalCursor } from './cursor.util';
 import {
   CreatePdpGoalData,
   FindByUserOptions,
   IPdpGoalsRepository,
+  Page,
   PdpGoalWithArtefact,
   SaveGoalData,
   UpdatePdpGoalActionData,
@@ -148,9 +150,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
 
       let query = this.pdpGoalModel
         .find(filter)
-        .sort(
-          options?.sortByNextDueDate ? { nextActionDueDate: 1, createdAt: 1 } : { createdAt: -1 }
-        )
+        .sort(options?.sortByReviewDate ? { reviewDate: 1, createdAt: 1 } : { createdAt: -1 })
         .lean();
 
       if (options?.limit) {
@@ -165,21 +165,40 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     }
   }
 
-  async findByUserIdWithArtefact(
+  async findPaginated(
     userId: Types.ObjectId,
-    statuses: PdpGoalStatus[]
-  ): Promise<Result<PdpGoalWithArtefact[], DBError>> {
+    statuses: PdpGoalStatus[],
+    cursor?: string,
+    limit = 20
+  ): Promise<Result<Page<PdpGoal>, DBError>> {
     try {
-      const results = await this.pdpGoalModel.aggregate([
-        { $match: { userId, status: { $in: statuses } } },
-        ...ARTEFACT_LOOKUP_PIPELINE,
-        { $sort: { _sortDate: 1 } },
-        { $project: { _sortDate: 0 } },
-      ]);
+      const filter: Record<string, unknown> = { userId, status: { $in: statuses } };
 
-      return ok(results.map(mapToGoalWithArtefact));
+      if (cursor) {
+        const { sortDate, id } = parsePdpGoalCursor(cursor);
+        filter.$or = [
+          { reviewDate: { $gt: sortDate } },
+          { reviewDate: sortDate, _id: { $gt: id } },
+        ];
+      }
+
+      const fetchLimit = limit + 1;
+      const goals = await this.pdpGoalModel
+        .find(filter)
+        .sort({ reviewDate: 1, _id: 1 })
+        .limit(fetchLimit)
+        .lean();
+
+      const hasMore = goals.length > limit;
+      if (hasMore) goals.pop();
+
+      return ok({
+        items: goals,
+        nextCursor:
+          hasMore && goals.length > 0 ? buildPdpGoalCursor(goals[goals.length - 1]) : null,
+      });
     } catch (error) {
-      this.logger.error('Failed to find PDP goals with artefact info', error);
+      this.logger.error('Failed to find PDP goals', error);
       return err({ code: 'DB_ERROR', message: 'Failed to find PDP goals' });
     }
   }
@@ -226,7 +245,6 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       if (data.reviewDate !== undefined) setFields.reviewDate = data.reviewDate;
       if (data.completedAt !== undefined) setFields.completedAt = data.completedAt;
       if (data.completionReview !== undefined) setFields.completionReview = data.completionReview;
-      if (data.nextActionDueDate !== undefined) setFields.nextActionDueDate = data.nextActionDueDate;
       if (data.actions !== undefined) setFields.actions = data.actions;
 
       if (Object.keys(setFields).length > 0) {
@@ -250,15 +268,12 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       const goalSetFields: Record<string, unknown> = {};
       if (data.status !== undefined) goalSetFields.status = data.status;
       if (data.reviewDate !== undefined) goalSetFields.reviewDate = data.reviewDate;
-      if (data.completionReview !== undefined) goalSetFields.completionReview = data.completionReview;
+      if (data.completionReview !== undefined)
+        goalSetFields.completionReview = data.completionReview;
 
       if (actionUpdates && actionUpdates.length > 0) {
         if (Object.keys(goalSetFields).length > 0) {
-          await this.pdpGoalModel.updateOne(
-            { xid: goalXid },
-            { $set: goalSetFields },
-            { session }
-          );
+          await this.pdpGoalModel.updateOne({ xid: goalXid }, { $set: goalSetFields }, { session });
         }
 
         const byStatus = new Map<PdpGoalStatus, string[]>();
@@ -282,11 +297,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
         }
 
         if (Object.keys(goalSetFields).length > 0) {
-          await this.pdpGoalModel.updateOne(
-            { xid: goalXid },
-            { $set: goalSetFields },
-            { session }
-          );
+          await this.pdpGoalModel.updateOne({ xid: goalXid }, { $set: goalSetFields }, { session });
         }
       }
 

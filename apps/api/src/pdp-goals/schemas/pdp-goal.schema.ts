@@ -51,9 +51,6 @@ export class PdpGoal {
   @Prop({ type: Date, default: null })
   completedAt!: Date | null;
 
-  @Prop({ type: Date, default: null })
-  nextActionDueDate!: Date | null;
-
   @Prop({ type: String, default: null })
   completionReview!: string | null;
 
@@ -69,6 +66,5 @@ export type PdpGoalDocument = PdpGoal & Document;
 export const PdpGoalSchema = SchemaFactory.createForClass(PdpGoal);
 
 // Compound indexes
-PdpGoalSchema.index({ userId: 1, status: 1 });
+PdpGoalSchema.index({ userId: 1, status: 1, reviewDate: 1 });
 PdpGoalSchema.index({ artefactId: 1 });
-PdpGoalSchema.index({ userId: 1, nextActionDueDate: 1 });

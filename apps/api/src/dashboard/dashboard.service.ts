@@ -31,7 +31,7 @@ export class DashboardService {
         this.artefactsService.listArtefacts(userId, { limit: 5 }),
         this.pdpGoalsRepository.findByUserId(userObjectId, activeStatuses, {
           limit: 5,
-          sortByNextDueDate: true,
+          sortByReviewDate: true,
           dueBefore: thirtyDaysFromNow,
         }),
         this.pdpGoalsRepository.countByUserId(userObjectId, activeStatuses),

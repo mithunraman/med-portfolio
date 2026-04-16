@@ -15,9 +15,17 @@ export class PdpGoalsClient {
     return this.client.delete<{ message: string }>(`/pdp-goals/${goalId}`);
   }
 
-  async listGoals(statuses?: PdpGoalStatus[]): Promise<ListPdpGoalsResponse> {
-    const query = statuses && statuses.length > 0 ? `?status=${statuses.join(',')}` : '';
-    return this.client.get<ListPdpGoalsResponse>(`/pdp-goals${query}`);
+  async listGoals(params?: {
+    statuses?: PdpGoalStatus[];
+    cursor?: string;
+    limit?: number;
+  }): Promise<ListPdpGoalsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.statuses?.length) searchParams.set('status', params.statuses.join(','));
+    if (params?.cursor) searchParams.set('cursor', params.cursor);
+    if (params?.limit !== undefined) searchParams.set('limit', String(params.limit));
+    const query = searchParams.toString();
+    return this.client.get<ListPdpGoalsResponse>(`/pdp-goals${query ? `?${query}` : ''}`);
   }
 
   async getGoal(goalId: string): Promise<PdpGoalResponse> {

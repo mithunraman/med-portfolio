@@ -10,6 +10,8 @@
 
 - Once entries screen or PDP screen is loaded, and we create more entires, these screens don't update. Ideally, we should clear the stale data.
 
+- When usage limits are hit, check what the UX looks like from a client side.
+
 # LLM
 
 - Add support for Clinical Experience Groups like: Older adults, Urgent and unscheduled care, etc

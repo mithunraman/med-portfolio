@@ -13,6 +13,8 @@ const ListPdpGoalsSchema = z.object({
         .map(Number)
         .filter((n) => Object.values(PdpGoalStatus).includes(n as PdpGoalStatus)) as PdpGoalStatus[];
     }),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export class ListPdpGoalsDto extends createZodDto(ListPdpGoalsSchema) {}

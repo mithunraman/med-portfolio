@@ -93,11 +93,17 @@ export {
   addPdpGoalAction,
   updatePdpGoalAction,
   markPdpGoalsStale,
+  resetPdpGoalView,
+  resetAllPdpGoalViews,
   selectAllPdpGoals,
   selectPdpGoalById,
+  selectPdpGoalsByView,
+  selectPdpGoalFilterView,
   selectPdpGoalsDueSoon,
   selectPdpGoalsDueTotal,
+  pdpGoalViewKey,
 } from './pdpGoals';
+export type { PdpGoalEntity, PdpGoalFilterView } from './pdpGoals';
 
 // ── Review Periods ──
 export {

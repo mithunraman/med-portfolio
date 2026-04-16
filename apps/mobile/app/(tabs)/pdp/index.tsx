@@ -1,4 +1,3 @@
-import type { StatusVariant } from '@/components';
 import {
   EmptyState,
   FetchErrorBanner,
@@ -11,12 +10,23 @@ import { STALE_THRESHOLD_MS } from '@/constants/staleness';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
-import { fetchPdpGoals, selectAllPdpGoals, type TypedError } from '@/store';
+import {
+  fetchPdpGoals,
+  pdpGoalViewKey,
+  resetPdpGoalView,
+  selectPdpGoalFilterView,
+  selectPdpGoalsByView,
+  type PdpGoalEntity,
+  type TypedError,
+} from '@/store';
 import { useTheme } from '@/theme';
-import { PdpGoalStatus, type PdpGoalResponse } from '@acme/shared';
+import { formatDate } from '@/utils/formatDate';
+import { getPdpGoalStatusDisplay } from '@/utils/pdpGoalStatus';
+import { PdpGoalStatus } from '@acme/shared';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Platform,
   RefreshControl,
@@ -26,34 +36,15 @@ import {
   View,
 } from 'react-native';
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function formatReviewDate(isoDate: string): string {
-  const date = new Date(isoDate);
-  const day = date.getDate().toString().padStart(2, '0');
-  const month = MONTHS[date.getMonth()];
-  const year = date.getFullYear();
-  return `${day} ${month} ${year}`;
-}
-
-function getPdpGoalStatusDisplay(status: PdpGoalStatus): { label: string; variant: StatusVariant } {
-  switch (status) {
-    case PdpGoalStatus.STARTED:
-      return { label: 'Started', variant: 'success' };
-    case PdpGoalStatus.COMPLETED:
-      return { label: 'Completed', variant: 'info' };
-    default:
-      return { label: 'Unknown', variant: 'default' };
-  }
-}
 
 const STATUS_FILTERS: { label: string; value: PdpGoalStatus | null }[] = [
   { label: 'All', value: null },
   { label: 'Started', value: PdpGoalStatus.STARTED },
   { label: 'Completed', value: PdpGoalStatus.COMPLETED },
+  { label: 'Archived', value: PdpGoalStatus.ARCHIVED },
 ];
 
-function GoalListItem({ item, onPress }: { item: PdpGoalResponse; onPress: () => void }) {
+function GoalListItem({ item, onPress }: { item: PdpGoalEntity; onPress: () => void }) {
   const { colors } = useTheme();
   const statusDisplay = getPdpGoalStatusDisplay(item.status);
 
@@ -71,11 +62,11 @@ function GoalListItem({ item, onPress }: { item: PdpGoalResponse; onPress: () =>
         </Text>
         {item.status === PdpGoalStatus.COMPLETED && item.completedAt ? (
           <Text style={[styles.listItemMeta, { color: colors.textSecondary }]}>
-            Completed {formatReviewDate(item.completedAt)}
+            Completed {formatDate(item.completedAt)}
           </Text>
         ) : item.reviewDate ? (
           <Text style={[styles.listItemMeta, { color: colors.textSecondary }]}>
-            Review by {formatReviewDate(item.reviewDate)}
+            Review by {formatDate(item.reviewDate)}
           </Text>
         ) : (
           <Text style={[styles.listItemMeta, { color: colors.textSecondary }]}>
@@ -94,85 +85,112 @@ export default function PdpScreen() {
   const dispatch = useAppDispatch();
   const router = useRouter();
 
-  const goals = useAppSelector(selectAllPdpGoals);
-  const loading = useAppSelector((state) => state.pdpGoals.loading);
-  const error = useAppSelector((state) => state.pdpGoals.error);
-  const stale = useAppSelector((state) => state.pdpGoals.stale);
-  const lastFetchedAt = useAppSelector((state) => state.pdpGoals.lastFetchedAt);
-
   const [activeFilter, setActiveFilter] = useState<PdpGoalStatus | null>(null);
-  const [isFetching, setIsFetching] = useState(false);
   const fetchingRef = useRef(false);
   const [fetchError, setFetchError] = useState<TypedError | null>(null);
+
+  const key = pdpGoalViewKey(activeFilter);
+  const currentView = useAppSelector((state) => selectPdpGoalFilterView(state, key));
+  const displayedGoals = useAppSelector((state) => selectPdpGoalsByView(state, key));
+  const error = useAppSelector((state) => state.pdpGoals.error);
+  const stale = useAppSelector((state) => state.pdpGoals.stale);
+  const lastFetchedAt = currentView?.lastFetchedAt ?? null;
 
   const listContentStyle = useMemo(
     () => [styles.listContent, { paddingBottom: insets.bottom + 16 }],
     [insets.bottom]
   );
 
-  const filteredGoals = useMemo(() => {
-    if (activeFilter === null) return goals;
-    return goals.filter((g) => g.status === activeFilter);
-  }, [goals, activeFilter]);
-
   const doFetch = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
-    setIsFetching(true);
     setFetchError(null);
 
-    const result = await dispatch(fetchPdpGoals());
+    const result = await dispatch(fetchPdpGoals({ status: activeFilter ?? undefined }));
 
     fetchingRef.current = false;
-    setIsFetching(false);
 
-    if (fetchPdpGoals.rejected.match(result) && !result.meta.condition && goals.length > 0) {
+    if (fetchPdpGoals.rejected.match(result) && !result.meta.condition) {
       setFetchError(result.payload as TypedError);
     }
-  }, [dispatch, goals.length]);
+  }, [dispatch, activeFilter]);
 
   const doFetchRef = useRef(doFetch);
   doFetchRef.current = doFetch;
 
+  // Fetch on mount and on filter change if no cached view
   useEffect(() => {
-    doFetchRef.current();
-  }, []);
+    if (!currentView) {
+      doFetchRef.current();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only trigger on filter change, not on view invalidation
+  }, [activeFilter]);
 
+  // Refetch on focus if stale
   useFocusEffect(
     useCallback(() => {
       const isExpired = lastFetchedAt != null && Date.now() - lastFetchedAt > STALE_THRESHOLD_MS;
-      if ((stale || isExpired) && !loading) {
+      if ((stale || isExpired) && currentView?.status === 'idle') {
+        dispatch(resetPdpGoalView(key));
         doFetchRef.current();
       }
-    }, [stale, loading, lastFetchedAt])
+    }, [stale, lastFetchedAt, currentView?.status, dispatch, key])
   );
 
+  // Refetch on network recovery
   useNetworkRecovery(
     useCallback(() => {
-      if (!loading && (goals.length === 0 || error)) {
+      if (
+        (!currentView || currentView.status === 'idle') &&
+        (displayedGoals.length === 0 || error)
+      ) {
         doFetchRef.current();
       }
-    }, [loading, goals.length, error])
+    }, [currentView, displayedGoals.length, error])
   );
 
+  const handleRefresh = useCallback(() => {
+    if (fetchingRef.current) return;
+    dispatch(resetPdpGoalView(pdpGoalViewKey(activeFilter)));
+    doFetchRef.current();
+  }, [dispatch, activeFilter]);
+
+  const handleLoadMore = useCallback(() => {
+    if (!currentView || currentView.status !== 'idle' || !currentView.nextCursor) return;
+    dispatch(
+      fetchPdpGoals({
+        status: activeFilter ?? undefined,
+        cursor: currentView.nextCursor,
+      })
+    );
+  }, [dispatch, activeFilter, currentView]);
+
   const handleGoalPress = useCallback(
-    (goal: PdpGoalResponse) => {
+    (goal: PdpGoalEntity) => {
       router.push(`/(pdp-goal)/${goal.id}`);
     },
     [router]
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: PdpGoalResponse }) => (
+    ({ item }: { item: PdpGoalEntity }) => (
       <GoalListItem item={item} onPress={() => handleGoalPress(item)} />
     ),
     [handleGoalPress]
   );
 
-  const keyExtractor = useCallback((item: PdpGoalResponse) => item.id, []);
+  const keyExtractor = useCallback((item: PdpGoalEntity) => item.id, []);
 
-  const isInitialLoad = loading && goals.length === 0;
-  const showDot = isFetching && goals.length > 0;
+  const isInitialLoad =
+    (currentView?.status === 'loading' && displayedGoals.length === 0) || (!currentView && !error);
+  const showDot =
+    currentView?.status === 'loadingMore' ||
+    (currentView?.status === 'loading' && displayedGoals.length > 0);
+
+  const renderFooter = useCallback(() => {
+    if (currentView?.status !== 'loadingMore') return null;
+    return <ActivityIndicator style={styles.footerSpinner} color={colors.primary} />;
+  }, [currentView?.status, colors.primary]);
 
   return (
     <View
@@ -214,23 +232,21 @@ export default function PdpScreen() {
         {showDot && <WaveDots color={colors.primary} />}
       </View>
 
-      {fetchError && goals.length > 0 && (
-        <FetchErrorBanner
-          error={fetchError}
-          onDismiss={() => setFetchError(null)}
-        />
+      {fetchError && displayedGoals.length > 0 && (
+        <FetchErrorBanner error={fetchError} onDismiss={() => setFetchError(null)} />
       )}
 
+      {/* Content */}
       {isInitialLoad ? (
         <SkeletonList />
-      ) : error && goals.length === 0 ? (
+      ) : error && displayedGoals.length === 0 ? (
         error.kind === 'network' ? (
           <EmptyState
             icon="cloud-offline-outline"
             title="You're offline"
             description="Check your connection and try again."
             actionLabel="Retry"
-            onAction={() => dispatch(fetchPdpGoals())}
+            onAction={() => doFetchRef.current()}
           />
         ) : (
           <EmptyState
@@ -238,10 +254,10 @@ export default function PdpScreen() {
             title="Something went wrong"
             description={error.message}
             actionLabel={error.retryable ? 'Try again' : undefined}
-            onAction={error.retryable ? () => dispatch(fetchPdpGoals()) : undefined}
+            onAction={error.retryable ? () => doFetchRef.current() : undefined}
           />
         )
-      ) : filteredGoals.length === 0 ? (
+      ) : displayedGoals.length === 0 ? (
         <EmptyState
           icon="checkbox-outline"
           title={activeFilter !== null ? 'No goals with this status' : 'No PDP goals yet'}
@@ -253,7 +269,7 @@ export default function PdpScreen() {
         />
       ) : (
         <FlatList
-          data={filteredGoals}
+          data={displayedGoals}
           keyExtractor={keyExtractor}
           renderItem={renderItem}
           contentContainerStyle={listContentStyle}
@@ -261,10 +277,13 @@ export default function PdpScreen() {
           windowSize={5}
           removeClippedSubviews={Platform.OS === 'android'}
           showsVerticalScrollIndicator={false}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={renderFooter}
           refreshControl={
             <RefreshControl
               refreshing={false}
-              onRefresh={() => doFetch()}
+              onRefresh={handleRefresh}
               tintColor="transparent"
               colors={['transparent']}
             />
@@ -319,10 +338,8 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
   },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  footerSpinner: {
+    paddingVertical: 16,
   },
   listContent: {
     paddingHorizontal: 16,

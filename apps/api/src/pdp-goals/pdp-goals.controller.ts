@@ -26,7 +26,11 @@ export class PdpGoalsController {
     @CurrentUser() user: CurrentUserPayload,
     @Query() query: ListPdpGoalsDto
   ): Promise<ListPdpGoalsResponse> {
-    return this.pdpGoalsService.listGoals(user.userId, query.status);
+    return this.pdpGoalsService.listGoals(user.userId, {
+      statuses: query.status,
+      cursor: query.cursor,
+      limit: query.limit,
+    });
   }
 
   @Get(':xid')

@@ -22,15 +22,18 @@ import {
   updateArtefactStatus,
 } from './thunks';
 
+import {
+  type FilterView,
+  viewKeyFromStatus,
+  invalidateView,
+  removeIdFromView,
+} from '../../viewHelpers';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface FilterView {
-  ids: string[];
-  nextCursor: string | null;
-  status: 'idle' | 'loading' | 'loadingMore';
-}
+export type { FilterView };
 
 export type EntityStatus = 'loading' | 'updating' | 'saving';
 
@@ -39,7 +42,6 @@ export interface ArtefactsState {
   statusById: Record<string, EntityStatus>;
   error: TypedError | null;
   stale: boolean;
-  lastFetchedAt: number | null;
   views: Record<string, FilterView>;
 }
 
@@ -48,18 +50,7 @@ export interface ArtefactsState {
 // ---------------------------------------------------------------------------
 
 export const viewKey = (status?: ArtefactStatus | null): string =>
-  status == null ? 'all' : String(status);
-
-function removeIdFromView(state: ArtefactsState, key: string, id: string): void {
-  const view = state.views[key];
-  if (!view) return;
-  const idx = view.ids.indexOf(id);
-  if (idx !== -1) view.ids.splice(idx, 1);
-}
-
-function invalidateView(state: ArtefactsState, key: string): void {
-  delete state.views[key];
-}
+  viewKeyFromStatus(status);
 
 /** Shared logic for mutations that change an artefact's status. */
 function handleStatusChange(
@@ -90,7 +81,6 @@ const artefactsSlice = createSlice({
     statusById: {},
     error: null,
     stale: false,
-    lastFetchedAt: null,
     views: {},
   }),
   reducers: {
@@ -133,6 +123,7 @@ const artefactsSlice = createSlice({
             ids: existing?.ids ?? [],
             nextCursor: existing?.nextCursor ?? null,
             status: 'loading',
+            lastFetchedAt: existing?.lastFetchedAt ?? null,
           };
         }
         state.error = null;
@@ -146,6 +137,7 @@ const artefactsSlice = createSlice({
             ids: resultIds,
             nextCursor: action.payload.nextCursor,
             status: 'idle',
+            lastFetchedAt: action.payload.fetchedAt,
           };
         } else {
           const view = state.views[key];
@@ -153,11 +145,11 @@ const artefactsSlice = createSlice({
             view.ids.push(...resultIds);
             view.nextCursor = action.payload.nextCursor;
             view.status = 'idle';
+            view.lastFetchedAt = action.payload.fetchedAt;
           }
         }
 
         state.stale = false;
-        state.lastFetchedAt = action.payload.fetchedAt;
         artefactsAdapter.upsertMany(state, action.payload.artefacts);
       })
       .addCase(fetchArtefacts.rejected, (state, action) => {

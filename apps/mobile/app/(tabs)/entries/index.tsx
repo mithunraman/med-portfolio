@@ -100,7 +100,7 @@ export default function EntriesScreen() {
   const displayedArtefacts = useAppSelector((state) => selectArtefactsByView(state, key));
   const error = useAppSelector((state) => state.artefacts.error);
   const stale = useAppSelector((state) => state.artefacts.stale);
-  const lastFetchedAt = useAppSelector((state) => state.artefacts.lastFetchedAt);
+  const lastFetchedAt = currentView?.lastFetchedAt ?? null;
 
   const listContentStyle = useMemo(
     () => [styles.listContent, { paddingBottom: insets.bottom + 16 }],

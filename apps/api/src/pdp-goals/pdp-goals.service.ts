@@ -1,4 +1,4 @@
-import type { ListPdpGoalsResponse, PdpGoalResponse } from '@acme/shared';
+import type { ListPdpGoalsResponse, PdpGoalListItem, PdpGoalResponse } from '@acme/shared';
 import { PdpGoalStatus } from '@acme/shared';
 import {
   Inject,
@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Types } from 'mongoose';
+import { toISOStringOrNull } from '../common/utils/date.util';
 import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { isErr } from '../common/utils/result.util';
 import { AddPdpGoalActionDto, UpdatePdpGoalActionDto, UpdatePdpGoalDto } from './dto';
@@ -15,7 +16,7 @@ import {
   PDP_GOALS_REPOSITORY,
   PdpGoalWithArtefact,
 } from './pdp-goals.repository.interface';
-import type { PdpGoalAction } from './schemas/pdp-goal.schema';
+import type { PdpGoal, PdpGoalAction } from './schemas/pdp-goal.schema';
 
 const DEFAULT_STATUSES = [PdpGoalStatus.STARTED, PdpGoalStatus.COMPLETED];
 
@@ -26,26 +27,34 @@ function mapActionToDto(a: PdpGoalAction) {
     action: a.action,
     intendedEvidence: a.intendedEvidence,
     status: a.status,
-    dueDate: a.dueDate ? (a.dueDate instanceof Date ? a.dueDate.toISOString() : a.dueDate) : null,
+    dueDate: toISOStringOrNull(a.dueDate),
     completionReview: a.completionReview,
   };
 }
 
-function mapGoalToDto(goal: PdpGoalWithArtefact): PdpGoalResponse {
+function mapGoalWithArtefactToDto(goal: PdpGoalWithArtefact): PdpGoalResponse {
   return {
     id: goal.xid,
     goal: goal.goal,
     status: goal.status,
-    reviewDate:
-      goal.reviewDate instanceof Date ? goal.reviewDate.toISOString() : (goal.reviewDate ?? null),
-    completedAt:
-      goal.completedAt instanceof Date
-        ? goal.completedAt.toISOString()
-        : (goal.completedAt ?? null),
+    reviewDate: toISOStringOrNull(goal.reviewDate),
+    completedAt: toISOStringOrNull(goal.completedAt),
     completionReview: goal.completionReview,
     actions: goal.actions.map(mapActionToDto),
     artefactId: goal.artefactXid ?? '',
     artefactTitle: goal.artefactTitle,
+  };
+}
+
+function mapGoalToListItem(goal: PdpGoal): PdpGoalListItem {
+  return {
+    id: goal.xid,
+    goal: goal.goal,
+    status: goal.status,
+    reviewDate: toISOStringOrNull(goal.reviewDate),
+    completedAt: toISOStringOrNull(goal.completedAt),
+    completionReview: goal.completionReview,
+    actions: goal.actions.map(mapActionToDto),
   };
 }
 
@@ -71,21 +80,26 @@ export class PdpGoalsService {
     return { message: 'Goal deleted successfully' };
   }
 
-  async listGoals(userId: string, statuses?: PdpGoalStatus[]): Promise<ListPdpGoalsResponse> {
-    const effectiveStatuses = statuses && statuses.length > 0 ? statuses : DEFAULT_STATUSES;
+  async listGoals(
+    userId: string,
+    query: { statuses?: PdpGoalStatus[]; cursor?: string; limit?: number }
+  ): Promise<ListPdpGoalsResponse> {
+    const effectiveStatuses =
+      query.statuses && query.statuses.length > 0 ? query.statuses : DEFAULT_STATUSES;
     const userId$ = new Types.ObjectId(userId);
 
-    const [goalsResult, countResult] = await Promise.all([
-      this.pdpGoalsRepository.findByUserIdWithArtefact(userId$, effectiveStatuses),
-      this.pdpGoalsRepository.countByUserId(userId$, effectiveStatuses),
-    ]);
+    const result = await this.pdpGoalsRepository.findPaginated(
+      userId$,
+      effectiveStatuses,
+      query.cursor,
+      query.limit
+    );
 
-    if (isErr(goalsResult)) throw new InternalServerErrorException(goalsResult.error.message);
-    if (isErr(countResult)) throw new InternalServerErrorException(countResult.error.message);
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
 
     return {
-      goals: goalsResult.value.map(mapGoalToDto),
-      total: countResult.value,
+      goals: result.value.items.map(mapGoalToListItem),
+      nextCursor: result.value.nextCursor,
     };
   }
 
@@ -98,7 +112,7 @@ export class PdpGoalsService {
     if (isErr(result)) throw new InternalServerErrorException(result.error.message);
     if (!result.value) throw new NotFoundException('PDP goal not found');
 
-    return mapGoalToDto(result.value);
+    return mapGoalWithArtefactToDto(result.value);
   }
 
   async updateGoal(
@@ -136,13 +150,12 @@ export class PdpGoalsService {
       reviewDate: goal.reviewDate,
       completedAt: goal.completedAt,
       completionReview: goal.completionReview,
-      nextActionDueDate: goal.reviewDate,
       actions: goal.actions,
     });
 
     if (isErr(saveResult)) throw new InternalServerErrorException(saveResult.error.message);
 
-    return mapGoalToDto(goal);
+    return mapGoalWithArtefactToDto(goal);
   }
 
   async addAction(
@@ -172,11 +185,10 @@ export class PdpGoalsService {
 
     const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, {
       actions: goal.actions,
-      nextActionDueDate: goal.reviewDate,
     });
     if (isErr(saveResult)) throw new InternalServerErrorException(saveResult.error.message);
 
-    return mapGoalToDto(goal);
+    return mapGoalWithArtefactToDto(goal);
   }
 
   async updateAction(
@@ -202,10 +214,9 @@ export class PdpGoalsService {
 
     const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, {
       actions: goal.actions,
-      nextActionDueDate: goal.reviewDate,
     });
     if (isErr(saveResult)) throw new InternalServerErrorException(saveResult.error.message);
 
-    return mapGoalToDto(goal);
+    return mapGoalWithArtefactToDto(goal);
   }
 }

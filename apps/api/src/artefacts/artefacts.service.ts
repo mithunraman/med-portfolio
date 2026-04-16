@@ -334,7 +334,12 @@ export class ArtefactsService {
         // 2. Apply PDP goal selections (business logic)
         for (const selection of dto.pdpGoalSelections) {
           if (selection.selected) {
-            // Selected goal → ACTIVE with review date, per-action status based on selection
+            if (!selection.reviewDate) {
+              throw new BadRequestException(
+                `Review date is required for selected goal ${selection.goalId}`
+              );
+            }
+
             const actionUpdates: UpdatePdpGoalActionData[] = (selection.actions ?? []).map((a) => ({
               actionXid: a.actionId,
               status: a.selected ? PdpGoalStatus.STARTED : PdpGoalStatus.ARCHIVED,
@@ -344,7 +349,7 @@ export class ArtefactsService {
               selection.goalId,
               {
                 status: PdpGoalStatus.STARTED,
-                reviewDate: selection.reviewDate ? new Date(selection.reviewDate) : null,
+                reviewDate: new Date(selection.reviewDate),
               },
               actionUpdates,
               session

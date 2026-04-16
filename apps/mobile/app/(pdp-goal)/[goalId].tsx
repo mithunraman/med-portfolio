@@ -1,4 +1,3 @@
-import type { StatusVariant } from '@/components';
 import { Button, EmptyState, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
@@ -11,7 +10,9 @@ import {
 } from '@/store';
 import { useTheme } from '@/theme';
 import { hexToRgba } from '@/utils/color';
-import { PdpGoalStatus, type PdpGoalResponse } from '@acme/shared';
+import { formatDate } from '@/utils/formatDate';
+import { getPdpGoalStatusDisplay } from '@/utils/pdpGoalStatus';
+import { PdpGoalStatus } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
@@ -37,34 +38,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const WARNING_COLOR = '#f59e0b';
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function formatDate(isoDate: string): string {
-  const date = new Date(isoDate);
-  const day = date.getDate().toString().padStart(2, '0');
-  const month = MONTHS[date.getMonth()];
-  const year = date.getFullYear();
-  return `${day} ${month} ${year}`;
-}
-
 function toCalendarString(date: Date): string {
   const y = date.getFullYear();
   const m = (date.getMonth() + 1).toString().padStart(2, '0');
   const d = date.getDate().toString().padStart(2, '0');
   return `${y}-${m}-${d}`;
-}
-
-function getPdpGoalStatusDisplay(status: PdpGoalStatus): { label: string; variant: StatusVariant } {
-  switch (status) {
-    case PdpGoalStatus.STARTED:
-      return { label: 'Started', variant: 'success' };
-    case PdpGoalStatus.COMPLETED:
-      return { label: 'Completed', variant: 'info' };
-    case PdpGoalStatus.ARCHIVED:
-      return { label: 'Archived', variant: 'default' };
-    default:
-      return { label: 'Not started', variant: 'processing' };
-  }
 }
 
 // ── Date Picker Modal ──────────────────────────────────────────────────────
@@ -273,9 +251,7 @@ export default function PdpGoalDetailScreen() {
   const navigation = useNavigation();
   const { showActionSheetWithOptions } = useActionSheet();
 
-  const goal = useAppSelector((state) => selectPdpGoalById(state, goalId ?? '')) as
-    | PdpGoalResponse
-    | undefined;
+  const goal = useAppSelector((state) => selectPdpGoalById(state, goalId ?? ''));
   const entityStatus = useAppSelector(
     (state) => state.pdpGoals.statusById[goalId ?? '']
   );

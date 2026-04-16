@@ -9,6 +9,7 @@ import { api } from '../../../api/client';
 import { classifyError } from '../../../utils/classifyError';
 import { logger } from '../../../utils/logger';
 import { retryRead } from '../../../utils/retry';
+import { pdpGoalViewKey } from './slice';
 
 const pdpGoalsLogger = logger.createScope('PdpGoalsThunks');
 
@@ -30,10 +31,20 @@ export const deletePdpGoal = createAsyncThunk(
 
 export const fetchPdpGoals = createAsyncThunk(
   'pdpGoals/fetchPdpGoals',
-  async (params: { statuses?: PdpGoalStatus[] } | undefined, { rejectWithValue }) => {
-    pdpGoalsLogger.info('Fetching PDP goals');
+  async (
+    params: { status?: PdpGoalStatus; cursor?: string; limit?: number } | undefined,
+    { rejectWithValue }
+  ) => {
+    pdpGoalsLogger.info('Fetching PDP goals', params);
     try {
-      const response = await retryRead(() => api.pdpGoals.listGoals(params?.statuses));
+      const statuses = params?.status != null ? [params.status] : undefined;
+      const response = await retryRead(() =>
+        api.pdpGoals.listGoals({
+          statuses,
+          cursor: params?.cursor,
+          limit: params?.limit,
+        })
+      );
       pdpGoalsLogger.info('Fetched PDP goals', { count: response.goals.length });
       return { ...response, fetchedAt: Date.now() };
     } catch (error) {
@@ -42,9 +53,14 @@ export const fetchPdpGoals = createAsyncThunk(
     }
   },
   {
-    condition: (_, { getState }) => {
-      const { pdpGoals } = getState() as { pdpGoals: { loading: boolean } };
-      return !pdpGoals.loading;
+    condition: (params, { getState }) => {
+      const { pdpGoals } = getState() as {
+        pdpGoals: { views: Record<string, { status: string }> };
+      };
+      const key = pdpGoalViewKey(params?.status);
+      const view = pdpGoals.views[key];
+      if (!view) return true;
+      return view.status === 'idle';
     },
   }
 );

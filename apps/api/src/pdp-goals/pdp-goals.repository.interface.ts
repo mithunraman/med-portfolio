@@ -20,8 +20,13 @@ export interface CreatePdpGoalData {
 
 export interface FindByUserOptions {
   limit?: number;
-  sortByNextDueDate?: boolean;
+  sortByReviewDate?: boolean;
   dueBefore?: Date;
+}
+
+export interface Page<T> {
+  items: T[];
+  nextCursor: string | null;
 }
 
 export interface SaveGoalData {
@@ -29,7 +34,6 @@ export interface SaveGoalData {
   reviewDate?: Date | null;
   completedAt?: Date | null;
   completionReview?: string | null;
-  nextActionDueDate?: Date | null;
   actions?: PdpGoalAction[];
 }
 
@@ -82,10 +86,12 @@ export interface IPdpGoalsRepository {
     options?: FindByUserOptions
   ): Promise<Result<PdpGoal[], DBError>>;
 
-  findByUserIdWithArtefact(
+  findPaginated(
     userId: Types.ObjectId,
-    statuses: PdpGoalStatus[]
-  ): Promise<Result<PdpGoalWithArtefact[], DBError>>;
+    statuses: PdpGoalStatus[],
+    cursor?: string,
+    limit?: number
+  ): Promise<Result<Page<PdpGoal>, DBError>>;
 
   findOneWithArtefact(
     goalXid: string,

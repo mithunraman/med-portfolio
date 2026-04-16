@@ -17,3 +17,7 @@
 - Next to usage stats, show a why / explain button. When clicked, it should open a new screen explaining the usage stats, and how it is calculated. It should also explain why these stats exist.
 
 - For each react native screen / component, look for improvements and best practices.
+
+- When dashboard is loading, use skeleton instead of spinner.
+
+- Cap the artefact title to a maximum of 500 characters when storing in the DB.

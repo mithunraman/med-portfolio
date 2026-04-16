@@ -1,14 +1,13 @@
 import {
   EmptyState,
   FetchErrorBanner,
+  FilterPillRow,
   LastUpdatedLabel,
   SkeletonList,
   StatusPill,
   WaveDots,
 } from '@/components';
-import { STALE_THRESHOLD_MS } from '@/constants/staleness';
-import { useAppDispatch, useAppSelector } from '@/hooks';
-import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
+import { useAppSelector, useFilteredList } from '@/hooks';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 import {
   fetchArtefacts,
@@ -16,13 +15,13 @@ import {
   selectArtefactsByView,
   selectFilterView,
   viewKey,
-  type TypedError,
 } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
+import { formatTimeAgo } from '@/utils/formatTimeAgo';
 import { ArtefactStatus, type Artefact } from '@acme/shared';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -34,7 +33,6 @@ import {
   View,
 } from 'react-native';
 
-// Status filter options — using null to mean "All"
 const STATUS_FILTERS: { label: string; value: ArtefactStatus | null }[] = [
   { label: 'All', value: null },
   { label: 'In progress', value: ArtefactStatus.IN_CONVERSATION },
@@ -42,21 +40,6 @@ const STATUS_FILTERS: { label: string; value: ArtefactStatus | null }[] = [
   { label: 'Completed', value: ArtefactStatus.COMPLETED },
   { label: 'Archived', value: ArtefactStatus.ARCHIVED },
 ];
-
-function formatTimeAgo(dateString: string): string {
-  const now = Date.now();
-  const then = new Date(dateString).getTime();
-  const diffMs = now - then;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return new Date(dateString).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-}
 
 function EntryListItem({ item, onPress }: { item: Artefact; onPress: () => void }) {
   const { colors } = useTheme();
@@ -87,94 +70,41 @@ function EntryListItem({ item, onPress }: { item: Artefact; onPress: () => void 
 export default function EntriesScreen() {
   const insets = useOfflineAwareInsets();
   const { colors } = useTheme();
-  const dispatch = useAppDispatch();
   const router = useRouter();
 
   const [activeFilter, setActiveFilter] = useState<ArtefactStatus | null>(null);
-  const [isFetching, setIsFetching] = useState(false);
-  const fetchingRef = useRef(false);
-  const [fetchError, setFetchError] = useState<TypedError | null>(null);
 
   const key = viewKey(activeFilter);
-  const currentView = useAppSelector((state) => selectFilterView(state, key));
   const displayedArtefacts = useAppSelector((state) => selectArtefactsByView(state, key));
   const error = useAppSelector((state) => state.artefacts.error);
-  const stale = useAppSelector((state) => state.artefacts.stale);
-  const lastFetchedAt = currentView?.lastFetchedAt ?? null;
+
+  const {
+    currentView,
+    lastFetchedAt,
+    fetchError,
+    setFetchError,
+    isInitialLoad,
+    showDot,
+    handleRefresh,
+    handleLoadMore,
+    doFetch,
+  } = useFilteredList<ArtefactStatus>({
+    activeFilter,
+    selectView: (state) => selectFilterView(state, key),
+    selectItems: (state) => selectArtefactsByView(state, key),
+    selectError: (state) => state.artefacts.error,
+    selectStale: (state) => state.artefacts.stale,
+    fetchThunk: fetchArtefacts,
+    isRejected: fetchArtefacts.rejected.match,
+    resetViewAction: resetView,
+    viewKeyFn: viewKey,
+  });
 
   const listContentStyle = useMemo(
     () => [styles.listContent, { paddingBottom: insets.bottom + 16 }],
     [insets.bottom]
   );
 
-  const doFetch = useCallback(async () => {
-    if (fetchingRef.current) return;
-    fetchingRef.current = true;
-    setIsFetching(true);
-    setFetchError(null);
-
-    const result = await dispatch(fetchArtefacts({ status: activeFilter ?? undefined }));
-
-    fetchingRef.current = false;
-    setIsFetching(false);
-
-    if (fetchArtefacts.rejected.match(result) && !result.meta.condition) {
-      setFetchError(result.payload as TypedError);
-    }
-  }, [dispatch, activeFilter]);
-
-  const doFetchRef = useRef(doFetch);
-  doFetchRef.current = doFetch;
-
-  // Fetch on mount and on filter change if no cached view
-  useEffect(() => {
-    if (!currentView) {
-      doFetchRef.current();
-    }
-  }, [activeFilter, currentView]);
-
-  // Refetch on focus if stale
-  useFocusEffect(
-    useCallback(() => {
-      const isExpired = lastFetchedAt != null && Date.now() - lastFetchedAt > STALE_THRESHOLD_MS;
-      if ((stale || isExpired) && currentView?.status === 'idle') {
-        dispatch(resetView(key));
-        doFetchRef.current();
-      }
-    }, [stale, lastFetchedAt, currentView?.status, dispatch, key])
-  );
-
-  // Refetch on network recovery
-  useNetworkRecovery(
-    useCallback(() => {
-      if (
-        (!currentView || currentView.status === 'idle') &&
-        (displayedArtefacts.length === 0 || error)
-      ) {
-        doFetchRef.current();
-      }
-    }, [currentView, displayedArtefacts.length, error])
-  );
-
-  // -- Pull to refresh --
-  const handleRefresh = useCallback(() => {
-    if (fetchingRef.current) return;
-    dispatch(resetView(viewKey(activeFilter)));
-    doFetchRef.current();
-  }, [dispatch, activeFilter]);
-
-  // -- Infinite scroll --
-  const handleLoadMore = useCallback(() => {
-    if (!currentView || currentView.status !== 'idle' || !currentView.nextCursor) return;
-    dispatch(
-      fetchArtefacts({
-        status: activeFilter ?? undefined,
-        cursor: currentView.nextCursor,
-      })
-    );
-  }, [dispatch, activeFilter, currentView]);
-
-  // -- Navigation --
   const handleEntryPress = useCallback(
     (item: Artefact) => {
       if (item.status >= ArtefactStatus.IN_REVIEW || item.status === ArtefactStatus.ARCHIVED) {
@@ -195,13 +125,6 @@ export default function EntriesScreen() {
 
   const keyExtractor = useCallback((item: Artefact) => item.id, []);
 
-  // -- Derived state --
-  const isInitialLoad =
-    (currentView?.status === 'loading' && displayedArtefacts.length === 0) ||
-    (!currentView && !error);
-  const showDot =
-    currentView?.status === 'loadingMore' || (isFetching && displayedArtefacts.length > 0);
-
   const renderFooter = useCallback(() => {
     if (currentView?.status !== 'loadingMore') return null;
     return <ActivityIndicator style={styles.footerSpinner} color={colors.primary} />;
@@ -216,32 +139,11 @@ export default function EntriesScreen() {
         <LastUpdatedLabel timestamp={lastFetchedAt} />
       </View>
 
-      {/* Status filter pills */}
-      <View style={styles.filterRow}>
-        {STATUS_FILTERS.map((filter) => (
-          <TouchableOpacity
-            key={filter.label}
-            style={[
-              styles.filterPill,
-              {
-                backgroundColor: activeFilter === filter.value ? colors.primary : colors.surface,
-                borderColor: activeFilter === filter.value ? colors.primary : colors.border,
-              },
-            ]}
-            onPress={() => setActiveFilter(filter.value)}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.filterPillText,
-                { color: activeFilter === filter.value ? '#fff' : colors.text },
-              ]}
-            >
-              {filter.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <FilterPillRow
+        filters={STATUS_FILTERS}
+        activeFilter={activeFilter}
+        onSelect={setActiveFilter}
+      />
 
       <View style={[styles.waveDotsRow, !showDot && styles.waveDotsHidden]}>
         {showDot && <WaveDots color={colors.primary} />}
@@ -251,7 +153,6 @@ export default function EntriesScreen() {
         <FetchErrorBanner error={fetchError} onDismiss={() => setFetchError(null)} />
       )}
 
-      {/* Content */}
       {isInitialLoad ? (
         <SkeletonList />
       ) : error && displayedArtefacts.length === 0 ? (
@@ -261,7 +162,7 @@ export default function EntriesScreen() {
             title="You're offline"
             description="Check your connection and try again."
             actionLabel="Retry"
-            onAction={() => doFetchRef.current()}
+            onAction={doFetch}
           />
         ) : (
           <EmptyState
@@ -269,7 +170,7 @@ export default function EntriesScreen() {
             title="Something went wrong"
             description={error.message}
             actionLabel={error.retryable ? 'Try again' : undefined}
-            onAction={error.retryable ? () => doFetchRef.current() : undefined}
+            onAction={error.retryable ? doFetch : undefined}
           />
         )
       ) : displayedArtefacts.length === 0 ? (
@@ -324,23 +225,6 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-  },
-  filterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    gap: 6,
-  },
-  filterPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  filterPillText: {
-    fontSize: 13,
-    fontWeight: '500',
   },
   waveDotsRow: {
     alignItems: 'center',

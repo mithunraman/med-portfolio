@@ -1,4 +1,5 @@
 export { useAppDispatch } from './useAppDispatch';
+export { useFilteredList } from './useFilteredList';
 export { useBackgroundStaleTimer } from './useBackgroundStaleTimer';
 export { useAppSelector } from './useAppSelector';
 export { useAudioRecorder, type AudioRecordingResult } from './useAudioRecorder';

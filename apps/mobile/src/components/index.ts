@@ -11,6 +11,7 @@ export { EmptyState } from './EmptyState';
 export { ErrorBoundary } from './ErrorBoundary';
 export { ExportSheet } from './ExportSheet';
 export { FetchErrorBanner } from './FetchErrorBanner';
+export { FilterPillRow } from './FilterPillRow';
 export { FullScreenSectionEditor } from './FullScreenTextEditor';
 export { LastUpdatedLabel } from './LastUpdatedLabel';
 export { LoadingProvider, useLoading } from './LoadingHUD';

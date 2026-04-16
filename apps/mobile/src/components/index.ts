@@ -23,6 +23,7 @@ export { SettingsItem, type SettingsItemProps } from './SettingsItem';
 export { SettingsSection } from './SettingsSection';
 export { SingleSelect, type SingleSelectOption } from './SingleSelect';
 export { SkeletonBone } from './SkeletonBone';
+export { SkeletonProvider } from './SkeletonProvider';
 export { SkeletonList } from './SkeletonList';
 export { StatusPill, type StatusVariant } from './StatusPill';
 export { WelcomeModule } from './WelcomeModule';

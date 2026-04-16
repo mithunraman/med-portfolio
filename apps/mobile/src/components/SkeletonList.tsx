@@ -1,6 +1,7 @@
 import { useTheme } from '@/theme';
 import { StyleSheet, View } from 'react-native';
 import { SkeletonBone } from './SkeletonBone';
+import { SkeletonProvider } from './SkeletonProvider';
 
 function SkeletonCard() {
   const { colors } = useTheme();
@@ -21,11 +22,13 @@ interface SkeletonListProps {
 
 export function SkeletonList({ count = 5 }: SkeletonListProps) {
   return (
-    <View style={styles.container}>
-      {Array.from({ length: count }, (_, i) => (
-        <SkeletonCard key={i} />
-      ))}
-    </View>
+    <SkeletonProvider>
+      <View style={styles.container}>
+        {Array.from({ length: count }, (_, i) => (
+          <SkeletonCard key={i} />
+        ))}
+      </View>
+    </SkeletonProvider>
   );
 }
 

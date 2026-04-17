@@ -61,7 +61,7 @@ export function useFilteredList<TFilter extends number>(
   } = config;
 
   const dispatch = useAppDispatch();
-  const fetchingRef = useRef(false);
+  const fetchingKeyRef = useRef<string | null>(null);
   const [fetchError, setFetchError] = useState<TypedError | null>(null);
 
   const currentView = useAppSelector(selectView);
@@ -71,16 +71,23 @@ export function useFilteredList<TFilter extends number>(
   const lastFetchedAt = currentView?.lastFetchedAt ?? null;
 
   const doFetch = useCallback(async () => {
-    if (fetchingRef.current) return;
-    fetchingRef.current = true;
+    const key = String(activeFilter ?? 'all');
+    if (fetchingKeyRef.current === key) return;
+    fetchingKeyRef.current = key;
     setFetchError(null);
 
     const result = await dispatch(fetchThunk({ status: activeFilter ?? undefined }));
 
-    fetchingRef.current = false;
+    // Only clear if this fetch is still the active one (not superseded by a newer filter)
+    if (fetchingKeyRef.current === key) {
+      fetchingKeyRef.current = null;
+    }
 
     if (isRejected(result) && !result.meta.condition) {
-      setFetchError(result.payload as TypedError);
+      // Only set error if the filter hasn't changed while we were fetching
+      if (fetchingKeyRef.current === null || fetchingKeyRef.current === key) {
+        setFetchError(result.payload as TypedError);
+      }
     }
   }, [dispatch, fetchThunk, isRejected, activeFilter]);
 
@@ -119,9 +126,9 @@ export function useFilteredList<TFilter extends number>(
 
   // Pull to refresh
   const handleRefresh = useCallback(() => {
-    if (fetchingRef.current) return;
+    if (fetchingKeyRef.current === String(activeFilter ?? 'all')) return;
     doFetchRef.current();
-  }, []);
+  }, [activeFilter]);
 
   // Infinite scroll
   const handleLoadMore = useCallback(() => {

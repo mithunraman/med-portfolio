@@ -9,7 +9,7 @@ import { api } from '../../../api/client';
 import { classifyError } from '../../../utils/classifyError';
 import { logger } from '../../../utils/logger';
 import { retryRead } from '../../../utils/retry';
-import { pdpGoalViewKey } from './slice';
+import { viewKeyFromStatus } from '../../viewHelpers';
 
 const pdpGoalsLogger = logger.createScope('PdpGoalsThunks');
 
@@ -57,7 +57,7 @@ export const fetchPdpGoals = createAsyncThunk(
       const { pdpGoals } = getState() as {
         pdpGoals: { views: Record<string, { status: string }> };
       };
-      const key = pdpGoalViewKey(params?.status);
+      const key = viewKeyFromStatus(params?.status);
       const view = pdpGoals.views[key];
       if (!view) return true;
       return view.status === 'idle';

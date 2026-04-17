@@ -1,4 +1,4 @@
-import { CoverageRing, SectionHeader, StatusPill, WelcomeModule } from '@/components';
+import { CoverageRing, HomeSkeleton, SectionHeader, StatusPill, WelcomeModule } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
@@ -24,7 +24,6 @@ import { randomUUID } from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   RefreshControl,
   ScrollView,
@@ -547,9 +546,7 @@ export default function HomeScreen() {
             onStartFirstEntry={handleStartNew}
           />
         ) : isInitialLoad ? (
-          <View style={styles.initialLoading}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
+          <HomeSkeleton />
         ) : (
           <>
             {/* Module B: Review Period Coverage (high priority — ARCP tracking) */}
@@ -604,12 +601,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     gap: 8,
   },
-  initialLoading: {
-    paddingVertical: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
   // Header
   header: {
     paddingHorizontal: 20,

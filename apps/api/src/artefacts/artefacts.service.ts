@@ -675,7 +675,7 @@ export class ArtefactsService {
             userId: new Types.ObjectId(userId),
             specialty: sourceArtefact.specialty,
             trainingStage: sourceArtefact.trainingStage ?? '',
-            title: `Copy of ${sourceArtefact.title}`,
+            title: `Copy of ${sourceArtefact.title}`.slice(0, 200),
           },
           session
         );
@@ -703,7 +703,7 @@ export class ArtefactsService {
           {
             userId: new Types.ObjectId(userId),
             artefact: newArtefact._id,
-            title: `Copy of ${convResult.value.title}`,
+            title: `Copy of ${convResult.value.title}`.slice(0, 200),
           },
           session
         );

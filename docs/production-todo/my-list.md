@@ -20,4 +20,4 @@
 
 * [Done] When dashboard is loading, use skeleton instead of spinner.
 
-* Cap the artefact title to a maximum of 500 characters when storing in the DB.
+* [Done] Cap the artefact title to a maximum of 500 characters when storing in the DB.

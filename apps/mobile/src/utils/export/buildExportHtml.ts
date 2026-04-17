@@ -14,25 +14,21 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-function goalStatusLabel(status: PdpGoalStatus): string {
-  switch (status) {
-    case PdpGoalStatus.NOT_STARTED:
-      return 'Not started';
-    case PdpGoalStatus.STARTED:
-      return 'In progress';
-    case PdpGoalStatus.COMPLETED:
-      return 'Completed';
-    case PdpGoalStatus.ARCHIVED:
-      return 'Archived';
-    default:
-      return 'Unknown';
-  }
-}
+import { getPdpGoalStatusDisplay } from '@/utils/pdpGoalStatus';
+
+const GOAL_STATUS_CLASS: Record<PdpGoalStatus, string> = {
+  [PdpGoalStatus.NOT_STARTED]: 'not-started',
+  [PdpGoalStatus.STARTED]: 'in-progress',
+  [PdpGoalStatus.COMPLETED]: 'completed',
+  [PdpGoalStatus.ARCHIVED]: '',
+  [PdpGoalStatus.DELETED]: '',
+};
 
 function buildReflectionHtml(artefact: Artefact): string {
-  if (!artefact.reflection?.length) return '';
+  const sections = artefact.reflection?.filter((s) => s.text);
+  if (!sections?.length) return '';
 
-  const sections = artefact.reflection
+  const html = sections
     .map(
       (s) => `
       <div class="section">
@@ -42,13 +38,14 @@ function buildReflectionHtml(artefact: Artefact): string {
     )
     .join('');
 
-  return `<div class="block"><h2>Reflection</h2>${sections}</div>`;
+  return `<div class="block"><h2>Reflection</h2>${html}</div>`;
 }
 
 function buildCapabilitiesHtml(artefact: Artefact): string {
-  if (!artefact.capabilities?.length) return '';
+  const caps = artefact.capabilities?.filter((c) => c.name || c.evidence);
+  if (!caps?.length) return '';
 
-  const rows = artefact.capabilities
+  const rows = caps
     .map(
       (c) => `
       <tr>
@@ -69,19 +66,22 @@ function buildCapabilitiesHtml(artefact: Artefact): string {
 }
 
 function buildPdpGoalsHtml(artefact: Artefact): string {
-  const nonArchived = artefact.pdpGoals?.filter((g) => g.status !== PdpGoalStatus.ARCHIVED);
+  const nonArchived = artefact.pdpGoals?.filter(
+    (g) => g.status !== PdpGoalStatus.ARCHIVED && g.status !== PdpGoalStatus.DELETED && g.goal
+  );
   if (!nonArchived?.length) return '';
 
   const goals = nonArchived
     .map((g) => {
       const actions = g.actions
-        .filter((a) => a.status !== PdpGoalStatus.ARCHIVED)
+        .filter((a) => a.status !== PdpGoalStatus.ARCHIVED && a.status !== PdpGoalStatus.DELETED)
         .map(
           (a) => `
           <li>
             <span class="action-text">${escapeHtml(a.action)}</span>
-            <span class="status-pill ${a.status === PdpGoalStatus.COMPLETED ? 'completed' : ''}">${goalStatusLabel(a.status)}</span>
+            <span class="status-pill ${GOAL_STATUS_CLASS[a.status]}">${getPdpGoalStatusDisplay(a.status).label}</span>
             ${a.dueDate ? `<span class="due-date">Due: ${formatDate(a.dueDate)}</span>` : ''}
+            ${a.completionReview ? `<p class="action-review">${escapeHtml(a.completionReview)}</p>` : ''}
           </li>`
         )
         .join('');
@@ -90,9 +90,10 @@ function buildPdpGoalsHtml(artefact: Artefact): string {
         <div class="goal-card">
           <div class="goal-header">
             <span class="goal-text">${escapeHtml(g.goal)}</span>
-            <span class="status-pill ${g.status === PdpGoalStatus.COMPLETED ? 'completed' : ''}">${goalStatusLabel(g.status)}</span>
+            <span class="status-pill ${GOAL_STATUS_CLASS[g.status]}">${getPdpGoalStatusDisplay(g.status).label}</span>
           </div>
           ${g.reviewDate ? `<p class="review-date">Review by: ${formatDate(g.reviewDate)}</p>` : ''}
+          ${g.completionReview ? `<p class="completion-review">${escapeHtml(g.completionReview)}</p>` : ''}
           ${actions ? `<ul class="actions-list">${actions}</ul>` : ''}
         </div>`;
     })
@@ -120,6 +121,7 @@ export function buildExportHtml(artefact: Artefact): string {
       font-size: 11pt;
       line-height: 1.5;
       color: #1a1a1a;
+      padding: 20mm 15mm;
     }
 
     /* Header */
@@ -258,6 +260,16 @@ export function buildExportHtml(artefact: Artefact): string {
       white-space: nowrap;
     }
 
+    .status-pill.not-started {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .status-pill.in-progress {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
     .status-pill.completed {
       background: #dcfce7;
       color: #166534;
@@ -277,6 +289,7 @@ export function buildExportHtml(artefact: Artefact): string {
 
     .actions-list li {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 8px;
       padding: 3px 0;
@@ -289,8 +302,25 @@ export function buildExportHtml(artefact: Artefact): string {
     }
 
     .due-date {
-      font-size: 8.5pt;
-      color: #9ca3af;
+      font-size: 9pt;
+      color: #6b7280;
+    }
+
+    .completion-review {
+      font-size: 10pt;
+      color: #374151;
+      margin-top: 6px;
+      white-space: pre-wrap;
+      font-style: italic;
+    }
+
+    .action-review {
+      width: 100%;
+      font-size: 9pt;
+      color: #6b7280;
+      margin-top: 2px;
+      white-space: pre-wrap;
+      font-style: italic;
     }
 
     /* Footer */
@@ -298,8 +328,8 @@ export function buildExportHtml(artefact: Artefact): string {
       margin-top: 24px;
       padding-top: 8px;
       border-top: 1px solid #e5e7eb;
-      font-size: 8pt;
-      color: #9ca3af;
+      font-size: 9pt;
+      color: #6b7280;
       text-align: center;
     }
   </style>
@@ -320,7 +350,7 @@ export function buildExportHtml(artefact: Artefact): string {
   ${buildPdpGoalsHtml(artefact)}
 
   <div class="footer">
-    Generated by Portfolio Assistant &middot; ${formatDate(new Date().toISOString())}
+    Generated by Logdit.app &middot; ${formatDate(new Date().toISOString())}
   </div>
 
 </body>

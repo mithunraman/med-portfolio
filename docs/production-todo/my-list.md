@@ -8,7 +8,7 @@
 
 * Completed PDP goals in Entry page should have a better UI UX.
 
-- After an artefact is created in the conversation, when user clicks view entry, the conversation screen should be removed and the artefact screen should be shown. When back is pressed, it should go back to the home screen.
+* After an artefact is created in the conversation, when user clicks view entry, the conversation screen should be removed and the artefact screen should be shown. When back is pressed, it should go back to the home screen.
 
 - When a PDP goal is completed, and a reflection is added, and when user exports the artefact, the reflection should be included in the export. Currently it is not included.
 
@@ -18,6 +18,6 @@
 
 - For each react native screen / component, look for improvements and best practices.
 
-- When dashboard is loading, use skeleton instead of spinner.
+* When dashboard is loading, use skeleton instead of spinner.
 
 - Cap the artefact title to a maximum of 500 characters when storing in the DB.

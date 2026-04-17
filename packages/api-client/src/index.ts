@@ -8,6 +8,7 @@ import { MediaClient } from './clients/media.client';
 import { InitClient } from './clients/init.client';
 import { PdpGoalsClient } from './clients/pdp-goals.client';
 import { ReviewPeriodsClient } from './clients/review-periods.client';
+import { QuotaClient } from './clients/quota.client';
 import { SpecialtiesClient } from './clients/specialties.client';
 
 // Re-export types and adapters
@@ -32,6 +33,7 @@ export function createApiClient(config: ApiClientConfig) {
     init: new InitClient(baseClient),
     pdpGoals: new PdpGoalsClient(baseClient),
     reviewPeriods: new ReviewPeriodsClient(baseClient),
+    quota: new QuotaClient(baseClient),
     specialties: new SpecialtiesClient(baseClient),
   };
 }

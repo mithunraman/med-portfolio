@@ -6,4 +6,5 @@ export * from './media.client';
 export * from './init.client';
 export * from './pdp-goals.client';
 export * from './review-periods.client';
+export * from './quota.client';
 export * from './specialties.client';

@@ -1,8 +1,9 @@
 import { useAppSelector } from '@/hooks';
 import { useTheme } from '@/theme';
 import type { QuotaWindow } from '@acme/shared';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 function formatTimeRemaining(resetsAt: string | null): string {
   if (!resetsAt) return 'Rolling window';
@@ -49,14 +50,10 @@ function QuotaBar({ label, window: w }: { label: string; window: QuotaWindow }) 
     <View style={styles.quotaRow}>
       <View style={styles.quotaHeader}>
         <Text style={[styles.quotaLabel, { color: colors.text }]}>{label}</Text>
-        <Text style={[styles.quotaPercent, { color: barColor }]}>
-          {Math.round(percent)}% used
-        </Text>
+        <Text style={[styles.quotaPercent, { color: barColor }]}>{Math.round(percent)}% used</Text>
       </View>
       <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
-        <View
-          style={[styles.barFill, { width: `${percent}%`, backgroundColor: barColor }]}
-        />
+        <View style={[styles.barFill, { width: `${percent}%`, backgroundColor: barColor }]} />
       </View>
       <Text style={[styles.quotaMeta, { color: colors.textSecondary }]}>{resetLabel}</Text>
     </View>
@@ -66,16 +63,28 @@ function QuotaBar({ label, window: w }: { label: string; window: QuotaWindow }) 
 export function QuotaUsageSection() {
   const quota = useAppSelector((s) => s.auth.quota);
   const { colors } = useTheme();
+  const router = useRouter();
 
   if (!quota) return null;
 
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Usage</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>AI Credits</Text>
+        <TouchableOpacity
+          style={styles.infoLink}
+          onPress={() => router.push('/credits-info')}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="How do credits work?"
+        >
+          <Text style={[styles.infoLinkText, { color: colors.primary }]}>How do credits work?</Text>
+        </TouchableOpacity>
+      </View>
       <View style={[styles.sectionContent, { backgroundColor: colors.surface }]}>
-        <QuotaBar label="Session" window={quota.shortWindow} />
+        <QuotaBar label="Session credits" window={quota.shortWindow} />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <QuotaBar label="Weekly" window={quota.weeklyWindow} />
+        <QuotaBar label="Weekly credits" window={quota.weeklyWindow} />
       </View>
     </View>
   );
@@ -90,8 +99,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 8,
-    paddingHorizontal: 24,
   },
   sectionContent: {
     marginHorizontal: 16,
@@ -129,5 +136,21 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    marginBottom: 8,
+  },
+  infoLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  infoLinkText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

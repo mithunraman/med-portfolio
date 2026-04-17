@@ -21,3 +21,5 @@
 * [Done] When dashboard is loading, use skeleton instead of spinner.
 
 * [Done] Cap the artefact title to a maximum of 500 characters when storing in the DB.
+
+* Guests should be allowed to create a maximum of 5 artefacts. Then ask them to register as user to continue. Registered user should be allowed to create more.

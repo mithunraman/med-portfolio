@@ -15,3 +15,14 @@ export const QuotaStatusSchema = z.object({
 });
 
 export type QuotaStatus = z.infer<typeof QuotaStatusSchema>;
+
+export const CreditInfoItemSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+});
+
+export type CreditInfoItem = z.infer<typeof CreditInfoItemSchema>;
+
+export const CreditInfoResponseSchema = z.array(CreditInfoItemSchema);
+
+export type CreditInfoResponse = z.infer<typeof CreditInfoResponseSchema>;

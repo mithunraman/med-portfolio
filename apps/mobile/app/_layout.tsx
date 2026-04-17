@@ -194,6 +194,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(entry)" options={{ presentation: 'card' }} />
         <Stack.Screen name="(pdp-goal)" options={{ presentation: 'card' }} />
         <Stack.Screen name="(review-period)" options={{ presentation: 'card' }} />
+        <Stack.Screen name="(profile-settings)" options={{ presentation: 'card' }} />
         <Stack.Screen name="credits-info" options={{ presentation: 'card' }} />
         <Stack.Screen name="claim-account" options={{ presentation: 'modal' }} />
       </Stack>

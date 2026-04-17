@@ -14,7 +14,7 @@
 
 * [Done] Rename the file name of the exported artefact. It should contain entry type and title of the artefact.
 
-* Next to usage stats, show a why / explain button. When clicked, it should open a new screen explaining the usage stats, and how it is calculated. It should also explain why these stats exist.
+* [Done] Next to usage stats, show a why / explain button. When clicked, it should open a new screen explaining the usage stats, and how it is calculated. It should also explain why these stats exist.
 
 * For each react native screen / component, look for improvements and best practices.
 

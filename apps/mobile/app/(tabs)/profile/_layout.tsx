@@ -15,8 +15,6 @@ export default function ProfileLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="account-settings" options={{ title: 'Account Settings' }} />
-      <Stack.Screen name="privacy-support" options={{ title: 'Privacy & Support' }} />
     </Stack>
   );
 }

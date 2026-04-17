@@ -52,13 +52,18 @@ export default function AccountSettingsScreen() {
       return;
     }
 
+    if (!user?.specialty?.code || !user?.specialty?.trainingStage?.code) {
+      Alert.alert('Error', 'Specialty information is missing. Please update your specialty first.');
+      return;
+    }
+
     setIsSaving(true);
     try {
       await dispatch(
         updateProfile({
           name: trimmed,
-          specialty: user!.specialty!.code,
-          trainingStage: user!.specialty!.trainingStage.code,
+          specialty: user.specialty.code,
+          trainingStage: user.specialty.trainingStage.code,
         })
       ).unwrap();
       setNameModalVisible(false);

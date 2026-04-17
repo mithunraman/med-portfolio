@@ -70,7 +70,7 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[styles.heroCard, { backgroundColor: colors.surface }]}
           onPress={
-            isGuest ? handleCreateAccount : () => router.push('/(tabs)/profile/account-settings')
+            isGuest ? handleCreateAccount : () => router.push('/(profile-settings)/account-settings')
           }
           activeOpacity={0.7}
           accessibilityRole="button"
@@ -157,7 +157,7 @@ export default function ProfileScreen() {
             <SettingsItem
               icon="person-circle-outline"
               label="Account Settings"
-              onPress={() => router.push('/(tabs)/profile/account-settings')}
+              onPress={() => router.push('/(profile-settings)/account-settings')}
             />
           )}
           <SettingsItem
@@ -175,7 +175,7 @@ export default function ProfileScreen() {
           <SettingsItem
             icon="shield-outline"
             label="Privacy & Support"
-            onPress={() => router.push('/(tabs)/profile/privacy-support')}
+            onPress={() => router.push('/(profile-settings)/privacy-support')}
           />
         </SettingsSection>
 

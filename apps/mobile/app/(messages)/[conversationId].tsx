@@ -673,7 +673,7 @@ export default function ChatScreen() {
             buttonLabel="View Your Entry"
             onPress={() => {
               if (artefactId) {
-                router.push(`/(entry)/${artefactId}`);
+                router.replace(`/(entry)/${artefactId}`);
               }
             }}
           />

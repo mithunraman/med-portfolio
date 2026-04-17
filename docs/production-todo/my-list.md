@@ -6,7 +6,7 @@
 
 - Write tests to check for AuthZ issues, like user A trying to access user B's data.
 
-- Completed PDP goals in Entry page should have a better UI UX.
+* Completed PDP goals in Entry page should have a better UI UX.
 
 - After an artefact is created in the conversation, when user clicks view entry, the conversation screen should be removed and the artefact screen should be shown. When back is pressed, it should go back to the home screen.
 

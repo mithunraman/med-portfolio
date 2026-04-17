@@ -103,6 +103,10 @@ In-process polling (not a distributed queue). Services create outbox entries; a 
 
 Snapshot-before-edit: editing an artefact first snapshots the current state. Restoring a version also snapshots current state first, enabling undo. Entity-agnostic service.
 
+### Mobile logging
+
+Never use raw `console.log/info/warn/error` in mobile app code. Use the structured logger at `apps/mobile/src/utils/logger/` which provides scoped loggers, log-level filtering, and sensitive data redaction. Create a scoped logger per module: `const myLogger = logger.createScope('MyModule')`. For error reporting, use `Sentry.captureException()` with `tags` (static, filterable) and `extra` (dynamic, searchable context).
+
 ### Mobile environment
 
 `EXPO_PUBLIC_API_URL` must use your machine's local IP (not `localhost`), since Expo runs on a physical device or emulator. JWT tokens stored in Expo SecureStore (native OS keychain), not AsyncStorage.

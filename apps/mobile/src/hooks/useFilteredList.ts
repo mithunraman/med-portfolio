@@ -5,7 +5,7 @@ import { useFocusEffect } from 'expo-router';
 import { useAppDispatch } from './useAppDispatch';
 import { useAppSelector } from './useAppSelector';
 import { useNetworkRecovery } from './useNetworkRecovery';
-import type { PayloadAction, SerializedError } from '@reduxjs/toolkit';
+import type { SerializedError } from '@reduxjs/toolkit';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,8 +29,6 @@ interface UseFilteredListConfig<TFilter extends number> {
   selectStale: (state: RootState) => boolean;
   fetchThunk: FetchThunk<TFilter>;
   isRejected: (result: ThunkResult) => boolean;
-  resetViewAction: (key: string) => PayloadAction<string>;
-  viewKeyFn: (filter: TFilter | null) => string;
 }
 
 interface UseFilteredListResult {
@@ -60,8 +58,6 @@ export function useFilteredList<TFilter extends number>(
     selectStale,
     fetchThunk,
     isRejected,
-    resetViewAction,
-    viewKeyFn,
   } = config;
 
   const dispatch = useAppDispatch();
@@ -73,8 +69,6 @@ export function useFilteredList<TFilter extends number>(
   const error = useAppSelector(selectError);
   const stale = useAppSelector(selectStale);
   const lastFetchedAt = currentView?.lastFetchedAt ?? null;
-
-  const key = viewKeyFn(activeFilter);
 
   const doFetch = useCallback(async () => {
     if (fetchingRef.current) return;
@@ -106,10 +100,9 @@ export function useFilteredList<TFilter extends number>(
     useCallback(() => {
       const isExpired = lastFetchedAt != null && Date.now() - lastFetchedAt > STALE_THRESHOLD_MS;
       if ((stale || isExpired) && currentView?.status === 'idle') {
-        dispatch(resetViewAction(key));
         doFetchRef.current();
       }
-    }, [stale, lastFetchedAt, currentView?.status, dispatch, resetViewAction, key]),
+    }, [stale, lastFetchedAt, currentView?.status]),
   );
 
   // Refetch on network recovery
@@ -127,9 +120,8 @@ export function useFilteredList<TFilter extends number>(
   // Pull to refresh
   const handleRefresh = useCallback(() => {
     if (fetchingRef.current) return;
-    dispatch(resetViewAction(viewKeyFn(activeFilter)));
     doFetchRef.current();
-  }, [dispatch, resetViewAction, viewKeyFn, activeFilter]);
+  }, []);
 
   // Infinite scroll
   const handleLoadMore = useCallback(() => {
@@ -147,8 +139,7 @@ export function useFilteredList<TFilter extends number>(
     (currentView?.status === 'loading' && displayedItems.length === 0) ||
     (!currentView && !error);
   const showDot =
-    currentView?.status === 'loadingMore' ||
-    (currentView?.status === 'loading' && displayedItems.length > 0);
+    currentView?.status === 'loading' && displayedItems.length > 0;
 
   return {
     currentView,

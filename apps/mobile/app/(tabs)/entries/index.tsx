@@ -11,7 +11,6 @@ import { useAppSelector, useFilteredList } from '@/hooks';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 import {
   fetchArtefacts,
-  resetView,
   selectArtefactsByView,
   selectFilterView,
   viewKey,
@@ -96,8 +95,6 @@ export default function EntriesScreen() {
     selectStale: (state) => state.artefacts.stale,
     fetchThunk: fetchArtefacts,
     isRejected: fetchArtefacts.rejected.match,
-    resetViewAction: resetView,
-    viewKeyFn: viewKey,
   });
 
   const listContentStyle = useMemo(

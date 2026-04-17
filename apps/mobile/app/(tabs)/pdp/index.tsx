@@ -12,7 +12,6 @@ import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 import {
   fetchPdpGoals,
   pdpGoalViewKey,
-  resetPdpGoalView,
   selectPdpGoalFilterView,
   selectPdpGoalsByView,
   type PdpGoalEntity,
@@ -105,8 +104,6 @@ export default function PdpScreen() {
     selectStale: (state) => state.pdpGoals.stale,
     fetchThunk: fetchPdpGoals,
     isRejected: fetchPdpGoals.rejected.match,
-    resetViewAction: resetPdpGoalView,
-    viewKeyFn: pdpGoalViewKey,
   });
 
   const listContentStyle = useMemo(

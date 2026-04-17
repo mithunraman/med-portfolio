@@ -42,6 +42,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const AI_REASONING_COLOR = '#8B5CF6';
+const COMPLETED_ACCENT = '#28a745';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -624,6 +625,7 @@ export default function EntryDetailScreen() {
                   .filter((goal) => isArchivedEntry || goal.status !== PdpGoalStatus.ARCHIVED)
                   .map((goal) => {
                     const goalStatus = getPdpGoalStatusDisplay(goal.status);
+                    const isCompleted = goal.status === PdpGoalStatus.COMPLETED;
                     const visibleActions = isArchivedEntry
                       ? goal.actions
                       : goal.actions.filter((a) => a.status !== PdpGoalStatus.ARCHIVED);
@@ -631,7 +633,15 @@ export default function EntryDetailScreen() {
                     return (
                       <View
                         key={goal.id}
-                        style={[styles.pdpGoalCard, { backgroundColor: colors.surface }]}
+                        style={[
+                          styles.pdpGoalCard,
+                          { backgroundColor: colors.surface },
+                          isCompleted && {
+                            borderLeftWidth: 4,
+                            borderLeftColor: COMPLETED_ACCENT,
+                            opacity: 0.55,
+                          },
+                        ]}
                       >
                         <View style={styles.pdpGoalHeader}>
                           <Text style={[styles.cardTitle, { color: colors.text }]}>
@@ -657,7 +667,7 @@ export default function EntryDetailScreen() {
 
                         <View style={styles.pdpActions}>
                           {visibleActions.map((action, actionIndex) => {
-                            const actionActive = action.status === PdpGoalStatus.STARTED;
+                            const actionActive = action.status === PdpGoalStatus.STARTED || action.status === PdpGoalStatus.COMPLETED;
 
                             return (
                               <View
@@ -672,8 +682,12 @@ export default function EntryDetailScreen() {
                                     style={[
                                       styles.pdpActionCheckbox,
                                       {
-                                        borderColor: colors.primary,
-                                        backgroundColor: colors.primary,
+                                        borderColor: isCompleted
+                                          ? COMPLETED_ACCENT
+                                          : colors.primary,
+                                        backgroundColor: isCompleted
+                                          ? COMPLETED_ACCENT
+                                          : colors.primary,
                                       },
                                     ]}
                                   >

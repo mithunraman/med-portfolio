@@ -1,25 +1,25 @@
 {
   "expo": {
-    "name": "Mobile2",
-    "slug": "mobile2",
+    "name": "Logdit",
+    "slug": "logdit",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile2",
+    "scheme": "logdit",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.mkr.mobile",
+      "bundleIdentifier": "app.logdit.mobile",
       "buildNumber": "1",
       "appleTeamId": "D766Z89ML4"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "#fefdfb",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
-      "package": "com.mkr.mobile",
+      "package": "app.logdit.mobile",
       "versionCode": 1,
       "edgeToEdgeEnabled": true,
       "permissions": ["android.permission.RECORD_AUDIO", "android.permission.MODIFY_AUDIO_SETTINGS"]
@@ -34,9 +34,9 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#fefdfb",
           "dark": {
-            "backgroundColor": "#121212"
+            "backgroundColor": "#1a1d1a"
           }
         }
       ],

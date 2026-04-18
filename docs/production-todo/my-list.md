@@ -6,6 +6,12 @@
 
 - Write tests to check for AuthZ issues, like user A trying to access user B's data.
 
+* For each react native screen / component, look for improvements and best practices.
+
+* Guests should be allowed to create a maximum of 5 artefacts. Then ask them to register as user to continue. Registered user should be allowed to create more.
+
+* User should be able to create a review period form the "see all" review period screen. When a new review period is created, we need to warn the user if there are any other active review periods, it will be archived.
+
 * [Done] Completed PDP goals in Entry page should have a better UI UX.
 
 * [Done] After an artefact is created in the conversation, when user clicks view entry, the conversation screen should be removed and the artefact screen should be shown. When back is pressed, it should go back to the home screen.
@@ -16,10 +22,6 @@
 
 * [Done] Next to usage stats, show a why / explain button. When clicked, it should open a new screen explaining the usage stats, and how it is calculated. It should also explain why these stats exist.
 
-* For each react native screen / component, look for improvements and best practices.
-
 * [Done] When dashboard is loading, use skeleton instead of spinner.
 
 * [Done] Cap the artefact title to a maximum of 500 characters when storing in the DB.
-
-* Guests should be allowed to create a maximum of 5 artefacts. Then ask them to register as user to continue. Registered user should be allowed to create more.

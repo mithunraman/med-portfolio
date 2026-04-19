@@ -11,23 +11,18 @@ export const creditInfoItems: CreditInfoItem[] = [
       'AI credits are used whenever you use an AI feature, like sending a message, uploading audio, or running a portfolio analysis. Each AI action uses 1 credit.',
   },
   {
-    title: 'Session credits',
+    title: 'How credits refresh',
     description:
-      'Some credits refresh every 4 hours. As time passes, used credits become available again automatically.',
+      'Credits refresh automatically - some refill every few hours, and you get a full weekly reset every Monday. Check your profile to see exactly when.',
   },
   {
-    title: 'Weekly credits',
+    title: 'Sign up for more credits',
     description:
-      'You also get a weekly credit allowance that resets every Monday. This helps ensure you have access to AI features throughout the week.',
+      'Guest accounts have limited credits. Create an account to unlock your full credit allowance.',
   },
   {
     title: 'What happens when I run out?',
     description:
-      'You can still browse, edit, and manage your portfolio. Only AI-powered features are paused until your credits refresh. You can always check your profile to see when that will happen.',
-  },
-  {
-    title: 'Why do credits exist?',
-    description:
-      'AI features rely on powerful models to generate messages, transcribe audio, and run analyses. Credits help us keep the experience fast and reliable for everyone.',
+      'You can still browse, edit, and manage your portfolio - only AI features are paused until credits refresh. Check your profile to see when.',
   },
 ];

@@ -1,5 +1,6 @@
 import { Specialty } from '@acme/shared';
 import {
+  getAllRegisteredConfigs,
   getAllSpecialtyOptions,
   getSpecialtyConfig,
   isValidTrainingStage,
@@ -8,7 +9,7 @@ import {
 describe('SpecialtyRegistry', () => {
   describe('getSpecialtyConfig', () => {
     it.each([Specialty.GP, Specialty.PSYCHIATRY, Specialty.INTERNAL_MEDICINE])(
-      'should return config for specialty %s',
+      'should return config for active specialty %s',
       (specialty) => {
         const config = getSpecialtyConfig(specialty);
 
@@ -23,21 +24,20 @@ describe('SpecialtyRegistry', () => {
 
     it('should throw for unregistered specialty', () => {
       expect(() => getSpecialtyConfig(999 as Specialty)).toThrow(
-        'No configuration found for specialty: 999'
+        'No active configuration found for specialty: 999'
       );
     });
   });
 
   describe('getAllSpecialtyOptions', () => {
-    it('should return all registered specialties', () => {
+    it('should return only active specialties', () => {
       const options = getAllSpecialtyOptions();
 
-      expect(options.length).toBe(3);
+      expect(options.length).toBeGreaterThan(0);
 
-      const specialties = options.map((o) => o.specialty);
-      expect(specialties).toContain(Specialty.GP);
-      expect(specialties).toContain(Specialty.PSYCHIATRY);
-      expect(specialties).toContain(Specialty.INTERNAL_MEDICINE);
+      for (const option of options) {
+        expect(() => getSpecialtyConfig(option.specialty)).not.toThrow();
+      }
     });
 
     it('should include training stages for each specialty', () => {
@@ -98,11 +98,11 @@ describe('SpecialtyRegistry', () => {
   });
 
   describe('config integrity', () => {
-    it.each([Specialty.GP, Specialty.PSYCHIATRY, Specialty.INTERNAL_MEDICINE])(
-      'specialty %s: every entry type should map to an existing template',
-      (specialty) => {
-        const config = getSpecialtyConfig(specialty);
+    const allConfigs = getAllRegisteredConfigs();
 
+    it.each(allConfigs.map((c) => [c.name, c] as const))(
+      '%s: every entry type should map to an existing template',
+      (_name, config) => {
         for (const entryType of config.entryTypes) {
           const templateId = config.entryTypeToTemplate[entryType.code];
           expect(templateId).toBeDefined();
@@ -111,11 +111,9 @@ describe('SpecialtyRegistry', () => {
       }
     );
 
-    it.each([Specialty.GP, Specialty.PSYCHIATRY, Specialty.INTERNAL_MEDICINE])(
-      'specialty %s: template section weights should sum to approximately 1.0',
-      (specialty) => {
-        const config = getSpecialtyConfig(specialty);
-
+    it.each(allConfigs.map((c) => [c.name, c] as const))(
+      '%s: template section weights should sum to approximately 1.0',
+      (_name, config) => {
         for (const [_, template] of Object.entries(config.templates)) {
           const totalWeight = template.sections.reduce((sum, s) => sum + s.weight, 0);
           expect(totalWeight).toBeCloseTo(1.0, 1);
@@ -123,28 +121,25 @@ describe('SpecialtyRegistry', () => {
       }
     );
 
-    it.each([Specialty.GP, Specialty.PSYCHIATRY, Specialty.INTERNAL_MEDICINE])(
-      'specialty %s: capabilities should have unique codes',
-      (specialty) => {
-        const config = getSpecialtyConfig(specialty);
+    it.each(allConfigs.map((c) => [c.name, c] as const))(
+      '%s: capabilities should have unique codes',
+      (_name, config) => {
         const codes = config.capabilities.map((c) => c.code);
         expect(new Set(codes).size).toBe(codes.length);
       }
     );
 
-    it.each([Specialty.GP, Specialty.PSYCHIATRY, Specialty.INTERNAL_MEDICINE])(
-      'specialty %s: entry types should have unique codes',
-      (specialty) => {
-        const config = getSpecialtyConfig(specialty);
+    it.each(allConfigs.map((c) => [c.name, c] as const))(
+      '%s: entry types should have unique codes',
+      (_name, config) => {
         const codes = config.entryTypes.map((e) => e.code);
         expect(new Set(codes).size).toBe(codes.length);
       }
     );
 
-    it.each([Specialty.GP, Specialty.PSYCHIATRY, Specialty.INTERNAL_MEDICINE])(
-      'specialty %s: training stages should have unique codes',
-      (specialty) => {
-        const config = getSpecialtyConfig(specialty);
+    it.each(allConfigs.map((c) => [c.name, c] as const))(
+      '%s: training stages should have unique codes',
+      (_name, config) => {
         const codes = config.trainingStages.map((s) => s.code);
         expect(new Set(codes).size).toBe(codes.length);
       }

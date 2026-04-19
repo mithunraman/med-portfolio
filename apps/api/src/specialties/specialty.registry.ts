@@ -1,36 +1,36 @@
-import { Specialty, SpecialtyConfig, SpecialtyOption } from '@acme/shared';
+import { Specialty, SpecialtyConfig, SpecialtyOption, SpecialtyRegistryEntry } from '@acme/shared';
 import { GP_SPECIALTY_CONFIG } from './gp';
 import { IM_SPECIALTY_CONFIG } from './internal-medicine';
 import { PSYCHIATRY_SPECIALTY_CONFIG } from './psychiatry';
 
-const SPECIALTY_CONFIGS: Partial<Record<Specialty, SpecialtyConfig>> = {
-  [Specialty.GP]: GP_SPECIALTY_CONFIG,
-  [Specialty.INTERNAL_MEDICINE]: IM_SPECIALTY_CONFIG,
-  [Specialty.PSYCHIATRY]: PSYCHIATRY_SPECIALTY_CONFIG,
+const SPECIALTY_CONFIGS: Partial<Record<Specialty, SpecialtyRegistryEntry>> = {
+  [Specialty.GP]: { config: GP_SPECIALTY_CONFIG, isActive: true },
+  [Specialty.INTERNAL_MEDICINE]: { config: IM_SPECIALTY_CONFIG, isActive: true },
+  [Specialty.PSYCHIATRY]: { config: PSYCHIATRY_SPECIALTY_CONFIG, isActive: true },
 };
 
 export function getSpecialtyConfig(specialty: Specialty): SpecialtyConfig {
-  const config = SPECIALTY_CONFIGS[specialty];
-  if (!config) {
-    throw new Error(`No configuration found for specialty: ${specialty}`);
+  const entry = SPECIALTY_CONFIGS[specialty];
+  if (!entry || !entry.isActive) {
+    throw new Error(`No active configuration found for specialty: ${specialty}`);
   }
-  return config;
+  return entry.config;
 }
 
 export function getAllSpecialtyOptions(): SpecialtyOption[] {
   return Object.values(SPECIALTY_CONFIGS)
-    .filter((config): config is SpecialtyConfig => config !== undefined)
-    .map((config) => ({
-      specialty: config.specialty,
-      name: config.name,
-      trainingStages: config.trainingStages,
+    .filter((entry): entry is SpecialtyRegistryEntry => entry !== undefined && entry.isActive)
+    .map((entry) => ({
+      specialty: entry.config.specialty,
+      name: entry.config.name,
+      trainingStages: entry.config.trainingStages,
     }));
 }
 
 export function isValidTrainingStage(specialty: Specialty, stageCode: string): boolean {
-  const config = SPECIALTY_CONFIGS[specialty];
-  if (!config) return false;
-  return config.trainingStages.some((s) => s.code === stageCode);
+  const entry = SPECIALTY_CONFIGS[specialty];
+  if (!entry || !entry.isActive) return false;
+  return entry.config.trainingStages.some((s) => s.code === stageCode);
 }
 
 export function getTemplateForEntryType(config: SpecialtyConfig, entryTypeCode: string) {
@@ -45,4 +45,11 @@ export function getTemplateForEntryType(config: SpecialtyConfig, entryTypeCode: 
     throw new Error(`Template "${templateId}" not found in specialty "${config.name}"`);
   }
   return template;
+}
+
+/** @internal — exposes all registered configs regardless of isActive, for test data integrity checks. */
+export function getAllRegisteredConfigs(): SpecialtyConfig[] {
+  return Object.values(SPECIALTY_CONFIGS)
+    .filter((entry): entry is SpecialtyRegistryEntry => entry !== undefined)
+    .map((entry) => entry.config);
 }

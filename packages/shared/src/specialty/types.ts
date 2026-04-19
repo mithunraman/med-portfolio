@@ -96,6 +96,15 @@ export interface SpecialtyOption {
 }
 
 /**
+ * Wraps a SpecialtyConfig with an activation flag.
+ * Only active entries are exposed to users and used in core business logic.
+ */
+export interface SpecialtyRegistryEntry {
+  config: SpecialtyConfig;
+  isActive: boolean;
+}
+
+/**
  * Complete configuration for a medical training specialty.
  * This is the "fuel" that drives the specialty-agnostic processing graph.
  * Each specialty (GP, Emergency Medicine, Psychiatry, etc.) provides one of these.

@@ -12,6 +12,8 @@
 
 * User should be able to create a review period form the "see all" review period screen. When a new review period is created, we need to warn the user if there are any other active review periods, it will be archived.
 
+* User is currently unable to change their training / year in the profile page. It should be possible to change it.
+
 * [Done] Completed PDP goals in Entry page should have a better UI UX.
 
 * [Done] After an artefact is created in the conversation, when user clicks view entry, the conversation screen should be removed and the artefact screen should be shown. When back is pressed, it should go back to the home screen.

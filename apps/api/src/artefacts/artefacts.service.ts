@@ -148,40 +148,40 @@ export class ArtefactsService {
   async deleteArtefact(userId: string, xid: string): Promise<{ message: string }> {
     const userOid = new Types.ObjectId(userId);
 
-    const findResult = await this.artefactsRepository.findByXid(xid, userOid);
-    if (isErr(findResult)) throw new InternalServerErrorException(findResult.error.message);
-    if (!findResult.value) throw new NotFoundException('Entry not found');
-
-    const artefact = findResult.value;
-
-    if (artefact.status === ArtefactStatus.IN_CONVERSATION) {
-      throw new BadRequestException(
-        'Use conversation delete while entry is in progress'
-      );
-    }
-    if (artefact.status === ArtefactStatus.DELETED) {
-      throw new NotFoundException('Entry not found');
-    }
-
-    // Find all conversations linked to this artefact
-    const convIdsResult = await this.conversationsRepository.findConversationIdsByArtefact(
-      artefact._id
-    );
-    if (isErr(convIdsResult))
-      throw new InternalServerErrorException(convIdsResult.error.message);
-    const conversationIds = convIdsResult.value;
-
-    // Collect message IDs across all conversations for media cleanup
-    const allMessageIds: Types.ObjectId[] = [];
-    for (const convId of conversationIds) {
-      const msgIdsResult = await this.conversationsRepository.findMessageIdsByConversation(convId);
-      if (!isErr(msgIdsResult)) {
-        allMessageIds.push(...msgIdsResult.value);
-      }
-    }
-
-    await this.transactionService.withTransaction(
+    const conversationIds = await this.transactionService.withTransaction(
       async (session) => {
+        const artefact = await this.findOrThrow(xid, userOid, session);
+
+        if (artefact.status === ArtefactStatus.IN_CONVERSATION) {
+          throw new BadRequestException(
+            'Use conversation delete while entry is in progress'
+          );
+        }
+        if (artefact.status === ArtefactStatus.DELETED) {
+          throw new NotFoundException('Entry not found');
+        }
+
+        // Find all conversations linked to this artefact
+        const convIdsResult = await this.conversationsRepository.findConversationIdsByArtefact(
+          artefact._id,
+          session
+        );
+        if (isErr(convIdsResult))
+          throw new InternalServerErrorException(convIdsResult.error.message);
+        const conversationIds = convIdsResult.value;
+
+        // Collect message IDs across all conversations for media cleanup
+        const allMessageIds: Types.ObjectId[] = [];
+        for (const convId of conversationIds) {
+          const msgIdsResult = await this.conversationsRepository.findMessageIdsByConversation(
+            convId,
+            session
+          );
+          if (!isErr(msgIdsResult)) {
+            allMessageIds.push(...msgIdsResult.value);
+          }
+        }
+
         // Cancel outbox entries for all conversations
         for (const convId of conversationIds) {
           const cancelResult = await this.outboxRepository.cancelByConversationId(
@@ -218,6 +218,8 @@ export class ArtefactsService {
           session
         );
         if (isErr(goalsAnon)) throw new InternalServerErrorException(goalsAnon.error.message);
+
+        return conversationIds;
       },
       { context: `deleteArtefact:${xid}` }
     );
@@ -271,31 +273,35 @@ export class ArtefactsService {
     xid: string,
     dto: UpdateArtefactStatusRequest
   ): Promise<Artefact> {
-    const findResult = await this.artefactsRepository.findByXid(xid, new Types.ObjectId(userId));
+    const artefact = await this.transactionService.withTransaction(
+      async (session) => {
+        const artefactDoc = await this.findOrThrow(xid, new Types.ObjectId(userId), session);
 
-    if (isErr(findResult)) {
-      throw new InternalServerErrorException(findResult.error.message);
-    }
-    if (!findResult.value) {
-      throw new NotFoundException('Artefact not found');
-    }
+        if (dto.status === ArtefactStatus.ARCHIVED) {
+          return this.archiveArtefact(artefactDoc, dto.archivePdpGoals ?? false, session);
+        }
 
-    const artefactDoc = findResult.value;
+        // Simple status update (non-archive transitions)
+        const updateResult = await this.artefactsRepository.updateArtefactById(
+          artefactDoc._id,
+          { status: dto.status },
+          session
+        );
+
+        if (isErr(updateResult)) {
+          throw new InternalServerErrorException(updateResult.error.message);
+        }
+
+        return this.buildArtefactDto(updateResult.value._id, updateResult.value, session);
+      },
+      { context: `updateArtefactStatus:${xid}` }
+    );
 
     if (dto.status === ArtefactStatus.ARCHIVED) {
-      return this.archiveArtefact(artefactDoc, dto.archivePdpGoals ?? false);
+      this.emitStateChanged(userId);
     }
 
-    // Simple status update (non-archive transitions)
-    const updateResult = await this.artefactsRepository.updateArtefactById(artefactDoc._id, {
-      status: dto.status,
-    });
-
-    if (isErr(updateResult)) {
-      throw new InternalServerErrorException(updateResult.error.message);
-    }
-
-    return this.buildArtefactDto(updateResult.value._id, updateResult.value);
+    return artefact;
   }
 
   async finaliseArtefact(
@@ -303,23 +309,14 @@ export class ArtefactsService {
     xid: string,
     dto: FinaliseArtefactRequest
   ): Promise<Artefact> {
-    const findResult = await this.artefactsRepository.findByXid(xid, new Types.ObjectId(userId));
-
-    if (isErr(findResult)) {
-      throw new InternalServerErrorException(findResult.error.message);
-    }
-    if (!findResult.value) {
-      throw new NotFoundException('Artefact not found');
-    }
-
-    const artefactDoc = findResult.value;
-
-    if (artefactDoc.status !== ArtefactStatus.IN_REVIEW) {
-      throw new BadRequestException('Artefact must be in IN_REVIEW status to finalise');
-    }
-
     const artefact = await this.transactionService.withTransaction(
       async (session) => {
+        const artefactDoc = await this.findOrThrow(xid, new Types.ObjectId(userId), session);
+
+        if (artefactDoc.status !== ArtefactStatus.IN_REVIEW) {
+          throw new BadRequestException('Artefact must be in IN_REVIEW status to finalise');
+        }
+
         // 1. Set artefact to COMPLETED
         const updateResult = await this.artefactsRepository.updateArtefactById(
           artefactDoc._id,
@@ -382,74 +379,76 @@ export class ArtefactsService {
     return artefact;
   }
 
+  private async findOrThrow(
+    xid: string,
+    userId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<ArtefactSchema> {
+    const findResult = await this.artefactsRepository.findByXid(xid, userId, session);
+    if (isErr(findResult)) throw new InternalServerErrorException(findResult.error.message);
+    if (!findResult.value) throw new NotFoundException('Artefact not found');
+    return findResult.value;
+  }
+
   private async archiveArtefact(
     artefactDoc: ArtefactSchema,
-    archiveActivePdpGoals: boolean
+    archiveActivePdpGoals: boolean,
+    parentSession?: ClientSession
   ): Promise<Artefact> {
-    const artefact = await this.transactionService.withTransaction(
-      async (session) => {
-        // 1. Set artefact status to ARCHIVED
-        const updateResult = await this.artefactsRepository.updateArtefactById(
-          artefactDoc._id,
-          { status: ArtefactStatus.ARCHIVED },
-          session
-        );
+    const doArchive = async (session: ClientSession) => {
+      // 1. Set artefact status to ARCHIVED
+      const updateResult = await this.artefactsRepository.updateArtefactById(
+        artefactDoc._id,
+        { status: ArtefactStatus.ARCHIVED },
+        session
+      );
 
-        if (isErr(updateResult)) {
-          throw new InternalServerErrorException(updateResult.error.message);
-        }
+      if (isErr(updateResult)) {
+        throw new InternalServerErrorException(updateResult.error.message);
+      }
 
-        // 2. Always archive PENDING goals
-        const pendingResult = await this.pdpGoalsRepository.updateManyByArtefactId(
+      // 2. Always archive PENDING goals
+      const pendingResult = await this.pdpGoalsRepository.updateManyByArtefactId(
+        artefactDoc._id,
+        { statuses: [PdpGoalStatus.NOT_STARTED] },
+        { status: PdpGoalStatus.ARCHIVED },
+        session
+      );
+
+      if (isErr(pendingResult)) {
+        throw new InternalServerErrorException(pendingResult.error.message);
+      }
+
+      // 3. Optionally archive ACTIVE + COMPLETED goals (user chose to)
+      if (archiveActivePdpGoals) {
+        const activeResult = await this.pdpGoalsRepository.updateManyByArtefactId(
           artefactDoc._id,
-          { statuses: [PdpGoalStatus.NOT_STARTED] },
+          { statuses: [PdpGoalStatus.STARTED, PdpGoalStatus.COMPLETED] },
           { status: PdpGoalStatus.ARCHIVED },
           session
         );
 
-        if (isErr(pendingResult)) {
-          throw new InternalServerErrorException(pendingResult.error.message);
+        if (isErr(activeResult)) {
+          throw new InternalServerErrorException(activeResult.error.message);
         }
+      }
 
-        // 3. Optionally archive ACTIVE + COMPLETED goals (user chose to)
-        if (archiveActivePdpGoals) {
-          const activeResult = await this.pdpGoalsRepository.updateManyByArtefactId(
-            artefactDoc._id,
-            { statuses: [PdpGoalStatus.STARTED, PdpGoalStatus.COMPLETED] },
-            { status: PdpGoalStatus.ARCHIVED },
-            session
-          );
+      return this.buildArtefactDto(updateResult.value._id, updateResult.value, session);
+    };
 
-          if (isErr(activeResult)) {
-            throw new InternalServerErrorException(activeResult.error.message);
-          }
-        }
+    const artefact = parentSession
+      ? await doArchive(parentSession)
+      : await this.transactionService.withTransaction(doArchive, { context: 'archiveArtefact' });
 
-        return this.buildArtefactDto(updateResult.value._id, updateResult.value, session);
-      },
-      { context: 'archiveArtefact' }
-    );
-
-    this.emitStateChanged(artefactDoc.userId.toString());
+    // Only emit if we own the transaction — callers with a parentSession
+    // must emit after their transaction commits to avoid stale events on rollback.
+    if (!parentSession) {
+      this.emitStateChanged(artefactDoc.userId.toString());
+    }
     return artefact;
   }
 
   async editArtefact(userId: string, xid: string, dto: EditArtefactRequest): Promise<Artefact> {
-    const findResult = await this.artefactsRepository.findByXid(xid, new Types.ObjectId(userId));
-
-    if (isErr(findResult)) {
-      throw new InternalServerErrorException(findResult.error.message);
-    }
-    if (!findResult.value) {
-      throw new NotFoundException('Artefact not found');
-    }
-
-    const artefactDoc = findResult.value;
-
-    if (artefactDoc.status !== ArtefactStatus.IN_REVIEW) {
-      throw new BadRequestException('Artefact can only be edited in IN_REVIEW status');
-    }
-
     const editData: { title?: string; reflection?: Array<{ title: string; text: string }> } = {};
     if (dto.title !== undefined) editData.title = dto.title;
     if (dto.reflection !== undefined) editData.reflection = dto.reflection;
@@ -460,6 +459,12 @@ export class ArtefactsService {
 
     return this.transactionService.withTransaction(
       async (session) => {
+        const artefactDoc = await this.findOrThrow(xid, new Types.ObjectId(userId), session);
+
+        if (artefactDoc.status !== ArtefactStatus.IN_REVIEW) {
+          throw new BadRequestException('Artefact can only be edited in IN_REVIEW status');
+        }
+
         await this.versionHistoryService.createVersion(
           ArtefactsService.ENTITY_TYPE,
           artefactDoc._id,
@@ -499,18 +504,11 @@ export class ArtefactsService {
   }
 
   async getVersionHistory(userId: string, xid: string): Promise<ArtefactVersionHistoryResponse> {
-    const findResult = await this.artefactsRepository.findByXid(xid, new Types.ObjectId(userId));
-
-    if (isErr(findResult)) {
-      throw new InternalServerErrorException(findResult.error.message);
-    }
-    if (!findResult.value) {
-      throw new NotFoundException('Artefact not found');
-    }
+    const artefact = await this.findOrThrow(xid, new Types.ObjectId(userId));
 
     const versions = await this.versionHistoryService.getVersions(
       ArtefactsService.ENTITY_TYPE,
-      findResult.value._id
+      artefact._id
     );
 
     return {
@@ -528,33 +526,25 @@ export class ArtefactsService {
     xid: string,
     dto: RestoreArtefactVersionRequest
   ): Promise<Artefact> {
-    const findResult = await this.artefactsRepository.findByXid(xid, new Types.ObjectId(userId));
-
-    if (isErr(findResult)) {
-      throw new InternalServerErrorException(findResult.error.message);
-    }
-    if (!findResult.value) {
-      throw new NotFoundException('Artefact not found');
-    }
-
-    const artefactDoc = findResult.value;
-
-    if (artefactDoc.status !== ArtefactStatus.IN_REVIEW) {
-      throw new BadRequestException('Artefact can only be restored in IN_REVIEW status');
-    }
-
-    const targetVersion = await this.versionHistoryService.getVersion(
-      ArtefactsService.ENTITY_TYPE,
-      artefactDoc._id,
-      dto.version
-    );
-
-    if (!targetVersion) {
-      throw new NotFoundException('Version not found');
-    }
-
     return this.transactionService.withTransaction(
       async (session) => {
+        const artefactDoc = await this.findOrThrow(xid, new Types.ObjectId(userId), session);
+
+        if (artefactDoc.status !== ArtefactStatus.IN_REVIEW) {
+          throw new BadRequestException('Artefact can only be restored in IN_REVIEW status');
+        }
+
+        const targetVersion = await this.versionHistoryService.getVersion(
+          ArtefactsService.ENTITY_TYPE,
+          artefactDoc._id,
+          dto.version,
+          session
+        );
+
+        if (!targetVersion) {
+          throw new NotFoundException('Version not found');
+        }
+
         // Snapshot current state before restoring
         await this.versionHistoryService.createVersion(
           ArtefactsService.ENTITY_TYPE,
@@ -633,19 +623,14 @@ export class ArtefactsService {
   }
 
   async duplicateToReview(userId: string, xid: string): Promise<Artefact> {
-    const findResult = await this.artefactsRepository.findByXid(xid, new Types.ObjectId(userId));
-
-    if (isErr(findResult)) throw new InternalServerErrorException(findResult.error.message);
-    if (!findResult.value) throw new NotFoundException('Artefact not found');
-
-    const sourceArtefact = findResult.value;
-
-    if (sourceArtefact.status !== ArtefactStatus.COMPLETED) {
-      throw new BadRequestException('Only COMPLETED artefacts can be cloned');
-    }
-
     return this.transactionService.withTransaction(
       async (session) => {
+        const sourceArtefact = await this.findOrThrow(xid, new Types.ObjectId(userId), session);
+
+        if (sourceArtefact.status !== ArtefactStatus.COMPLETED) {
+          throw new BadRequestException('Only COMPLETED artefacts can be cloned');
+        }
+
         // Fetch source conversation and messages
         const convResult = await this.conversationsRepository.findActiveConversationByArtefact(
           sourceArtefact._id,

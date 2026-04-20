@@ -34,10 +34,11 @@ export class ReviewPeriodsRepository implements IReviewPeriodsRepository {
 
   async findByXid(
     xid: string,
-    userId: Types.ObjectId
+    userId: Types.ObjectId,
+    session?: ClientSession
   ): Promise<Result<ReviewPeriod | null, DBError>> {
     try {
-      const doc = await this.model.findOne({ xid, userId }).lean();
+      const doc = await this.model.findOne({ xid, userId }).session(session ?? null).lean();
       return ok(doc);
     } catch (error) {
       this.logger.error('Failed to find review period', error);

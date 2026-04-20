@@ -169,44 +169,58 @@ export class ConversationsService {
   ): Promise<void> {
     const userOid = new Types.ObjectId(userId);
 
-    // 1. Find conversation and verify ownership
-    const convResult = await this.conversationsRepository.findConversationByXid(
-      conversationXid,
-      userOid,
+    await this.transactionService.withTransaction(
+      async (session) => {
+        // 1. Find conversation and verify ownership
+        const convResult = await this.conversationsRepository.findConversationByXid(
+          conversationXid,
+          userOid,
+          session,
+        );
+        if (isErr(convResult)) throw new InternalServerErrorException(convResult.error.message);
+        if (!convResult.value) throw new NotFoundException('Conversation not found');
+
+        const conversation = convResult.value;
+
+        // 2. Guard: only allow deletion in active conversations
+        if (conversation.status !== ConversationStatus.ACTIVE) {
+          throw new ConflictException(
+            'Messages can only be deleted while the conversation is active'
+          );
+        }
+
+        // 3. Guard: block deletion if analysis is in progress
+        const activeRun = await this.analysisRunsService.findActiveRun(
+          conversation._id,
+          session
+        );
+        if (activeRun) {
+          throw new ConflictException('Cannot delete messages while analysis is in progress');
+        }
+
+        // 4. Resolve message xid → ObjectId
+        const msgResult = await this.conversationsRepository.findMessagesByXids(
+          [messageXid],
+          userOid,
+          session,
+        );
+        if (isErr(msgResult)) throw new InternalServerErrorException(msgResult.error.message);
+        const message = msgResult.value[0];
+        if (!message) throw new NotFoundException('Message not found');
+
+        // 5. Soft-delete + anonymize
+        const deleteResult = await this.conversationsRepository.softDeleteMessage(
+          message._id,
+          conversation._id,
+          userOid,
+          session,
+        );
+        if (isErr(deleteResult))
+          throw new InternalServerErrorException(deleteResult.error.message);
+        if (!deleteResult.value) throw new NotFoundException('Message not found');
+      },
+      { context: `deleteMessage:${conversationXid}:${messageXid}` }
     );
-    if (isErr(convResult)) throw new InternalServerErrorException(convResult.error.message);
-    if (!convResult.value) throw new NotFoundException('Conversation not found');
-
-    const conversation = convResult.value;
-
-    // 2. Guard: only allow deletion in active conversations
-    if (conversation.status !== ConversationStatus.ACTIVE) {
-      throw new ConflictException('Messages can only be deleted while the conversation is active');
-    }
-
-    // 3. Guard: block deletion if analysis is in progress
-    const activeRun = await this.analysisRunsService.findActiveRun(conversation._id);
-    if (activeRun) {
-      throw new ConflictException('Cannot delete messages while analysis is in progress');
-    }
-
-    // 4. Resolve message xid → ObjectId
-    const msgResult = await this.conversationsRepository.findMessagesByXids(
-      [messageXid],
-      userOid,
-    );
-    if (isErr(msgResult)) throw new InternalServerErrorException(msgResult.error.message);
-    const message = msgResult.value[0];
-    if (!message) throw new NotFoundException('Message not found');
-
-    // 5. Soft-delete + anonymize
-    const deleteResult = await this.conversationsRepository.softDeleteMessage(
-      message._id,
-      conversation._id,
-      userOid,
-    );
-    if (isErr(deleteResult)) throw new InternalServerErrorException(deleteResult.error.message);
-    if (!deleteResult.value) throw new NotFoundException('Message not found');
   }
 
   async sendMessage(userId: string, conversationId: string, dto: SendMessageDto): Promise<Message> {
@@ -423,31 +437,41 @@ export class ConversationsService {
     conversation: { _id: Types.ObjectId; artefact: Types.ObjectId },
     idempotencyKey?: string
   ): Promise<void> {
-    // Guard: require at least one COMPLETE user message before starting
-    const completeResult = await this.conversationsRepository.hasCompleteMessages(conversation._id);
-    if (isErr(completeResult)) throw new InternalServerErrorException(completeResult.error.message);
-    if (!completeResult.value)
-      throw new BadRequestException('Cannot start analysis without any completed messages.');
-
-    // Check for existing active run (e.g. user already triggered analysis)
-    const existingRun = await this.analysisRunsService.findActiveRun(conversation._id);
-    if (existingRun) {
-      throw new ConflictException('An analysis run is already in progress for this conversation.');
-    }
-
     const effectiveIdempotencyKey = idempotencyKey || generateXid();
 
-    // Look up artefact to get specialty + trainingStage for the graph
-    const artefactResult = await this.artefactsRepository.findById(conversation.artefact);
-    if (isErr(artefactResult) || !artefactResult.value) {
-      throw new InternalServerErrorException('Artefact not found for conversation');
-    }
-    const artefact = artefactResult.value;
-
-    // Transactional: create analysis_run + outbox entry atomically.
-    // threadId is derived internally by createRun as `${conversationId}:${runNumber}`.
     await this.transactionService.withTransaction(
       async (session) => {
+        // Guard: require at least one COMPLETE user message before starting
+        const completeResult = await this.conversationsRepository.hasCompleteMessages(
+          conversation._id,
+          session
+        );
+        if (isErr(completeResult))
+          throw new InternalServerErrorException(completeResult.error.message);
+        if (!completeResult.value)
+          throw new BadRequestException('Cannot start analysis without any completed messages.');
+
+        // Check for existing active run (e.g. user already triggered analysis)
+        const existingRun = await this.analysisRunsService.findActiveRun(
+          conversation._id,
+          session
+        );
+        if (existingRun) {
+          throw new ConflictException(
+            'An analysis run is already in progress for this conversation.'
+          );
+        }
+
+        // Look up artefact to get specialty + trainingStage for the graph
+        const artefactResult = await this.artefactsRepository.findById(
+          conversation.artefact,
+          session
+        );
+        if (isErr(artefactResult) || !artefactResult.value) {
+          throw new InternalServerErrorException('Artefact not found for conversation');
+        }
+        const artefact = artefactResult.value;
+
         const { run } = await this.analysisRunsService.createRun(
           conversation._id,
           effectiveIdempotencyKey,
@@ -575,25 +599,24 @@ export class ConversationsService {
     // Extract idempotency key from value (client sends it alongside selection data)
     const idempotencyKey = (value?.idempotencyKey as string) || nanoidAlphanumeric();
 
-    // Idempotency check: if key is provided and message already exists, skip creation
-    if (idempotencyKey) {
-      const existingResult = await this.conversationsRepository.findMessageByIdempotencyKey(
-        userOid,
-        idempotencyKey
-      );
-      if (isErr(existingResult))
-        throw new InternalServerErrorException(existingResult.error.message);
-      if (existingResult.value) {
-        this.logger.log(
-          `Idempotent hit for resume key ${idempotencyKey}, skipping message creation`
-        );
-        return; // Already processed — outbox entry already enqueued
-      }
-    }
-
     // 6. Transaction: USER text message (for selections) + outbox entry
     await this.transactionService.withTransaction(
       async (session) => {
+        // Idempotency check inside transaction to prevent double-resume race
+        const existingResult = await this.conversationsRepository.findMessageByIdempotencyKey(
+          userOid,
+          idempotencyKey,
+          session
+        );
+        if (isErr(existingResult))
+          throw new InternalServerErrorException(existingResult.error.message);
+        if (existingResult.value) {
+          this.logger.log(
+            `Idempotent hit for resume key ${idempotencyKey}, skipping message creation`
+          );
+          return;
+        }
+
         // Record user selection as plain USER text message
         // Use option labels from question for human-readable content
         if (questionType === 'single_select' && selectedKey) {

@@ -162,7 +162,7 @@ describe('VersionHistoryService', () => {
       const result = await service.getVersion(entityType, entityId, 2);
 
       expect(result).toEqual(version);
-      expect(mockRepo.findVersion).toHaveBeenCalledWith(entityType, entityId, 2);
+      expect(mockRepo.findVersion).toHaveBeenCalledWith(entityType, entityId, 2, undefined);
     });
 
     it('returns null when version does not exist', async () => {

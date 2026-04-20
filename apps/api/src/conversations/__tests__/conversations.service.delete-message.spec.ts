@@ -54,6 +54,9 @@ const mockAnalysisRunsService = {
 // Unused deps — ConversationsService requires them but deleteMessage doesn't use them
 const noopService = {} as any;
 const noopRepo = {} as any;
+const mockTransactionService = {
+  withTransaction: jest.fn((fn: (session: any) => Promise<any>) => fn(null)),
+};
 
 function createService(): ConversationsService {
   return new ConversationsService(
@@ -64,7 +67,7 @@ function createService(): ConversationsService {
     noopRepo, // analysisRunsRepository
     noopRepo, // outboxRepository
     noopService, // mediaService
-    noopService, // transactionService
+    mockTransactionService as any, // transactionService
     noopService, // portfolioGraphService
     mockAnalysisRunsService as any,
     noopService, // outboxService
@@ -77,6 +80,9 @@ describe('ConversationsService.deleteMessage', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    mockTransactionService.withTransaction.mockImplementation(
+      (fn: (session: any) => Promise<any>) => fn(null),
+    );
     service = createService();
   });
 
@@ -92,6 +98,7 @@ describe('ConversationsService.deleteMessage', () => {
       messageOid,
       conversationOid,
       userId,
+      null,
     );
   });
 

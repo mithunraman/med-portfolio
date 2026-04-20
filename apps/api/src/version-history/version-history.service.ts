@@ -63,9 +63,10 @@ export class VersionHistoryService {
   async getVersion(
     entityType: string,
     entityId: Types.ObjectId,
-    version: number
+    version: number,
+    session?: ClientSession
   ): Promise<VersionHistory | null> {
-    const result = await this.versionHistoryRepository.findVersion(entityType, entityId, version);
+    const result = await this.versionHistoryRepository.findVersion(entityType, entityId, version, session);
 
     if (isErr(result)) {
       throw new InternalServerErrorException(result.error.message);

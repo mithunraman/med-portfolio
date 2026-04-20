@@ -512,10 +512,11 @@ describe('ArtefactsService', () => {
         status: ArtefactStatus.IN_REVIEW,
       });
 
-      // Direct update, no transaction, no PDP goal changes
+      // Status update inside transaction, no PDP goal changes
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
         { status: ArtefactStatus.IN_REVIEW },
+        expect.anything(),
       );
       expect(mockPdpGoalsRepo.updateManyByArtefactId).not.toHaveBeenCalled();
     });

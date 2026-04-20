@@ -28,7 +28,8 @@ export interface IReviewPeriodsRepository {
 
   findByXid(
     xid: string,
-    userId: Types.ObjectId
+    userId: Types.ObjectId,
+    session?: ClientSession
   ): Promise<Result<ReviewPeriod | null, DBError>>;
 
   findByUserId(

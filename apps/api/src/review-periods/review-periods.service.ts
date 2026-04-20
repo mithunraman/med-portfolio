@@ -16,7 +16,7 @@ import {
 } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { startOfDay } from 'date-fns';
-import { Model, Types } from 'mongoose';
+import { ClientSession, Model, Types } from 'mongoose';
 import { TransactionService } from '../database/transaction.service';
 import { User, UserDocument } from '../auth/schemas/user.schema';
 import {
@@ -124,64 +124,82 @@ export class ReviewPeriodsService {
     xid: string,
     dto: { name?: string; startDate?: string; endDate?: string }
   ): Promise<ReviewPeriodDto> {
-    const existing = await this.findOrThrow(userId, xid);
+    const updated = await this.transactionService.withTransaction(
+      async (session) => {
+        const existing = await this.findOrThrow(userId, xid, session);
 
-    if (existing.status === ReviewPeriodStatus.ARCHIVED) {
-      throw new BadRequestException('Cannot update an archived review period');
-    }
+        if (existing.status === ReviewPeriodStatus.ARCHIVED) {
+          throw new BadRequestException('Cannot update an archived review period');
+        }
 
-    const updateData: { name?: string; startDate?: Date; endDate?: Date } = {};
-    if (dto.name !== undefined) updateData.name = dto.name;
-    if (dto.startDate !== undefined) updateData.startDate = new Date(dto.startDate);
-    if (dto.endDate !== undefined) updateData.endDate = new Date(dto.endDate);
+        const updateData: { name?: string; startDate?: Date; endDate?: Date } = {};
+        if (dto.name !== undefined) updateData.name = dto.name;
+        if (dto.startDate !== undefined) updateData.startDate = new Date(dto.startDate);
+        if (dto.endDate !== undefined) updateData.endDate = new Date(dto.endDate);
 
-    // Validate dates if either is being updated
-    const effectiveStart = updateData.startDate ?? existing.startDate;
-    const effectiveEnd = updateData.endDate ?? existing.endDate;
-    if (effectiveEnd <= effectiveStart) {
-      throw new BadRequestException('End date must be after start date');
-    }
+        // Validate dates if either is being updated
+        const effectiveStart = updateData.startDate ?? existing.startDate;
+        const effectiveEnd = updateData.endDate ?? existing.endDate;
+        if (effectiveEnd <= effectiveStart) {
+          throw new BadRequestException('End date must be after start date');
+        }
 
-    const result = await this.reviewPeriodsRepository.updateByXid(
-      xid,
-      new Types.ObjectId(userId),
-      updateData
+        const result = await this.reviewPeriodsRepository.updateByXid(
+          xid,
+          new Types.ObjectId(userId),
+          updateData,
+          session
+        );
+
+        if (isErr(result)) {
+          throw new InternalServerErrorException(result.error.message);
+        }
+        if (!result.value) {
+          throw new NotFoundException('Review period not found');
+        }
+
+        return result.value;
+      },
+      { context: `updateReviewPeriod:${xid}` }
     );
-
-    if (isErr(result)) {
-      throw new InternalServerErrorException(result.error.message);
-    }
-    if (!result.value) {
-      throw new NotFoundException('Review period not found');
-    }
 
     // Invalidate coverage cache for this user
     this.invalidateCoverageCache(userId);
 
-    return this.toDto(result.value);
+    return this.toDto(updated);
   }
 
   async archiveReviewPeriod(userId: string, xid: string): Promise<ReviewPeriodDto> {
-    const existing = await this.findOrThrow(userId, xid);
+    const updated = await this.transactionService.withTransaction(
+      async (session) => {
+        const existing = await this.findOrThrow(userId, xid, session);
 
-    if (existing.status === ReviewPeriodStatus.ARCHIVED) {
-      throw new BadRequestException('Review period is already archived');
-    }
+        if (existing.status === ReviewPeriodStatus.ARCHIVED) {
+          throw new BadRequestException('Review period is already archived');
+        }
 
-    const result = await this.reviewPeriodsRepository.updateByXid(xid, new Types.ObjectId(userId), {
-      status: ReviewPeriodStatus.ARCHIVED,
-    });
+        const result = await this.reviewPeriodsRepository.updateByXid(
+          xid,
+          new Types.ObjectId(userId),
+          { status: ReviewPeriodStatus.ARCHIVED },
+          session
+        );
 
-    if (isErr(result)) {
-      throw new InternalServerErrorException(result.error.message);
-    }
-    if (!result.value) {
-      throw new NotFoundException('Review period not found');
-    }
+        if (isErr(result)) {
+          throw new InternalServerErrorException(result.error.message);
+        }
+        if (!result.value) {
+          throw new NotFoundException('Review period not found');
+        }
+
+        return result.value;
+      },
+      { context: `archiveReviewPeriod:${xid}` }
+    );
 
     this.invalidateCoverageCache(userId);
 
-    return this.toDto(result.value);
+    return this.toDto(updated);
   }
 
   async getCoverage(userId: string, xid: string): Promise<CoverageResponse> {
@@ -227,8 +245,16 @@ export class ReviewPeriodsService {
 
   // --- Private helpers ---
 
-  private async findOrThrow(userId: string, xid: string): Promise<ReviewPeriod> {
-    const result = await this.reviewPeriodsRepository.findByXid(xid, new Types.ObjectId(userId));
+  private async findOrThrow(
+    userId: string,
+    xid: string,
+    session?: ClientSession
+  ): Promise<ReviewPeriod> {
+    const result = await this.reviewPeriodsRepository.findByXid(
+      xid,
+      new Types.ObjectId(userId),
+      session
+    );
 
     if (isErr(result)) {
       throw new InternalServerErrorException(result.error.message);

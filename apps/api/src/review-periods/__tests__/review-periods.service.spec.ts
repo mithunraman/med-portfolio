@@ -257,7 +257,8 @@ describe('ReviewPeriodsService', () => {
       expect(mockReviewPeriodsRepo.updateByXid).toHaveBeenCalledWith(
         'rp_abc123',
         expect.any(Types.ObjectId),
-        { status: ReviewPeriodStatus.ARCHIVED }
+        { status: ReviewPeriodStatus.ARCHIVED },
+        expect.anything(),
       );
     });
 

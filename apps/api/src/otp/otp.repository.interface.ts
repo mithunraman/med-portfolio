@@ -1,12 +1,8 @@
-import type { Result } from '../common/utils/result.util';
+import type { DBError, Result } from '../common/utils/result.util';
 import type { Otp } from './schemas/otp.schema';
 
 export const OTP_REPOSITORY = Symbol('OTP_REPOSITORY');
 
-export interface DBError {
-  code: string;
-  message: string;
-}
 
 export interface CreateOtpData {
   email: string;

@@ -1,14 +1,10 @@
 import { OutboxStatus } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
-import type { Result } from '../common/utils/result.util';
+import type { DBError, Result } from '../common/utils/result.util';
 import type { OutboxEntry } from './schemas/outbox.schema';
 
 export const OUTBOX_REPOSITORY = Symbol('OUTBOX_REPOSITORY');
 
-export interface DBError {
-  code: string;
-  message: string;
-}
 
 export interface CreateOutboxEntryData {
   type: string;

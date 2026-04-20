@@ -23,6 +23,8 @@ import { EmailModule } from './email';
 import { DatabaseModule } from './database';
 import { HealthModule } from './health';
 import { InitModule } from './init';
+import { NoticesModule } from './notices';
+import { VersionPolicyModule } from './version-policy';
 import { ItemsModule } from './items/items.module';
 import { LLMModule } from './llm';
 import { MediaModule } from './media';
@@ -90,6 +92,8 @@ import { StorageModule } from './storage';
     ReviewPeriodsModule,
     OtpModule,
     SpecialtiesModule,
+    VersionPolicyModule,
+    NoticesModule,
     HealthModule,
   ],
   providers: [

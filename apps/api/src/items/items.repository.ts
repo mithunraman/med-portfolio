@@ -9,9 +9,8 @@ import {
   UpdateItemData,
   ListItemsQuery,
   ListItemsResult,
-  DBError,
 } from './items.repository.interface';
-import { Result, ok, err } from '../common/utils/result.util';
+import { DBError, Result, ok, err } from '../common/utils/result.util';
 
 @Injectable()
 export class ItemsRepository implements IItemsRepository {

@@ -1,14 +1,10 @@
 import { MediaRefCollection, MediaStatus, MediaType } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
-import type { Result } from '../common/utils/result.util';
+import type { DBError, Result } from '../common/utils/result.util';
 import type { Media } from './schemas/media.schema';
 
 export const MEDIA_REPOSITORY = Symbol('MEDIA_REPOSITORY');
 
-export interface DBError {
-  code: string;
-  message: string;
-}
 
 export interface CreateMediaData {
   xid: string;

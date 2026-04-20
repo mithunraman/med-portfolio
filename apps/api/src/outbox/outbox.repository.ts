@@ -2,9 +2,9 @@ import { OutboxStatus } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
-import { Result, err, ok } from '../common/utils/result.util';
+import { DBError, Result, err, ok } from '../common/utils/result.util';
 import { TransactionService } from '../database/transaction.service';
-import { CreateOutboxEntryData, DBError, IOutboxRepository } from './outbox.repository.interface';
+import { CreateOutboxEntryData, IOutboxRepository } from './outbox.repository.interface';
 import { OutboxEntry, OutboxEntryDocument } from './schemas/outbox.schema';
 
 /** Exponential backoff: 2^attempts * 1000ms (2s, 4s, 8s, 16s...) */

@@ -2,9 +2,8 @@ import { PdpGoalStatus } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
-import type { DBError } from '../artefacts/artefacts.repository.interface';
 import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
-import { Result, err, ok } from '../common/utils/result.util';
+import { DBError, Result, err, ok } from '../common/utils/result.util';
 import { buildPdpGoalCursor, parsePdpGoalCursor } from './cursor.util';
 import {
   CreatePdpGoalData,

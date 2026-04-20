@@ -2,8 +2,7 @@ import { ReviewPeriodStatus } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
-import type { DBError } from '../artefacts/artefacts.repository.interface';
-import { err, ok, type Result } from '../common/utils/result.util';
+import { type DBError, err, ok, type Result } from '../common/utils/result.util';
 import type {
   CreateReviewPeriodData,
   IReviewPeriodsRepository,

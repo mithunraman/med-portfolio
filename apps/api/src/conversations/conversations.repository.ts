@@ -2,11 +2,10 @@ import { ConversationStatus, MessageStatus, MessageRole } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
-import { Result, err, ok } from '../common/utils/result.util';
+import { DBError, Result, err, ok } from '../common/utils/result.util';
 import {
   CreateConversationData,
   CreateMessageData,
-  DBError,
   IConversationsRepository,
   ListMessagesQuery,
   ListMessagesResult,

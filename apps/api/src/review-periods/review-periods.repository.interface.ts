@@ -1,7 +1,6 @@
 import { ReviewPeriodStatus } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
-import type { DBError } from '../artefacts/artefacts.repository.interface';
-import type { Result } from '../common/utils/result.util';
+import type { DBError, Result } from '../common/utils/result.util';
 import type { ReviewPeriod } from './schemas/review-period.schema';
 
 export const REVIEW_PERIODS_REPOSITORY = Symbol('REVIEW_PERIODS_REPOSITORY');

@@ -2,10 +2,9 @@ import { ArtefactStatus } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
-import { Result, err, ok } from '../common/utils/result.util';
+import { DBError, Result, err, ok } from '../common/utils/result.util';
 import {
   CountByUserFilter,
-  DBError,
   IArtefactsRepository,
   ListArtefactsQuery,
   ListArtefactsResult,

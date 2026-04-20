@@ -1,15 +1,11 @@
 import { type Question, MessageStatus, MessageRole, MessageType } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
-import type { Result } from '../common/utils/result.util';
+import type { DBError, Result } from '../common/utils/result.util';
 import type { Conversation } from './schemas/conversation.schema';
 import type { Message, TranscriptionMetadata } from './schemas/message.schema';
 
 export const CONVERSATIONS_REPOSITORY = Symbol('CONVERSATIONS_REPOSITORY');
 
-export interface DBError {
-  code: string;
-  message: string;
-}
 
 // Conversation types
 export interface CreateConversationData {

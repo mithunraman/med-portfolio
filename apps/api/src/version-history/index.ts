@@ -4,5 +4,4 @@ export {
   VERSION_HISTORY_REPOSITORY,
   type IVersionHistoryRepository,
   type CreateVersionData,
-  type DBError,
 } from './version-history.repository.interface';

@@ -10,6 +10,7 @@ import { PdpGoalsClient } from './clients/pdp-goals.client';
 import { ReviewPeriodsClient } from './clients/review-periods.client';
 import { QuotaClient } from './clients/quota.client';
 import { SpecialtiesClient } from './clients/specialties.client';
+import { NoticesClient } from './clients/notices.client';
 
 // Re-export types and adapters
 export * from './adapters/types';
@@ -35,6 +36,7 @@ export function createApiClient(config: ApiClientConfig) {
     reviewPeriods: new ReviewPeriodsClient(baseClient),
     quota: new QuotaClient(baseClient),
     specialties: new SpecialtiesClient(baseClient),
+    notices: new NoticesClient(baseClient),
   };
 }
 

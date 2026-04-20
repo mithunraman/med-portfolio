@@ -1,7 +1,6 @@
 import { PdpGoalStatus } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
-import type { DBError } from '../artefacts/artefacts.repository.interface';
-import type { Result } from '../common/utils/result.util';
+import type { DBError, Result } from '../common/utils/result.util';
 import type { PdpGoal, PdpGoalAction } from './schemas/pdp-goal.schema';
 
 export const PDP_GOALS_REPOSITORY = Symbol('PDP_GOALS_REPOSITORY');

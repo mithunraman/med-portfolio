@@ -14,3 +14,8 @@ export * from './analysis-run-status.enum';
 export * from './outbox-status.enum';
 export * from './review-period-status.enum';
 export * from './thinking-step.enum';
+export * from './platform.enum';
+export * from './update-status.enum';
+export * from './notice-type.enum';
+export * from './notice-severity.enum';
+export * from './audience-type.enum';

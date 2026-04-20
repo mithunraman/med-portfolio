@@ -1,14 +1,10 @@
 import { ArtefactStatus, Specialty } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
-import type { Result } from '../common/utils/result.util';
+import type { DBError, Result } from '../common/utils/result.util';
 import type { Artefact } from './schemas/artefact.schema';
 
 export const ARTEFACTS_REPOSITORY = Symbol('ARTEFACTS_REPOSITORY');
 
-export interface DBError {
-  code: string;
-  message: string;
-}
 
 // Artefact types
 export interface UpsertArtefactData {

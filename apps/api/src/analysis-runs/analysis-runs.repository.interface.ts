@@ -1,14 +1,10 @@
 import { AnalysisRunStatus } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
-import type { Result } from '../common/utils/result.util';
+import type { DBError, Result } from '../common/utils/result.util';
 import type { AnalysisRun } from './schemas/analysis-run.schema';
 
 export const ANALYSIS_RUNS_REPOSITORY = Symbol('ANALYSIS_RUNS_REPOSITORY');
 
-export interface DBError {
-  code: string;
-  message: string;
-}
 
 export interface CreateAnalysisRunData {
   conversationId: Types.ObjectId;

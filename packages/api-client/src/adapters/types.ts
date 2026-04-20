@@ -50,4 +50,6 @@ export interface ApiClientConfig {
   requestIdGenerator?: () => string;
   onUnauthorized?: () => void;
   onQuotaUpdate?: (quota: QuotaHeaders) => void;
+  appVersion?: string;
+  platform?: string;
 }

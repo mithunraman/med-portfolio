@@ -15,7 +15,7 @@ type PublicRequestOptions = Pick<RequestOptions, 'authenticated' | 'skipUnauthor
  * Platform-agnostic - consumers provide their own HTTP adapter and token storage.
  */
 export class BaseApiClient {
-  private readonly config: Required<ApiClientConfig>;
+  private readonly config: Required<Omit<ApiClientConfig, 'appVersion' | 'platform'>> & Pick<ApiClientConfig, 'appVersion' | 'platform'>;
 
   constructor(config: ApiClientConfig) {
     this.config = {
@@ -39,6 +39,13 @@ export class BaseApiClient {
       'x-request-id': requestId,
       ...requestOptions.headers,
     };
+
+    if (this.config.appVersion) {
+      headers['x-app-version'] = this.config.appVersion;
+    }
+    if (this.config.platform) {
+      headers['x-platform'] = this.config.platform;
+    }
 
     // Add auth header if authenticated
     if (authenticated) {

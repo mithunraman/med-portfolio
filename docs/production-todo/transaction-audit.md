@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-19
 **Scope:** All `*.service.ts` files under `apps/api/src/`
-**Status:** Audit only — no code changes made
+**Status:** ✅ All 11 findings fixed (2026-04-20)
 
 ---
 

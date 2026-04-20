@@ -1,6 +1,6 @@
 import { ClientSession, Types } from 'mongoose';
 import { ItemStatus } from '@acme/shared';
-import type { Result } from '../common/utils/result.util';
+import type { DBError, Result } from '../common/utils/result.util';
 import type { Item } from './schemas/item.schema';
 
 export const ITEMS_REPOSITORY = Symbol('ITEMS_REPOSITORY');
@@ -29,10 +29,6 @@ export interface ListItemsResult {
   total: number;
 }
 
-export interface DBError {
-  code: string;
-  message: string;
-}
 
 export interface IItemsRepository {
   create(data: CreateItemData, session?: ClientSession): Promise<Result<Item, DBError>>;

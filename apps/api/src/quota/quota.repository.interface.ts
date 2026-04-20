@@ -1,12 +1,8 @@
 import { Types } from 'mongoose';
-import type { Result } from '../common/utils/result.util';
+import type { DBError, Result } from '../common/utils/result.util';
 
 export const QUOTA_REPOSITORY = Symbol('QUOTA_REPOSITORY');
 
-export interface DBError {
-  code: string;
-  message: string;
-}
 
 export interface IQuotaRepository {
   countSince(userId: Types.ObjectId, since: Date): Promise<Result<number, DBError>>;

@@ -1,5 +1,5 @@
 import { ArtefactStatus, ReviewPeriodStatus, Specialty } from '@acme/shared';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { ok } from '../../common/utils/result.util';
 import { ReviewPeriodsService } from '../review-periods.service';
@@ -75,11 +75,16 @@ const mockUserModel = {
   }),
 };
 
+const mockTransactionService = {
+  withTransaction: jest.fn((fn: (session: any) => Promise<any>) => fn({} as any)),
+};
+
 function createService(): ReviewPeriodsService {
   return new ReviewPeriodsService(
     mockReviewPeriodsRepo as any,
     mockArtefactsRepo as any,
     mockUserModel as any,
+    mockTransactionService as any,
   );
 }
 
@@ -117,7 +122,8 @@ describe('ReviewPeriodsService', () => {
         expect.objectContaining({
           userId: expect.any(Types.ObjectId),
           name: 'ST2 Year 1 Review',
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -131,16 +137,28 @@ describe('ReviewPeriodsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('throws ConflictException when an active review period already exists', async () => {
-      mockReviewPeriodsRepo.findActiveByUserId.mockResolvedValue(ok(makeReviewPeriodDoc()));
+    it('auto-archives the existing active period when creating a new one', async () => {
+      const existingActive = makeReviewPeriodDoc({ xid: 'rp_old' });
+      const newDoc = makeReviewPeriodDoc({ xid: 'rp_new', name: 'New Period' });
+      mockReviewPeriodsRepo.findActiveByUserId.mockResolvedValue(ok(existingActive));
+      mockReviewPeriodsRepo.updateByXid.mockResolvedValue(
+        ok({ ...existingActive, status: ReviewPeriodStatus.ARCHIVED })
+      );
+      mockReviewPeriodsRepo.create.mockResolvedValue(ok(newDoc));
 
-      await expect(
-        service.createReviewPeriod(userIdStr, {
-          name: 'Test',
-          startDate: futureDate(1).toISOString(),
-          endDate: futureDate(365).toISOString(),
-        })
-      ).rejects.toThrow(ConflictException);
+      const result = await service.createReviewPeriod(userIdStr, {
+        name: 'New Period',
+        startDate: futureDate(1).toISOString(),
+        endDate: futureDate(365).toISOString(),
+      });
+
+      expect(result.id).toBe('rp_new');
+      expect(mockReviewPeriodsRepo.updateByXid).toHaveBeenCalledWith(
+        'rp_old',
+        expect.any(Types.ObjectId),
+        { status: ReviewPeriodStatus.ARCHIVED },
+        expect.anything()
+      );
     });
   });
 

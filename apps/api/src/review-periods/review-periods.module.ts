@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ArtefactsModule } from '../artefacts/artefacts.module';
+import { DatabaseModule } from '../database/database.module';
 import { User, UserSchema } from '../auth/schemas/user.schema';
 import { ReviewPeriodsController } from './review-periods.controller';
 import { ReviewPeriodsRepository } from './review-periods.repository';
@@ -15,6 +16,7 @@ import { ReviewPeriod, ReviewPeriodSchema } from './schemas/review-period.schema
       { name: User.name, schema: UserSchema },
     ]),
     ArtefactsModule,
+    DatabaseModule,
   ],
   controllers: [ReviewPeriodsController],
   providers: [

@@ -7,6 +7,9 @@ export interface ThemeColors {
   border: string;
   error: string;
   accent: string;
+  warning: string;
+  warningBackground: string;
+  warningBorder: string;
 }
 
 export type ThemeName = 'gmail' | 'linear' | 'spotify' | 'notion' | 'stripe' | 'forest' | 'sunset';
@@ -22,6 +25,9 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       border: '#dadce0',
       error: '#d93025',
       accent: '#00a884',
+      warning: '#E65100',
+      warningBackground: 'rgba(255, 152, 0, 0.10)',
+      warningBorder: 'rgba(255, 152, 0, 0.40)',
     },
     dark: {
       background: '#202124',
@@ -32,6 +38,9 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       border: '#3c4043',
       error: '#f28b82',
       accent: '#00a884',
+      warning: '#FFB74D',
+      warningBackground: 'rgba(255, 152, 0, 0.15)',
+      warningBorder: 'rgba(255, 152, 0, 0.30)',
     },
   },
 
@@ -45,6 +54,9 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       border: '#e6e6e6',
       error: '#eb5757',
       accent: '#00a884',
+      warning: '#E65100',
+      warningBackground: 'rgba(255, 152, 0, 0.10)',
+      warningBorder: 'rgba(255, 152, 0, 0.40)',
     },
     dark: {
       background: '#0d0d0d',
@@ -55,6 +67,9 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       border: '#2a2a2a',
       error: '#f27878',
       accent: '#00a884',
+      warning: '#FFB74D',
+      warningBackground: 'rgba(255, 152, 0, 0.15)',
+      warningBorder: 'rgba(255, 152, 0, 0.30)',
     },
   },
 
@@ -68,6 +83,9 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       border: '#e1e1e1',
       error: '#e22134',
       accent: '#00a884',
+      warning: '#E65100',
+      warningBackground: 'rgba(255, 152, 0, 0.10)',
+      warningBorder: 'rgba(255, 152, 0, 0.40)',
     },
     dark: {
       background: '#121212',
@@ -78,6 +96,9 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       border: '#282828',
       error: '#f15e6c',
       accent: '#00a884',
+      warning: '#FFB74D',
+      warningBackground: 'rgba(255, 152, 0, 0.15)',
+      warningBorder: 'rgba(255, 152, 0, 0.30)',
     },
   },
 
@@ -91,6 +112,9 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       border: '#e9e9e7',
       error: '#e03e3e',
       accent: '#00a884',
+      warning: '#E65100',
+      warningBackground: 'rgba(255, 152, 0, 0.10)',
+      warningBorder: 'rgba(255, 152, 0, 0.40)',
     },
     dark: {
       background: '#191919',
@@ -101,6 +125,9 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       border: '#2f2f2f',
       error: '#ff7369',
       accent: '#00a884',
+      warning: '#FFB74D',
+      warningBackground: 'rgba(255, 152, 0, 0.15)',
+      warningBorder: 'rgba(255, 152, 0, 0.30)',
     },
   },
 
@@ -114,6 +141,9 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       border: '#e3e8ee',
       error: '#df1b41',
       accent: '#00a884',
+      warning: '#E65100',
+      warningBackground: 'rgba(255, 152, 0, 0.10)',
+      warningBorder: 'rgba(255, 152, 0, 0.40)',
     },
     dark: {
       background: '#0a2540',
@@ -124,6 +154,9 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       border: '#1a4971',
       error: '#fe87a1',
       accent: '#00a884',
+      warning: '#FFB74D',
+      warningBackground: 'rgba(255, 152, 0, 0.15)',
+      warningBorder: 'rgba(255, 152, 0, 0.30)',
     },
   },
 
@@ -137,6 +170,9 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       border: '#dde3da',
       error: '#c1403d',
       accent: '#00a884',
+      warning: '#E65100',
+      warningBackground: 'rgba(255, 152, 0, 0.10)',
+      warningBorder: 'rgba(255, 152, 0, 0.40)',
     },
     dark: {
       background: '#1a1d1a',
@@ -147,6 +183,9 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       border: '#3a423a',
       error: '#e87c79',
       accent: '#00a884',
+      warning: '#FFB74D',
+      warningBackground: 'rgba(255, 152, 0, 0.15)',
+      warningBorder: 'rgba(255, 152, 0, 0.30)',
     },
   },
 
@@ -160,6 +199,9 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       border: '#e7e5e4',
       error: '#dc2626',
       accent: '#00a884',
+      warning: '#E65100',
+      warningBackground: 'rgba(255, 152, 0, 0.10)',
+      warningBorder: 'rgba(255, 152, 0, 0.40)',
     },
     dark: {
       background: '#1c1917',
@@ -170,6 +212,9 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       border: '#3d3836',
       error: '#f87171',
       accent: '#00a884',
+      warning: '#FFB74D',
+      warningBackground: 'rgba(255, 152, 0, 0.15)',
+      warningBorder: 'rgba(255, 152, 0, 0.30)',
     },
   },
 };

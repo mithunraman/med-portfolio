@@ -112,6 +112,7 @@ export {
   updateReviewPeriod,
   archiveReviewPeriod,
   fetchCoverage,
+  selectActiveReviewPeriod,
   selectAllReviewPeriods,
   selectReviewPeriodById,
   markReviewPeriodsStale,

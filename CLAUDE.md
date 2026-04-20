@@ -89,7 +89,7 @@ All routes are protected by default (global JwtAuthGuard + RolesGuard). Use `@Pu
 
 ### Transactions
 
-`TransactionService.withTransaction()` wraps operations atomically. The callback receives a `ClientSession` that **must** be passed to every repo call within it, or those calls execute outside the transaction.
+`TransactionService.withTransaction()` wraps operations atomically. The callback receives a `ClientSession` that **must** be passed to every database operation within it — reads AND writes — or those calls execute outside the transaction. This includes guard reads (e.g., checking if an active record exists before creating one). Before passing `session` to a repository method, verify the method's interface and implementation actually accept and forward `session?: ClientSession` to the underlying Mongoose query; if they don't, update interface + implementation + call site together.
 
 ### Message processing pipeline
 

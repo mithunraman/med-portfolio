@@ -9,7 +9,6 @@ import { ArtefactStatus, ReviewPeriodStatus } from '@acme/shared';
 import { InjectModel } from '@nestjs/mongoose';
 import {
   BadRequestException,
-  ConflictException,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -18,6 +17,7 @@ import {
 import { OnEvent } from '@nestjs/event-emitter';
 import { startOfDay } from 'date-fns';
 import { Model, Types } from 'mongoose';
+import { TransactionService } from '../database/transaction.service';
 import { User, UserDocument } from '../auth/schemas/user.schema';
 import {
   ARTEFACTS_REPOSITORY,
@@ -45,7 +45,8 @@ export class ReviewPeriodsService {
     @Inject(ARTEFACTS_REPOSITORY)
     private readonly artefactsRepository: IArtefactsRepository,
     @InjectModel(User.name)
-    private readonly userModel: Model<UserDocument>
+    private readonly userModel: Model<UserDocument>,
+    private readonly transactionService: TransactionService
   ) {}
 
   async createReviewPeriod(
@@ -67,29 +68,38 @@ export class ReviewPeriodsService {
       throw new BadRequestException('End date must be after start date');
     }
 
-    // Check for existing active review period
-    const activeResult = await this.reviewPeriodsRepository.findActiveByUserId(userObjectId);
-    if (isErr(activeResult)) {
-      throw new InternalServerErrorException(activeResult.error.message);
-    }
-    if (activeResult.value) {
-      throw new ConflictException(
-        'An active review period already exists. Archive it before creating a new one.'
-      );
-    }
+    // Auto-archive existing active period and create new one in a transaction
+    return this.transactionService.withTransaction(
+      async (session) => {
+        const activeResult = await this.reviewPeriodsRepository.findActiveByUserId(userObjectId, session);
+        if (isErr(activeResult)) {
+          throw new InternalServerErrorException(activeResult.error.message);
+        }
 
-    const createResult = await this.reviewPeriodsRepository.create({
-      userId: userObjectId,
-      name: dto.name,
-      startDate,
-      endDate,
-    });
+        if (activeResult.value) {
+          const archiveResult = await this.reviewPeriodsRepository.updateByXid(
+            activeResult.value.xid,
+            userObjectId,
+            { status: ReviewPeriodStatus.ARCHIVED },
+            session
+          );
+          if (isErr(archiveResult)) {
+            throw new InternalServerErrorException(archiveResult.error.message);
+          }
+        }
 
-    if (isErr(createResult)) {
-      throw new InternalServerErrorException(createResult.error.message);
-    }
+        const createResult = await this.reviewPeriodsRepository.create(
+          { userId: userObjectId, name: dto.name, startDate, endDate },
+          session
+        );
+        if (isErr(createResult)) {
+          throw new InternalServerErrorException(createResult.error.message);
+        }
 
-    return this.toDto(createResult.value);
+        return this.toDto(createResult.value);
+      },
+      { context: 'createReviewPeriod' }
+    );
   }
 
   async getReviewPeriod(userId: string, xid: string): Promise<ReviewPeriodDto> {

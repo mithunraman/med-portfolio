@@ -2,7 +2,7 @@
 export { default as reviewPeriodsReducer } from './slice';
 
 // Selectors
-export { selectAllReviewPeriods, selectReviewPeriodById } from './slice';
+export { selectActiveReviewPeriod, selectAllReviewPeriods, selectReviewPeriodById } from './slice';
 
 // Actions
 export { markReviewPeriodsStale } from './slice';

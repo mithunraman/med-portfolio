@@ -37,13 +37,15 @@ export interface IReviewPeriodsRepository {
   ): Promise<Result<ReviewPeriod[], DBError>>;
 
   findActiveByUserId(
-    userId: Types.ObjectId
+    userId: Types.ObjectId,
+    session?: ClientSession
   ): Promise<Result<ReviewPeriod | null, DBError>>;
 
   updateByXid(
     xid: string,
     userId: Types.ObjectId,
-    data: UpdateReviewPeriodData
+    data: UpdateReviewPeriodData,
+    session?: ClientSession
   ): Promise<Result<ReviewPeriod | null, DBError>>;
 
   anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;

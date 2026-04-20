@@ -1,5 +1,6 @@
 import type { CoverageResponse, ReviewPeriod } from '@acme/shared';
-import { createEntityAdapter, createSlice } from '@reduxjs/toolkit';
+import { ReviewPeriodStatus } from '@acme/shared';
+import { createEntityAdapter, createSelector, createSlice } from '@reduxjs/toolkit';
 import type { RootState } from '../../index';
 import {
   archiveReviewPeriod,
@@ -59,6 +60,16 @@ const reviewPeriodsSlice = createSlice({
       })
       .addCase(createReviewPeriod.fulfilled, (state, action) => {
         state.mutating = false;
+        // The backend auto-archives the previous active period — reflect that immediately
+        const previousActive = Object.values(state.entities).find(
+          (p) => p && p.status === ReviewPeriodStatus.ACTIVE
+        );
+        if (previousActive) {
+          reviewPeriodsAdapter.updateOne(state, {
+            id: previousActive.id,
+            changes: { status: ReviewPeriodStatus.ARCHIVED },
+          });
+        }
         reviewPeriodsAdapter.addOne(state, action.payload);
       })
       .addCase(createReviewPeriod.rejected, (state, action) => {
@@ -115,6 +126,11 @@ export const {
   selectAll: selectAllReviewPeriods,
   selectById: selectReviewPeriodById,
 } = reviewPeriodsAdapter.getSelectors((state: RootState) => state.reviewPeriods);
+
+export const selectActiveReviewPeriod = createSelector(
+  selectAllReviewPeriods,
+  (periods) => periods.find((p) => p.status === ReviewPeriodStatus.ACTIVE) ?? null
+);
 
 export const { markReviewPeriodsStale } = reviewPeriodsSlice.actions;
 

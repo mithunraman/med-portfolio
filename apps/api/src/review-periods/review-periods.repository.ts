@@ -62,9 +62,12 @@ export class ReviewPeriodsRepository implements IReviewPeriodsRepository {
     }
   }
 
-  async findActiveByUserId(userId: Types.ObjectId): Promise<Result<ReviewPeriod | null, DBError>> {
+  async findActiveByUserId(
+    userId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<ReviewPeriod | null, DBError>> {
     try {
-      const doc = await this.model.findOne({ userId, status: ReviewPeriodStatus.ACTIVE }).lean();
+      const doc = await this.model.findOne({ userId, status: ReviewPeriodStatus.ACTIVE }).session(session ?? null).lean();
       return ok(doc);
     } catch (error) {
       this.logger.error('Failed to find active review period', error);
@@ -75,7 +78,8 @@ export class ReviewPeriodsRepository implements IReviewPeriodsRepository {
   async updateByXid(
     xid: string,
     userId: Types.ObjectId,
-    data: UpdateReviewPeriodData
+    data: UpdateReviewPeriodData,
+    session?: ClientSession
   ): Promise<Result<ReviewPeriod | null, DBError>> {
     try {
       const update: Record<string, unknown> = {};
@@ -85,7 +89,7 @@ export class ReviewPeriodsRepository implements IReviewPeriodsRepository {
       if (data.status !== undefined) update.status = data.status;
 
       const doc = await this.model
-        .findOneAndUpdate({ xid, userId }, { $set: update }, { new: true })
+        .findOneAndUpdate({ xid, userId }, { $set: update }, { new: true, session })
         .lean();
       return ok(doc);
     } catch (error) {

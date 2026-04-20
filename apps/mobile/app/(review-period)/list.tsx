@@ -114,11 +114,6 @@ export default function ReviewPeriodListScreen() {
     return periods.filter((p) => p.status === activeFilter);
   }, [periods, activeFilter]);
 
-  const hasActivePeriod = useMemo(
-    () => periods.some((p) => p.status === ReviewPeriodStatus.ACTIVE),
-    [periods]
-  );
-
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await dispatch(fetchReviewPeriods());
@@ -177,7 +172,7 @@ export default function ReviewPeriodListScreen() {
 
         <View style={styles.filterSpacer} />
 
-        {!hasActivePeriod && (
+        {!isInitialLoad && (
           <Pressable onPress={handleCreate} hitSlop={8} style={styles.addButton}>
             <Ionicons name="add-circle" size={28} color={colors.primary} />
           </Pressable>

@@ -4,11 +4,11 @@ import {
   createReviewPeriod,
   markDashboardStale,
   markReviewPeriodsStale,
+  selectActiveReviewPeriod,
   selectReviewPeriodById,
   updateReviewPeriod,
 } from '@/store';
 import { useTheme } from '@/theme';
-import { ApiError } from '@acme/api-client';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -47,7 +47,7 @@ function toCalendarString(date: Date): string {
 }
 
 function toISODateString(calendarString: string): string {
-  return new Date(calendarString).toISOString();
+  return new Date(calendarString + 'T00:00:00').toISOString();
 }
 
 // ── Date Picker Modal ────────────────────────────────────────────────────────
@@ -132,6 +132,10 @@ export default function CreateReviewPeriodScreen() {
     xid ? selectReviewPeriodById(state, xid) : undefined
   );
   const mutating = useAppSelector((state) => state.reviewPeriods.mutating);
+  const activeReviewPeriod = useAppSelector(selectActiveReviewPeriod);
+
+  // In edit mode, don't warn about the period being edited
+  const activePeriod = isEditMode && activeReviewPeriod?.id === xid ? null : activeReviewPeriod;
 
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState<string | null>(null);
@@ -171,9 +175,7 @@ export default function CreateReviewPeriodScreen() {
 
   const isValid = name.trim().length > 0 && !!startDate && !!endDate;
 
-  const handleSubmit = useCallback(async () => {
-    if (!isValid) return;
-
+  const submitForm = useCallback(async () => {
     try {
       if (isEditMode && xid) {
         await dispatch(
@@ -196,28 +198,37 @@ export default function CreateReviewPeriodScreen() {
         ).unwrap();
       }
 
-      // Refresh data in the background
       dispatch(markDashboardStale());
       dispatch(markReviewPeriodsStale());
 
       router.back();
     } catch (error) {
-      if (error instanceof ApiError && error.status === 409) {
-        Alert.alert(
-          'Already have an active period',
-          'You can only have one active review period. Archive the current one first.'
-        );
-      } else {
-        const message =
-          typeof error === 'string'
-            ? error
-            : error instanceof Error
-              ? error.message
-              : 'Something went wrong';
-        Alert.alert('Error', message);
-      }
+      const message =
+        typeof error === 'string'
+          ? error
+          : error instanceof Error
+            ? error.message
+            : 'Something went wrong';
+      Alert.alert('Error', message);
     }
-  }, [isValid, isEditMode, xid, name, startDate, endDate, dispatch, router]);
+  }, [isEditMode, xid, name, startDate, endDate, dispatch, router]);
+
+  const handleSubmit = useCallback(() => {
+    if (!isValid) return;
+
+    if (!isEditMode && activePeriod) {
+      Alert.alert(
+        'Replace active review period?',
+        `Your current period '${activePeriod.name}' will be archived.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Replace & Create', style: 'destructive', onPress: submitForm },
+        ]
+      );
+    } else {
+      submitForm();
+    }
+  }, [isValid, isEditMode, activePeriod, submitForm]);
 
   return (
     <KeyboardAvoidingView
@@ -229,6 +240,22 @@ export default function CreateReviewPeriodScreen() {
         contentContainerStyle={[styles.formContent, { paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Active period warning banner */}
+        {!isEditMode && activePeriod && (
+          <View
+            style={[
+              styles.banner,
+              { backgroundColor: colors.warningBackground, borderColor: colors.warningBorder },
+            ]}
+          >
+            <Ionicons name="warning-outline" size={20} color={colors.warning} />
+            <Text style={[styles.bannerText, { color: colors.warning }]}>
+              You already have an active review period &apos;{activePeriod.name}&apos;. Creating a
+              new one will archive it.
+            </Text>
+          </View>
+        )}
+
         {/* Name */}
         <View style={styles.field}>
           <Text style={[styles.fieldLabel, { color: colors.text }]}>Name</Text>
@@ -337,6 +364,19 @@ const styles = StyleSheet.create({
   formContent: {
     padding: 20,
     gap: 20,
+  },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  bannerText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
   },
   field: {
     gap: 6,

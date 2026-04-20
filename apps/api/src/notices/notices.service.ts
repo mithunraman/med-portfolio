@@ -121,7 +121,7 @@ export class NoticesService {
     const data: Partial<CreateNoticeData> = {
       ...rest,
       ...(startsAt != null && { startsAt: new Date(startsAt) }),
-      ...(expiresAt != null && { expiresAt: new Date(expiresAt) }),
+      ...(expiresAt === null ? { expiresAt: null } : expiresAt != null ? { expiresAt: new Date(expiresAt) } : {}),
     };
 
     const result = await this.repository.update(xid, data);

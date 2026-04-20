@@ -14,7 +14,7 @@ export interface CreateNoticeData {
   actionLabel?: string;
   dismissible: boolean;
   startsAt: Date;
-  expiresAt?: Date;
+  expiresAt?: Date | null;
   active: boolean;
   audienceType: string;
   audienceRoles?: number[];

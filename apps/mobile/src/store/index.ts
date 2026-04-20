@@ -7,6 +7,7 @@ import {
   dashboardReducer,
   messagesReducer,
   networkReducer,
+  noticesReducer,
   onboardingReducer,
   pdpGoalsReducer,
   reviewPeriodsReducer,
@@ -18,6 +19,7 @@ const appReducer = combineReducers({
   conversations: conversationsReducer,
   messages: messagesReducer,
   network: networkReducer,
+  notices: noticesReducer,
   onboarding: onboardingReducer,
   dashboard: dashboardReducer,
   pdpGoals: pdpGoalsReducer,
@@ -43,6 +45,7 @@ const rootReducer: Reducer<ReturnType<typeof appReducer>, Action> = (state, acti
             conversations: undefined as never,
             messages: undefined as never,
             dashboard: undefined as never,
+            notices: undefined as never,
             pdpGoals: undefined as never,
             reviewPeriods: undefined as never,
           }

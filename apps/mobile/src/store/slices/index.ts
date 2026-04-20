@@ -8,6 +8,7 @@ export { dashboardReducer } from './dashboard';
 export { pdpGoalsReducer } from './pdpGoals';
 export { reviewPeriodsReducer } from './reviewPeriods';
 export { default as networkReducer } from './networkSlice';
+export { noticesReducer } from './notices';
 
 // ── Artefacts ──
 export {
@@ -120,3 +121,13 @@ export {
 
 // ── Network ──
 export { setNetworkStatus, setBannerVisible, selectIsOffline, selectBannerVisible } from './networkSlice';
+
+// ── Notices ──
+export {
+  removeNotice,
+  dismissNotice,
+  selectUpdatePolicy,
+  selectHasMandatoryUpdate,
+  selectBannerNotice,
+  selectModalNotice,
+} from './notices';

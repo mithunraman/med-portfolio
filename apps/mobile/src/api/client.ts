@@ -4,7 +4,9 @@ import {
   type QuotaHeaders,
   type TokenProvider,
 } from '@acme/api-client';
+import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
@@ -109,6 +111,8 @@ export const api = createApiClient({
   baseUrl: env.EXPO_PUBLIC_API_URL,
   httpAdapter: createRNHttpAdapter(),
   tokenProvider: mobileTokenProvider,
+  appVersion: Constants.expoConfig?.version,
+  platform: Platform.OS,
   onUnauthorized: () => {
     if (!unauthorizedFired) {
       unauthorizedFired = true;

@@ -1,12 +1,15 @@
 import { setOnQuotaUpdate, setOnUnauthorized } from '@/api/client';
 import { ErrorBoundary, LoadingProvider } from '@/components';
 import { ActiveBanner } from '@/components/ActiveBanner';
+import { ForceUpdateScreen } from '@/components/ForceUpdateScreen';
+import { NoticeModal } from '@/components/NoticeModal';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useBackgroundStaleTimer } from '@/hooks/useBackgroundStaleTimer';
 import { useNetworkListener } from '@/hooks/useNetworkListener';
 import {
   initializeAuth,
   loadOnboardingState,
+  selectUpdatePolicy,
   setUnauthenticated,
   store,
   updateQuota,
@@ -59,6 +62,8 @@ function RootLayoutNav() {
   const authStatus = useAppSelector((state) => state.auth.status);
   const user = useAppSelector((state) => state.auth.user);
   const onboardingInitialized = useAppSelector((state) => state.onboarding.isInitialized);
+  const updatePolicy = useAppSelector(selectUpdatePolicy);
+  const hasMandatoryUpdate = updatePolicy?.status === 'mandatory';
 
   // Subscribe to network state changes
   useNetworkListener();
@@ -178,6 +183,10 @@ function RootLayoutNav() {
     return <LoadingScreen />;
   }
 
+  if (hasMandatoryUpdate && updatePolicy) {
+    return <ForceUpdateScreen updatePolicy={updatePolicy} />;
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ActiveBanner />
@@ -198,6 +207,7 @@ function RootLayoutNav() {
         <Stack.Screen name="credits-info" options={{ presentation: 'card' }} />
         <Stack.Screen name="claim-account" options={{ presentation: 'modal' }} />
       </Stack>
+      <NoticeModal />
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </View>
   );

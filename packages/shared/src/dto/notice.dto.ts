@@ -33,12 +33,12 @@ export const CreateNoticeSchema = z
     active: z.boolean().default(true),
     audienceType: z.nativeEnum(AudienceType),
     audienceRoles: z.array(z.nativeEnum(UserRole)).optional(),
-    audienceUserIds: z.array(z.string()).optional(),
+    audienceUserIds: z.array(z.string().length(24, 'Must be a valid user ID')).optional(),
     priority: z.number().int().min(0).max(100).default(0),
   })
   .refine(
     (data) => {
-      if (data.expiresAt && data.startsAt >= data.expiresAt) return false;
+      if (data.expiresAt && new Date(data.startsAt) >= new Date(data.expiresAt)) return false;
       return true;
     },
     { message: 'expiresAt must be after startsAt' }
@@ -72,16 +72,16 @@ export const UpdateNoticeSchema = z
     actionLabel: z.string().max(50).optional(),
     dismissible: z.boolean().optional(),
     startsAt: z.string().datetime().optional(),
-    expiresAt: z.string().datetime().optional(),
+    expiresAt: z.string().datetime().nullable().optional(),
     active: z.boolean().optional(),
     audienceType: z.nativeEnum(AudienceType).optional(),
     audienceRoles: z.array(z.nativeEnum(UserRole)).optional(),
-    audienceUserIds: z.array(z.string()).optional(),
+    audienceUserIds: z.array(z.string().length(24, 'Must be a valid user ID')).optional(),
     priority: z.number().int().min(0).max(100).optional(),
   })
   .refine(
     (data) => {
-      if (data.expiresAt && data.startsAt && data.startsAt >= data.expiresAt) return false;
+      if (data.expiresAt && data.startsAt && new Date(data.startsAt) >= new Date(data.expiresAt)) return false;
       return true;
     },
     { message: 'expiresAt must be after startsAt' }

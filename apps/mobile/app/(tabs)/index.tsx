@@ -1,4 +1,5 @@
 import { CoverageRing, HomeSkeleton, SectionHeader, StatusPill, WelcomeModule } from '@/components';
+import { NoticeBanner } from '@/components/NoticeBanner';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
@@ -529,6 +530,8 @@ export default function HomeScreen() {
           </Text>
           <Text style={[styles.dateText, { color: colors.textSecondary }]}>{formatDate()}</Text>
         </View>
+
+        <NoticeBanner />
 
         {/* Module A: Start New Entry */}
         <StartNewEntryCard

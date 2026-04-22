@@ -21,7 +21,9 @@ export class VersionPolicyAdminController {
     @Body() dto: UpsertVersionPolicyDto
   ): Promise<VersionPolicyResponse> {
     if (platform !== dto.platform) {
-      throw new BadRequestException(`URL platform "${platform}" does not match body platform "${dto.platform}"`);
+      throw new BadRequestException(
+        `URL platform "${platform}" does not match body platform "${dto.platform}"`
+      );
     }
     return this.service.upsert(dto);
   }

@@ -71,10 +71,6 @@ export class NoticesService {
       throw new NotFoundException('Notice not found');
     }
 
-    if (!result.value.dismissible) {
-      throw new BadRequestException('Notice is not dismissible');
-    }
-
     await this.repository.upsertDismissal(userId, result.value._id);
   }
 

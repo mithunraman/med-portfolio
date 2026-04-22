@@ -1,6 +1,17 @@
 import type { AdminNoticeResponse } from '@acme/shared';
 import { UserRole } from '@acme/shared';
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CreateNoticeDto, UpdateNoticeDto } from './dto';
 import { NoticesService } from './notices.service';
@@ -29,7 +40,10 @@ export class NoticesAdminController {
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() dto: UpdateNoticeDto): Promise<AdminNoticeResponse> {
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateNoticeDto
+  ): Promise<AdminNoticeResponse> {
     return this.service.adminUpdate(id, dto);
   }
 

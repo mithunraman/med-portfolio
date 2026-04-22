@@ -1,13 +1,12 @@
+import { useAppDispatch, useAppSelector } from '@/hooks';
+import { dismissRecommendedUpdate, selectRecommendedUpdateBannerVisible } from '@/store';
 import type { UpdatePolicy } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const BANNER_HEIGHT = 36;
-const DISMISS_KEY = 'recommendedUpdate:dismissedVersion';
+import { RECOMMENDED_UPDATE_BANNER_HEIGHT } from './bannerMetrics';
 
 interface Props {
   updatePolicy: UpdatePolicy;
@@ -15,18 +14,11 @@ interface Props {
 
 export function RecommendedUpdateBanner({ updatePolicy }: Props) {
   const insets = useSafeAreaInsets();
+  const dispatch = useAppDispatch();
+  const visible = useAppSelector(selectRecommendedUpdateBannerVisible);
   const anim = useRef(new Animated.Value(0)).current;
-  const [dismissed, setDismissed] = useState(true); // Default hidden until check completes
 
   const { latestVersion, storeUrl } = updatePolicy;
-
-  useEffect(() => {
-    AsyncStorage.getItem(DISMISS_KEY).then((val) => {
-      setDismissed(val === latestVersion);
-    });
-  }, [latestVersion]);
-
-  const visible = !dismissed;
 
   useEffect(() => {
     Animated.timing(anim, {
@@ -37,15 +29,14 @@ export function RecommendedUpdateBanner({ updatePolicy }: Props) {
   }, [visible, anim]);
 
   const handleDismiss = () => {
-    setDismissed(true);
-    AsyncStorage.setItem(DISMISS_KEY, latestVersion);
+    dispatch(dismissRecommendedUpdate(latestVersion));
   };
 
   const handleUpdate = () => {
     Linking.openURL(storeUrl);
   };
 
-  const totalHeight = insets.top + BANNER_HEIGHT;
+  const totalHeight = insets.top + RECOMMENDED_UPDATE_BANNER_HEIGHT;
   const animatedHeight = anim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, totalHeight],
@@ -71,7 +62,7 @@ export function RecommendedUpdateBanner({ updatePolicy }: Props) {
       <Ionicons name="arrow-up-circle-outline" size={14} color="#fff" />
       <TouchableOpacity onPress={handleUpdate} activeOpacity={0.7} style={styles.textContainer}>
         <Text style={styles.text} numberOfLines={1}>
-          Update available — v{latestVersion}
+          Update available - v{latestVersion}
         </Text>
       </TouchableOpacity>
       <TouchableOpacity

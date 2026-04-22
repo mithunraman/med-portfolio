@@ -1,40 +1,18 @@
-import { selectBannerVisible, selectIsOffline } from '@/store/slices/networkSlice';
+import { BANNER_HEIGHTS } from '@/components/bannerMetrics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppSelector } from './useAppSelector';
-
-const BANNER_HEIGHT = 36;
-const DELETION_BANNER_HEIGHT = 44;
-const QUOTA_BANNER_HEIGHT = 36;
+import { useBannerVisibility } from './useBannerVisibility';
 
 /**
  * Returns the height of the active banner (including safe area).
- * Only one banner is shown at a time (priority: offline > deletion > quota).
+ * Only one banner is shown at a time — priority matches ActiveBanner:
+ * offline > deletion > recommendedUpdate > quota.
  * Used by KeyboardAvoidingView to adjust its offset.
  */
 export function useBannerOffset(): number {
   const insets = useSafeAreaInsets();
-  const isOffline = useAppSelector(selectIsOffline);
-  const offlineBannerVisible = useAppSelector(selectBannerVisible);
-  const deletionPending = useAppSelector((s) => !!s.auth.user?.deletionScheduledFor);
-  const quotaWarningVisible = useAppSelector((s) => {
-    const q = s.auth.quota;
-    if (!q) return false;
-    const shortPercent = q.shortWindow.limit > 0 ? q.shortWindow.used / q.shortWindow.limit : 0;
-    const weeklyPercent = q.weeklyWindow.limit > 0 ? q.weeklyWindow.used / q.weeklyWindow.limit : 0;
-    return shortPercent >= 0.8 || weeklyPercent >= 0.8;
-  });
+  const { activeBanner } = useBannerVisibility();
 
-  // Same priority as ActiveBanner: offline > deletion > quota
-  let bannerHeight = 0;
-  if (isOffline || offlineBannerVisible) {
-    bannerHeight = BANNER_HEIGHT;
-  } else if (deletionPending) {
-    bannerHeight = DELETION_BANNER_HEIGHT;
-  } else if (quotaWarningVisible) {
-    bannerHeight = QUOTA_BANNER_HEIGHT;
-  }
+  if (!activeBanner) return 0;
 
-  if (bannerHeight === 0) return 0;
-
-  return insets.top + bannerHeight;
+  return insets.top + BANNER_HEIGHTS[activeBanner];
 }

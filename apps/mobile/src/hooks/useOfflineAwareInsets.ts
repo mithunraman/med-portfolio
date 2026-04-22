@@ -1,32 +1,19 @@
-import { selectBannerVisible, selectIsOffline } from '@/store/slices/networkSlice';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppSelector } from './useAppSelector';
+import { useBannerVisibility } from './useBannerVisibility';
 
 /**
  * Returns safe area insets with `top` adjusted for top banners.
  *
- * When any top banner is visible (offline, back-online, or deletion) it sits
- * above the Stack and already covers insets.top. Screens should not add
- * insets.top again, so this hook returns top: 0 while a banner is showing.
+ * When any top banner is visible (offline, deletion, recommended update, or
+ * quota warning) it sits above the Stack and already covers insets.top, so
+ * screens should not add insets.top again.
  */
 export function useOfflineAwareInsets() {
   const insets = useSafeAreaInsets();
-  const offlineBannerVisible = useAppSelector(selectBannerVisible);
-  const deletionPending = useAppSelector((s) => !!s.auth.user?.deletionScheduledFor);
-  const quotaWarningVisible = useAppSelector((s) => {
-    const q = s.auth.quota;
-    if (!q) return false;
-    const shortPercent = q.shortWindow.limit > 0 ? q.shortWindow.used / q.shortWindow.limit : 0;
-    const weeklyPercent = q.weeklyWindow.limit > 0 ? q.weeklyWindow.used / q.weeklyWindow.limit : 0;
-    return shortPercent >= 0.8 || weeklyPercent >= 0.8;
-  });
-
-  const isOffline = useAppSelector(selectIsOffline);
-  const anyBannerVisible =
-    isOffline || offlineBannerVisible || deletionPending || quotaWarningVisible;
+  const { activeBanner } = useBannerVisibility();
 
   return {
     ...insets,
-    top: anyBannerVisible ? 0 : insets.top,
+    top: activeBanner ? 0 : insets.top,
   };
 }

@@ -8,6 +8,7 @@ import { useBackgroundStaleTimer } from '@/hooks/useBackgroundStaleTimer';
 import { useNetworkListener } from '@/hooks/useNetworkListener';
 import {
   initializeAuth,
+  loadDismissedUpdateVersion,
   loadOnboardingState,
   selectUpdatePolicy,
   setUnauthenticated,
@@ -75,6 +76,7 @@ function RootLayoutNav() {
   useEffect(() => {
     dispatch(initializeAuth());
     dispatch(loadOnboardingState());
+    dispatch(loadDismissedUpdateVersion());
 
     // On 401, clear auth state so user is redirected to login
     setOnUnauthorized(() => {

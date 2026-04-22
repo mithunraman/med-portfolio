@@ -126,8 +126,11 @@ export { setNetworkStatus, setBannerVisible, selectIsOffline, selectBannerVisibl
 export {
   removeNotice,
   dismissNotice,
+  dismissRecommendedUpdate,
+  loadDismissedUpdateVersion,
   selectUpdatePolicy,
   selectHasMandatoryUpdate,
+  selectRecommendedUpdateBannerVisible,
   selectBannerNotice,
   selectModalNotice,
 } from './notices';

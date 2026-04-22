@@ -5,11 +5,15 @@ import { fetchInit } from '../dashboard/thunks';
 export interface NoticesState {
   notices: AppNotice[];
   updatePolicy: UpdatePolicy | null;
+  dismissedUpdateVersion: string | null;
+  dismissedUpdateHydrated: boolean;
 }
 
 const initialState: NoticesState = {
   notices: [],
   updatePolicy: null,
+  dismissedUpdateVersion: null,
+  dismissedUpdateHydrated: false,
 };
 
 const noticesSlice = createSlice({
@@ -18,6 +22,13 @@ const noticesSlice = createSlice({
   reducers: {
     removeNotice(state, action: PayloadAction<string>) {
       state.notices = state.notices.filter((n) => n.id !== action.payload);
+    },
+    setDismissedUpdateVersion(state, action: PayloadAction<string | null>) {
+      state.dismissedUpdateVersion = action.payload;
+      state.dismissedUpdateHydrated = true;
+    },
+    dismissUpdateVersion(state, action: PayloadAction<string>) {
+      state.dismissedUpdateVersion = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -28,5 +39,6 @@ const noticesSlice = createSlice({
   },
 });
 
-export const { removeNotice } = noticesSlice.actions;
+export const { removeNotice, setDismissedUpdateVersion, dismissUpdateVersion } =
+  noticesSlice.actions;
 export default noticesSlice.reducer;

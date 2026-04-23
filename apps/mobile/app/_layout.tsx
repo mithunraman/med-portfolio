@@ -10,6 +10,7 @@ import {
   initializeAuth,
   loadDismissedUpdateVersion,
   loadOnboardingState,
+  selectHasMandatoryUpdate,
   selectUpdatePolicy,
   setUnauthenticated,
   store,
@@ -64,7 +65,7 @@ function RootLayoutNav() {
   const user = useAppSelector((state) => state.auth.user);
   const onboardingInitialized = useAppSelector((state) => state.onboarding.isInitialized);
   const updatePolicy = useAppSelector(selectUpdatePolicy);
-  const hasMandatoryUpdate = updatePolicy?.status === 'mandatory';
+  const hasMandatoryUpdate = useAppSelector(selectHasMandatoryUpdate);
 
   // Subscribe to network state changes
   useNetworkListener();

@@ -1,3 +1,4 @@
+import { AudienceType, NoticeSeverity, NoticeType, UserRole } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -6,8 +7,8 @@ import { Notice, NoticeDocument } from './schemas/notice.schema';
 import { NoticeDismissal, NoticeDismissalDocument } from './schemas/notice-dismissal.schema';
 
 export interface CreateNoticeData {
-  type: string;
-  severity: string;
+  type: NoticeType;
+  severity: NoticeSeverity;
   title: string;
   body?: string;
   actionUrl?: string;
@@ -16,8 +17,8 @@ export interface CreateNoticeData {
   startsAt: Date;
   expiresAt?: Date | null;
   active: boolean;
-  audienceType: string;
-  audienceRoles?: number[];
+  audienceType: AudienceType;
+  audienceRoles?: UserRole[];
   audienceUserIds?: string[];
   priority: number;
 }
@@ -39,7 +40,6 @@ export class NoticesRepository {
           startsAt: { $lte: now },
           $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
         })
-        .sort({ priority: -1, createdAt: -1 })
         .lean();
       return ok(docs);
     } catch (error) {

@@ -1,6 +1,8 @@
 import type { ActiveBannerKind } from '@/components/bannerMetrics';
 import { selectRecommendedUpdateBannerVisible } from '@/store';
 import { selectBannerVisible, selectIsOffline } from '@/store/slices/networkSlice';
+import { getUrgentQuotaWindow } from '@/utils/quotaThreshold';
+import { useMemo } from 'react';
 import { useAppSelector } from './useAppSelector';
 
 interface BannerVisibility {
@@ -23,27 +25,23 @@ export function useBannerVisibility(): BannerVisibility {
   const offlineBannerVisible = useAppSelector(selectBannerVisible);
   const deletionPending = useAppSelector((s) => !!s.auth.user?.deletionScheduledFor);
   const recommendedUpdate = useAppSelector(selectRecommendedUpdateBannerVisible);
-  const quotaWarningVisible = useAppSelector((s) => {
-    const q = s.auth.quota;
-    if (!q) return false;
-    const shortPercent = q.shortWindow.limit > 0 ? q.shortWindow.used / q.shortWindow.limit : 0;
-    const weeklyPercent = q.weeklyWindow.limit > 0 ? q.weeklyWindow.used / q.weeklyWindow.limit : 0;
-    return shortPercent >= 0.8 || weeklyPercent >= 0.8;
-  });
+  const quotaWarningVisible = useAppSelector((s) => !!getUrgentQuotaWindow(s.auth.quota));
 
-  const offline = isOffline || offlineBannerVisible;
+  return useMemo(() => {
+    const offline = isOffline || offlineBannerVisible;
 
-  let activeBanner: ActiveBannerKind | null = null;
-  if (offline) activeBanner = 'offline';
-  else if (deletionPending) activeBanner = 'deletion';
-  else if (recommendedUpdate) activeBanner = 'recommendedUpdate';
-  else if (quotaWarningVisible) activeBanner = 'quota';
+    let activeBanner: ActiveBannerKind | null = null;
+    if (offline) activeBanner = 'offline';
+    else if (deletionPending) activeBanner = 'deletion';
+    else if (recommendedUpdate) activeBanner = 'recommendedUpdate';
+    else if (quotaWarningVisible) activeBanner = 'quota';
 
-  return {
-    offline,
-    deletion: deletionPending,
-    recommendedUpdate,
-    quota: quotaWarningVisible,
-    activeBanner,
-  };
+    return {
+      offline,
+      deletion: deletionPending,
+      recommendedUpdate,
+      quota: quotaWarningVisible,
+      activeBanner,
+    };
+  }, [isOffline, offlineBannerVisible, deletionPending, recommendedUpdate, quotaWarningVisible]);
 }

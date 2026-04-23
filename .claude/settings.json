@@ -1,4 +1,12 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(./node_modules/.bin/jest --config jest.unit.config.ts -- version-policy notices)",
+      "Bash(/Users/mithunraman/Desktop/code/portfolio/node_modules/.bin/jest --config jest.unit.config.ts -- version-policy notices)",
+      "Bash(node -e \"const s=require\\('semver'\\); console.log\\('v1.0.0 →', JSON.stringify\\(s.valid\\('v1.0.0'\\)\\)\\); console.log\\('1.0.0 →', JSON.stringify\\(s.valid\\('1.0.0'\\)\\)\\); console.log\\('abc →', JSON.stringify\\(s.valid\\('abc'\\)\\)\\);\")",
+      "Bash(/Users/mithunraman/Desktop/code/portfolio/node_modules/.bin/jest --config jest.config.ts -- version-policy notices)"
+    ]
+  },
   "enabledPlugins": {
     "react-native-best-practices@callstack-agent-skills": true,
     "upgrading-react-native@callstack-agent-skills": true,

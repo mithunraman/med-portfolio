@@ -1,12 +1,10 @@
 import { useAppSelector } from '@/hooks';
-import type { QuotaWindow } from '@acme/shared';
+import { useBannerAnimation } from '@/hooks/useBannerAnimation';
+import { getUrgentQuotaWindow } from '@/utils/quotaThreshold';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, StyleSheet, Text } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const BANNER_HEIGHT = 36;
-const WARNING_THRESHOLD = 0.8;
+import { QUOTA_BANNER_HEIGHT } from './bannerMetrics';
 
 function formatResetTime(resetsAt: string | null): string {
   if (!resetsAt) return 'soon';
@@ -18,27 +16,8 @@ function formatResetTime(resetsAt: string | null): string {
   return `${minutes}m`;
 }
 
-function getUrgentWindow(
-  shortWindow: QuotaWindow,
-  weeklyWindow: QuotaWindow
-): { window: QuotaWindow; percent: number } | null {
-  const shortPercent = shortWindow.limit > 0 ? shortWindow.used / shortWindow.limit : 0;
-  const weeklyPercent = weeklyWindow.limit > 0 ? weeklyWindow.used / weeklyWindow.limit : 0;
-
-  // Return the window that's closer to or over the limit
-  if (shortPercent >= WARNING_THRESHOLD || weeklyPercent >= WARNING_THRESHOLD) {
-    return shortPercent >= weeklyPercent
-      ? { window: shortWindow, percent: shortPercent }
-      : { window: weeklyWindow, percent: weeklyPercent };
-  }
-
-  return null;
-}
-
 export function QuotaWarningBanner() {
   const quota = useAppSelector((s) => s.auth.quota);
-  const insets = useSafeAreaInsets();
-  const anim = useRef(new Animated.Value(0)).current;
   const [, setTick] = useState(0);
 
   // Update every minute for countdown
@@ -47,31 +26,13 @@ export function QuotaWarningBanner() {
     return () => clearInterval(id);
   }, []);
 
-  const urgent = quota ? getUrgentWindow(quota.shortWindow, quota.weeklyWindow) : null;
+  const urgent = getUrgentQuotaWindow(quota);
   const visible = !!urgent;
   const isExceeded = urgent ? urgent.percent >= 1 : false;
-
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: visible ? 1 : 0,
-      duration: 250,
-      useNativeDriver: false,
-    }).start();
-  }, [visible, anim]);
-
-  const totalHeight = insets.top + BANNER_HEIGHT;
-
-  const animatedHeight = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, totalHeight],
-  });
-
-  const animatedPaddingTop = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, insets.top],
-  });
-
   const backgroundColor = isExceeded ? '#d93025' : '#b45309';
+
+  const animatedStyle = useBannerAnimation(visible, QUOTA_BANNER_HEIGHT, backgroundColor);
+
   const remaining = urgent ? Math.max(0, urgent.window.limit - urgent.window.used) : 0;
   const resetTime = urgent ? formatResetTime(urgent.window.resetsAt) : '';
 
@@ -81,14 +42,7 @@ export function QuotaWarningBanner() {
 
   return (
     <Animated.View
-      style={[
-        styles.banner,
-        {
-          height: animatedHeight,
-          paddingTop: animatedPaddingTop,
-          backgroundColor: visible ? backgroundColor : 'transparent',
-        },
-      ]}
+      style={[styles.banner, animatedStyle]}
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
     >
@@ -110,7 +64,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    overflow: 'hidden',
     paddingHorizontal: 16,
   },
   text: {

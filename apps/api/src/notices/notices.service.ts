@@ -1,88 +1,122 @@
 import type { AdminNoticeResponse, AppNotice, CreateNoticeDto, UpdateNoticeDto } from '@acme/shared';
-import { AudienceType, UserRole } from '@acme/shared';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Types } from 'mongoose';
+import { AudienceType, NoticeSeverity, UserRole } from '@acme/shared';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { Types, isValidObjectId } from 'mongoose';
+import { isErr } from '../common/utils/result.util';
 import { CreateNoticeData, NoticesRepository } from './notices.repository';
 import { Notice } from './schemas/notice.schema';
 
 const MAX_NOTICES_PER_USER = 5;
 
-const SEVERITY_ORDER = { critical: 3, warning: 2, info: 1 } as const;
+const SEVERITY_ORDER: Record<NoticeSeverity, number> = {
+  [NoticeSeverity.CRITICAL]: 3,
+  [NoticeSeverity.WARNING]: 2,
+  [NoticeSeverity.INFO]: 1,
+};
+
+function toAppNotice(n: Notice): AppNotice {
+  return {
+    id: n.xid,
+    type: n.type,
+    severity: n.severity,
+    title: n.title,
+    body: n.body ?? undefined,
+    actionUrl: n.actionUrl ?? undefined,
+    actionLabel: n.actionLabel ?? undefined,
+    dismissible: n.dismissible,
+    startsAt: n.startsAt.toISOString(),
+    expiresAt: n.expiresAt?.toISOString(),
+  };
+}
+
+function toAdminResponse(n: Notice): AdminNoticeResponse {
+  return {
+    id: n.xid,
+    type: n.type,
+    severity: n.severity,
+    title: n.title,
+    body: n.body ?? undefined,
+    actionUrl: n.actionUrl ?? undefined,
+    actionLabel: n.actionLabel ?? undefined,
+    dismissible: n.dismissible,
+    startsAt: n.startsAt.toISOString(),
+    expiresAt: n.expiresAt?.toISOString(),
+    active: n.active,
+    audienceType: n.audienceType,
+    audienceRoles: n.audienceRoles,
+    audienceUserIds: n.audienceUserIds,
+    priority: n.priority,
+    createdAt: n.createdAt.toISOString(),
+    updatedAt: n.updatedAt.toISOString(),
+  };
+}
 
 @Injectable()
 export class NoticesService {
   constructor(private readonly repository: NoticesRepository) {}
 
-  async getNoticesForUser(userId: Types.ObjectId, role: UserRole): Promise<AppNotice[]> {
+  async getNoticesForUser(userId: string, role: UserRole): Promise<AppNotice[]> {
+    if (!isValidObjectId(userId)) throw new BadRequestException('Invalid user id');
+    const userObjectId = new Types.ObjectId(userId);
+
     const result = await this.repository.findActive(new Date());
-    if (!result.ok) return [];
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
 
-    const notices = result.value;
-
-    // Filter by audience
-    const relevant = notices.filter((notice) => {
+    const relevant = result.value.filter((notice) => {
       if (notice.audienceType === AudienceType.ALL) return true;
       if (notice.audienceType === AudienceType.ROLE && notice.audienceRoles) {
         return notice.audienceRoles.includes(role);
       }
       if (notice.audienceType === AudienceType.USERS && notice.audienceUserIds) {
-        return notice.audienceUserIds.includes(userId.toString());
+        return notice.audienceUserIds.includes(userId);
       }
       return false;
     });
 
     if (relevant.length === 0) return [];
 
-    // Filter out dismissed
     const noticeObjectIds = relevant.map((n) => n._id);
-    const dismissalResult = await this.repository.findDismissals(userId, noticeObjectIds);
-    const dismissedIds = new Set(
-      dismissalResult.ok
-        ? dismissalResult.value.map((d) => d.noticeId.toString())
-        : []
-    );
+    const dismissalResult = await this.repository.findDismissals(userObjectId, noticeObjectIds);
+    if (isErr(dismissalResult)) throw new InternalServerErrorException(dismissalResult.error.message);
 
+    const dismissedIds = new Set(dismissalResult.value.map((d) => d.noticeId.toString()));
     const undismissed = relevant.filter((n) => !dismissedIds.has(n._id.toString()));
 
-    // Sort by priority desc, then severity
     undismissed.sort((a, b) => {
       if (b.priority !== a.priority) return b.priority - a.priority;
-      return (SEVERITY_ORDER[b.severity] ?? 0) - (SEVERITY_ORDER[a.severity] ?? 0);
+      return SEVERITY_ORDER[b.severity] - SEVERITY_ORDER[a.severity];
     });
 
-    // Cap at max
-    return undismissed.slice(0, MAX_NOTICES_PER_USER).map((n) => ({
-      id: n.xid,
-      type: n.type,
-      severity: n.severity,
-      title: n.title,
-      body: n.body ?? undefined,
-      actionUrl: n.actionUrl ?? undefined,
-      actionLabel: n.actionLabel ?? undefined,
-      dismissible: n.dismissible,
-      startsAt: n.startsAt.toISOString(),
-      expiresAt: n.expiresAt?.toISOString(),
-    }));
+    return undismissed.slice(0, MAX_NOTICES_PER_USER).map(toAppNotice);
   }
 
-  async dismiss(userId: Types.ObjectId, noticeXid: string): Promise<void> {
-    const result = await this.repository.findByXid(noticeXid);
-    if (!result.ok || !result.value) {
-      throw new NotFoundException('Notice not found');
-    }
+  async dismiss(userId: string, noticeXid: string): Promise<void> {
+    if (!isValidObjectId(userId)) throw new BadRequestException('Invalid user id');
 
-    await this.repository.upsertDismissal(userId, result.value._id);
+    const result = await this.repository.findByXid(noticeXid);
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
+    if (!result.value) throw new NotFoundException('Notice not found');
+
+    const dismissalResult = await this.repository.upsertDismissal(
+      new Types.ObjectId(userId),
+      result.value._id
+    );
+    if (isErr(dismissalResult)) throw new InternalServerErrorException(dismissalResult.error.message);
   }
 
   // Admin methods
 
-  async adminList(filter: { active?: boolean }, page: number, limit: number): Promise<{ items: AdminNoticeResponse[]; total: number }> {
+  async adminList(
+    filter: { active?: boolean },
+    page: number,
+    limit: number
+  ): Promise<{ items: AdminNoticeResponse[]; total: number }> {
     const skip = (page - 1) * limit;
     const result = await this.repository.findAll(filter, skip, limit);
-    if (!result.ok) return { items: [], total: 0 };
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
 
     return {
-      items: result.value.docs.map((n) => this.toAdminResponse(n)),
+      items: result.value.docs.map(toAdminResponse),
       total: result.value.total,
     };
   }
@@ -105,11 +139,9 @@ export class NoticesService {
       priority: dto.priority,
     });
 
-    if (!result.ok) {
-      throw new BadRequestException('Failed to create notice');
-    }
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
 
-    return this.toAdminResponse(result.value);
+    return toAdminResponse(result.value);
   }
 
   async adminUpdate(xid: string, dto: UpdateNoticeDto): Promise<AdminNoticeResponse> {
@@ -121,39 +153,15 @@ export class NoticesService {
     };
 
     const result = await this.repository.update(xid, data);
-    if (!result.ok || !result.value) {
-      throw new NotFoundException('Notice not found');
-    }
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
+    if (!result.value) throw new NotFoundException('Notice not found');
 
-    return this.toAdminResponse(result.value);
+    return toAdminResponse(result.value);
   }
 
   async adminDelete(xid: string): Promise<void> {
     const result = await this.repository.delete(xid);
-    if (!result.ok || !result.value) {
-      throw new NotFoundException('Notice not found');
-    }
-  }
-
-  private toAdminResponse(n: Notice): AdminNoticeResponse {
-    return {
-      id: n.xid,
-      type: n.type,
-      severity: n.severity,
-      title: n.title,
-      body: n.body ?? undefined,
-      actionUrl: n.actionUrl ?? undefined,
-      actionLabel: n.actionLabel ?? undefined,
-      dismissible: n.dismissible,
-      startsAt: n.startsAt instanceof Date ? n.startsAt.toISOString() : n.startsAt,
-      expiresAt: n.expiresAt instanceof Date ? n.expiresAt.toISOString() : n.expiresAt ?? undefined,
-      active: n.active,
-      audienceType: n.audienceType,
-      audienceRoles: n.audienceRoles,
-      audienceUserIds: n.audienceUserIds,
-      priority: n.priority,
-      createdAt: n.createdAt instanceof Date ? n.createdAt.toISOString() : n.createdAt,
-      updatedAt: n.updatedAt instanceof Date ? n.updatedAt.toISOString() : n.updatedAt,
-    };
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
+    if (!result.value) throw new NotFoundException('Notice not found');
   }
 }

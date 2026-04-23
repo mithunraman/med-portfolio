@@ -1,6 +1,7 @@
 import { Platform } from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
 
 @Schema({
   collection: 'version_policies',
@@ -8,6 +9,10 @@ import { Document, Types } from 'mongoose';
 })
 export class VersionPolicy {
   _id!: Types.ObjectId;
+
+  @Prop({ required: true, unique: true, index: true, default: () => nanoidAlphanumeric() })
+  xid!: string;
+
   @Prop({ required: true, unique: true, type: String, enum: Object.values(Platform) })
   platform!: Platform;
 

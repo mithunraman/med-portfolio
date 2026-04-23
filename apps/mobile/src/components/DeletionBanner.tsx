@@ -1,40 +1,18 @@
 import { useAppDispatch, useAppSelector } from '@/hooks';
+import { useBannerAnimation } from '@/hooks/useBannerAnimation';
 import { cancelDeletion } from '@/store/slices/authSlice';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Animated, StyleSheet, Text, TouchableOpacity } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const BANNER_HEIGHT = 44;
+import { DELETION_BANNER_HEIGHT } from './bannerMetrics';
 
 export function DeletionBanner() {
   const dispatch = useAppDispatch();
   const user = useAppSelector((s) => s.auth.user);
-  const insets = useSafeAreaInsets();
-  const anim = useRef(new Animated.Value(0)).current;
   const [cancelling, setCancelling] = useState(false);
 
   const visible = !!user?.deletionScheduledFor;
-
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: visible ? 1 : 0,
-      duration: 250,
-      useNativeDriver: false,
-    }).start();
-  }, [visible, anim]);
-
-  const totalHeight = insets.top + BANNER_HEIGHT;
-
-  const animatedHeight = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, totalHeight],
-  });
-
-  const animatedPaddingTop = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, insets.top],
-  });
+  const animatedStyle = useBannerAnimation(visible, DELETION_BANNER_HEIGHT, '#b45309');
 
   const handleCancel = async () => {
     setCancelling(true);
@@ -57,14 +35,7 @@ export function DeletionBanner() {
 
   return (
     <Animated.View
-      style={[
-        styles.banner,
-        {
-          height: animatedHeight,
-          paddingTop: animatedPaddingTop,
-          backgroundColor: visible ? '#b45309' : 'transparent',
-        },
-      ]}
+      style={[styles.banner, animatedStyle]}
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
     >
@@ -96,7 +67,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    overflow: 'hidden',
     paddingHorizontal: 16,
   },
   text: {

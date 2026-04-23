@@ -6,7 +6,7 @@ import { Document, Types } from 'mongoose';
   timestamps: false,
 })
 export class NoticeDismissal {
-  @Prop({ required: true, type: Types.ObjectId, index: true })
+  @Prop({ required: true, type: Types.ObjectId })
   userId!: Types.ObjectId;
 
   @Prop({ required: true, type: Types.ObjectId })

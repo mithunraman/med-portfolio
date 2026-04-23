@@ -124,7 +124,6 @@ export { setNetworkStatus, setBannerVisible, selectIsOffline, selectBannerVisibl
 
 // ── Notices ──
 export {
-  removeNotice,
   dismissNotice,
   dismissRecommendedUpdate,
   loadDismissedUpdateVersion,

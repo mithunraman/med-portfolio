@@ -1,22 +1,22 @@
-import { selectIsOffline, setBannerVisible } from '@/store/slices/networkSlice';
 import { useAppDispatch, useAppSelector } from '@/hooks';
+import { useBannerAnimation } from '@/hooks/useBannerAnimation';
+import { selectIsOffline, setBannerVisible } from '@/store/slices/networkSlice';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { OFFLINE_BANNER_HEIGHT } from './bannerMetrics';
 
-export const OFFLINE_BANNER_HEIGHT = 36;
 const BACK_ONLINE_DURATION_MS = 2000;
 
 export function OfflineBanner() {
   const dispatch = useAppDispatch();
   const isOffline = useAppSelector(selectIsOffline);
-  const insets = useSafeAreaInsets();
   const [showBackOnline, setShowBackOnline] = useState(false);
   const wasOffline = useRef(false);
-  const anim = useRef(new Animated.Value(0)).current;
 
   const visible = isOffline || showBackOnline;
+  const backgroundColor = isOffline ? '#d93025' : '#16a34a';
+  const animatedStyle = useBannerAnimation(visible, OFFLINE_BANNER_HEIGHT, backgroundColor);
 
   // Track offline → online transitions for "Back online" message
   useEffect(() => {
@@ -35,42 +35,12 @@ export function OfflineBanner() {
     dispatch(setBannerVisible(visible));
   }, [visible, dispatch]);
 
-  // Animate 0 → 1 (visible) or 1 → 0 (hidden)
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: visible ? 1 : 0,
-      duration: 250,
-      useNativeDriver: false,
-    }).start();
-  }, [visible, anim]);
-
-  // Total height includes safe area so the colored background fills behind the status bar
-  const totalHeight = insets.top + OFFLINE_BANNER_HEIGHT;
-
-  const animatedHeight = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, totalHeight],
-  });
-
-  const animatedPaddingTop = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, insets.top],
-  });
-
-  const backgroundColor = isOffline ? '#d93025' : '#16a34a';
   const label = isOffline ? 'No internet connection' : 'Back online';
   const iconName = isOffline ? 'cloud-offline-outline' : 'checkmark-circle-outline';
 
   return (
     <Animated.View
-      style={[
-        styles.banner,
-        {
-          backgroundColor: visible ? backgroundColor : 'transparent',
-          height: animatedHeight,
-          paddingTop: animatedPaddingTop,
-        },
-      ]}
+      style={[styles.banner, animatedStyle]}
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
     >
@@ -86,7 +56,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    overflow: 'hidden',
   },
   text: {
     color: '#fff',

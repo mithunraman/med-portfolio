@@ -17,6 +17,9 @@ const config: Config = {
   },
   // Integration tests may be slow (real DB, real graph)
   testTimeout: 30000,
+  silent: true,
+  verbose: false,
+  setupFilesAfterEnv: ['<rootDir>/../jest.setup.ts'],
 };
 
 export default config;

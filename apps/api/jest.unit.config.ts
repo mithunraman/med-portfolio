@@ -15,6 +15,9 @@ const config: Config = {
     '^@acme/shared/(.*)$': '<rootDir>/../../../packages/shared/src/$1',
   },
   testTimeout: 10000,
+  silent: true,
+  verbose: false,
+  setupFilesAfterEnv: ['<rootDir>/../jest.setup.ts'],
 };
 
 export default config;

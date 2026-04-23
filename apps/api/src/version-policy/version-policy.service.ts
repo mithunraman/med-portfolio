@@ -2,23 +2,44 @@ import type { UpdatePolicy, UpsertVersionPolicyDto, VersionPolicyResponse } from
 import { Platform, UpdateStatus } from '@acme/shared';
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import * as semver from 'semver';
+import { z } from 'zod';
+import { isErr } from '../common/utils/result.util';
+import { VersionPolicy } from './schemas/version-policy.schema';
 import { VersionPolicyRepository } from './version-policy.repository';
+
+const platformSchema = z.nativeEnum(Platform);
+
+function toResponse(doc: VersionPolicy): VersionPolicyResponse {
+  return {
+    xid: doc.xid,
+    platform: doc.platform,
+    minimumVersion: doc.minimumVersion,
+    recommendedVersion: doc.recommendedVersion,
+    latestVersion: doc.latestVersion,
+    storeUrl: doc.storeUrl,
+    message: doc.message ?? undefined,
+  };
+}
 
 @Injectable()
 export class VersionPolicyService {
   constructor(private readonly repository: VersionPolicyRepository) {}
 
-  async evaluate(platform: string | undefined, clientVersion: string | undefined): Promise<UpdatePolicy | null> {
+  async evaluate(
+    platform: string | undefined,
+    clientVersion: string | undefined
+  ): Promise<UpdatePolicy | null> {
     if (!platform || !clientVersion) return null;
 
-    const validPlatform = Object.values(Platform).find((p) => p === platform);
-    if (!validPlatform) return null;
+    const platformResult = platformSchema.safeParse(platform);
+    if (!platformResult.success) return null;
 
     const parsed = semver.valid(clientVersion);
     if (!parsed) return null;
 
-    const result = await this.repository.findByPlatform(validPlatform);
-    if (!result.ok || !result.value) return null;
+    const result = await this.repository.findByPlatform(platformResult.data);
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
+    if (!result.value) return null;
 
     const policy = result.value;
 
@@ -45,17 +66,9 @@ export class VersionPolicyService {
 
   async getAll(): Promise<VersionPolicyResponse[]> {
     const result = await this.repository.findAll();
-    if (!result.ok) return [];
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
 
-    return result.value.map((doc) => ({
-      id: doc._id.toString(),
-      platform: doc.platform,
-      minimumVersion: doc.minimumVersion,
-      recommendedVersion: doc.recommendedVersion,
-      latestVersion: doc.latestVersion,
-      storeUrl: doc.storeUrl,
-      message: doc.message ?? undefined,
-    }));
+    return result.value.map(toResponse);
   }
 
   async upsert(dto: UpsertVersionPolicyDto): Promise<VersionPolicyResponse> {
@@ -68,19 +81,8 @@ export class VersionPolicyService {
       message: dto.message,
     });
 
-    if (!result.ok) {
-      throw new InternalServerErrorException('Failed to upsert version policy');
-    }
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
 
-    const doc = result.value;
-    return {
-      id: doc._id.toString(),
-      platform: doc.platform,
-      minimumVersion: doc.minimumVersion,
-      recommendedVersion: doc.recommendedVersion,
-      latestVersion: doc.latestVersion,
-      storeUrl: doc.storeUrl,
-      message: doc.message ?? undefined,
-    };
+    return toResponse(result.value);
   }
 }

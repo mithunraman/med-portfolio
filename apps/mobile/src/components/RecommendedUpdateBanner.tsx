@@ -1,11 +1,11 @@
+import { SEVERITY_COLORS } from '@/constants/notices';
 import { useAppDispatch, useAppSelector } from '@/hooks';
+import { useBannerAnimation } from '@/hooks/useBannerAnimation';
 import { dismissRecommendedUpdate, selectRecommendedUpdateBannerVisible } from '@/store';
-import type { UpdatePolicy } from '@acme/shared';
+import { NoticeSeverity, type UpdatePolicy } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
-import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RECOMMENDED_UPDATE_BANNER_HEIGHT } from './bannerMetrics';
 
 interface Props {
@@ -13,20 +13,15 @@ interface Props {
 }
 
 export function RecommendedUpdateBanner({ updatePolicy }: Props) {
-  const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
   const visible = useAppSelector(selectRecommendedUpdateBannerVisible);
-  const anim = useRef(new Animated.Value(0)).current;
+  const animatedStyle = useBannerAnimation(
+    visible,
+    RECOMMENDED_UPDATE_BANNER_HEIGHT,
+    SEVERITY_COLORS[NoticeSeverity.INFO]
+  );
 
   const { latestVersion, storeUrl } = updatePolicy;
-
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: visible ? 1 : 0,
-      duration: 250,
-      useNativeDriver: false,
-    }).start();
-  }, [visible, anim]);
 
   const handleDismiss = () => {
     dispatch(dismissRecommendedUpdate(latestVersion));
@@ -36,26 +31,9 @@ export function RecommendedUpdateBanner({ updatePolicy }: Props) {
     Linking.openURL(storeUrl);
   };
 
-  const totalHeight = insets.top + RECOMMENDED_UPDATE_BANNER_HEIGHT;
-  const animatedHeight = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, totalHeight],
-  });
-  const animatedPaddingTop = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, insets.top],
-  });
-
   return (
     <Animated.View
-      style={[
-        styles.banner,
-        {
-          height: animatedHeight,
-          paddingTop: animatedPaddingTop,
-          backgroundColor: '#1d4ed8',
-        },
-      ]}
+      style={[styles.banner, animatedStyle]}
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
     >
@@ -82,7 +60,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    overflow: 'hidden',
     paddingHorizontal: 16,
   },
   textContainer: {

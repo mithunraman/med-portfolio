@@ -31,6 +31,7 @@ export const loadDismissedUpdateVersion = createAsyncThunk(
       dispatch(setDismissedUpdateVersion(value));
     } catch (error) {
       noticesLogger.warn('Failed to hydrate dismissed update version', { error: String(error) });
+      // Fail open: on storage corruption, show the banner again rather than permanently hiding it.
       dispatch(setDismissedUpdateVersion(null));
     }
   }

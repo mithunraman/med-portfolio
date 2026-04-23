@@ -1,5 +1,4 @@
 export { default as noticesReducer } from './slice';
-export { removeNotice } from './slice';
 export {
   dismissNotice,
   dismissRecommendedUpdate,

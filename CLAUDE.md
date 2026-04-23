@@ -2,6 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Deployment Status
+
+**The backend and mobile app are not yet live.** There are no production users, no production data, and no deployed environments to maintain compatibility with.
+
+**Implications when making changes:**
+- **No backfill scripts needed** for schema changes — just update the schema.
+- **No backward-compatibility shims** for API / DTO changes — breaking changes are fine.
+- **No data migrations** — breaking changes to Mongoose schemas are acceptable; local dev data can be dropped and recreated.
+- **No deprecation periods** for field renames, removals, or enum changes.
+- Feature flags, version gates, and phased rollouts are not needed for the code itself (though they may be part of a product feature's behavior).
+
+Keep the solution lean: avoid writing code purely to handle state that doesn't exist yet.
+
 ## Build & Development Commands
 
 This is a pnpm monorepo using Turborepo. Always use `pnpm` (not npm) for package management.
@@ -79,9 +92,20 @@ All repository methods return `Result<T, DBError>` — they never throw. Service
 
 ### ID strategy
 
-- **xid**: 21-char nanoid (`nanoidAlphanumeric()`), used in all API routes and responses.
-- **_id**: MongoDB ObjectId, used internally for relations and repo queries.
-- Services convert xid → _id for lookups. Responses always return xid, never _id.
+- **xid**: external id, 21-char nanoid (`nanoidAlphanumeric()`), visible to customers in API routes and responses.
+- **_id**: internal id, used for relations and repo queries. Backed by MongoDB's `ObjectId` today, but that's an infrastructure detail — treat `_id` as an opaque internal identity, not a Mongo concept.
+- Responses always return xid, never _id.
+
+### Service layer must not know about MongoDB driver types
+
+Services are the domain/application layer. Keep Mongo driver vocabulary out of them:
+
+- **Do not** use `Types.ObjectId`, `new Types.ObjectId(...)`, or `isValidObjectId()` inside service files. These are persistence concerns that belong in the repository.
+- **Do not** validate id shape (hex length, ObjectId format) in services. If an id reached the service, the controller/guard layer is responsible for having validated it.
+- Services should pass ids to repositories as the type the repository interface declares (typically `string` for xids, or a branded domain id). The repository performs any conversion to storage-native types internally.
+- When adding a new repository method, design the interface in domain terms (`findByXid(xid: string)`, `upsertDismissal(userId: string, noticeId: string)`) — never leak `Types.ObjectId` through the interface.
+
+Existing services have drift on this rule (e.g. `new Types.ObjectId(userId)` sprinkled through `artefacts.service.ts`, `pdp-goals.service.ts`). Don't propagate that pattern into new code; when touching an existing service, prefer pushing the conversion down into the repository rather than adding another call site.
 
 ### Auth decorators
 

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBannerVisibility } from './useBannerVisibility';
 
@@ -12,8 +13,11 @@ export function useOfflineAwareInsets() {
   const insets = useSafeAreaInsets();
   const { activeBanner } = useBannerVisibility();
 
-  return {
-    ...insets,
-    top: activeBanner ? 0 : insets.top,
-  };
+  return useMemo(
+    () => ({
+      ...insets,
+      top: activeBanner ? 0 : insets.top,
+    }),
+    [insets, activeBanner]
+  );
 }

@@ -1,7 +1,6 @@
 import type { InitResponse } from '@acme/shared';
 import { UserRole } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
-import { Types } from 'mongoose';
 import { AuthService } from '../auth/auth.service';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { NoticesService } from '../notices/notices.service';
@@ -32,7 +31,7 @@ export class InitService {
         this.dashboardService.getDashboard(userId),
         this.quotaService.getQuotaStatus(userId, role),
         this.versionPolicyService.evaluate(platform, appVersion),
-        this.noticesService.getNoticesForUser(new Types.ObjectId(userId), role),
+        this.noticesService.getNoticesForUser(userId, role),
       ]);
 
     if (userResult.status === 'rejected') {

@@ -42,7 +42,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch {
       // Ignore errors during logout
     } finally {
-      await webTokenProvider.clearAccessToken();
+      await webTokenProvider.clearTokens();
       setUser(null);
     }
   }, []);
@@ -54,7 +54,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const otpVerify = useCallback(async (email: string, code: string, name?: string) => {
     const response = await api.auth.otpVerify({ email, code, name });
-    await webTokenProvider.setAccessToken(response.accessToken);
+    await webTokenProvider.setTokens({
+      accessToken: response.accessToken,
+      refreshToken: response.refreshToken,
+    });
     setUser(response.user);
   }, []);
 
@@ -67,7 +70,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const currentUser = await api.auth.me();
           setUser(currentUser);
         } catch {
-          await webTokenProvider.clearAccessToken();
+          await webTokenProvider.clearTokens();
         }
       }
       setIsLoading(false);

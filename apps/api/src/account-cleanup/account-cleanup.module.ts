@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AnalysisRunsModule } from '../analysis-runs';
 import { ArtefactsModule } from '../artefacts/artefacts.module';
+import { AuthModule } from '../auth/auth.module';
 import { User, UserSchema } from '../auth/schemas/user.schema';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { ItemsModule } from '../items/items.module';
@@ -17,6 +18,7 @@ import { AccountCleanupService } from './account-cleanup.service';
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+    AuthModule,
     ArtefactsModule,
     ConversationsModule,
     MediaModule,

@@ -20,10 +20,15 @@ export const envSchema = z.object({
     .url('MONGODB_URI must be a valid URL'),
 
   // Authentication
-  JWT_SECRET: z
-    .string({ required_error: 'JWT_SECRET is required' })
-    .min(32, 'JWT_SECRET must be at least 32 characters for security'),
-  JWT_EXPIRES_IN: z.string().default('7d'),
+  JWT_ACCESS_SECRET: z
+    .string({ required_error: 'JWT_ACCESS_SECRET is required' })
+    .min(32, 'JWT_ACCESS_SECRET must be at least 32 characters for security'),
+  JWT_ACCESS_EXPIRES_IN: z.string().default('60m'),
+  REFRESH_TOKEN_TTL_DAYS: z
+    .string()
+    .default('90')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().int().min(1).max(365)),
 
   // Storage (S3/R2)
   S3_ENDPOINT: z.string().url().optional(),
@@ -146,8 +151,9 @@ export const appConfig = registerAs('app', () => {
       uri: env.MONGODB_URI,
     },
     jwt: {
-      secret: env.JWT_SECRET,
-      expiresIn: env.JWT_EXPIRES_IN,
+      accessSecret: env.JWT_ACCESS_SECRET,
+      accessExpiresIn: env.JWT_ACCESS_EXPIRES_IN,
+      refreshTtlDays: env.REFRESH_TOKEN_TTL_DAYS,
     },
     storage: {
       endpoint: env.S3_ENDPOINT,

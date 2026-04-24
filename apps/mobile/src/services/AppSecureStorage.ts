@@ -19,6 +19,7 @@ export interface StoredUserSession {
  */
 export interface SecureStorageSchema {
   accessToken: string;
+  refreshToken: string;
   user: StoredUserSession;
 }
 
@@ -36,7 +37,7 @@ class AppSecureStorageService {
         return null;
       }
 
-      if (key === 'accessToken') {
+      if (key === 'accessToken' || key === 'refreshToken') {
         return value as SecureStorageSchema[K];
       }
 
@@ -79,7 +80,11 @@ class AppSecureStorageService {
    * Clear all session data (logout).
    */
   async clearSession(): Promise<void> {
-    await Promise.all([this.remove('accessToken'), this.remove('user')]);
+    await Promise.all([
+      this.remove('accessToken'),
+      this.remove('refreshToken'),
+      this.remove('user'),
+    ]);
     storageLogger.info('Session cleared');
   }
 }

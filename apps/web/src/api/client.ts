@@ -2,31 +2,32 @@ import { createApiClient, createFetchAdapter, type TokenProvider } from '@acme/a
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
-/**
- * Web token provider using localStorage.
- */
+const ACCESS_KEY = 'accessToken';
+const REFRESH_KEY = 'refreshToken';
+
 const webTokenProvider: TokenProvider = {
   async getAccessToken() {
-    return localStorage.getItem('accessToken');
+    return localStorage.getItem(ACCESS_KEY);
   },
-  async setAccessToken(token: string) {
-    localStorage.setItem('accessToken', token);
+  async getRefreshToken() {
+    return localStorage.getItem(REFRESH_KEY);
   },
-  async clearAccessToken() {
-    localStorage.removeItem('accessToken');
+  async setTokens({ accessToken, refreshToken }) {
+    localStorage.setItem(ACCESS_KEY, accessToken);
+    localStorage.setItem(REFRESH_KEY, refreshToken);
+  },
+  async clearTokens() {
+    localStorage.removeItem(ACCESS_KEY);
+    localStorage.removeItem(REFRESH_KEY);
   },
 };
 
-// Store for unauthorized callback
 let onUnauthorizedCallback: (() => void) | null = null;
 
 export function setOnUnauthorized(callback: () => void) {
   onUnauthorizedCallback = callback;
 }
 
-/**
- * Singleton API client instance for web.
- */
 export const api = createApiClient({
   baseUrl: API_URL,
   httpAdapter: createFetchAdapter(),

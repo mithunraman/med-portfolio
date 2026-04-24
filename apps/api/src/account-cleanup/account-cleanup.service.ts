@@ -11,6 +11,11 @@ import {
   IArtefactsRepository,
 } from '../artefacts/artefacts.repository.interface';
 import { User, UserDocument } from '../auth/schemas/user.schema';
+import {
+  ISessionRepository,
+  SESSION_REPOSITORY,
+} from '../auth/sessions.repository.interface';
+import { SessionRevokedReason } from '@acme/shared';
 import { isErr } from '../common/utils/result.util';
 import {
   CONVERSATIONS_REPOSITORY,
@@ -50,6 +55,7 @@ export class AccountCleanupService {
     @Inject(VERSION_HISTORY_REPOSITORY)
     private readonly versionHistoryRepo: IVersionHistoryRepository,
     @Inject(OUTBOX_REPOSITORY) private readonly outboxRepo: IOutboxRepository,
+    @Inject(SESSION_REPOSITORY) private readonly sessionRepo: ISessionRepository,
     private readonly storageService: StorageService
   ) {}
 
@@ -206,8 +212,8 @@ export class AccountCleanupService {
           deletionScheduledFor: null,
           anonymizedAt: new Date(),
         },
-        $inc: { tokenVersion: 1 },
       }
     );
+    await this.sessionRepo.revokeAllByUser(userId.toString(), SessionRevokedReason.LOGOUT_ALL);
   }
 }

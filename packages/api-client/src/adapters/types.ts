@@ -22,13 +22,23 @@ export interface HttpResponse<T> {
 }
 
 /**
- * Token provider interface for auth header injection.
+ * Token provider interface for access + refresh token storage.
  * Allows different storage mechanisms (localStorage, SecureStore, etc.)
  */
 export interface TokenProvider {
   getAccessToken(): Promise<string | null>;
-  setAccessToken(token: string): Promise<void>;
-  clearAccessToken(): Promise<void>;
+  getRefreshToken(): Promise<string | null>;
+  setTokens(tokens: { accessToken: string; refreshToken: string }): Promise<void>;
+  clearTokens(): Promise<void>;
+}
+
+/**
+ * Provides device identity headers sent on auth-mutating requests.
+ */
+export interface DeviceInfoProvider {
+  getDeviceId(): Promise<string>;
+  getDeviceName(): string;
+  getOs?(): string | undefined;
 }
 
 /**
@@ -47,6 +57,7 @@ export interface ApiClientConfig {
   baseUrl: string;
   httpAdapter: HttpAdapter;
   tokenProvider: TokenProvider;
+  deviceInfoProvider?: DeviceInfoProvider;
   requestIdGenerator?: () => string;
   onUnauthorized?: () => void;
   onQuotaUpdate?: (quota: QuotaHeaders) => void;

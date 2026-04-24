@@ -14,7 +14,7 @@ import { AnalysisRunsModule } from './analysis-runs';
 import { ArtefactsModule } from './artefacts/artefacts.module';
 import { AuthModule } from './auth/auth.module';
 import { DevOnlyGuard, JwtAuthGuard, QuotaGuard, RolesGuard } from './common/guards';
-import { QuotaInterceptor, TokenRefreshInterceptor } from './common/interceptors';
+import { QuotaInterceptor } from './common/interceptors';
 import { MetricsModule } from './common/metrics';
 import { ConfigModule } from './config';
 import { ConversationsModule } from './conversations/conversations.module';
@@ -124,10 +124,6 @@ import { StorageModule } from './storage';
     {
       provide: APP_INTERCEPTOR,
       useClass: QuotaInterceptor,
-    },
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: TokenRefreshInterceptor,
     },
   ],
 })

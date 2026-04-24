@@ -16,7 +16,7 @@ describe('NoticesController', () => {
   it('U-C-01: dismiss passes CurrentUser.userId and id to service', async () => {
     const service = createMockService();
     const controller = new NoticesController(service as any);
-    const user: CurrentUserPayload = { userId: 'user_123', email: 'a@b.c', role: 0 };
+    const user: CurrentUserPayload = { userId: 'user_123', role: 0, sessionId: 'sess_1' };
 
     await controller.dismiss(user, 'not_xid_001');
 

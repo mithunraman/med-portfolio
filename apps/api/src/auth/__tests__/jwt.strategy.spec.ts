@@ -1,19 +1,18 @@
-import { UserRole } from '@acme/shared';
+import { AuthErrorCode, SessionRevokedReason, UserRole } from '@acme/shared';
 import { UnauthorizedException } from '@nestjs/common';
 import { Types } from 'mongoose';
+import { ok } from '../../common/utils/result.util';
+import { ISessionRepository } from '../sessions.repository.interface';
 import { JwtPayload, JwtStrategy } from '../strategies/jwt.strategy';
 
-// ── Helpers ──
-
 const userId = new Types.ObjectId();
-const userIdStr = userId.toString();
+const sessionId = new Types.ObjectId();
 
 function makePayload(overrides: Partial<JwtPayload> = {}): JwtPayload {
   return {
-    sub: userIdStr,
-    email: 'user@example.com',
+    sub: userId.toString(),
     role: UserRole.USER,
-    tokenVersion: 0,
+    sid: sessionId.toString(),
     ...overrides,
   };
 }
@@ -21,96 +20,118 @@ function makePayload(overrides: Partial<JwtPayload> = {}): JwtPayload {
 function makeUserDoc(overrides: Record<string, unknown> = {}) {
   return {
     _id: userId,
-    email: 'user@example.com',
     role: UserRole.USER,
-    tokenVersion: 0,
     anonymizedAt: null,
     ...overrides,
   };
 }
 
-// ── Mocks ──
+function makeSession(overrides: Record<string, unknown> = {}) {
+  return {
+    _id: sessionId,
+    userId,
+    expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+    revokedAt: null,
+    revokedReason: null,
+    ...overrides,
+  } as any;
+}
 
 const mockLean = jest.fn();
 const mockSelect = jest.fn().mockReturnValue({ lean: mockLean });
-const mockFindById = jest.fn().mockReturnValue({ select: mockSelect });
+const mockUserModel = { findById: jest.fn().mockReturnValue({ select: mockSelect }) };
 
-const mockUserModel = { findById: mockFindById };
+const mockSessionRepo: jest.Mocked<Pick<ISessionRepository, 'findById'>> = {
+  findById: jest.fn(),
+};
 
 const mockConfigService = {
   get: jest.fn().mockReturnValue('test-jwt-secret-that-is-at-least-32-chars'),
 };
 
 function createStrategy(): JwtStrategy {
-  return new JwtStrategy(mockConfigService as any, mockUserModel as any);
+  return new JwtStrategy(
+    mockConfigService as any,
+    mockUserModel as any,
+    mockSessionRepo as any
+  );
 }
-
-// ── Tests ──
 
 describe('JwtStrategy', () => {
   let strategy: JwtStrategy;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockFindById.mockReturnValue({ select: mockSelect });
+    mockUserModel.findById.mockReturnValue({ select: mockSelect });
     mockSelect.mockReturnValue({ lean: mockLean });
     strategy = createStrategy();
   });
 
-  describe('validate', () => {
-    it('should return userId, email, and role from the database', async () => {
-      const dbUser = makeUserDoc();
-      mockLean.mockResolvedValue(dbUser);
+  it('returns userId, role and sessionId on a valid token', async () => {
+    mockLean.mockResolvedValue(makeUserDoc());
+    mockSessionRepo.findById.mockResolvedValue(ok(makeSession()));
 
-      const result = await strategy.validate(makePayload());
+    const result = await strategy.validate(makePayload());
 
-      expect(result).toEqual({
-        userId: userIdStr,
-        email: 'user@example.com',
-        role: UserRole.USER,
-      });
-      expect(mockFindById).toHaveBeenCalledWith(userIdStr);
-      expect(mockSelect).toHaveBeenCalledWith('tokenVersion role email anonymizedAt');
+    expect(result).toEqual({
+      userId: userId.toString(),
+      role: UserRole.USER,
+      sessionId: sessionId.toString(),
     });
+  });
 
-    it('should throw UnauthorizedException when user is not found', async () => {
-      mockLean.mockResolvedValue(null);
+  it('throws TOKEN_INVALID when sid is missing', async () => {
+    await expect(strategy.validate({ ...makePayload(), sid: '' })).rejects.toThrow(
+      UnauthorizedException
+    );
+  });
 
-      await expect(strategy.validate(makePayload())).rejects.toThrow(
-        new UnauthorizedException('User not found'),
-      );
+  it('throws USER_INACTIVE when user is not found', async () => {
+    mockLean.mockResolvedValue(null);
+    mockSessionRepo.findById.mockResolvedValue(ok(makeSession()));
+
+    await expect(strategy.validate(makePayload())).rejects.toMatchObject({
+      response: { code: AuthErrorCode.USER_INACTIVE },
     });
+  });
 
-    it('should throw UnauthorizedException when tokenVersion does not match', async () => {
-      mockLean.mockResolvedValue(makeUserDoc({ tokenVersion: 2 }));
+  it('throws USER_INACTIVE when user is anonymized', async () => {
+    mockLean.mockResolvedValue(makeUserDoc({ anonymizedAt: new Date() }));
+    mockSessionRepo.findById.mockResolvedValue(ok(makeSession()));
 
-      await expect(strategy.validate(makePayload({ tokenVersion: 1 }))).rejects.toThrow(
-        new UnauthorizedException('Token has been revoked'),
-      );
+    await expect(strategy.validate(makePayload())).rejects.toMatchObject({
+      response: { code: AuthErrorCode.USER_INACTIVE },
     });
+  });
 
-    it('should throw UnauthorizedException when user is anonymized', async () => {
-      mockLean.mockResolvedValue(makeUserDoc({ anonymizedAt: new Date() }));
+  it('throws SESSION_NOT_FOUND when session does not exist', async () => {
+    mockLean.mockResolvedValue(makeUserDoc());
+    mockSessionRepo.findById.mockResolvedValue(ok(null));
 
-      await expect(strategy.validate(makePayload())).rejects.toThrow(
-        new UnauthorizedException('Account is no longer active'),
-      );
+    await expect(strategy.validate(makePayload())).rejects.toMatchObject({
+      response: { code: AuthErrorCode.SESSION_NOT_FOUND },
     });
+  });
 
-    it('should return the database role when it differs from the JWT payload', async () => {
-      mockLean.mockResolvedValue(makeUserDoc({ role: UserRole.ADMIN }));
+  it('throws SESSION_REVOKED when session is revoked', async () => {
+    mockLean.mockResolvedValue(makeUserDoc());
+    mockSessionRepo.findById.mockResolvedValue(
+      ok(makeSession({ revokedAt: new Date(), revokedReason: SessionRevokedReason.LOGOUT }))
+    );
 
-      const result = await strategy.validate(makePayload({ role: UserRole.USER }));
-
-      expect(result.role).toBe(UserRole.ADMIN);
+    await expect(strategy.validate(makePayload())).rejects.toMatchObject({
+      response: { code: AuthErrorCode.SESSION_REVOKED },
     });
+  });
 
-    it('should return the database email when it differs from the JWT payload', async () => {
-      mockLean.mockResolvedValue(makeUserDoc({ email: 'updated@example.com' }));
+  it('throws SESSION_EXPIRED when session has passed its TTL', async () => {
+    mockLean.mockResolvedValue(makeUserDoc());
+    mockSessionRepo.findById.mockResolvedValue(
+      ok(makeSession({ expiresAt: new Date(Date.now() - 1000) }))
+    );
 
-      const result = await strategy.validate(makePayload({ email: 'old@example.com' }));
-
-      expect(result.email).toBe('updated@example.com');
+    await expect(strategy.validate(makePayload())).rejects.toMatchObject({
+      response: { code: AuthErrorCode.SESSION_EXPIRED },
     });
   });
 });

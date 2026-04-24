@@ -13,10 +13,13 @@ const authLogger = logger.createScope('AuthSlice');
  * Persist auth session to secure storage after successful login/registration.
  */
 async function persistAuthSession(
-  response: { accessToken: string; user: AuthUser },
+  response: { accessToken: string; refreshToken: string; user: AuthUser },
   isGuest: boolean
 ): Promise<void> {
-  await mobileTokenProvider.setAccessToken(response.accessToken);
+  await mobileTokenProvider.setTokens({
+    accessToken: response.accessToken,
+    refreshToken: response.refreshToken,
+  });
   await AppSecureStorage.set('user', {
     user: response.user,
     isGuest,
@@ -55,15 +58,19 @@ const initialState: AuthState = {
 export const initializeAuth = createAsyncThunk('auth/initialize', async () => {
   authLogger.debug('Initializing auth');
 
-  const token = await AppSecureStorage.get('accessToken');
-  if (!token) {
-    authLogger.debug('No existing token');
+  const [accessToken, refreshToken] = await Promise.all([
+    AppSecureStorage.get('accessToken'),
+    AppSecureStorage.get('refreshToken'),
+  ]);
+  if (!accessToken || !refreshToken) {
+    authLogger.debug('No existing tokens');
+    await AppSecureStorage.clearSession();
     return { status: 'unauthenticated' as const, user: null };
   }
 
   const storedSession = await AppSecureStorage.get('user');
   if (!storedSession?.user) {
-    authLogger.warn('Token exists but no stored user, clearing session');
+    authLogger.warn('Tokens exist but no stored user, clearing session');
     await AppSecureStorage.clearSession();
     return { status: 'unauthenticated' as const, user: null };
   }

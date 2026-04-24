@@ -1,4 +1,14 @@
-import type { LoginResponse, AuthUser, OtpSendRequest, OtpSendResponse, OtpVerifyRequest, OtpClaimRequest, UpdateProfileRequest } from '@acme/shared';
+import type {
+  AuthUser,
+  LoginResponse,
+  OtpClaimRequest,
+  OtpSendRequest,
+  OtpSendResponse,
+  OtpVerifyRequest,
+  RefreshTokenResponse,
+  SessionView,
+  UpdateProfileRequest,
+} from '@acme/shared';
 import { BaseApiClient } from '../core/api-client';
 
 export class AuthClient {
@@ -21,13 +31,35 @@ export class AuthClient {
   }
 
   async registerGuest(): Promise<LoginResponse> {
-    return this.client.post<LoginResponse>('/auth/guest', {}, {
-      authenticated: false,
-    });
+    return this.client.post<LoginResponse>(
+      '/auth/guest',
+      {},
+      { authenticated: false }
+    );
+  }
+
+  async refresh(refreshToken: string): Promise<RefreshTokenResponse> {
+    return this.client.post<RefreshTokenResponse>(
+      '/auth/refresh',
+      { refreshToken },
+      { authenticated: false, skipRefresh: true }
+    );
   }
 
   async logout(): Promise<void> {
     return this.client.post<void>('/auth/logout', {}, { skipUnauthorizedCallback: true });
+  }
+
+  async logoutAll(): Promise<void> {
+    return this.client.post<void>('/auth/logout-all', {});
+  }
+
+  async listSessions(): Promise<SessionView[]> {
+    return this.client.get<SessionView[]>('/auth/sessions');
+  }
+
+  async revokeSession(id: string): Promise<void> {
+    return this.client.delete<void>(`/auth/sessions/${id}`);
   }
 
   async requestDeletion(): Promise<AuthUser> {

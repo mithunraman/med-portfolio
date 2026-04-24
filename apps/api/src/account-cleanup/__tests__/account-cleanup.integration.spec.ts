@@ -166,7 +166,6 @@ describe('AccountCleanupService (integration)', () => {
       role: UserRole.USER,
       specialty: Specialty.GP,
       trainingStage: 'ST1',
-      tokenVersion: 0,
       deletionRequestedAt: opts.deletion ? new Date(Date.now() - 72 * 60 * 60 * 1000) : null,
       deletionScheduledFor: opts.deletion ? new Date(Date.now() - 24 * 60 * 60 * 1000) : null,
       anonymizedAt: null,
@@ -301,7 +300,6 @@ describe('AccountCleanupService (integration)', () => {
     expect(userA!.deletionRequestedAt).toBeNull();
     expect(userA!.deletionScheduledFor).toBeNull();
     expect(userA!.anonymizedAt).toBeInstanceOf(Date);
-    expect(userA!.tokenVersion).toBe(1);
 
     const artefactA = await artefactModel.findOne({ userId: userAId }).lean();
     expect(artefactA!.title).toBe('[deleted]');
@@ -366,7 +364,6 @@ describe('AccountCleanupService (integration)', () => {
     expect(userB!.email).toBe(`user-${userBId.toString().slice(-4)}@example.com`);
     expect(userB!.specialty).toBe(Specialty.GP);
     expect(userB!.anonymizedAt).toBeNull();
-    expect(userB!.tokenVersion).toBe(0);
 
     const artefactB = await artefactModel.findOne({ userId: userBId }).lean();
     expect(artefactB!.title).toBe(`Artefact for ${userBId}`);

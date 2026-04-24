@@ -51,6 +51,10 @@ function createService() {
     outboxRepo: createMockRepo(),
   };
 
+  const sessionRepo = {
+    revokeAllByUser: jest.fn().mockResolvedValue(ok(0)),
+  };
+
   const userModel = createMockUserModel();
 
   const service = new AccountCleanupService(
@@ -64,10 +68,11 @@ function createService() {
     repos.itemsRepo as any,
     repos.versionHistoryRepo as any,
     repos.outboxRepo as any,
+    sessionRepo as any,
     mockStorageService as any
   );
 
-  return { service, repos, userModel };
+  return { service, repos, userModel, sessionRepo };
 }
 
 /** Set up userModel to return one user ready for deletion */
@@ -296,8 +301,8 @@ describe('AccountCleanupService', () => {
   // ── User record anonymization ──
 
   describe('user record anonymization', () => {
-    it('should anonymize user with correct fields and increment tokenVersion', async () => {
-      const { service, userModel } = createService();
+    it('should anonymize user with correct fields and revoke all sessions', async () => {
+      const { service, userModel, sessionRepo } = createService();
       setupUserForDeletion(userModel, targetUserId);
 
       await service.processExpiredDeletions();
@@ -314,8 +319,11 @@ describe('AccountCleanupService', () => {
             deletionScheduledFor: null,
             anonymizedAt: expect.any(Date),
           },
-          $inc: { tokenVersion: 1 },
         }
+      );
+      expect(sessionRepo.revokeAllByUser).toHaveBeenCalledWith(
+        targetUserId.toString(),
+        'logout_all'
       );
     });
   });

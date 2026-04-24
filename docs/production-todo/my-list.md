@@ -10,7 +10,7 @@
 
 * Guests should be allowed to create a maximum of 5 artefacts. Then ask them to register as user to continue. Registered user should be allowed to create more.
 
-* User should be able to create a review period form the "see all" review period screen. When a new review period is created, we need to warn the user if there are any other active review periods, it will be archived.
+* [Done] User should be able to create a review period form the "see all" review period screen. When a new review period is created, we need to warn the user if there are any other active review periods, it will be archived.
 
 * User is currently unable to change their training / year in the profile page. It should be possible to change it.
 

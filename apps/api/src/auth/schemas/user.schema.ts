@@ -24,9 +24,6 @@ export class User {
   @Prop({ type: String, default: null })
   trainingStage!: string | null;
 
-  @Prop({ type: Number, default: 0 })
-  tokenVersion!: number;
-
   @Prop({ type: Date, default: null })
   deletionRequestedAt!: Date | null;
 

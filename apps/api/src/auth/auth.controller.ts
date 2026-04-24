@@ -1,10 +1,36 @@
-import type { AuthUser, LoginResponse, OtpSendResponse } from '@acme/shared';
-import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post } from '@nestjs/common';
+import type {
+  AuthUser,
+  LoginResponse,
+  OtpSendResponse,
+  RefreshTokenResponse,
+  SessionView,
+} from '@acme/shared';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
+import {
+  DeviceInfo,
+  DeviceInfoHeaders,
+} from '../common/decorators/device-info.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
-import { OtpClaimDto, OtpSendDto, OtpVerifyDto, UpdateProfileDto } from './dto';
+import {
+  OtpClaimDto,
+  OtpSendDto,
+  OtpVerifyDto,
+  RefreshTokenDto,
+  UpdateProfileDto,
+} from './dto';
 
 @SkipThrottle()
 @Controller('auth')
@@ -23,29 +49,73 @@ export class AuthController {
   @Post('otp/verify')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
-  async otpVerify(@Body() dto: OtpVerifyDto): Promise<LoginResponse> {
-    return this.authService.otpVerifyAndLogin(dto.email, dto.code, dto.name);
+  async otpVerify(
+    @Body() dto: OtpVerifyDto,
+    @DeviceInfoHeaders() device: DeviceInfo
+  ): Promise<LoginResponse> {
+    return this.authService.otpVerifyAndLogin(dto.email, dto.code, device, dto.name);
   }
 
   @Post('claim')
   @HttpCode(HttpStatus.OK)
   async claimGuest(
     @CurrentUser() user: CurrentUserPayload,
-    @Body() dto: OtpClaimDto
+    @Body() dto: OtpClaimDto,
+    @DeviceInfoHeaders() device: DeviceInfo
   ): Promise<LoginResponse> {
-    return this.authService.claimGuestAccount(user.userId, dto.email, dto.code, dto.name);
+    return this.authService.claimGuestAccount(
+      user.userId,
+      user.sessionId,
+      dto.email,
+      dto.code,
+      dto.name,
+      device
+    );
+  }
+
+  @Public()
+  @Post('refresh')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @HttpCode(HttpStatus.OK)
+  async refresh(
+    @Body() dto: RefreshTokenDto,
+    @DeviceInfoHeaders() device: DeviceInfo
+  ): Promise<RefreshTokenResponse> {
+    return this.authService.refreshSession(dto.refreshToken, device);
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   async logout(@CurrentUser() user: CurrentUserPayload): Promise<{ message: string }> {
+    return this.authService.logout(user.sessionId);
+  }
+
+  @Post('logout-all')
+  @HttpCode(HttpStatus.OK)
+  async logoutAll(@CurrentUser() user: CurrentUserPayload): Promise<{ message: string }> {
     return this.authService.logoutAll(user.userId);
+  }
+
+  @Get('sessions')
+  async listSessions(@CurrentUser() user: CurrentUserPayload): Promise<SessionView[]> {
+    return this.authService.listSessions(user.userId, user.sessionId);
+  }
+
+  @Delete('sessions/:id')
+  @HttpCode(HttpStatus.OK)
+  async revokeSession(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string
+  ): Promise<{ message: string }> {
+    return this.authService.revokeSession(user.userId, id);
   }
 
   @Public()
   @Post('guest')
-  async registerGuest(): Promise<LoginResponse> {
-    return this.authService.registerGuest();
+  async registerGuest(
+    @DeviceInfoHeaders() device: DeviceInfo
+  ): Promise<LoginResponse> {
+    return this.authService.registerGuest(device);
   }
 
   @Post('me/request-deletion')

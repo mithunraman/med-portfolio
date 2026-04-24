@@ -1,35 +1,59 @@
 import {
+  AuthErrorCode,
+  SessionRevokedReason,
   UserRole,
   type AuthUser,
   type LoginResponse,
   type OtpSendResponse,
+  type RefreshTokenResponse,
+  type SessionView,
   type UpdateProfileRequest,
 } from '@acme/shared';
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import * as crypto from 'crypto';
 import { Model } from 'mongoose';
 import ms from 'ms';
+import { DeviceInfo } from '../common/decorators/device-info.decorator';
+import { isErr } from '../common/utils/result.util';
 import { OtpService } from '../otp';
 import { getSpecialtyConfig, isValidTrainingStage } from '../specialties/specialty.registry';
+import { Session } from './schemas/session.schema';
 import { User, UserDocument } from './schemas/user.schema';
+import {
+  ISessionRepository,
+  SESSION_REPOSITORY,
+} from './sessions.repository.interface';
+import { TokenService } from './token.service';
+
+interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+}
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly refreshTtlMs: number;
 
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
-    private jwtService: JwtService,
-    private otpService: OtpService
-  ) {}
+    @Inject(SESSION_REPOSITORY) private readonly sessionRepo: ISessionRepository,
+    private readonly tokenService: TokenService,
+    private readonly otpService: OtpService,
+    private readonly configService: ConfigService
+  ) {
+    const days = this.configService.get<number>('app.jwt.refreshTtlDays', 90);
+    this.refreshTtlMs = days * 24 * 60 * 60 * 1000;
+  }
 
   // ── OTP-based auth ──
 
@@ -45,7 +69,12 @@ export class AuthService {
     };
   }
 
-  async otpVerifyAndLogin(email: string, code: string, name?: string): Promise<LoginResponse> {
+  async otpVerifyAndLogin(
+    email: string,
+    code: string,
+    device: DeviceInfo,
+    name?: string
+  ): Promise<LoginResponse> {
     await this.otpService.verifyOtp(email, code);
 
     const normalizedEmail = email.toLowerCase();
@@ -56,85 +85,202 @@ export class AuthService {
         name: name || normalizedEmail.split('@')[0],
         email: normalizedEmail,
         role: UserRole.USER,
-        tokenVersion: 0,
       });
-
       this.logger.log(`New user created via OTP: ${normalizedEmail}`);
     }
 
-    const accessToken = this.generateToken(user);
+    const tokens = await this.createSessionAndTokens(user, device);
+    this.logger.log(
+      `auth.login userId=${user._id.toString()} method=otp device=${device.deviceId}`
+    );
 
-    return {
-      accessToken,
-      user: this.toAuthUser(user),
-    };
+    return { ...tokens, user: this.toAuthUser(user) };
   }
 
   async claimGuestAccount(
     guestUserId: string,
+    guestSessionId: string,
     email: string,
     code: string,
-    name: string
+    name: string,
+    device: DeviceInfo
   ): Promise<LoginResponse> {
     await this.otpService.verifyOtp(email, code);
 
     const normalizedEmail = email.toLowerCase();
 
-    // Check the email isn't already taken by another user
     const existingUser = await this.userModel.findOne({ email: normalizedEmail });
     if (existingUser) {
       throw new ConflictException('An account with this email already exists');
     }
 
-    // Find the guest user
     const guestUser = await this.userModel.findById(guestUserId);
     if (!guestUser) {
       throw new BadRequestException('Guest account not found');
     }
-
     if (guestUser.role !== UserRole.USER_GUEST) {
       throw new BadRequestException('Account is already registered');
     }
 
-    // Upgrade in place — all data stays linked to the same _id
     guestUser.email = normalizedEmail;
     guestUser.role = UserRole.USER;
     guestUser.name = name;
-    guestUser.tokenVersion = (guestUser.tokenVersion ?? 0) + 1;
     await guestUser.save();
 
-    this.logger.log(`Guest account claimed: ${normalizedEmail}`);
+    // Revoke the guest's current session, then mint a fresh one for the claimed account.
+    await this.sessionRepo.revoke(guestSessionId, SessionRevokedReason.SUPERSEDED);
 
-    const accessToken = this.generateToken(guestUser);
+    const tokens = await this.createSessionAndTokens(guestUser, device);
+    this.logger.log(
+      `auth.login userId=${guestUser._id.toString()} method=claim device=${device.deviceId}`
+    );
 
-    return {
-      accessToken,
-      user: this.toAuthUser(guestUser),
-    };
+    return { ...tokens, user: this.toAuthUser(guestUser) };
   }
 
-  async logoutAll(userId: string): Promise<{ message: string }> {
-    await this.userModel.updateOne({ _id: userId }, { $inc: { tokenVersion: 1 } });
-    return { message: 'All sessions invalidated' };
-  }
-
-  async registerGuest(): Promise<LoginResponse> {
+  async registerGuest(device: DeviceInfo): Promise<LoginResponse> {
     const guestId = crypto.randomUUID();
 
     const user = await this.userModel.create({
       name: 'Guest',
       email: `guest_${guestId}@guest.local`,
       role: UserRole.USER_GUEST,
-      tokenVersion: 0,
     });
 
-    const accessToken = this.generateToken(user);
+    const tokens = await this.createSessionAndTokens(user, device);
+    this.logger.log(
+      `auth.login userId=${user._id.toString()} method=guest device=${device.deviceId}`
+    );
 
-    return {
-      accessToken,
-      user: this.toAuthUser(user),
-    };
+    return { ...tokens, user: this.toAuthUser(user) };
   }
+
+  // ── Refresh ──
+
+  async refreshSession(
+    rawRefreshToken: string,
+    device: DeviceInfo
+  ): Promise<RefreshTokenResponse> {
+    const hash = this.tokenService.hashRefreshToken(rawRefreshToken);
+
+    const activeResult = await this.sessionRepo.findActiveByRefreshHash(hash);
+    if (isErr(activeResult)) {
+      throw new UnauthorizedException({
+        code: AuthErrorCode.REFRESH_INVALID,
+        message: 'Failed to validate refresh token',
+      });
+    }
+
+    let session = activeResult.value;
+
+    if (!session) {
+      // Not an active token — check if it's a rotated-away token being replayed.
+      const replayResult = await this.sessionRepo.findByPreviousHash(hash);
+      if (!isErr(replayResult) && replayResult.value) {
+        const replay = replayResult.value;
+        await this.sessionRepo.revokeFamily(
+          replay.refreshTokenFamily,
+          SessionRevokedReason.ROTATION_REPLAY
+        );
+        this.logger.warn(
+          `auth.refresh.replay userId=${replay.userId.toString()} family=${replay.refreshTokenFamily}`
+        );
+      }
+      throw new UnauthorizedException({
+        code: AuthErrorCode.REFRESH_INVALID,
+        message: 'Refresh token is invalid',
+      });
+    }
+
+    if (session.expiresAt < new Date()) {
+      throw new UnauthorizedException({
+        code: AuthErrorCode.SESSION_EXPIRED,
+        message: 'Session has expired',
+      });
+    }
+
+    const user = await this.userModel.findById(session.userId);
+    if (!user || user.anonymizedAt) {
+      throw new UnauthorizedException({
+        code: AuthErrorCode.USER_INACTIVE,
+        message: 'User is not active',
+      });
+    }
+
+    // Rotate: mint new refresh token, move old hash to previousHashes.
+    // CAS on the current hash — if a concurrent refresh rotated first, this
+    // lookup misses and we return REFRESH_INVALID (defence against client-side
+    // single-flight failures and replay attempts that slipped past the active
+    // lookup above).
+    const newRefresh = this.tokenService.generateRefreshToken();
+    const rotateResult = await this.sessionRepo.rotate(
+      session._id.toString(),
+      hash,
+      newRefresh.hash
+    );
+    if (isErr(rotateResult)) {
+      throw new UnauthorizedException({
+        code: AuthErrorCode.REFRESH_INVALID,
+        message: 'Failed to rotate refresh token',
+      });
+    }
+    session = rotateResult.value;
+
+    const accessToken = this.tokenService.signAccessToken(user, session._id.toString());
+    this.logger.log(
+      `auth.refresh userId=${user._id.toString()} sessionId=${session._id.toString()} device=${device.deviceId}`
+    );
+
+    return { accessToken, refreshToken: newRefresh.raw };
+  }
+
+  // ── Logout ──
+
+  async logout(sessionId: string): Promise<{ message: string }> {
+    const result = await this.sessionRepo.revoke(sessionId, SessionRevokedReason.LOGOUT);
+    if (isErr(result)) {
+      this.logger.error(`Failed to revoke session ${sessionId}`);
+    } else {
+      this.logger.log(`auth.logout sessionId=${sessionId}`);
+    }
+    return { message: 'Logged out' };
+  }
+
+  async logoutAll(userId: string): Promise<{ message: string }> {
+    const result = await this.sessionRepo.revokeAllByUser(
+      userId,
+      SessionRevokedReason.LOGOUT_ALL
+    );
+    if (isErr(result)) {
+      this.logger.error(`Failed to revoke all sessions for user ${userId}`);
+    } else {
+      this.logger.log(`auth.logout_all userId=${userId} revoked=${result.value}`);
+    }
+    return { message: 'All sessions invalidated' };
+  }
+
+  // ── Session management ──
+
+  async listSessions(userId: string, currentSessionId: string): Promise<SessionView[]> {
+    const result = await this.sessionRepo.listActiveByUser(userId);
+    if (isErr(result)) return [];
+    return result.value.map((s) => this.toSessionView(s, currentSessionId));
+  }
+
+  async revokeSession(userId: string, sessionId: string): Promise<{ message: string }> {
+    const found = await this.sessionRepo.findById(sessionId);
+    if (isErr(found) || !found.value) {
+      throw new BadRequestException('Session not found');
+    }
+    if (found.value.userId.toString() !== userId) {
+      throw new UnauthorizedException('Cannot revoke a session that is not yours');
+    }
+    await this.sessionRepo.revoke(sessionId, SessionRevokedReason.LOGOUT);
+    this.logger.log(`auth.session.revoked userId=${userId} sessionId=${sessionId}`);
+    return { message: 'Session revoked' };
+  }
+
+  // ── Profile / deletion (unchanged behavior) ──
 
   async updateProfile(userId: string, dto: UpdateProfileRequest): Promise<AuthUser> {
     if (!isValidTrainingStage(dto.specialty, dto.trainingStage)) {
@@ -152,24 +298,16 @@ export class AuthService {
     }
 
     const user = await this.userModel.findByIdAndUpdate(userId, updateFields, { new: true });
-
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
-
-    this.logger.log(
-      `Profile updated for user ${userId}: specialty=${dto.specialty}, stage=${dto.trainingStage}`
-    );
     return this.toAuthUser(user);
   }
-
-  // ── Account deletion ──
 
   private static readonly DELETION_GRACE_PERIOD_MS = ms('48h');
 
   async requestDeletion(userId: string): Promise<AuthUser> {
     const user = await this.findUserOrThrow(userId);
-
     if (user.deletionRequestedAt) {
       throw new ConflictException('Account deletion already requested');
     }
@@ -179,15 +317,11 @@ export class AuthService {
     user.deletionScheduledFor = new Date(now.getTime() + AuthService.DELETION_GRACE_PERIOD_MS);
     await user.save();
 
-    this.logger.log(
-      `Account deletion requested for user ${userId}, scheduled for ${user.deletionScheduledFor.toISOString()}`
-    );
     return this.toAuthUser(user);
   }
 
   async cancelDeletion(userId: string): Promise<AuthUser> {
     const user = await this.findUserOrThrow(userId);
-
     if (!user.deletionRequestedAt) {
       throw new BadRequestException('No pending deletion request');
     }
@@ -195,16 +329,54 @@ export class AuthService {
     user.deletionRequestedAt = null;
     user.deletionScheduledFor = null;
     await user.save();
-
-    this.logger.log(`Account deletion cancelled for user ${userId}`);
     return this.toAuthUser(user);
   }
-
-  // ── Common ──
 
   async getCurrentUser(userId: string): Promise<AuthUser> {
     const user = await this.findUserOrThrow(userId);
     return this.toAuthUser(user);
+  }
+
+  // ── Internals ──
+
+  private async createSessionAndTokens(
+    user: UserDocument,
+    device: DeviceInfo
+  ): Promise<TokenPair> {
+    if (!device.deviceId) {
+      throw new BadRequestException('X-Device-Id header is required');
+    }
+
+    // Revoke any existing active session on the same device — prevents stale pileup.
+    const existing = await this.sessionRepo.findActiveByUserAndDevice(
+      user._id.toString(),
+      device.deviceId
+    );
+    if (!isErr(existing) && existing.value) {
+      await this.sessionRepo.revoke(
+        existing.value._id.toString(),
+        SessionRevokedReason.SUPERSEDED
+      );
+    }
+
+    const refresh = this.tokenService.generateRefreshToken();
+    const family = this.tokenService.generateFamily();
+    const expiresAt = new Date(Date.now() + this.refreshTtlMs);
+
+    const created = await this.sessionRepo.create({
+      userId: user._id.toString(),
+      deviceId: device.deviceId,
+      deviceName: device.deviceName,
+      refreshTokenHash: refresh.hash,
+      refreshTokenFamily: family,
+      expiresAt,
+    });
+    if (isErr(created)) {
+      throw new UnauthorizedException('Failed to create session');
+    }
+
+    const accessToken = this.tokenService.signAccessToken(user, created.value._id.toString());
+    return { accessToken, refreshToken: refresh.raw };
   }
 
   private async findUserOrThrow(userId: string): Promise<UserDocument> {
@@ -215,14 +387,14 @@ export class AuthService {
     return user;
   }
 
-  generateToken(user: UserDocument): string {
-    const payload = {
-      sub: user._id.toString(),
-      email: user.email,
-      role: user.role,
-      tokenVersion: user.tokenVersion ?? 0,
+  private toSessionView(session: Session, currentSessionId: string): SessionView {
+    return {
+      id: session._id.toString(),
+      deviceName: session.deviceName,
+      createdAt: session.createdAt.toISOString(),
+      lastUsedAt: session.lastUsedAt.toISOString(),
+      isCurrent: session._id.toString() === currentSessionId,
     };
-    return this.jwtService.sign(payload);
   }
 
   toAuthUser(user: UserDocument): AuthUser {

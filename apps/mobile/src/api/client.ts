@@ -1,5 +1,6 @@
 import {
   createApiClient,
+  type DeviceInfoProvider,
   type HttpAdapter,
   type QuotaHeaders,
   type TokenProvider,
@@ -9,44 +10,65 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
+import { getDeviceName, getOrCreateDeviceId, getOsLabel } from './device';
 
 const apiLogger = logger.createScope('API');
 
 /**
- * In-memory token cache to avoid native bridge calls on every API request.
- * SecureStore is only read on cold start; mutations keep the cache in sync.
+ * In-memory cache for both tokens to avoid a native bridge call per request.
+ * SecureStore is read once on cold start; mutations keep the cache in sync.
  */
-let cachedToken: string | null = null;
-let tokenLoaded = false;
+let cachedAccessToken: string | null = null;
+let cachedRefreshToken: string | null = null;
+let tokensLoaded = false;
 
-/**
- * Mobile token provider using Expo SecureStore with in-memory caching.
- */
+async function loadTokensOnce() {
+  if (tokensLoaded) return;
+  const [access, refresh] = await Promise.all([
+    SecureStore.getItemAsync('accessToken'),
+    SecureStore.getItemAsync('refreshToken'),
+  ]);
+  cachedAccessToken = access;
+  cachedRefreshToken = refresh;
+  tokensLoaded = true;
+}
+
 const mobileTokenProvider: TokenProvider = {
   async getAccessToken() {
-    if (!tokenLoaded) {
-      cachedToken = await SecureStore.getItemAsync('accessToken');
-      tokenLoaded = true;
-    }
-    return cachedToken;
+    await loadTokensOnce();
+    return cachedAccessToken;
   },
-  async setAccessToken(token: string) {
-    cachedToken = token;
-    tokenLoaded = true;
-    unauthorizedFired = false;
-    await SecureStore.setItemAsync('accessToken', token);
+  async getRefreshToken() {
+    await loadTokensOnce();
+    return cachedRefreshToken;
   },
-  async clearAccessToken() {
-    cachedToken = null;
-    tokenLoaded = true;
+  async setTokens({ accessToken, refreshToken }) {
+    cachedAccessToken = accessToken;
+    cachedRefreshToken = refreshToken;
+    tokensLoaded = true;
     unauthorizedFired = false;
-    await SecureStore.deleteItemAsync('accessToken');
+    await Promise.all([
+      SecureStore.setItemAsync('accessToken', accessToken),
+      SecureStore.setItemAsync('refreshToken', refreshToken),
+    ]);
+  },
+  async clearTokens() {
+    cachedAccessToken = null;
+    cachedRefreshToken = null;
+    tokensLoaded = true;
+    await Promise.all([
+      SecureStore.deleteItemAsync('accessToken'),
+      SecureStore.deleteItemAsync('refreshToken'),
+    ]);
   },
 };
 
-/**
- * React Native HTTP adapter.
- */
+const mobileDeviceInfoProvider: DeviceInfoProvider = {
+  getDeviceId: () => getOrCreateDeviceId(),
+  getDeviceName: () => getDeviceName(),
+  getOs: () => getOsLabel(),
+};
+
 function createRNHttpAdapter(): HttpAdapter {
   return {
     async request(config) {
@@ -88,12 +110,8 @@ function createRNHttpAdapter(): HttpAdapter {
   };
 }
 
-// Store for callbacks
 let onUnauthorizedCallback: (() => void) | null = null;
 let onQuotaUpdateCallback: ((quota: QuotaHeaders) => void) | null = null;
-
-// Prevents multiple 401 dispatches when several in-flight requests fail simultaneously.
-// Reset in mobileTokenProvider.setAccessToken() on successful auth.
 let unauthorizedFired = false;
 
 export function setOnUnauthorized(callback: () => void) {
@@ -104,13 +122,11 @@ export function setOnQuotaUpdate(callback: (quota: QuotaHeaders) => void) {
   onQuotaUpdateCallback = callback;
 }
 
-/**
- * Singleton API client instance for mobile.
- */
 export const api = createApiClient({
   baseUrl: env.EXPO_PUBLIC_API_URL,
   httpAdapter: createRNHttpAdapter(),
   tokenProvider: mobileTokenProvider,
+  deviceInfoProvider: mobileDeviceInfoProvider,
   appVersion: Constants.expoConfig?.version,
   platform: Platform.OS,
   onUnauthorized: () => {

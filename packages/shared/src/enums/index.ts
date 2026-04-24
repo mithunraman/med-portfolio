@@ -19,3 +19,4 @@ export * from './update-status.enum';
 export * from './notice-type.enum';
 export * from './notice-severity.enum';
 export * from './audience-type.enum';
+export * from './session-revoked-reason.enum';

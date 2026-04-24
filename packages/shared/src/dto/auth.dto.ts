@@ -50,10 +50,47 @@ export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequestSchema>;
 
 export const LoginResponseSchema = z.object({
   accessToken: z.string(),
+  refreshToken: z.string(),
   user: AuthUserSchema,
 });
 
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
+
+export const RefreshTokenRequestSchema = z.object({
+  refreshToken: z.string().min(1, 'Refresh token is required'),
+});
+
+export type RefreshTokenRequest = z.infer<typeof RefreshTokenRequestSchema>;
+
+export const RefreshTokenResponseSchema = z.object({
+  accessToken: z.string(),
+  refreshToken: z.string(),
+});
+
+export type RefreshTokenResponse = z.infer<typeof RefreshTokenResponseSchema>;
+
+export const SessionViewSchema = z.object({
+  id: z.string(),
+  deviceName: z.string(),
+  createdAt: z.string(),
+  lastUsedAt: z.string(),
+  isCurrent: z.boolean(),
+});
+
+export type SessionView = z.infer<typeof SessionViewSchema>;
+
+export const AuthErrorCode = {
+  TOKEN_EXPIRED: 'TOKEN_EXPIRED',
+  TOKEN_INVALID: 'TOKEN_INVALID',
+  SESSION_REVOKED: 'SESSION_REVOKED',
+  SESSION_EXPIRED: 'SESSION_EXPIRED',
+  SESSION_NOT_FOUND: 'SESSION_NOT_FOUND',
+  REFRESH_INVALID: 'REFRESH_INVALID',
+  REFRESH_REPLAY: 'REFRESH_REPLAY',
+  USER_INACTIVE: 'USER_INACTIVE',
+} as const;
+
+export type AuthErrorCode = (typeof AuthErrorCode)[keyof typeof AuthErrorCode];
 
 // ── OTP ──
 

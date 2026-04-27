@@ -8,34 +8,18 @@ import {
   DEVICE_HEADERS,
   destroyAuthHarness,
   deviceHeadersFor,
-  extractDevOtp,
+  loginWithOtp,
 } from './helpers/auth-test-harness';
 
 jest.setTimeout(45000);
 
-async function loginAs(
+function loginAs(
   harness: AuthTestHarness,
   email: string,
   headers = DEVICE_HEADERS,
   name = 'Test User'
 ) {
-  const sendRes = await request(harness.app.getHttpServer())
-    .post('/api/auth/otp/send')
-    .send({ email })
-    .expect(200);
-  const code = extractDevOtp(sendRes.body);
-
-  const verifyRes = await request(harness.app.getHttpServer())
-    .post('/api/auth/otp/verify')
-    .set(headers)
-    .send({ email, code, name })
-    .expect(200);
-
-  return {
-    accessToken: verifyRes.body.accessToken as string,
-    refreshToken: verifyRes.body.refreshToken as string,
-    userId: verifyRes.body.user.id as string,
-  };
+  return loginWithOtp(harness, { email, device: headers, name });
 }
 
 describe('Session management endpoints', () => {
@@ -94,17 +78,15 @@ describe('Session management endpoints', () => {
   });
 
   // ── I-SM-03 ──
-  it('DELETE /auth/sessions/:id revokes one session', async () => {
+  it('DELETE /auth/sessions/:xid revokes one session', async () => {
     const email = 'delete-one@example.com';
     const a = await loginAs(harness, email, DEVICE_HEADERS);
     const b = await loginAs(harness, email, deviceHeadersFor('device-X'));
 
-    const otherSession = await harness.sessionModel.findOne({
-      deviceId: 'device-X',
-    });
+    const otherSession = await harness.sessionModel.findOne({ deviceId: 'device-X' });
 
     await request(harness.app.getHttpServer())
-      .delete(`/api/auth/sessions/${otherSession!._id.toString()}`)
+      .delete(`/api/auth/sessions/${otherSession!.xid}`)
       .set('Authorization', `Bearer ${a.accessToken}`)
       .expect(200);
 
@@ -126,7 +108,7 @@ describe('Session management endpoints', () => {
   });
 
   // ── I-SM-04 ──
-  it('DELETE /auth/sessions/:id rejects sessions owned by another user', async () => {
+  it('DELETE /auth/sessions/:xid does not reveal sessions owned by another user', async () => {
     const a = await loginAs(harness, 'owner-a@example.com', DEVICE_HEADERS);
     const b = await loginAs(
       harness,
@@ -138,27 +120,27 @@ describe('Session management endpoints', () => {
       userId: new Types.ObjectId(b.userId),
     });
 
+    // Atomic ownership check → 400 regardless of which failure case (not-mine,
+    // not-found, or already-revoked). The session must remain active.
     const res = await request(harness.app.getHttpServer())
-      .delete(`/api/auth/sessions/${bSession!._id.toString()}`)
+      .delete(`/api/auth/sessions/${bSession!.xid}`)
       .set('Authorization', `Bearer ${a.accessToken}`);
 
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(400);
 
     const bUnchanged = await harness.sessionModel.findById(bSession!._id).lean();
     expect(bUnchanged!.revokedAt).toBeNull();
   });
 
   // ── I-SM-05 ──
-  it('DELETE /auth/sessions/:id with an invalid id returns 4xx', async () => {
+  it('DELETE /auth/sessions/:xid with an unknown xid returns 400', async () => {
     const { accessToken } = await loginAs(harness, 'badid@example.com');
 
     const res = await request(harness.app.getHttpServer())
-      .delete('/api/auth/sessions/not-an-objectid')
+      .delete('/api/auth/sessions/no-such-xid')
       .set('Authorization', `Bearer ${accessToken}`);
 
-    // Could be 400 (ValidationException) or 401 (cast to ObjectId → not found → cannot revoke)
-    // Our service currently throws BadRequestException on null → 400
-    expect([400, 401]).toContain(res.status);
+    expect(res.status).toBe(400);
   });
 
   // ── I-SM-06 ──

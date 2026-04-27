@@ -3,12 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerModule } from '@nestjs/throttler';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { randomUUID } from 'crypto';
 import { LoggerModule } from 'nestjs-pino';
-import { rateLimitConfig } from './config/rate-limit.config';
 import { AccountCleanupModule } from './account-cleanup';
 import { AnalysisRunsModule } from './analysis-runs';
 import { ArtefactsModule } from './artefacts/artefacts.module';
@@ -17,17 +15,17 @@ import { DevOnlyGuard, JwtAuthGuard, QuotaGuard, RolesGuard } from './common/gua
 import { QuotaInterceptor } from './common/interceptors';
 import { MetricsModule } from './common/metrics';
 import { ConfigModule } from './config';
+import { rateLimitConfig } from './config/rate-limit.config';
 import { ConversationsModule } from './conversations/conversations.module';
 import { DashboardModule } from './dashboard/dashboard.module';
-import { EmailModule } from './email';
 import { DatabaseModule } from './database';
+import { EmailModule } from './email';
 import { HealthModule } from './health';
 import { InitModule } from './init';
-import { NoticesModule } from './notices';
-import { VersionPolicyModule } from './version-policy';
 import { ItemsModule } from './items/items.module';
 import { LLMModule } from './llm';
 import { MediaModule } from './media';
+import { NoticesModule } from './notices';
 import { OtpModule } from './otp';
 import { OutboxModule } from './outbox';
 import { ProcessingModule } from './processing';
@@ -35,6 +33,7 @@ import { QuotaModule } from './quota';
 import { ReviewPeriodsModule } from './review-periods/review-periods.module';
 import { SpecialtiesModule } from './specialties/specialties.module';
 import { StorageModule } from './storage';
+import { VersionPolicyModule } from './version-policy';
 
 @Module({
   imports: [

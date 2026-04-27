@@ -71,7 +71,7 @@ describe('SessionsRepository (integration)', () => {
       const created = await repo.create(makeInput({ refreshTokenHash: 'H1' }));
       if (!isOk(created)) throw new Error('create failed');
 
-      await repo.revoke(created.value._id.toString(), SessionRevokedReason.LOGOUT);
+      await repo.revoke(created.value.id, SessionRevokedReason.LOGOUT);
 
       const result = await repo.findActiveByRefreshHash('H1');
       expect(isOk(result)).toBe(true);
@@ -94,7 +94,7 @@ describe('SessionsRepository (integration)', () => {
       const created = await repo.create(makeInput({ refreshTokenHash: 'H_orig' }));
       if (!isOk(created)) throw new Error('create failed');
 
-      const rotated = await repo.rotate(created.value._id.toString(), 'H_orig', 'H_new');
+      const rotated = await repo.rotate(created.value.id, 'H_orig', 'H_new');
       if (!isOk(rotated)) throw new Error('rotate failed');
 
       const result = await repo.findByPreviousHash('H_orig');
@@ -113,7 +113,7 @@ describe('SessionsRepository (integration)', () => {
       // Nudge clock
       await new Promise((r) => setTimeout(r, 5));
 
-      const rotated = await repo.rotate(created.value._id.toString(), 'H1', 'H2');
+      const rotated = await repo.rotate(created.value.id, 'H1', 'H2');
       if (!isOk(rotated)) throw new Error('rotate failed');
 
       expect(rotated.value.refreshTokenHash).toBe('H2');
@@ -125,17 +125,17 @@ describe('SessionsRepository (integration)', () => {
       const created = await repo.create(makeInput({ refreshTokenHash: 'H1' }));
       if (!isOk(created)) throw new Error('create failed');
 
-      const result = await repo.rotate(created.value._id.toString(), 'H_wrong', 'H2');
+      const result = await repo.rotate(created.value.id, 'H_wrong', 'H2');
       expect(result.ok).toBe(false);
 
-      const doc = await model.findById(created.value._id).lean();
+      const doc = await model.findById(created.value.id).lean();
       expect(doc!.refreshTokenHash).toBe('H1'); // unchanged
     });
 
     it('is atomic under concurrent rotations of the same token', async () => {
       const created = await repo.create(makeInput({ refreshTokenHash: 'H1' }));
       if (!isOk(created)) throw new Error('create failed');
-      const id = created.value._id.toString();
+      const id = created.value.id;
 
       const [a, b] = await Promise.all([
         repo.rotate(id, 'H1', 'H2_a'),
@@ -157,7 +157,7 @@ describe('SessionsRepository (integration)', () => {
     it('keeps only the 10 most recent previous hashes', async () => {
       const created = await repo.create(makeInput({ refreshTokenHash: 'H_0' }));
       if (!isOk(created)) throw new Error('create failed');
-      const id = created.value._id.toString();
+      const id = created.value.id;
 
       for (let i = 1; i <= 12; i++) {
         const r = await repo.rotate(id, `H_${i - 1}`, `H_${i}`);
@@ -177,7 +177,7 @@ describe('SessionsRepository (integration)', () => {
     it('does not overwrite an existing revocation', async () => {
       const created = await repo.create(makeInput());
       if (!isOk(created)) throw new Error('create failed');
-      const id = created.value._id.toString();
+      const id = created.value.id;
 
       await repo.revoke(id, SessionRevokedReason.LOGOUT);
       const firstRev = await model.findById(id).lean();
@@ -210,16 +210,16 @@ describe('SessionsRepository (integration)', () => {
         throw new Error('seed failed');
       }
 
-      await repo.revoke(f1revoked.value._id.toString(), SessionRevokedReason.LOGOUT);
-      const preexistingRev = (await model.findById(f1revoked.value._id).lean())!.revokedAt!;
+      await repo.revoke(f1revoked.value.id, SessionRevokedReason.LOGOUT);
+      const preexistingRev = (await model.findById(f1revoked.value.id).lean())!.revokedAt!;
 
       const result = await repo.revokeFamily('F1', SessionRevokedReason.ROTATION_REPLAY);
       if (!isOk(result)) throw new Error('revokeFamily failed');
       expect(result.value).toBe(1);
 
-      const f1activeAfter = await model.findById(f1active.value._id).lean();
-      const f1revokedAfter = await model.findById(f1revoked.value._id).lean();
-      const f2activeAfter = await model.findById(f2active.value._id).lean();
+      const f1activeAfter = await model.findById(f1active.value.id).lean();
+      const f1revokedAfter = await model.findById(f1revoked.value.id).lean();
+      const f2activeAfter = await model.findById(f2active.value.id).lean();
 
       expect(f1activeAfter!.revokedAt).not.toBeNull();
       expect(f1activeAfter!.revokedReason).toBe(SessionRevokedReason.ROTATION_REPLAY);
@@ -245,7 +245,7 @@ describe('SessionsRepository (integration)', () => {
 
       if (!isOk(a3) || !isOk(b1) || !isOk(a1) || !isOk(a2)) throw new Error('seed failed');
 
-      await repo.revoke(a3.value._id.toString(), SessionRevokedReason.LOGOUT); // already revoked
+      await repo.revoke(a3.value.id, SessionRevokedReason.LOGOUT); // already revoked
 
       const result = await repo.revokeAllByUser(userA, SessionRevokedReason.LOGOUT_ALL);
       if (!isOk(result)) throw new Error('revokeAllByUser failed');
@@ -275,7 +275,7 @@ describe('SessionsRepository (integration)', () => {
       );
       if (!isOk(active) || !isOk(revoked) || !isOk(expired)) throw new Error('seed failed');
 
-      await repo.revoke(revoked.value._id.toString(), SessionRevokedReason.LOGOUT);
+      await repo.revoke(revoked.value.id, SessionRevokedReason.LOGOUT);
 
       const result = await repo.listActiveByUser(user);
       if (!isOk(result)) throw new Error('list failed');

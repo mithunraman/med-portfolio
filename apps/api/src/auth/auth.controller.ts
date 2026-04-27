@@ -18,19 +18,10 @@ import {
 } from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
-import {
-  DeviceInfo,
-  DeviceInfoHeaders,
-} from '../common/decorators/device-info.decorator';
+import { DeviceInfo, DeviceInfoHeaders } from '../common/decorators/device-info.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
-import {
-  OtpClaimDto,
-  OtpSendDto,
-  OtpVerifyDto,
-  RefreshTokenDto,
-  UpdateProfileDto,
-} from './dto';
+import { OtpClaimDto, OtpSendDto, OtpVerifyDto, RefreshTokenDto, UpdateProfileDto } from './dto';
 
 @SkipThrottle()
 @Controller('auth')
@@ -101,20 +92,18 @@ export class AuthController {
     return this.authService.listSessions(user.userId, user.sessionId);
   }
 
-  @Delete('sessions/:id')
+  @Delete('sessions/:xid')
   @HttpCode(HttpStatus.OK)
   async revokeSession(
     @CurrentUser() user: CurrentUserPayload,
-    @Param('id') id: string
+    @Param('xid') xid: string
   ): Promise<{ message: string }> {
-    return this.authService.revokeSession(user.userId, id);
+    return this.authService.revokeSession(user.userId, xid);
   }
 
   @Public()
   @Post('guest')
-  async registerGuest(
-    @DeviceInfoHeaders() device: DeviceInfo
-  ): Promise<LoginResponse> {
+  async registerGuest(@DeviceInfoHeaders() device: DeviceInfo): Promise<LoginResponse> {
     return this.authService.registerGuest(device);
   }
 

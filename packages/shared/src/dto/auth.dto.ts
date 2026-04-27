@@ -9,31 +9,21 @@ export const LoginRequestSchema = z.object({
 
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 
-export const RegisterRequestSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-});
-
-export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
-
-export const AuthUserSpecialtySchema = z.object({
-  code: z.nativeEnum(Specialty),
-  name: z.string(),
-  trainingStage: z.object({
-    code: z.string(),
-    label: z.string(),
-  }),
-});
-
-export type AuthUserSpecialty = z.infer<typeof AuthUserSpecialtySchema>;
-
 export const AuthUserSchema = z.object({
   id: z.string(),
   email: z.string().email(),
   name: z.string(),
   role: z.nativeEnum(UserRole),
-  specialty: AuthUserSpecialtySchema.nullable(),
+  specialty: z
+    .object({
+      code: z.nativeEnum(Specialty),
+      name: z.string(),
+      trainingStage: z.object({
+        code: z.string(),
+        label: z.string(),
+      }),
+    })
+    .nullable(),
   deletionRequestedAt: z.string().nullable(),
   deletionScheduledFor: z.string().nullable(),
 });
@@ -79,18 +69,16 @@ export const SessionViewSchema = z.object({
 
 export type SessionView = z.infer<typeof SessionViewSchema>;
 
-export const AuthErrorCode = {
-  TOKEN_EXPIRED: 'TOKEN_EXPIRED',
-  TOKEN_INVALID: 'TOKEN_INVALID',
-  SESSION_REVOKED: 'SESSION_REVOKED',
-  SESSION_EXPIRED: 'SESSION_EXPIRED',
-  SESSION_NOT_FOUND: 'SESSION_NOT_FOUND',
-  REFRESH_INVALID: 'REFRESH_INVALID',
-  REFRESH_REPLAY: 'REFRESH_REPLAY',
-  USER_INACTIVE: 'USER_INACTIVE',
-} as const;
-
-export type AuthErrorCode = (typeof AuthErrorCode)[keyof typeof AuthErrorCode];
+export enum AuthErrorCode {
+  TOKEN_EXPIRED = 'TOKEN_EXPIRED',
+  TOKEN_INVALID = 'TOKEN_INVALID',
+  SESSION_REVOKED = 'SESSION_REVOKED',
+  SESSION_EXPIRED = 'SESSION_EXPIRED',
+  SESSION_NOT_FOUND = 'SESSION_NOT_FOUND',
+  REFRESH_INVALID = 'REFRESH_INVALID',
+  REFRESH_REPLAY = 'REFRESH_REPLAY',
+  USER_INACTIVE = 'USER_INACTIVE',
+}
 
 // ── OTP ──
 

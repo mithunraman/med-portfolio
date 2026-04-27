@@ -1,45 +1,62 @@
-import type {
-  ApiClientConfig,
-  DeviceInfoProvider,
-  HttpRequestConfig,
-  HttpResponse,
-} from '../adapters/types';
+import { AuthErrorCode, HEADERS } from '@acme/shared';
+import type { ApiClientConfig, HttpRequestConfig, HttpResponse } from '../adapters/types';
 import { ApiError, NetworkError, UnauthorizedError, ValidationError } from './api-error';
 import { generateRequestId } from './request-id';
 
+/**
+ * Request mode. Each mode maps to exactly one valid combination of
+ * authenticated / refresh / onUnauthorized semantics, so illegal combinations
+ * are unrepresentable.
+ *
+ * - `authenticated` (default): attach Bearer; try proactive + reactive refresh;
+ *   fire onUnauthorized on unrecoverable 401s. For every normal API call.
+ * - `public`: no auth header, no refresh. For OTP send/verify, guest register.
+ * - `refresh`: internal — used by the api-client itself when hitting
+ *   /auth/refresh. No auth, no recursive refresh, no unauthorized callback.
+ * - `best-effort`: attach Bearer if available; never fire the unauthorized
+ *   callback on failure. For logout — the client wants to clear locally even
+ *   if the server can't acknowledge.
+ */
+export type RequestMode = 'authenticated' | 'public' | 'refresh' | 'best-effort';
+
 interface RequestOptions extends Omit<HttpRequestConfig, 'url' | 'method'> {
   method?: HttpRequestConfig['method'];
-  authenticated?: boolean;
-  skipUnauthorizedCallback?: boolean;
-  skipRefresh?: boolean;
+  mode?: RequestMode;
 }
 
-type PublicRequestOptions = Pick<
-  RequestOptions,
-  'authenticated' | 'skipUnauthorizedCallback' | 'skipRefresh'
->;
+type PublicRequestOptions = Pick<RequestOptions, 'mode'>;
 
-const AUTH_ERROR_CODES = {
-  TOKEN_EXPIRED: 'TOKEN_EXPIRED',
-  TOKEN_INVALID: 'TOKEN_INVALID',
-  SESSION_REVOKED: 'SESSION_REVOKED',
-  SESSION_EXPIRED: 'SESSION_EXPIRED',
-  SESSION_NOT_FOUND: 'SESSION_NOT_FOUND',
-  REFRESH_INVALID: 'REFRESH_INVALID',
-  USER_INACTIVE: 'USER_INACTIVE',
-} as const;
+interface ModeFlags {
+  authenticated: boolean;
+  allowRefresh: boolean;
+  fireUnauthorizedCallback: boolean;
+}
+
+function flagsFor(mode: RequestMode): ModeFlags {
+  switch (mode) {
+    case 'authenticated':
+      return { authenticated: true, allowRefresh: true, fireUnauthorizedCallback: true };
+    case 'public':
+      return { authenticated: false, allowRefresh: false, fireUnauthorizedCallback: false };
+    case 'refresh':
+      return { authenticated: false, allowRefresh: false, fireUnauthorizedCallback: false };
+    case 'best-effort':
+      return { authenticated: true, allowRefresh: true, fireUnauthorizedCallback: false };
+  }
+}
 
 // Auth failures that mean "refresh won't help — force logout."
-const UNRECOVERABLE_CODES = new Set<string>([
-  AUTH_ERROR_CODES.TOKEN_INVALID,
-  AUTH_ERROR_CODES.SESSION_REVOKED,
-  AUTH_ERROR_CODES.SESSION_EXPIRED,
-  AUTH_ERROR_CODES.SESSION_NOT_FOUND,
-  AUTH_ERROR_CODES.REFRESH_INVALID,
-  AUTH_ERROR_CODES.USER_INACTIVE,
+const UNRECOVERABLE_CODES: ReadonlySet<string> = new Set([
+  AuthErrorCode.TOKEN_INVALID,
+  AuthErrorCode.SESSION_REVOKED,
+  AuthErrorCode.SESSION_EXPIRED,
+  AuthErrorCode.SESSION_NOT_FOUND,
+  AuthErrorCode.REFRESH_INVALID,
+  AuthErrorCode.REFRESH_REPLAY,
+  AuthErrorCode.USER_INACTIVE,
 ]);
 
-const PROACTIVE_REFRESH_BUFFER_SECONDS = 60;
+const DEFAULT_PROACTIVE_REFRESH_BUFFER_SECONDS = 60;
 
 interface RefreshResult {
   accessToken: string;
@@ -53,11 +70,23 @@ interface RefreshResult {
  */
 export class BaseApiClient {
   private readonly config: Required<
-    Omit<ApiClientConfig, 'appVersion' | 'platform' | 'deviceInfoProvider'>
+    Omit<
+      ApiClientConfig,
+      'appVersion' | 'platform' | 'deviceInfoProvider' | 'proactiveRefreshBufferSeconds'
+    >
   > &
-    Pick<ApiClientConfig, 'appVersion' | 'platform' | 'deviceInfoProvider'>;
+    Pick<
+      ApiClientConfig,
+      'appVersion' | 'platform' | 'deviceInfoProvider' | 'proactiveRefreshBufferSeconds'
+    >;
 
   private refreshPromise: Promise<RefreshResult> | null = null;
+  /**
+   * Caches the decoded `exp` claim for the currently-cached access token.
+   * Avoids base64 + JSON.parse per request. Invalidated whenever the string
+   * value of the access token changes.
+   */
+  private cachedExp: { token: string; exp: number | null } | null = null;
 
   constructor(config: ApiClientConfig) {
     this.config = {
@@ -69,21 +98,22 @@ export class BaseApiClient {
   }
 
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const {
-      authenticated = true,
-      skipUnauthorizedCallback = false,
-      skipRefresh = false,
-      ...requestOptions
-    } = options;
+    const { mode = 'authenticated', ...requestOptions } = options;
+    const flags = flagsFor(mode);
+    const skipUnauthorizedCallback = !flags.fireUnauthorizedCallback;
 
     // Proactive refresh: refresh before firing if the token is near expiry.
-    if (authenticated && !skipRefresh) {
+    if (flags.authenticated && flags.allowRefresh) {
       await this.maybeProactiveRefresh();
     }
 
     const requestId = this.config.requestIdGenerator();
     const url = `${this.config.baseUrl}${path}`;
-    const headers = await this.buildHeaders(requestOptions.headers, authenticated, requestId);
+    const headers = await this.buildHeaders(
+      requestOptions.headers,
+      flags.authenticated,
+      requestId
+    );
 
     let response: HttpResponse<unknown>;
     try {
@@ -104,9 +134,9 @@ export class BaseApiClient {
     // Reactive refresh on 401 TOKEN_EXPIRED — retry once.
     if (
       response.status === 401 &&
-      authenticated &&
-      !skipRefresh &&
-      this.is401WithCode(response, AUTH_ERROR_CODES.TOKEN_EXPIRED)
+      flags.authenticated &&
+      flags.allowRefresh &&
+      this.is401WithCode(response, AuthErrorCode.TOKEN_EXPIRED)
     ) {
       try {
         await this.refreshTokens();
@@ -117,7 +147,7 @@ export class BaseApiClient {
 
       const retryHeaders = await this.buildHeaders(
         requestOptions.headers,
-        authenticated,
+        flags.authenticated,
         requestId
       );
       response = await this.config.httpAdapter.request<unknown>({
@@ -160,35 +190,23 @@ export class BaseApiClient {
     requestId: string
   ): Promise<Record<string, string>> {
     const headers: Record<string, string> = {
-      'x-request-id': requestId,
+      [HEADERS.REQUEST_ID]: requestId,
       ...base,
     };
 
-    if (this.config.appVersion) headers['x-app-version'] = this.config.appVersion;
-    if (this.config.platform) headers['x-platform'] = this.config.platform;
+    if (this.config.appVersion) headers[HEADERS.APP_VERSION] = this.config.appVersion;
+    if (this.config.platform) headers[HEADERS.PLATFORM] = this.config.platform;
 
     if (this.config.deviceInfoProvider) {
-      await this.attachDeviceHeaders(headers, this.config.deviceInfoProvider);
+      Object.assign(headers, await this.config.deviceInfoProvider.getDeviceHeaders());
     }
 
     if (authenticated) {
       const token = await this.config.tokenProvider.getAccessToken();
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (token) headers[HEADERS.AUTHORIZATION] = `Bearer ${token}`;
     }
 
     return headers;
-  }
-
-  private async attachDeviceHeaders(
-    headers: Record<string, string>,
-    provider: DeviceInfoProvider
-  ): Promise<void> {
-    const deviceId = await provider.getDeviceId();
-    if (deviceId) headers['x-device-id'] = deviceId;
-    const deviceName = provider.getDeviceName();
-    if (deviceName) headers['x-device-name'] = deviceName;
-    const os = provider.getOs?.();
-    if (os) headers['x-os'] = os;
   }
 
   // ── Refresh ──
@@ -196,10 +214,18 @@ export class BaseApiClient {
   private async maybeProactiveRefresh(): Promise<void> {
     const token = await this.config.tokenProvider.getAccessToken();
     if (!token) return;
-    const exp = decodeJwtExp(token);
+
+    // Reuse the cached exp when the token hasn't changed since last decode.
+    if (!this.cachedExp || this.cachedExp.token !== token) {
+      this.cachedExp = { token, exp: decodeJwtExp(token) };
+    }
+    const exp = this.cachedExp.exp;
     if (exp === null) return;
+
     const secondsUntilExpiry = exp - Math.floor(Date.now() / 1000);
-    if (secondsUntilExpiry > PROACTIVE_REFRESH_BUFFER_SECONDS) return;
+    const buffer =
+      this.config.proactiveRefreshBufferSeconds ?? DEFAULT_PROACTIVE_REFRESH_BUFFER_SECONDS;
+    if (secondsUntilExpiry > buffer) return;
 
     try {
       await this.refreshTokens();
@@ -226,9 +252,7 @@ export class BaseApiClient {
     const result = await this.request<RefreshResult>('/auth/refresh', {
       method: 'POST',
       body: { refreshToken },
-      authenticated: false,
-      skipRefresh: true,
-      skipUnauthorizedCallback: true,
+      mode: 'refresh',
     });
 
     await this.config.tokenProvider.setTokens({

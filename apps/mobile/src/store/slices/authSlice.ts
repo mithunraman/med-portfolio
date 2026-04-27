@@ -3,26 +3,61 @@ import { UserRole } from '@acme/shared';
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import * as Sentry from '@sentry/react-native';
 import { api, mobileTokenProvider } from '../../api/client';
-import { AppSecureStorage } from '../../services';
+import { AppSecureStorage, SECURE_STORAGE_KEYS } from '../../services';
 import { logger } from '../../utils/logger';
 import { fetchInit } from './dashboard/thunks';
 
 const authLogger = logger.createScope('AuthSlice');
 
 /**
+ * Cheap shallow equality for AuthUser — hot-path reducers avoid churning the
+ * reference when the object is materially unchanged, which prevents cascade
+ * re-renders in `useSelector(state => state.auth.user)`.
+ */
+function shallowEqualUser(a: AuthUser | null, b: AuthUser | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.id === b.id &&
+    a.email === b.email &&
+    a.name === b.name &&
+    a.role === b.role &&
+    a.specialty?.code === b.specialty?.code &&
+    a.specialty?.trainingStage?.code === b.specialty?.trainingStage?.code &&
+    a.deletionRequestedAt === b.deletionRequestedAt &&
+    a.deletionScheduledFor === b.deletionScheduledFor
+  );
+}
+
+function assignUserIfChanged(state: { user: AuthUser | null }, next: AuthUser): void {
+  if (!shallowEqualUser(state.user, next)) {
+    state.user = next;
+  }
+}
+
+/**
+ * Update the stored `user` field while preserving other StoredUserSession fields.
+ * No-op if there's no existing session in SecureStore.
+ */
+async function updateStoredUser(user: AuthUser): Promise<void> {
+  const storedSession = await AppSecureStorage.get(SECURE_STORAGE_KEYS.USER);
+  if (storedSession) {
+    await AppSecureStorage.set(SECURE_STORAGE_KEYS.USER, { ...storedSession, user });
+  }
+}
+
+/**
  * Persist auth session to secure storage after successful login/registration.
  */
 async function persistAuthSession(
-  response: { accessToken: string; refreshToken: string; user: AuthUser },
-  isGuest: boolean
+  response: { accessToken: string; refreshToken: string; user: AuthUser }
 ): Promise<void> {
   await mobileTokenProvider.setTokens({
     accessToken: response.accessToken,
     refreshToken: response.refreshToken,
   });
-  await AppSecureStorage.set('user', {
+  await AppSecureStorage.set(SECURE_STORAGE_KEYS.USER, {
     user: response.user,
-    isGuest,
     lastLoginAt: Date.now(),
   });
 }
@@ -59,8 +94,8 @@ export const initializeAuth = createAsyncThunk('auth/initialize', async () => {
   authLogger.debug('Initializing auth');
 
   const [accessToken, refreshToken] = await Promise.all([
-    AppSecureStorage.get('accessToken'),
-    AppSecureStorage.get('refreshToken'),
+    mobileTokenProvider.getAccessToken(),
+    mobileTokenProvider.getRefreshToken(),
   ]);
   if (!accessToken || !refreshToken) {
     authLogger.debug('No existing tokens');
@@ -68,14 +103,14 @@ export const initializeAuth = createAsyncThunk('auth/initialize', async () => {
     return { status: 'unauthenticated' as const, user: null };
   }
 
-  const storedSession = await AppSecureStorage.get('user');
+  const storedSession = await AppSecureStorage.get(SECURE_STORAGE_KEYS.USER);
   if (!storedSession?.user) {
     authLogger.warn('Tokens exist but no stored user, clearing session');
     await AppSecureStorage.clearSession();
     return { status: 'unauthenticated' as const, user: null };
   }
 
-  const isGuest = storedSession.isGuest ?? storedSession.user.role === UserRole.USER_GUEST;
+  const isGuest = storedSession.user.role === UserRole.USER_GUEST;
   authLogger.info('Session restored', { userId: storedSession.user.id, isGuest });
 
   return {
@@ -116,7 +151,7 @@ export const otpVerify = createAsyncThunk(
 
     try {
       const response = await api.auth.otpVerify({ email, code, name });
-      await persistAuthSession(response, false);
+      await persistAuthSession(response);
 
       authLogger.info('OTP verification successful', { userId: response.user.id });
       return response.user;
@@ -138,7 +173,7 @@ export const registerGuest = createAsyncThunk(
 
     try {
       const response = await api.auth.registerGuest();
-      await persistAuthSession(response, true);
+      await persistAuthSession(response);
 
       authLogger.info('Guest registration successful', { userId: response.user.id });
       return response.user;
@@ -164,7 +199,7 @@ export const claimGuest = createAsyncThunk(
 
     try {
       const response = await api.auth.claimGuest({ email, code, name });
-      await persistAuthSession(response, false);
+      await persistAuthSession(response);
 
       authLogger.info('Guest account claimed', { userId: response.user.id });
       return response.user;
@@ -210,12 +245,7 @@ export const updateProfile = createAsyncThunk(
 
     try {
       const user = await api.auth.updateProfile(data);
-
-      // Update stored user in SecureStore
-      const storedSession = await AppSecureStorage.get('user');
-      if (storedSession) {
-        await AppSecureStorage.set('user', { ...storedSession, user });
-      }
+      await updateStoredUser(user);
 
       authLogger.info('Profile updated', { userId: user.id });
       return user;
@@ -237,11 +267,7 @@ export const requestDeletion = createAsyncThunk(
 
     try {
       const user = await api.auth.requestDeletion();
-
-      const storedSession = await AppSecureStorage.get('user');
-      if (storedSession) {
-        await AppSecureStorage.set('user', { ...storedSession, user });
-      }
+      await updateStoredUser(user);
 
       authLogger.info('Account deletion requested', {
         scheduledFor: user.deletionScheduledFor,
@@ -265,11 +291,7 @@ export const cancelDeletion = createAsyncThunk(
 
     try {
       const user = await api.auth.cancelDeletion();
-
-      const storedSession = await AppSecureStorage.get('user');
-      if (storedSession) {
-        await AppSecureStorage.set('user', { ...storedSession, user });
-      }
+      await updateStoredUser(user);
 
       authLogger.info('Account deletion cancelled');
       return user;
@@ -399,23 +421,23 @@ const authSlice = createSlice({
 
       // Update Profile
       .addCase(updateProfile.fulfilled, (state, action) => {
-        state.user = action.payload;
+        assignUserIfChanged(state, action.payload);
       })
 
       // Sync user profile + quota from init endpoint
       .addCase(fetchInit.fulfilled, (state, action) => {
-        state.user = action.payload.user;
+        assignUserIfChanged(state, action.payload.user);
         state.quota = action.payload.quota;
       })
 
       // Request Deletion
       .addCase(requestDeletion.fulfilled, (state, action) => {
-        state.user = action.payload;
+        assignUserIfChanged(state, action.payload);
       })
 
       // Cancel Deletion
       .addCase(cancelDeletion.fulfilled, (state, action) => {
-        state.user = action.payload;
+        assignUserIfChanged(state, action.payload);
       });
   },
 });

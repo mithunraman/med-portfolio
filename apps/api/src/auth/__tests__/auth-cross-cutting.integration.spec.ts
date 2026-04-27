@@ -9,30 +9,14 @@ import {
   createAuthHarness,
   DEVICE_HEADERS,
   destroyAuthHarness,
-  extractDevOtp,
+  loginWithOtp,
   TEST_JWT_SECRET,
 } from './helpers/auth-test-harness';
 
 jest.setTimeout(60000);
 
-async function loginAs(harness: AuthTestHarness, email: string) {
-  const send = await request(harness.app.getHttpServer())
-    .post('/api/auth/otp/send')
-    .send({ email })
-    .expect(200);
-  const code = extractDevOtp(send.body);
-
-  const verify = await request(harness.app.getHttpServer())
-    .post('/api/auth/otp/verify')
-    .set(DEVICE_HEADERS)
-    .send({ email, code, name: 'User' })
-    .expect(200);
-
-  return {
-    accessToken: verify.body.accessToken as string,
-    refreshToken: verify.body.refreshToken as string,
-    userId: verify.body.user.id as string,
-  };
+function loginAs(harness: AuthTestHarness, email: string) {
+  return loginWithOtp(harness, { email, name: 'User' });
 }
 
 describe('Auth cross-cutting concerns', () => {
@@ -107,7 +91,6 @@ describe('Auth cross-cutting concerns', () => {
     expect(res.status).toBe(401);
   });
 
-  // ── Bonus: alg:none rejected ──
   it('rejects a JWT with alg: none', async () => {
     const sessionId = new Types.ObjectId().toString();
     const userId = new Types.ObjectId().toString();
@@ -128,7 +111,6 @@ describe('Auth cross-cutting concerns', () => {
     expect(res.status).toBe(401);
   });
 
-  // ── Bonus: response body has `code` as a top-level field ──
   it('401 error responses expose code as a top-level JSON field', async () => {
     const forged = jwt.sign(
       { sub: new Types.ObjectId().toString(), role: 0 },
@@ -145,7 +127,6 @@ describe('Auth cross-cutting concerns', () => {
     expect(res.body.code).toBe(AuthErrorCode.TOKEN_INVALID);
   });
 
-  // ── Bonus: guest logout allowed (documents current product behavior) ──
   it('guest logout is accepted (revokes the session)', async () => {
     const guestRes = await request(harness.app.getHttpServer())
       .post('/api/auth/guest')
@@ -165,7 +146,6 @@ describe('Auth cross-cutting concerns', () => {
     expect(meAfter.body.code).toBe(AuthErrorCode.SESSION_REVOKED);
   });
 
-  // ── Bonus: server-side concurrent rotation of same valid token ──
   it('two concurrent refresh calls with the same token: one wins, the other is rejected (may revoke family)', async () => {
     const { refreshToken } = await loginAs(harness, 'race@example.com');
 
@@ -189,7 +169,6 @@ describe('Auth cross-cutting concerns', () => {
     expect(statuses[0]).toBeGreaterThanOrEqual(200);
   });
 
-  // ── Bonus: JwtService signs tokens that the live strategy accepts ──
   it('JwtService from the test app signs tokens the JwtStrategy accepts (sanity for other bonus tests)', async () => {
     const { userId } = await loginAs(harness, 'sanity@example.com');
     const session = await harness.sessionModel.findOne({

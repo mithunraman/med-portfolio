@@ -19,19 +19,17 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
-import * as crypto from 'crypto';
 import { Model } from 'mongoose';
 import ms from 'ms';
 import { DeviceInfo } from '../common/decorators/device-info.decorator';
+import { isMongoDuplicateKeyError } from '../common/utils/mongo-errors.util';
+import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { isErr } from '../common/utils/result.util';
 import { OtpService } from '../otp';
 import { getSpecialtyConfig, isValidTrainingStage } from '../specialties/specialty.registry';
-import { Session } from './schemas/session.schema';
+import { SessionRecord } from './schemas/session.schema';
 import { User, UserDocument } from './schemas/user.schema';
-import {
-  ISessionRepository,
-  SESSION_REPOSITORY,
-} from './sessions.repository.interface';
+import { ISessionRepository, SESSION_REPOSITORY } from './sessions.repository.interface';
 import { TokenService } from './token.service';
 
 interface TokenPair {
@@ -52,7 +50,7 @@ export class AuthService {
     private readonly configService: ConfigService
   ) {
     const days = this.configService.get<number>('app.jwt.refreshTtlDays', 90);
-    this.refreshTtlMs = days * 24 * 60 * 60 * 1000;
+    this.refreshTtlMs = days * ms('1d');
   }
 
   // ── OTP-based auth ──
@@ -115,20 +113,37 @@ export class AuthService {
     }
 
     const guestUser = await this.userModel.findById(guestUserId);
-    if (!guestUser) {
-      throw new BadRequestException('Guest account not found');
-    }
-    if (guestUser.role !== UserRole.USER_GUEST) {
+    if (!guestUser) throw new BadRequestException('Guest account not found');
+    if (guestUser.role !== UserRole.USER_GUEST)
       throw new BadRequestException('Account is already registered');
-    }
 
     guestUser.email = normalizedEmail;
     guestUser.role = UserRole.USER;
     guestUser.name = name;
-    await guestUser.save();
+    try {
+      await guestUser.save();
+    } catch (error) {
+      // Translate the unique-index race: two concurrent claims with the same
+      // email both pass the pre-check above, then one save() wins and the
+      // other raises E11000.
+      if (isMongoDuplicateKeyError(error, 'email')) {
+        throw new ConflictException('An account with this email already exists');
+      }
+      throw error;
+    }
 
-    // Revoke the guest's current session, then mint a fresh one for the claimed account.
-    await this.sessionRepo.revoke(guestSessionId, SessionRevokedReason.SUPERSEDED);
+    // Revoke the guest's current session — best-effort. If this fails (DB
+    // glitch), the stale session dies at its 90-day TTL. We log and continue
+    // because the primary action (claim) is already successful.
+    const revokeResult = await this.sessionRepo.revoke(
+      guestSessionId,
+      SessionRevokedReason.SUPERSEDED
+    );
+    if (isErr(revokeResult)) {
+      this.logger.error(
+        `Failed to revoke guest session ${guestSessionId} during claim for user ${guestUser._id.toString()}`
+      );
+    }
 
     const tokens = await this.createSessionAndTokens(guestUser, device);
     this.logger.log(
@@ -139,11 +154,9 @@ export class AuthService {
   }
 
   async registerGuest(device: DeviceInfo): Promise<LoginResponse> {
-    const guestId = crypto.randomUUID();
-
     const user = await this.userModel.create({
       name: 'Guest',
-      email: `guest_${guestId}@guest.local`,
+      email: `guest_${nanoidAlphanumeric()}@guest.local`,
       role: UserRole.USER_GUEST,
     });
 
@@ -157,10 +170,7 @@ export class AuthService {
 
   // ── Refresh ──
 
-  async refreshSession(
-    rawRefreshToken: string,
-    device: DeviceInfo
-  ): Promise<RefreshTokenResponse> {
+  async refreshSession(rawRefreshToken: string, device: DeviceInfo): Promise<RefreshTokenResponse> {
     const hash = this.tokenService.hashRefreshToken(rawRefreshToken);
 
     const activeResult = await this.sessionRepo.findActiveByRefreshHash(hash);
@@ -183,8 +193,12 @@ export class AuthService {
           SessionRevokedReason.ROTATION_REPLAY
         );
         this.logger.warn(
-          `auth.refresh.replay userId=${replay.userId.toString()} family=${replay.refreshTokenFamily}`
+          `auth.refresh.replay userId=${replay.userId} family=${replay.refreshTokenFamily}`
         );
+        throw new UnauthorizedException({
+          code: AuthErrorCode.REFRESH_REPLAY,
+          message: 'Refresh token replay detected',
+        });
       }
       throw new UnauthorizedException({
         code: AuthErrorCode.REFRESH_INVALID,
@@ -199,7 +213,7 @@ export class AuthService {
       });
     }
 
-    const user = await this.userModel.findById(session.userId);
+    const user = await this.userModel.findById(session.userId).select('role anonymizedAt').lean();
     if (!user || user.anonymizedAt) {
       throw new UnauthorizedException({
         code: AuthErrorCode.USER_INACTIVE,
@@ -207,17 +221,12 @@ export class AuthService {
       });
     }
 
-    // Rotate: mint new refresh token, move old hash to previousHashes.
     // CAS on the current hash — if a concurrent refresh rotated first, this
     // lookup misses and we return REFRESH_INVALID (defence against client-side
     // single-flight failures and replay attempts that slipped past the active
     // lookup above).
     const newRefresh = this.tokenService.generateRefreshToken();
-    const rotateResult = await this.sessionRepo.rotate(
-      session._id.toString(),
-      hash,
-      newRefresh.hash
-    );
+    const rotateResult = await this.sessionRepo.rotate(session.id, hash, newRefresh.hash);
     if (isErr(rotateResult)) {
       throw new UnauthorizedException({
         code: AuthErrorCode.REFRESH_INVALID,
@@ -226,9 +235,13 @@ export class AuthService {
     }
     session = rotateResult.value;
 
-    const accessToken = this.tokenService.signAccessToken(user, session._id.toString());
+    const userIdStr = session.userId;
+    const accessToken = this.tokenService.signAccessToken(
+      { id: userIdStr, role: user.role },
+      session.id
+    );
     this.logger.log(
-      `auth.refresh userId=${user._id.toString()} sessionId=${session._id.toString()} device=${device.deviceId}`
+      `auth.refresh userId=${userIdStr} sessionId=${session.id} device=${device.deviceId}`
     );
 
     return { accessToken, refreshToken: newRefresh.raw };
@@ -247,10 +260,7 @@ export class AuthService {
   }
 
   async logoutAll(userId: string): Promise<{ message: string }> {
-    const result = await this.sessionRepo.revokeAllByUser(
-      userId,
-      SessionRevokedReason.LOGOUT_ALL
-    );
+    const result = await this.sessionRepo.revokeAllByUser(userId, SessionRevokedReason.LOGOUT_ALL);
     if (isErr(result)) {
       this.logger.error(`Failed to revoke all sessions for user ${userId}`);
     } else {
@@ -267,16 +277,25 @@ export class AuthService {
     return result.value.map((s) => this.toSessionView(s, currentSessionId));
   }
 
-  async revokeSession(userId: string, sessionId: string): Promise<{ message: string }> {
-    const found = await this.sessionRepo.findById(sessionId);
-    if (isErr(found) || !found.value) {
+  // isCurrent compares the internal session id because that's what the JWT's
+  // `sid` claim carries. External callers (mobile/web) see xid and never the
+  // internal id — so they don't need to reason about this detail.
+
+  async revokeSession(userId: string, sessionXid: string): Promise<{ message: string }> {
+    // Single-statement atomic ownership check + revoke. Returns false if:
+    //   - the xid doesn't exist, or
+    //   - the session belongs to someone else, or
+    //   - it was already revoked.
+    // All three collapse to 400 — we don't disclose which it was.
+    const result = await this.sessionRepo.revokeOwnedByUserXid(
+      sessionXid,
+      userId,
+      SessionRevokedReason.LOGOUT
+    );
+    if (isErr(result) || !result.value) {
       throw new BadRequestException('Session not found');
     }
-    if (found.value.userId.toString() !== userId) {
-      throw new UnauthorizedException('Cannot revoke a session that is not yours');
-    }
-    await this.sessionRepo.revoke(sessionId, SessionRevokedReason.LOGOUT);
-    this.logger.log(`auth.session.revoked userId=${userId} sessionId=${sessionId}`);
+    this.logger.log(`auth.session.revoked userId=${userId} sessionXid=${sessionXid}`);
     return { message: 'Session revoked' };
   }
 
@@ -339,25 +358,18 @@ export class AuthService {
 
   // ── Internals ──
 
-  private async createSessionAndTokens(
-    user: UserDocument,
-    device: DeviceInfo
-  ): Promise<TokenPair> {
+  private async createSessionAndTokens(user: UserDocument, device: DeviceInfo): Promise<TokenPair> {
     if (!device.deviceId) {
       throw new BadRequestException('X-Device-Id header is required');
     }
 
-    // Revoke any existing active session on the same device — prevents stale pileup.
-    const existing = await this.sessionRepo.findActiveByUserAndDevice(
+    // Atomically revoke any prior active session on this device.
+    // One round-trip; safe against concurrent logins from the same device.
+    await this.sessionRepo.revokeActiveByUserAndDevice(
       user._id.toString(),
-      device.deviceId
+      device.deviceId,
+      SessionRevokedReason.SUPERSEDED
     );
-    if (!isErr(existing) && existing.value) {
-      await this.sessionRepo.revoke(
-        existing.value._id.toString(),
-        SessionRevokedReason.SUPERSEDED
-      );
-    }
 
     const refresh = this.tokenService.generateRefreshToken();
     const family = this.tokenService.generateFamily();
@@ -375,7 +387,10 @@ export class AuthService {
       throw new UnauthorizedException('Failed to create session');
     }
 
-    const accessToken = this.tokenService.signAccessToken(user, created.value._id.toString());
+    const accessToken = this.tokenService.signAccessToken(
+      { id: user._id.toString(), role: user.role },
+      created.value.id
+    );
     return { accessToken, refreshToken: refresh.raw };
   }
 
@@ -387,13 +402,13 @@ export class AuthService {
     return user;
   }
 
-  private toSessionView(session: Session, currentSessionId: string): SessionView {
+  private toSessionView(session: SessionRecord, currentSessionId: string): SessionView {
     return {
-      id: session._id.toString(),
+      id: session.xid,
       deviceName: session.deviceName,
       createdAt: session.createdAt.toISOString(),
       lastUsedAt: session.lastUsedAt.toISOString(),
-      isCurrent: session._id.toString() === currentSessionId,
+      isCurrent: session.id === currentSessionId,
     };
   }
 

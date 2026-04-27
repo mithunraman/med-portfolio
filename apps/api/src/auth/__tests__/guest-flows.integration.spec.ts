@@ -8,22 +8,13 @@ import {
   DEVICE_HEADERS,
   destroyAuthHarness,
   extractDevOtp,
+  registerGuestFlow,
 } from './helpers/auth-test-harness';
 
 jest.setTimeout(45000);
 
-async function registerGuest(harness: AuthTestHarness, headers = DEVICE_HEADERS) {
-  const res = await request(harness.app.getHttpServer())
-    .post('/api/auth/guest')
-    .set(headers)
-    .send({})
-    .expect(201);
-  return {
-    accessToken: res.body.accessToken as string,
-    refreshToken: res.body.refreshToken as string,
-    userId: res.body.user.id as string,
-    role: res.body.user.role as number,
-  };
+function registerGuest(harness: AuthTestHarness, headers = DEVICE_HEADERS) {
+  return registerGuestFlow(harness, { device: headers });
 }
 
 async function sendOtp(harness: AuthTestHarness, email: string): Promise<string> {

@@ -5,25 +5,42 @@ import type { AuthUser } from '@acme/shared';
 const storageLogger = logger.createScope('SecureStorage');
 
 /**
- * Stored user session metadata.
+ * Centralised SecureStore key names. Import from here — do not hard-code
+ * string literals at call sites.
+ */
+export const SECURE_STORAGE_KEYS = {
+  ACCESS_TOKEN: 'accessToken',
+  REFRESH_TOKEN: 'refreshToken',
+  DEVICE_ID: 'deviceId',
+  USER: 'user',
+} as const;
+
+/**
+ * Stored user session metadata. `isGuest` is NOT stored — derive it from
+ * `user.role === UserRole.USER_GUEST` when needed.
  */
 export interface StoredUserSession {
   user: AuthUser;
-  isGuest: boolean;
   lastLoginAt: number;
 }
 
 /**
  * Type-safe mapping of secure storage keys to their value types.
- * Only sensitive data belongs here.
  */
 export interface SecureStorageSchema {
-  accessToken: string;
-  refreshToken: string;
-  user: StoredUserSession;
+  [SECURE_STORAGE_KEYS.ACCESS_TOKEN]: string;
+  [SECURE_STORAGE_KEYS.REFRESH_TOKEN]: string;
+  [SECURE_STORAGE_KEYS.DEVICE_ID]: string;
+  [SECURE_STORAGE_KEYS.USER]: StoredUserSession;
 }
 
 export type SecureStorageKey = keyof SecureStorageSchema;
+
+const STRING_KEYS: ReadonlySet<SecureStorageKey> = new Set([
+  SECURE_STORAGE_KEYS.ACCESS_TOKEN,
+  SECURE_STORAGE_KEYS.REFRESH_TOKEN,
+  SECURE_STORAGE_KEYS.DEVICE_ID,
+]);
 
 /**
  * Type-safe secure storage service for sensitive data.
@@ -33,14 +50,8 @@ class AppSecureStorageService {
   async get<K extends SecureStorageKey>(key: K): Promise<SecureStorageSchema[K] | null> {
     try {
       const value = await SecureStore.getItemAsync(key);
-      if (value === null) {
-        return null;
-      }
-
-      if (key === 'accessToken' || key === 'refreshToken') {
-        return value as SecureStorageSchema[K];
-      }
-
+      if (value === null) return null;
+      if (STRING_KEYS.has(key)) return value as SecureStorageSchema[K];
       return JSON.parse(value) as SecureStorageSchema[K];
     } catch (error) {
       storageLogger.error('Failed to get item', { key, error: String(error) });
@@ -77,13 +88,15 @@ class AppSecureStorageService {
   }
 
   /**
-   * Clear all session data (logout).
+   * Clear session-scoped data on logout.
+   * Intentionally does NOT touch DEVICE_ID — that's a per-install identifier
+   * that survives logout and only resets on uninstall.
    */
   async clearSession(): Promise<void> {
     await Promise.all([
-      this.remove('accessToken'),
-      this.remove('refreshToken'),
-      this.remove('user'),
+      this.remove(SECURE_STORAGE_KEYS.ACCESS_TOKEN),
+      this.remove(SECURE_STORAGE_KEYS.REFRESH_TOKEN),
+      this.remove(SECURE_STORAGE_KEYS.USER),
     ]);
     storageLogger.info('Session cleared');
   }

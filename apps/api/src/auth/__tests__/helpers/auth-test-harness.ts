@@ -203,3 +203,65 @@ export function extractDevOtp(body: unknown): string {
   }
   return typed.devOtp;
 }
+
+export interface LoginResult {
+  accessToken: string;
+  refreshToken: string;
+  userId: string;
+}
+
+/**
+ * Full OTP login flow (send → verify) for integration tests.
+ * Returns the minted tokens and the user's id so tests can assert on them.
+ */
+export async function loginWithOtp(
+  harness: AuthTestHarness,
+  opts: { email: string; device?: Record<string, string>; name?: string }
+): Promise<LoginResult> {
+  // Lazy-require supertest so this helper doesn't force it onto anyone else
+  // who imports the harness in a non-integration context.
+  const request = (await import('supertest')).default;
+  const headers = opts.device ?? DEVICE_HEADERS;
+
+  const send = await request(harness.app.getHttpServer())
+    .post('/api/auth/otp/send')
+    .send({ email: opts.email })
+    .expect(200);
+  const code = extractDevOtp(send.body);
+
+  const verify = await request(harness.app.getHttpServer())
+    .post('/api/auth/otp/verify')
+    .set(headers)
+    .send({ email: opts.email, code, name: opts.name ?? 'Test User' })
+    .expect(200);
+
+  return {
+    accessToken: verify.body.accessToken,
+    refreshToken: verify.body.refreshToken,
+    userId: verify.body.user.id,
+  };
+}
+
+/**
+ * Guest registration flow for integration tests.
+ */
+export async function registerGuestFlow(
+  harness: AuthTestHarness,
+  opts: { device?: Record<string, string> } = {}
+): Promise<LoginResult & { role: number }> {
+  const request = (await import('supertest')).default;
+  const headers = opts.device ?? DEVICE_HEADERS;
+
+  const res = await request(harness.app.getHttpServer())
+    .post('/api/auth/guest')
+    .set(headers)
+    .send({})
+    .expect(201);
+
+  return {
+    accessToken: res.body.accessToken,
+    refreshToken: res.body.refreshToken,
+    userId: res.body.user.id,
+    role: res.body.user.role,
+  };
+}

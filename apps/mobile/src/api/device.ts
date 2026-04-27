@@ -1,11 +1,11 @@
 import Constants from 'expo-constants';
 import * as Crypto from 'expo-crypto';
-import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-
-const DEVICE_ID_KEY = 'auth.deviceId';
+import { AppSecureStorage, SECURE_STORAGE_KEYS } from '../services';
 
 let cachedDeviceId: string | null = null;
+let cachedDeviceName: string | null = null;
+let cachedOsLabel: string | null = null;
 
 /**
  * Stable per-install device id. Generated once on first launch, stored in
@@ -14,23 +14,27 @@ let cachedDeviceId: string | null = null;
 export async function getOrCreateDeviceId(): Promise<string> {
   if (cachedDeviceId) return cachedDeviceId;
 
-  const existing = await SecureStore.getItemAsync(DEVICE_ID_KEY);
+  const existing = await AppSecureStorage.get(SECURE_STORAGE_KEYS.DEVICE_ID);
   if (existing) {
     cachedDeviceId = existing;
     return existing;
   }
 
   const newId = Crypto.randomUUID();
-  await SecureStore.setItemAsync(DEVICE_ID_KEY, newId);
+  await AppSecureStorage.set(SECURE_STORAGE_KEYS.DEVICE_ID, newId);
   cachedDeviceId = newId;
   return newId;
 }
 
 export function getDeviceName(): string {
+  if (cachedDeviceName) return cachedDeviceName;
   const model = Constants.deviceName ?? 'Unknown';
-  return `${Platform.OS} ${model}`.trim();
+  cachedDeviceName = `${Platform.OS} ${model}`.trim();
+  return cachedDeviceName;
 }
 
 export function getOsLabel(): string {
-  return `${Platform.OS} ${Platform.Version}`;
+  if (cachedOsLabel) return cachedOsLabel;
+  cachedOsLabel = `${Platform.OS} ${Platform.Version}`;
+  return cachedOsLabel;
 }

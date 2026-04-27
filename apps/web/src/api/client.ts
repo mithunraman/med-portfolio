@@ -24,7 +24,7 @@ const webTokenProvider: TokenProvider = {
 
 let onUnauthorizedCallback: (() => void) | null = null;
 
-export function setOnUnauthorized(callback: () => void) {
+export function setOnUnauthorized(callback: (() => void) | null) {
   onUnauthorizedCallback = callback;
 }
 

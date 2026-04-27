@@ -4,7 +4,13 @@
       "Bash(./node_modules/.bin/jest --config jest.unit.config.ts -- version-policy notices)",
       "Bash(/Users/mithunraman/Desktop/code/portfolio/node_modules/.bin/jest --config jest.unit.config.ts -- version-policy notices)",
       "Bash(node -e \"const s=require\\('semver'\\); console.log\\('v1.0.0 →', JSON.stringify\\(s.valid\\('v1.0.0'\\)\\)\\); console.log\\('1.0.0 →', JSON.stringify\\(s.valid\\('1.0.0'\\)\\)\\); console.log\\('abc →', JSON.stringify\\(s.valid\\('abc'\\)\\)\\);\")",
-      "Bash(/Users/mithunraman/Desktop/code/portfolio/node_modules/.bin/jest --config jest.config.ts -- version-policy notices)"
+      "Bash(/Users/mithunraman/Desktop/code/portfolio/node_modules/.bin/jest --config jest.config.ts -- version-policy notices)",
+      "Bash(../../node_modules/.bin/eslint src/auth src/common/decorators/device-info.decorator.ts src/account-cleanup)",
+      "Bash(pnpm --filter api add -D supertest @types/supertest)",
+      "Bash(../../node_modules/.bin/jest --config jest.unit.config.ts src/auth/__tests__ src/common/decorators/__tests__)",
+      "Bash(pnpm --filter api typecheck)",
+      "Bash(../../node_modules/.bin/jest --config jest.config.ts src/auth/__tests__/auth-smoke.integration.spec.ts)",
+      "Bash(../../node_modules/.bin/jest --config jest.config.ts src/auth/__tests__/auth-smoke.integration.spec.ts --forceExit)"
     ]
   },
   "enabledPlugins": {

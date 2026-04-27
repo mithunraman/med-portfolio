@@ -1,16 +1,16 @@
 import { UserRole } from '@acme/shared';
 import { Types } from 'mongoose';
 import * as crypto from 'crypto';
-import { TokenService } from '../token.service';
+import { TokenService, type AccessTokenSubject } from '../token.service';
 
 const userId = new Types.ObjectId();
 
-function makeUserDoc(overrides: Record<string, unknown> = {}) {
+function makeSubject(overrides: Partial<AccessTokenSubject> = {}): AccessTokenSubject {
   return {
-    _id: userId,
+    id: userId.toString(),
     role: UserRole.USER,
     ...overrides,
-  } as any;
+  };
 }
 
 describe('TokenService', () => {
@@ -24,7 +24,7 @@ describe('TokenService', () => {
 
   describe('U-TS-01 signAccessToken', () => {
     it('signs JWT with exactly {sub, role, sid} — no email or tokenVersion', () => {
-      service.signAccessToken(makeUserDoc(), 'sess_1');
+      service.signAccessToken(makeSubject(), 'sess_1');
 
       expect(signMock).toHaveBeenCalledTimes(1);
       const payload = signMock.mock.calls[0][0];
@@ -39,7 +39,7 @@ describe('TokenService', () => {
 
     it('returns whatever the jwt service produced', () => {
       signMock.mockReturnValue('my.signed.token');
-      expect(service.signAccessToken(makeUserDoc(), 'sess_1')).toBe('my.signed.token');
+      expect(service.signAccessToken(makeSubject(), 'sess_1')).toBe('my.signed.token');
     });
   });
 

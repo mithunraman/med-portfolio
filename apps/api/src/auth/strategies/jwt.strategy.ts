@@ -1,11 +1,9 @@
 import { AuthErrorCode } from '@acme/shared';
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectModel } from '@nestjs/mongoose';
 import { PassportStrategy } from '@nestjs/passport';
-import { Model } from 'mongoose';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { User, UserDocument } from '../schemas/user.schema';
+import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import {
   ISessionRepository,
   SESSION_REPOSITORY,
@@ -21,7 +19,6 @@ export interface JwtPayload {
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     configService: ConfigService,
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
     @Inject(SESSION_REPOSITORY) private sessionRepo: ISessionRepository
   ) {
     super({
@@ -31,7 +28,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: JwtPayload) {
+  /**
+   * The session is the authoritative per-request state: revocation, expiry,
+   * and anonymization (which revokes all sessions in AccountCleanupService)
+   * are all caught by this single lookup. `role` comes from the JWT payload —
+   * it's safe because a role change requires re-auth, which produces a new
+   * session + new token.
+   */
+  async validate(payload: JwtPayload): Promise<CurrentUserPayload> {
     if (!payload.sid) {
       throw new UnauthorizedException({
         code: AuthErrorCode.TOKEN_INVALID,
@@ -39,39 +43,22 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       });
     }
 
-    const [user, sessionResult] = await Promise.all([
-      this.userModel.findById(payload.sub).select('role anonymizedAt').lean(),
-      this.sessionRepo.findById(payload.sid),
-    ]);
-
-    if (!user) {
-      throw new UnauthorizedException({
-        code: AuthErrorCode.USER_INACTIVE,
-        message: 'User not found',
-      });
-    }
-    if (user.anonymizedAt) {
-      throw new UnauthorizedException({
-        code: AuthErrorCode.USER_INACTIVE,
-        message: 'Account is no longer active',
-      });
-    }
-
-    if (!sessionResult.ok || !sessionResult.value) {
+    const result = await this.sessionRepo.findRevocationStatus(payload.sid);
+    if (!result.ok || !result.value) {
       throw new UnauthorizedException({
         code: AuthErrorCode.SESSION_NOT_FOUND,
         message: 'Session not found',
       });
     }
 
-    const session = sessionResult.value;
-    if (session.revokedAt) {
+    const { revokedAt, expiresAt } = result.value;
+    if (revokedAt) {
       throw new UnauthorizedException({
         code: AuthErrorCode.SESSION_REVOKED,
         message: 'Session has been revoked',
       });
     }
-    if (session.expiresAt < new Date()) {
+    if (expiresAt < new Date()) {
       throw new UnauthorizedException({
         code: AuthErrorCode.SESSION_EXPIRED,
         message: 'Session has expired',
@@ -80,7 +67,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     return {
       userId: payload.sub,
-      role: user.role,
+      role: payload.role,
       sessionId: payload.sid,
     };
   }

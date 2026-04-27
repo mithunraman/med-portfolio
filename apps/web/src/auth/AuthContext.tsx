@@ -4,6 +4,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useMemo,
   type ReactNode,
 } from 'react';
 import type { AuthUser } from '@acme/shared';
@@ -79,25 +80,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     checkAuth();
   }, []);
 
-  // Set up unauthorized callback
   useEffect(() => {
     setOnUnauthorized(() => {
       logout();
     });
+    return () => setOnUnauthorized(null);
   }, [logout]);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        isAuthenticated: !!user,
-        otpSend,
-        otpVerify,
-        logout,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      isLoading,
+      isAuthenticated: !!user,
+      otpSend,
+      otpVerify,
+      logout,
+    }),
+    [user, isLoading, otpSend, otpVerify, logout]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

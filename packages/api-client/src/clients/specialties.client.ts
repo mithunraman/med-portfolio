@@ -5,8 +5,6 @@ export class SpecialtiesClient {
   constructor(private readonly client: BaseApiClient) {}
 
   async getSpecialties(): Promise<SpecialtyListResponse> {
-    return this.client.get<SpecialtyListResponse>('/specialties', {
-      authenticated: false,
-    });
+    return this.client.get<SpecialtyListResponse>('/specialties', { mode: 'public' });
   }
 }

@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
-import { UserDocument } from './schemas/user.schema';
 
 export interface AccessTokenPayload {
   sub: string;
@@ -14,14 +13,19 @@ export interface GeneratedRefreshToken {
   hash: string;
 }
 
+export interface AccessTokenSubject {
+  id: string;
+  role: number;
+}
+
 @Injectable()
 export class TokenService {
   constructor(private readonly jwtService: JwtService) {}
 
-  signAccessToken(user: UserDocument, sessionId: string): string {
+  signAccessToken(subject: AccessTokenSubject, sessionId: string): string {
     const payload: AccessTokenPayload = {
-      sub: user._id.toString(),
-      role: user.role,
+      sub: subject.id,
+      role: subject.role,
       sid: sessionId,
     };
     return this.jwtService.sign(payload);

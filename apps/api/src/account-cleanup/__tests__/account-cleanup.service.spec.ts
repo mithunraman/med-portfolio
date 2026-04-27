@@ -1,3 +1,4 @@
+import { SessionRevokedReason } from '@acme/shared';
 import { Types } from 'mongoose';
 import { ok, err } from '../../common/utils/result.util';
 import { AccountCleanupService } from '../account-cleanup.service';
@@ -323,7 +324,7 @@ describe('AccountCleanupService', () => {
       );
       expect(sessionRepo.revokeAllByUser).toHaveBeenCalledWith(
         targetUserId.toString(),
-        'logout_all'
+        SessionRevokedReason.LOGOUT_ALL
       );
     });
   });

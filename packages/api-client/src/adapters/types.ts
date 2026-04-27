@@ -33,12 +33,12 @@ export interface TokenProvider {
 }
 
 /**
- * Provides device identity headers sent on auth-mutating requests.
+ * Provides device identity headers sent on every request.
+ * Returns a flat header map so the api-client doesn't need to know which
+ * platform-specific fields are present (e.g. web may omit `x-os`).
  */
 export interface DeviceInfoProvider {
-  getDeviceId(): Promise<string>;
-  getDeviceName(): string;
-  getOs?(): string | undefined;
+  getDeviceHeaders(): Promise<Record<string, string>>;
 }
 
 /**
@@ -63,4 +63,10 @@ export interface ApiClientConfig {
   onQuotaUpdate?: (quota: QuotaHeaders) => void;
   appVersion?: string;
   platform?: string;
+  /**
+   * Seconds before access-token expiry at which the client fires a proactive
+   * refresh. Default: 60. Lower this if access tokens are short-lived; raise
+   * if you want to amortise refresh chatter.
+   */
+  proactiveRefreshBufferSeconds?: number;
 }

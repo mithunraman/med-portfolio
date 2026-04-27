@@ -3,10 +3,19 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { DBError, Result, err, ok } from '../common/utils/result.util';
-import { Session, SessionDocument } from './schemas/session.schema';
-import { CreateSessionInput, ISessionRepository } from './sessions.repository.interface';
+import { Session, SessionDocument, SessionRecord, toSessionRecord } from './schemas/session.schema';
+import {
+  CreateSessionInput,
+  ISessionRepository,
+  SessionRevocationStatus,
+} from './sessions.repository.interface';
 
 const PREVIOUS_HASHES_CAP = 10;
+const MAX_ACTIVE_SESSIONS_RETURNED = 50;
+
+function toObjectIdOrNull(id: string): Types.ObjectId | null {
+  return Types.ObjectId.isValid(id) ? new Types.ObjectId(id) : null;
+}
 
 @Injectable()
 export class SessionsRepository implements ISessionRepository {
@@ -17,7 +26,7 @@ export class SessionsRepository implements ISessionRepository {
     private sessionModel: Model<SessionDocument>
   ) {}
 
-  async create(input: CreateSessionInput): Promise<Result<Session, DBError>> {
+  async create(input: CreateSessionInput): Promise<Result<SessionRecord, DBError>> {
     try {
       const session = await this.sessionModel.create({
         userId: new Types.ObjectId(input.userId),
@@ -27,40 +36,66 @@ export class SessionsRepository implements ISessionRepository {
         refreshTokenFamily: input.refreshTokenFamily,
         expiresAt: input.expiresAt,
       });
-      return ok(session.toObject());
+      return ok(toSessionRecord(session.toObject()));
     } catch (error) {
       this.logger.error('Failed to create session', error);
       return err({ code: 'DB_ERROR', message: 'Failed to create session' });
     }
   }
 
-  async findById(sessionId: string): Promise<Result<Session | null, DBError>> {
+  async findById(sessionId: string): Promise<Result<SessionRecord | null, DBError>> {
     try {
-      if (!Types.ObjectId.isValid(sessionId)) return ok(null);
-      const session = await this.sessionModel.findById(sessionId).lean();
-      return ok(session);
+      const oid = toObjectIdOrNull(sessionId);
+      if (!oid) return ok(null);
+      const session = await this.sessionModel.findById(oid).lean();
+      return ok(session ? toSessionRecord(session) : null);
     } catch (error) {
       this.logger.error('Failed to find session by id', error);
       return err({ code: 'DB_ERROR', message: 'Failed to find session' });
     }
   }
 
-  async findActiveByRefreshHash(hash: string): Promise<Result<Session | null, DBError>> {
+  async findByXid(xid: string): Promise<Result<SessionRecord | null, DBError>> {
+    try {
+      const session = await this.sessionModel.findOne({ xid }).lean();
+      return ok(session ? toSessionRecord(session) : null);
+    } catch (error) {
+      this.logger.error('Failed to find session by xid', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find session' });
+    }
+  }
+
+  async findRevocationStatus(
+    sessionId: string
+  ): Promise<Result<SessionRevocationStatus | null, DBError>> {
+    try {
+      const oid = toObjectIdOrNull(sessionId);
+      if (!oid) return ok(null);
+      const session = await this.sessionModel.findById(oid).select('revokedAt expiresAt').lean();
+      if (!session) return ok(null);
+      return ok({ revokedAt: session.revokedAt, expiresAt: session.expiresAt });
+    } catch (error) {
+      this.logger.error('Failed to find session revocation status', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find session' });
+    }
+  }
+
+  async findActiveByRefreshHash(hash: string): Promise<Result<SessionRecord | null, DBError>> {
     try {
       const session = await this.sessionModel
         .findOne({ refreshTokenHash: hash, revokedAt: null })
         .lean();
-      return ok(session);
+      return ok(session ? toSessionRecord(session) : null);
     } catch (error) {
       this.logger.error('Failed to find session by refresh hash', error);
       return err({ code: 'DB_ERROR', message: 'Failed to find session' });
     }
   }
 
-  async findByPreviousHash(hash: string): Promise<Result<Session | null, DBError>> {
+  async findByPreviousHash(hash: string): Promise<Result<SessionRecord | null, DBError>> {
     try {
       const session = await this.sessionModel.findOne({ previousHashes: hash }).lean();
-      return ok(session);
+      return ok(session ? toSessionRecord(session) : null);
     } catch (error) {
       this.logger.error('Failed to find session by previous hash', error);
       return err({ code: 'DB_ERROR', message: 'Failed to find session' });
@@ -70,7 +105,7 @@ export class SessionsRepository implements ISessionRepository {
   async findActiveByUserAndDevice(
     userId: string,
     deviceId: string
-  ): Promise<Result<Session | null, DBError>> {
+  ): Promise<Result<SessionRecord | null, DBError>> {
     try {
       const session = await this.sessionModel
         .findOne({
@@ -79,14 +114,14 @@ export class SessionsRepository implements ISessionRepository {
           revokedAt: null,
         })
         .lean();
-      return ok(session);
+      return ok(session ? toSessionRecord(session) : null);
     } catch (error) {
       this.logger.error('Failed to find active session by user+device', error);
       return err({ code: 'DB_ERROR', message: 'Failed to find session' });
     }
   }
 
-  async listActiveByUser(userId: string): Promise<Result<Session[], DBError>> {
+  async listActiveByUser(userId: string): Promise<Result<SessionRecord[], DBError>> {
     try {
       const sessions = await this.sessionModel
         .find({
@@ -95,8 +130,9 @@ export class SessionsRepository implements ISessionRepository {
           expiresAt: { $gt: new Date() },
         })
         .sort({ lastUsedAt: -1 })
+        .limit(MAX_ACTIVE_SESSIONS_RETURNED)
         .lean();
-      return ok(sessions);
+      return ok(sessions.map(toSessionRecord));
     } catch (error) {
       this.logger.error('Failed to list active sessions', error);
       return err({ code: 'DB_ERROR', message: 'Failed to list sessions' });
@@ -107,9 +143,10 @@ export class SessionsRepository implements ISessionRepository {
     sessionId: string,
     expectedOldHash: string,
     newHash: string
-  ): Promise<Result<Session, DBError>> {
+  ): Promise<Result<SessionRecord, DBError>> {
     try {
-      if (!Types.ObjectId.isValid(sessionId)) {
+      const oid = toObjectIdOrNull(sessionId);
+      if (!oid) {
         return err({ code: 'NOT_FOUND', message: 'Session not found' });
       }
 
@@ -119,7 +156,7 @@ export class SessionsRepository implements ISessionRepository {
       const updated = await this.sessionModel
         .findOneAndUpdate(
           {
-            _id: new Types.ObjectId(sessionId),
+            _id: oid,
             refreshTokenHash: expectedOldHash,
             revokedAt: null,
           },
@@ -129,7 +166,9 @@ export class SessionsRepository implements ISessionRepository {
                 refreshTokenHash: newHash,
                 previousHashes: {
                   $slice: [
-                    { $concatArrays: [['$refreshTokenHash'], { $ifNull: ['$previousHashes', []] }] },
+                    {
+                      $concatArrays: [['$refreshTokenHash'], { $ifNull: ['$previousHashes', []] }],
+                    },
                     PREVIOUS_HASHES_CAP,
                   ],
                 },
@@ -144,25 +183,62 @@ export class SessionsRepository implements ISessionRepository {
       if (!updated) {
         return err({ code: 'NOT_FOUND', message: 'Session not found or already rotated' });
       }
-      return ok(updated);
+      return ok(toSessionRecord(updated));
     } catch (error) {
       this.logger.error('Failed to rotate session', error);
       return err({ code: 'DB_ERROR', message: 'Failed to rotate session' });
     }
   }
 
-  async revoke(
-    sessionId: string,
-    reason: SessionRevokedReason
-  ): Promise<Result<void, DBError>> {
+  async revoke(sessionId: string, reason: SessionRevokedReason): Promise<Result<void, DBError>> {
     try {
+      const oid = toObjectIdOrNull(sessionId);
+      if (!oid) return ok(undefined);
       await this.sessionModel.updateOne(
-        { _id: new Types.ObjectId(sessionId), revokedAt: null },
+        { _id: oid, revokedAt: null },
         { revokedAt: new Date(), revokedReason: reason }
       );
       return ok(undefined);
     } catch (error) {
       this.logger.error('Failed to revoke session', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to revoke session' });
+    }
+  }
+
+  async revokeActiveByUserAndDevice(
+    userId: string,
+    deviceId: string,
+    reason: SessionRevokedReason
+  ): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.sessionModel.updateMany(
+        { userId: new Types.ObjectId(userId), deviceId, revokedAt: null },
+        { revokedAt: new Date(), revokedReason: reason }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to revoke sessions by user+device', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to revoke sessions' });
+    }
+  }
+
+  async revokeOwnedByUserXid(
+    sessionXid: string,
+    userId: string,
+    reason: SessionRevokedReason
+  ): Promise<Result<boolean, DBError>> {
+    try {
+      const result = await this.sessionModel.updateOne(
+        {
+          xid: sessionXid,
+          userId: new Types.ObjectId(userId),
+          revokedAt: null,
+        },
+        { revokedAt: new Date(), revokedReason: reason }
+      );
+      return ok(result.modifiedCount === 1);
+    } catch (error) {
+      this.logger.error('Failed to revoke owned session', error);
       return err({ code: 'DB_ERROR', message: 'Failed to revoke session' });
     }
   }

@@ -1,17 +1,17 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
+import { MongooseModule } from '@nestjs/mongoose';
+import { PassportModule } from '@nestjs/passport';
+import { OtpModule } from '../otp';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { TokenService } from './token.service';
-import { JwtStrategy } from './strategies/jwt.strategy';
-import { User, UserSchema } from './schemas/user.schema';
 import { Session, SessionSchema } from './schemas/session.schema';
+import { User, UserSchema } from './schemas/user.schema';
 import { SessionsRepository } from './sessions.repository';
 import { SESSION_REPOSITORY } from './sessions.repository.interface';
-import { OtpModule } from '../otp';
+import { JwtStrategy } from './strategies/jwt.strategy';
+import { TokenService } from './token.service';
 
 @Module({
   imports: [

@@ -15,15 +15,11 @@ export class AuthClient {
   constructor(private readonly client: BaseApiClient) {}
 
   async otpSend(data: OtpSendRequest): Promise<OtpSendResponse> {
-    return this.client.post<OtpSendResponse>('/auth/otp/send', data, {
-      authenticated: false,
-    });
+    return this.client.post<OtpSendResponse>('/auth/otp/send', data, { mode: 'public' });
   }
 
   async otpVerify(data: OtpVerifyRequest): Promise<LoginResponse> {
-    return this.client.post<LoginResponse>('/auth/otp/verify', data, {
-      authenticated: false,
-    });
+    return this.client.post<LoginResponse>('/auth/otp/verify', data, { mode: 'public' });
   }
 
   async claimGuest(data: OtpClaimRequest): Promise<LoginResponse> {
@@ -31,23 +27,19 @@ export class AuthClient {
   }
 
   async registerGuest(): Promise<LoginResponse> {
-    return this.client.post<LoginResponse>(
-      '/auth/guest',
-      {},
-      { authenticated: false }
-    );
+    return this.client.post<LoginResponse>('/auth/guest', {}, { mode: 'public' });
   }
 
   async refresh(refreshToken: string): Promise<RefreshTokenResponse> {
     return this.client.post<RefreshTokenResponse>(
       '/auth/refresh',
       { refreshToken },
-      { authenticated: false, skipRefresh: true }
+      { mode: 'refresh' }
     );
   }
 
   async logout(): Promise<void> {
-    return this.client.post<void>('/auth/logout', {}, { skipUnauthorizedCallback: true });
+    return this.client.post<void>('/auth/logout', {}, { mode: 'best-effort' });
   }
 
   async logoutAll(): Promise<void> {
@@ -58,8 +50,8 @@ export class AuthClient {
     return this.client.get<SessionView[]>('/auth/sessions');
   }
 
-  async revokeSession(id: string): Promise<void> {
-    return this.client.delete<void>(`/auth/sessions/${id}`);
+  async revokeSession(xid: string): Promise<void> {
+    return this.client.delete<void>(`/auth/sessions/${xid}`);
   }
 
   async requestDeletion(): Promise<AuthUser> {

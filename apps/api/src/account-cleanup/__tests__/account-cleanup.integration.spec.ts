@@ -23,7 +23,10 @@ import { ANALYSIS_RUNS_REPOSITORY } from '../../analysis-runs/analysis-runs.repo
 import { Artefact, ArtefactSchema } from '../../artefacts/schemas/artefact.schema';
 import { ArtefactsRepository } from '../../artefacts/artefacts.repository';
 import { ARTEFACTS_REPOSITORY } from '../../artefacts/artefacts.repository.interface';
+import { Session, SessionSchema } from '../../auth/schemas/session.schema';
 import { User, UserSchema } from '../../auth/schemas/user.schema';
+import { SessionsRepository } from '../../auth/sessions.repository';
+import { SESSION_REPOSITORY } from '../../auth/sessions.repository.interface';
 import { Conversation, ConversationSchema } from '../../conversations/schemas/conversation.schema';
 import { Message, MessageSchema } from '../../conversations/schemas/message.schema';
 import { ConversationsRepository } from '../../conversations/conversations.repository';
@@ -101,11 +104,13 @@ describe('AccountCleanupService (integration)', () => {
           { name: Item.name, schema: ItemSchema },
           { name: VersionHistory.name, schema: VersionHistorySchema },
           { name: OutboxEntry.name, schema: OutboxEntrySchema },
+          { name: Session.name, schema: SessionSchema },
         ]),
       ],
       providers: [
         AccountCleanupService,
         TransactionService,
+        { provide: SESSION_REPOSITORY, useClass: SessionsRepository },
         { provide: ARTEFACTS_REPOSITORY, useClass: ArtefactsRepository },
         { provide: CONVERSATIONS_REPOSITORY, useClass: ConversationsRepository },
         { provide: MEDIA_REPOSITORY, useClass: MediaRepository },

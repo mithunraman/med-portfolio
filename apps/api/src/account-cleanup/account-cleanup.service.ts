@@ -200,6 +200,12 @@ export class AccountCleanupService {
   }
 
   private async anonymizeUserRecord(userId: Types.ObjectId): Promise<void> {
+    const revokeResult = await this.sessionRepo.revokeAllByUser(
+      userId.toString(),
+      SessionRevokedReason.LOGOUT_ALL
+    );
+    if (isErr(revokeResult)) throw new Error(revokeResult.error.message);
+
     await this.userModel.updateOne(
       { _id: userId },
       {
@@ -214,6 +220,5 @@ export class AccountCleanupService {
         },
       }
     );
-    await this.sessionRepo.revokeAllByUser(userId.toString(), SessionRevokedReason.LOGOUT_ALL);
   }
 }

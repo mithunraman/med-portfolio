@@ -1,5 +1,5 @@
 import { AuthErrorCode, SessionRevokedReason, Specialty, UserRole } from '@acme/shared';
-import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { err, ok } from '../../common/utils/result.util';
 import { AuthService } from '../auth.service';
@@ -40,8 +40,9 @@ function makeGuestDoc(overrides: Record<string, unknown> = {}) {
 
 function makeSessionDoc(overrides: Record<string, unknown> = {}) {
   return {
-    _id: sessionId,
-    userId,
+    id: sessionIdStr,
+    xid: 'sess_xid_test',
+    userId: userIdStr,
     deviceId: device.deviceId,
     deviceName: device.deviceName,
     refreshTokenHash: 'hash_current',
@@ -64,15 +65,30 @@ const mockUserModel = {
   create: jest.fn(),
 };
 
+/** Returns a value for both `.findById(id)` and `.findById(id).select(...).lean()`. */
+function makeFindByIdMock(value: unknown) {
+  const leanResult = Promise.resolve(value);
+  const chain = { lean: () => leanResult };
+  const selectable = {
+    select: () => chain,
+    then: (resolve: (v: unknown) => unknown) => Promise.resolve(value).then(resolve),
+  };
+  return selectable;
+}
+
 const mockSessionRepo = {
   create: jest.fn(),
   findById: jest.fn(),
+  findByXid: jest.fn(),
+  findRevocationStatus: jest.fn(),
   findActiveByRefreshHash: jest.fn(),
   findByPreviousHash: jest.fn(),
   findActiveByUserAndDevice: jest.fn(),
   listActiveByUser: jest.fn(),
   rotate: jest.fn(),
   revoke: jest.fn(),
+  revokeActiveByUserAndDevice: jest.fn(),
+  revokeOwnedByUserXid: jest.fn(),
   revokeAllByUser: jest.fn(),
   revokeFamily: jest.fn(),
 };
@@ -113,6 +129,8 @@ describe('AuthService', () => {
     mockTokenService.generateFamily.mockReturnValue('fam_new');
     mockTokenService.hashRefreshToken.mockImplementation((raw: string) => `hash_${raw}`);
     mockSessionRepo.findActiveByUserAndDevice.mockResolvedValue(ok(null));
+    mockSessionRepo.revokeActiveByUserAndDevice.mockResolvedValue(ok(0));
+    mockSessionRepo.revoke.mockResolvedValue(ok(undefined));
     mockSessionRepo.create.mockImplementation((input) =>
       Promise.resolve(ok(makeSessionDoc({ refreshTokenHash: input.refreshTokenHash })))
     );
@@ -136,15 +154,15 @@ describe('AuthService', () => {
       );
     });
 
-    it('supersedes existing session on the same device on re-login', async () => {
+    it('supersedes existing session on the same device on re-login (atomic)', async () => {
       mockOtpService.verifyOtp.mockResolvedValue({ email: 'user@example.com', valid: true });
       mockUserModel.findOne.mockResolvedValue(makeUserDoc());
-      mockSessionRepo.findActiveByUserAndDevice.mockResolvedValue(ok(makeSessionDoc()));
 
       await service.otpVerifyAndLogin('user@example.com', '123456', device);
 
-      expect(mockSessionRepo.revoke).toHaveBeenCalledWith(
-        sessionIdStr,
+      expect(mockSessionRepo.revokeActiveByUserAndDevice).toHaveBeenCalledWith(
+        userIdStr,
+        device.deviceId,
         SessionRevokedReason.SUPERSEDED
       );
     });
@@ -165,7 +183,7 @@ describe('AuthService', () => {
   describe('refreshSession', () => {
     it('rotates a valid refresh token and returns new pair', async () => {
       mockSessionRepo.findActiveByRefreshHash.mockResolvedValue(ok(makeSessionDoc()));
-      mockUserModel.findById.mockResolvedValue(makeUserDoc());
+      mockUserModel.findById.mockReturnValue(makeFindByIdMock(makeUserDoc()));
       mockTokenService.generateRefreshToken.mockReturnValue({ raw: 'raw_r2', hash: 'hash_r2' });
       mockSessionRepo.rotate.mockResolvedValue(ok(makeSessionDoc({ refreshTokenHash: 'hash_r2' })));
 
@@ -180,14 +198,14 @@ describe('AuthService', () => {
       expect(result).toEqual({ accessToken: 'access.jwt', refreshToken: 'raw_r2' });
     });
 
-    it('revokes family and rejects on replay of a rotated token', async () => {
+    it('revokes family and rejects with REFRESH_REPLAY on replay of a rotated token', async () => {
       mockSessionRepo.findActiveByRefreshHash.mockResolvedValue(ok(null));
       mockSessionRepo.findByPreviousHash.mockResolvedValue(
         ok(makeSessionDoc({ refreshTokenFamily: 'fam_1' }))
       );
 
       await expect(service.refreshSession('raw_old', device)).rejects.toMatchObject({
-        response: { code: AuthErrorCode.REFRESH_INVALID },
+        response: { code: AuthErrorCode.REFRESH_REPLAY },
       });
       expect(mockSessionRepo.revokeFamily).toHaveBeenCalledWith(
         'fam_1',
@@ -217,7 +235,7 @@ describe('AuthService', () => {
 
     it('rejects when user has been anonymized', async () => {
       mockSessionRepo.findActiveByRefreshHash.mockResolvedValue(ok(makeSessionDoc()));
-      mockUserModel.findById.mockResolvedValue(makeUserDoc({ anonymizedAt: new Date() }));
+      mockUserModel.findById.mockReturnValue(makeFindByIdMock(makeUserDoc({ anonymizedAt: new Date() })));
 
       await expect(service.refreshSession('raw_r1', device)).rejects.toMatchObject({
         response: { code: AuthErrorCode.USER_INACTIVE },
@@ -230,7 +248,7 @@ describe('AuthService', () => {
       mockOtpService.verifyOtp.mockResolvedValue({ email: 'real@example.com', valid: true });
       mockUserModel.findOne.mockResolvedValue(null);
       const guestDoc = makeGuestDoc();
-      mockUserModel.findById.mockResolvedValue(guestDoc);
+      mockUserModel.findById.mockReturnValue(makeFindByIdMock(guestDoc));
 
       const result = await service.claimGuestAccount(
         userIdStr,
@@ -269,7 +287,7 @@ describe('AuthService', () => {
     it('rejects if the target is not a guest', async () => {
       mockOtpService.verifyOtp.mockResolvedValue({ email: 'real@example.com', valid: true });
       mockUserModel.findOne.mockResolvedValue(null);
-      mockUserModel.findById.mockResolvedValue(makeUserDoc());
+      mockUserModel.findById.mockReturnValue(makeFindByIdMock(makeUserDoc()));
 
       await expect(
         service.claimGuestAccount(
@@ -300,12 +318,12 @@ describe('AuthService', () => {
       );
     });
 
-    it('revokeSession rejects if session belongs to a different user', async () => {
-      mockSessionRepo.findById.mockResolvedValue(
-        ok(makeSessionDoc({ userId: new Types.ObjectId() }))
-      );
-      await expect(service.revokeSession(userIdStr, sessionIdStr)).rejects.toThrow(
-        UnauthorizedException
+    it('revokeSession rejects (as BadRequest) when the xid/ownership check misses', async () => {
+      // revokeOwnedByUserXid returns false when xid doesn't exist OR belongs
+      // to another user OR was already revoked — all collapse to 400.
+      mockSessionRepo.revokeOwnedByUserXid.mockResolvedValue(ok(false));
+      await expect(service.revokeSession(userIdStr, 'sess_xid_test')).rejects.toThrow(
+        BadRequestException
       );
     });
   });
@@ -368,7 +386,7 @@ describe('AuthService', () => {
   describe('refreshSession when user disappears mid-flight', () => {
     it('rejects with USER_INACTIVE when userModel.findById returns null', async () => {
       mockSessionRepo.findActiveByRefreshHash.mockResolvedValue(ok(makeSessionDoc()));
-      mockUserModel.findById.mockResolvedValue(null);
+      mockUserModel.findById.mockReturnValue(makeFindByIdMock(null));
 
       await expect(service.refreshSession('raw_r1', device)).rejects.toMatchObject({
         response: { code: AuthErrorCode.USER_INACTIVE },
@@ -380,7 +398,7 @@ describe('AuthService', () => {
   describe('refreshSession when rotate fails', () => {
     it('throws REFRESH_INVALID when the repository cannot rotate', async () => {
       mockSessionRepo.findActiveByRefreshHash.mockResolvedValue(ok(makeSessionDoc()));
-      mockUserModel.findById.mockResolvedValue(makeUserDoc());
+      mockUserModel.findById.mockReturnValue(makeFindByIdMock(makeUserDoc()));
       mockTokenService.generateRefreshToken.mockReturnValue({
         raw: 'raw_r2',
         hash: 'hash_r2',
@@ -447,17 +465,16 @@ describe('AuthService', () => {
 
   // ── U-AS-27 revokeSession when session not found ──
   describe('revokeSession with missing session', () => {
-    it('throws BadRequestException', async () => {
-      mockSessionRepo.findById.mockResolvedValue(ok(null));
+    it('throws BadRequestException when the atomic update matches nothing', async () => {
+      mockSessionRepo.revokeOwnedByUserXid.mockResolvedValue(ok(false));
 
       await expect(service.revokeSession(userIdStr, 'missing')).rejects.toThrow(
         BadRequestException
       );
-      expect(mockSessionRepo.revoke).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException when repo returns err', async () => {
-      mockSessionRepo.findById.mockResolvedValue(
+      mockSessionRepo.revokeOwnedByUserXid.mockResolvedValue(
         err({ code: 'DB_ERROR', message: 'boom' })
       );
 
@@ -469,20 +486,20 @@ describe('AuthService', () => {
 
   // ── U-AS-28 listSessions view mapping ──
   describe('listSessions', () => {
-    it('maps to SessionView[], flags current, hides hashes', async () => {
-      const otherId = new Types.ObjectId();
+    it('maps to SessionView[], exposes xid as id, flags current, hides hashes', async () => {
+      const otherId = new Types.ObjectId().toString();
       mockSessionRepo.listActiveByUser.mockResolvedValue(
         ok([
-          makeSessionDoc({ _id: sessionId, deviceName: 'iOS iPhone' }),
-          makeSessionDoc({ _id: otherId, deviceName: 'Android Pixel' }),
+          makeSessionDoc({ id: sessionIdStr, xid: 'xid_current', deviceName: 'iOS iPhone' }),
+          makeSessionDoc({ id: otherId, xid: 'xid_other', deviceName: 'Android Pixel' }),
         ])
       );
 
       const result = await service.listSessions(userIdStr, sessionIdStr);
 
       expect(result).toHaveLength(2);
-      const current = result.find((v) => v.id === sessionIdStr);
-      const other = result.find((v) => v.id === otherId.toString());
+      const current = result.find((v) => v.id === 'xid_current');
+      const other = result.find((v) => v.id === 'xid_other');
       expect(current?.isCurrent).toBe(true);
       expect(other?.isCurrent).toBe(false);
 

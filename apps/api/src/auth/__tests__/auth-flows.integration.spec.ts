@@ -9,33 +9,18 @@ import {
   destroyAuthHarness,
   deviceHeadersFor,
   extractDevOtp,
+  loginWithOtp,
 } from './helpers/auth-test-harness';
 
 jest.setTimeout(45000);
 
-async function loginFlow(
+function loginFlow(
   harness: AuthTestHarness,
   email: string,
   device: Record<string, string> = DEVICE_HEADERS,
   name = 'Test User'
-): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
-  const sendRes = await request(harness.app.getHttpServer())
-    .post('/api/auth/otp/send')
-    .send({ email })
-    .expect(200);
-  const code = extractDevOtp(sendRes.body);
-
-  const verifyRes = await request(harness.app.getHttpServer())
-    .post('/api/auth/otp/verify')
-    .set(device)
-    .send({ email, code, name })
-    .expect(200);
-
-  return {
-    accessToken: verifyRes.body.accessToken,
-    refreshToken: verifyRes.body.refreshToken,
-    userId: verifyRes.body.user.id,
-  };
+) {
+  return loginWithOtp(harness, { email, device, name });
 }
 
 describe('Auth end-to-end flows', () => {
@@ -109,13 +94,13 @@ describe('Auth end-to-end flows', () => {
       .send({ refreshToken: r1 })
       .expect(200);
 
-    // Use r1 again → replay
+    // Use r1 again → replay (distinct error code)
     const replayRes = await request(harness.app.getHttpServer())
       .post('/api/auth/refresh')
       .set(DEVICE_HEADERS)
       .send({ refreshToken: r1 })
       .expect(401);
-    expect(replayRes.body.code).toBe(AuthErrorCode.REFRESH_INVALID);
+    expect(replayRes.body.code).toBe(AuthErrorCode.REFRESH_REPLAY);
 
     const session = await harness.sessionModel.findOne({
       userId: new Types.ObjectId(userId),

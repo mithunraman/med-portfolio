@@ -60,10 +60,6 @@ export default function OtpLoginScreen() {
             : `We sent a 6-digit code to ${flow.email}`}
         </Text>
 
-        {flow.step === 'code' && flow.devOtp && (
-          <Text style={[s.devOtp, { color: colors.error }]}>[DEV] OTP: {flow.devOtp}</Text>
-        )}
-
         {flow.step === 'email' ? (
           <View style={s.form}>
             <View>

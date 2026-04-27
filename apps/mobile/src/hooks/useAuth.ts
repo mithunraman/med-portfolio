@@ -19,7 +19,6 @@ export function useAuth() {
   const user = useAppSelector((state) => state.auth.user);
   const error = useAppSelector((state) => state.auth.error);
   const isNewUser = useAppSelector((state) => state.auth.isNewUser);
-  const devOtp = useAppSelector((state) => state.auth.devOtp);
 
   const otpSend = useCallback(
     async (email: string) => {
@@ -68,7 +67,6 @@ export function useAuth() {
     status,
     error,
     isNewUser,
-    devOtp,
     isLoading: status === 'loading',
     isAuthenticated: status === 'authenticated',
     isGuest: status === 'guest',

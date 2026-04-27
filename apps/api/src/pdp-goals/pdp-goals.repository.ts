@@ -237,7 +237,11 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     }
   }
 
-  async saveGoal(xid: string, data: SaveGoalData): Promise<Result<void, DBError>> {
+  async saveGoal(
+    xid: string,
+    userId: Types.ObjectId,
+    data: SaveGoalData
+  ): Promise<Result<void, DBError>> {
     try {
       const setFields: Record<string, unknown> = {};
       if (data.status !== undefined) setFields.status = data.status;
@@ -246,10 +250,16 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       if (data.completionReview !== undefined) setFields.completionReview = data.completionReview;
       if (data.actions !== undefined) setFields.actions = data.actions;
 
-      if (Object.keys(setFields).length > 0) {
-        await this.pdpGoalModel.updateOne({ xid }, { $set: setFields });
+      if (Object.keys(setFields).length === 0) {
+        return ok(undefined);
       }
 
+      // Ownership predicate at the persistence layer — defence in depth even if
+      // a future caller forgets to pre-check. Mirrors anonymizeGoal/updateGoal.
+      const result = await this.pdpGoalModel.updateOne({ xid, userId }, { $set: setFields });
+      if (result.matchedCount === 0) {
+        return err({ code: 'NOT_FOUND', message: 'PDP goal not found' });
+      }
       return ok(undefined);
     } catch (error) {
       this.logger.error(`Failed to save PDP goal ${xid}`, error);

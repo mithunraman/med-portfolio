@@ -26,7 +26,6 @@ export function LoginPage() {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [isNewUser, setIsNewUser] = useState(false);
-  const [devOtp, setDevOtp] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -39,7 +38,6 @@ export function LoginPage() {
     try {
       const result = await otpSend(email);
       setIsNewUser(result.isNewUser);
-      setDevOtp(result.devOtp);
       setStep('otp');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send code');
@@ -108,12 +106,6 @@ export function LoginPage() {
               {error && (
                 <Alert icon={<IconAlertCircle size={16} />} color="red" variant="light">
                   {error}
-                </Alert>
-              )}
-
-              {devOtp && (
-                <Alert color="blue" variant="light">
-                  Dev OTP: {devOtp}
                 </Alert>
               )}
 

@@ -71,9 +71,16 @@ export class SessionsRepository implements ISessionRepository {
     try {
       const oid = toObjectIdOrNull(sessionId);
       if (!oid) return ok(null);
-      const session = await this.sessionModel.findById(oid).select('revokedAt expiresAt').lean();
+      const session = await this.sessionModel
+        .findById(oid)
+        .select('userId revokedAt expiresAt')
+        .lean();
       if (!session) return ok(null);
-      return ok({ revokedAt: session.revokedAt, expiresAt: session.expiresAt });
+      return ok({
+        userId: session.userId.toString(),
+        revokedAt: session.revokedAt,
+        expiresAt: session.expiresAt,
+      });
     } catch (error) {
       this.logger.error('Failed to find session revocation status', error);
       return err({ code: 'DB_ERROR', message: 'Failed to find session' });

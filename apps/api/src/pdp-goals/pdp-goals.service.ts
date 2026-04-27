@@ -120,10 +120,9 @@ export class PdpGoalsService {
     goalXid: string,
     dto: UpdatePdpGoalDto
   ): Promise<PdpGoalResponse> {
-    const result = await this.pdpGoalsRepository.findOneWithArtefact(
-      goalXid,
-      new Types.ObjectId(userId)
-    );
+    const userOid = new Types.ObjectId(userId);
+
+    const result = await this.pdpGoalsRepository.findOneWithArtefact(goalXid, userOid);
 
     if (isErr(result)) throw new InternalServerErrorException(result.error.message);
     if (!result.value) throw new NotFoundException('PDP goal not found');
@@ -145,7 +144,7 @@ export class PdpGoalsService {
       );
     }
 
-    const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, {
+    const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, userOid, {
       status: goal.status,
       reviewDate: goal.reviewDate,
       completedAt: goal.completedAt,
@@ -153,7 +152,12 @@ export class PdpGoalsService {
       actions: goal.actions,
     });
 
-    if (isErr(saveResult)) throw new InternalServerErrorException(saveResult.error.message);
+    if (isErr(saveResult)) {
+      if (saveResult.error.code === 'NOT_FOUND') {
+        throw new NotFoundException('PDP goal not found');
+      }
+      throw new InternalServerErrorException(saveResult.error.message);
+    }
 
     return mapGoalWithArtefactToDto(goal);
   }
@@ -163,10 +167,9 @@ export class PdpGoalsService {
     goalXid: string,
     dto: AddPdpGoalActionDto
   ): Promise<PdpGoalResponse> {
-    const result = await this.pdpGoalsRepository.findOneWithArtefact(
-      goalXid,
-      new Types.ObjectId(userId)
-    );
+    const userOid = new Types.ObjectId(userId);
+
+    const result = await this.pdpGoalsRepository.findOneWithArtefact(goalXid, userOid);
 
     if (isErr(result)) throw new InternalServerErrorException(result.error.message);
     if (!result.value) throw new NotFoundException('PDP goal not found');
@@ -183,10 +186,15 @@ export class PdpGoalsService {
 
     goal.actions = [...goal.actions, newAction];
 
-    const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, {
+    const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, userOid, {
       actions: goal.actions,
     });
-    if (isErr(saveResult)) throw new InternalServerErrorException(saveResult.error.message);
+    if (isErr(saveResult)) {
+      if (saveResult.error.code === 'NOT_FOUND') {
+        throw new NotFoundException('PDP goal not found');
+      }
+      throw new InternalServerErrorException(saveResult.error.message);
+    }
 
     return mapGoalWithArtefactToDto(goal);
   }
@@ -197,10 +205,9 @@ export class PdpGoalsService {
     actionXid: string,
     dto: UpdatePdpGoalActionDto
   ): Promise<PdpGoalResponse> {
-    const result = await this.pdpGoalsRepository.findOneWithArtefact(
-      goalXid,
-      new Types.ObjectId(userId)
-    );
+    const userOid = new Types.ObjectId(userId);
+
+    const result = await this.pdpGoalsRepository.findOneWithArtefact(goalXid, userOid);
 
     if (isErr(result)) throw new InternalServerErrorException(result.error.message);
     if (!result.value) throw new NotFoundException('PDP goal not found');
@@ -212,10 +219,15 @@ export class PdpGoalsService {
     if (dto.status !== undefined) action.status = dto.status;
     if (dto.completionReview !== undefined) action.completionReview = dto.completionReview ?? null;
 
-    const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, {
+    const saveResult = await this.pdpGoalsRepository.saveGoal(goalXid, userOid, {
       actions: goal.actions,
     });
-    if (isErr(saveResult)) throw new InternalServerErrorException(saveResult.error.message);
+    if (isErr(saveResult)) {
+      if (saveResult.error.code === 'NOT_FOUND') {
+        throw new NotFoundException('PDP goal not found');
+      }
+      throw new InternalServerErrorException(saveResult.error.message);
+    }
 
     return mapGoalWithArtefactToDto(goal);
   }

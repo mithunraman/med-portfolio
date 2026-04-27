@@ -70,7 +70,6 @@ export interface AuthState {
   quota: QuotaStatus | null;
   error: string | null;
   isNewUser: boolean | null;
-  devOtp: string | null;
   specialties: SpecialtyOption[];
 }
 
@@ -80,7 +79,6 @@ const initialState: AuthState = {
   quota: null,
   error: null,
   isNewUser: null,
-  devOtp: null,
   specialties: [],
 };
 
@@ -129,7 +127,7 @@ export const otpSend = createAsyncThunk(
 
     try {
       const response = await api.auth.otpSend({ email });
-      return { email, isNewUser: response.isNewUser, devOtp: response.devOtp };
+      return { email, isNewUser: response.isNewUser };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to send OTP';
       authLogger.error('OTP send failed', { error: message });
@@ -359,7 +357,6 @@ const authSlice = createSlice({
       })
       .addCase(otpSend.fulfilled, (state, action) => {
         state.isNewUser = action.payload.isNewUser;
-        state.devOtp = action.payload.devOtp ?? null;
       })
       .addCase(otpSend.rejected, (state, action) => {
         state.error = action.payload as string;

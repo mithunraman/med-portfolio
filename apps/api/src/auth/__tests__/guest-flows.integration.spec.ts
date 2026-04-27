@@ -7,7 +7,7 @@ import {
   createAuthHarness,
   DEVICE_HEADERS,
   destroyAuthHarness,
-  extractDevOtp,
+  lastSentOtp,
   registerGuestFlow,
 } from './helpers/auth-test-harness';
 
@@ -18,11 +18,11 @@ function registerGuest(harness: AuthTestHarness, headers = DEVICE_HEADERS) {
 }
 
 async function sendOtp(harness: AuthTestHarness, email: string): Promise<string> {
-  const res = await request(harness.app.getHttpServer())
+  await request(harness.app.getHttpServer())
     .post('/api/auth/otp/send')
     .send({ email })
     .expect(200);
-  return extractDevOtp(res.body);
+  return lastSentOtp(harness, email);
 }
 
 describe('Guest flows', () => {

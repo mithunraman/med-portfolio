@@ -24,12 +24,6 @@ export const otpFlowStyles = StyleSheet.create({
     lineHeight: 22,
     paddingHorizontal: 16,
   },
-  devOtp: {
-    fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
   form: {
     gap: 20,
   },

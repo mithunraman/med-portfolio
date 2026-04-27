@@ -19,7 +19,7 @@ interface UseOtpFlowOptions {
  * Encapsulates form state, validation, and handlers.
  */
 export function useOtpFlow({ onVerify, alwaysShowName }: UseOtpFlowOptions) {
-  const { otpSend, isNewUser, devOtp } = useAuth();
+  const { otpSend, isNewUser } = useAuth();
 
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
@@ -108,7 +108,6 @@ export function useOtpFlow({ onVerify, alwaysShowName }: UseOtpFlowOptions) {
     isVerifying,
     isLoading,
     showNameField,
-    devOtp,
 
     // Form
     control,

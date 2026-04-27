@@ -1,4 +1,4 @@
-import { AuthErrorCode } from '@acme/shared';
+import { AuthErrorCode, SessionRevokedReason } from '@acme/shared';
 import { JwtService } from '@nestjs/jwt';
 import * as jwt from 'jsonwebtoken';
 import { Types } from 'mongoose';
@@ -184,5 +184,34 @@ describe('Auth cross-cutting concerns', () => {
       .get('/api/auth/me')
       .set('Authorization', `Bearer ${minted}`)
       .expect(200);
+  });
+
+  // sub/sid binding — defends against JWT-secret compromise + sid guessing
+  it('rejects a validly-signed JWT whose sub does not match the session userId, and revokes the session', async () => {
+    const { userId: userAId } = await loginAs(harness, 'mismatch-a@example.com');
+    const { userId: userBId } = await loginAs(harness, 'mismatch-b@example.com');
+
+    const sessionA = await harness.sessionModel.findOne({
+      userId: new Types.ObjectId(userAId),
+    });
+
+    // Forge: sub = userB, but sid = userA's session. Signed correctly.
+    const jwtService = harness.module.get<JwtService>(JwtService);
+    const forged = jwtService.sign({
+      sub: userBId,
+      role: 0,
+      sid: sessionA!._id.toString(),
+    });
+
+    const res = await request(harness.app.getHttpServer())
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${forged}`);
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe(AuthErrorCode.TOKEN_INVALID);
+
+    // userA's session is now revoked with SUSPICIOUS reason
+    const revokedA = await harness.sessionModel.findById(sessionA!._id).lean();
+    expect(revokedA!.revokedAt).not.toBeNull();
+    expect(revokedA!.revokedReason).toBe(SessionRevokedReason.SUSPICIOUS);
   });
 });

@@ -194,14 +194,18 @@ export function deviceHeadersFor(deviceId: string) {
 }
 
 /**
- * Extracts the dev OTP from a /auth/otp/send response.
+ * Reads the most recent OTP code that the email service mock was asked to
+ * deliver to `email`. Replaces the previous `devOtp`-in-response convenience —
+ * the OTP is no longer echoed by the API under any environment.
  */
-export function extractDevOtp(body: unknown): string {
-  const typed = body as { devOtp?: string };
-  if (!typed.devOtp) {
-    throw new Error('Test expected devOtp in response — is NODE_ENV set to production?');
+export function lastSentOtp(harness: AuthTestHarness, email: string): string {
+  const normalized = email.toLowerCase();
+  const calls = harness.emailService.sendOtp.mock.calls;
+  for (let i = calls.length - 1; i >= 0; i--) {
+    const [calledEmail, code] = calls[i];
+    if (calledEmail === normalized) return code;
   }
-  return typed.devOtp;
+  throw new Error(`No OTP was sent to ${email} — was POST /auth/otp/send called?`);
 }
 
 export interface LoginResult {
@@ -223,11 +227,11 @@ export async function loginWithOtp(
   const request = (await import('supertest')).default;
   const headers = opts.device ?? DEVICE_HEADERS;
 
-  const send = await request(harness.app.getHttpServer())
+  await request(harness.app.getHttpServer())
     .post('/api/auth/otp/send')
     .send({ email: opts.email })
     .expect(200);
-  const code = extractDevOtp(send.body);
+  const code = lastSentOtp(harness, opts.email);
 
   const verify = await request(harness.app.getHttpServer())
     .post('/api/auth/otp/verify')

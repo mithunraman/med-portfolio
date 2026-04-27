@@ -8,7 +8,7 @@ import {
   DEVICE_HEADERS,
   destroyAuthHarness,
   deviceHeadersFor,
-  extractDevOtp,
+  lastSentOtp,
   loginWithOtp,
 } from './helpers/auth-test-harness';
 
@@ -253,11 +253,11 @@ describe('Auth end-to-end flows', () => {
 
   // ── I-FL-10 ──
   it('OTP verify is rejected when x-device-id header is missing', async () => {
-    const sendRes = await request(harness.app.getHttpServer())
+    await request(harness.app.getHttpServer())
       .post('/api/auth/otp/send')
       .send({ email: 'no-device@example.com' })
       .expect(200);
-    const code = extractDevOtp(sendRes.body);
+    const code = lastSentOtp(harness, 'no-device@example.com');
 
     const res = await request(harness.app.getHttpServer())
       .post('/api/auth/otp/verify')

@@ -3,7 +3,7 @@ import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { Model, Types } from 'mongoose';
-import { isOk } from '../../common/utils/result.util';
+import { isErr, isOk } from '../../common/utils/result.util';
 import { PdpGoalsRepository } from '../pdp-goals.repository';
 import { PDP_GOALS_REPOSITORY } from '../pdp-goals.repository.interface';
 import {
@@ -108,7 +108,7 @@ describe('PdpGoalsRepository (integration)', () => {
       await insertGoal(model, { xid: 'goal_sg1' });
 
       const reviewDate = new Date('2026-09-01');
-      const result = await repo.saveGoal('goal_sg1', {
+      const result = await repo.saveGoal('goal_sg1', userId, {
         status: PdpGoalStatus.STARTED,
         reviewDate,
         completionReview: 'Great progress',
@@ -131,7 +131,7 @@ describe('PdpGoalsRepository (integration)', () => {
         ],
       });
 
-      const result = await repo.saveGoal('goal_sg2', {
+      const result = await repo.saveGoal('goal_sg2', userId, {
         actions: [
           { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.COMPLETED, dueDate: null, completionReview: null },
           { xid: 'act_2', action: 'A2', intendedEvidence: 'E2', status: PdpGoalStatus.ARCHIVED, dueDate: null, completionReview: null },
@@ -148,11 +148,28 @@ describe('PdpGoalsRepository (integration)', () => {
     it('does not touch unspecified fields', async () => {
       await insertGoal(model, { xid: 'goal_sg3', status: PdpGoalStatus.STARTED });
 
-      await repo.saveGoal('goal_sg3', { completionReview: 'Done' });
+      await repo.saveGoal('goal_sg3', userId, { completionReview: 'Done' });
 
       const updated = await model.findOne({ xid: 'goal_sg3' }).lean();
       expect(updated!.status).toBe(PdpGoalStatus.STARTED); // unchanged
       expect(updated!.completionReview).toBe('Done');
+    });
+
+    it('refuses to write a goal owned by a different user (NOT_FOUND)', async () => {
+      await insertGoal(model, { xid: 'goal_sg4', status: PdpGoalStatus.STARTED });
+      const otherUser = new Types.ObjectId();
+
+      const result = await repo.saveGoal('goal_sg4', otherUser, {
+        status: PdpGoalStatus.COMPLETED,
+        completionReview: 'Hijacked',
+      });
+
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) expect(result.error.code).toBe('NOT_FOUND');
+
+      const untouched = await model.findOne({ xid: 'goal_sg4' }).lean();
+      expect(untouched!.status).toBe(PdpGoalStatus.STARTED);
+      expect(untouched!.completionReview).toBeNull();
     });
   });
 

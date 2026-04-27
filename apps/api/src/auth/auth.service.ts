@@ -63,7 +63,6 @@ export class AuthService {
     return {
       message: result.message,
       isNewUser: !existingUser,
-      ...(result.devOtp && { devOtp: result.devOtp }),
     };
   }
 

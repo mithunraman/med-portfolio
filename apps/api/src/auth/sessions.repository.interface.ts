@@ -14,6 +14,7 @@ export interface CreateSessionInput {
 }
 
 export interface SessionRevocationStatus {
+  userId: string;
   revokedAt: Date | null;
   expiresAt: Date;
 }

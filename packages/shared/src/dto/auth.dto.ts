@@ -91,7 +91,6 @@ export type OtpSendRequest = z.infer<typeof OtpSendRequestSchema>;
 export const OtpSendResponseSchema = z.object({
   message: z.string(),
   isNewUser: z.boolean(),
-  devOtp: z.string().optional(),
 });
 
 export type OtpSendResponse = z.infer<typeof OtpSendResponseSchema>;

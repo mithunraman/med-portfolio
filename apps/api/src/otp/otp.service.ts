@@ -14,7 +14,6 @@ import { IOtpRepository, OTP_REPOSITORY } from './otp.repository.interface';
 
 export interface SendOtpResult {
   message: string;
-  devOtp?: string;
 }
 
 export interface VerifyOtpResult {
@@ -83,15 +82,7 @@ export class OtpService {
       this.logger.error(`Failed to send OTP email to ${normalizedEmail}`, error);
     });
 
-    const isDev = this.configService.get<string>('NODE_ENV') !== 'production';
-    if (isDev) {
-      this.logger.warn(`[DEV] OTP for ${normalizedEmail}: ${code}`);
-    }
-
-    return {
-      message: 'OTP sent successfully',
-      ...(isDev && { devOtp: code }),
-    };
+    return { message: 'OTP sent successfully' };
   }
 
   async verifyOtp(email: string, code: string): Promise<VerifyOtpResult> {

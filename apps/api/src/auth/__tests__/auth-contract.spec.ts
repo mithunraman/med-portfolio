@@ -14,11 +14,12 @@ describe('Auth shared contract', () => {
       expect(SessionRevokedReason.LOGOUT_ALL).toBe('logout_all');
       expect(SessionRevokedReason.ROTATION_REPLAY).toBe('rotation_replay');
       expect(SessionRevokedReason.SUPERSEDED).toBe('superseded');
+      expect(SessionRevokedReason.SUSPICIOUS).toBe('suspicious');
     });
 
-    it('covers exactly the four reasons in use — no stale entries', () => {
+    it('covers exactly the reasons in use — no stale entries', () => {
       expect(new Set(Object.values(SessionRevokedReason))).toEqual(
-        new Set(['logout', 'logout_all', 'rotation_replay', 'superseded'])
+        new Set(['logout', 'logout_all', 'rotation_replay', 'superseded', 'suspicious'])
       );
     });
   });

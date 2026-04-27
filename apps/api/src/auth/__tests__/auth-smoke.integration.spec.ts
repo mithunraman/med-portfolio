@@ -5,7 +5,7 @@ import {
   createAuthHarness,
   DEVICE_HEADERS,
   destroyAuthHarness,
-  extractDevOtp,
+  lastSentOtp,
 } from './helpers/auth-test-harness';
 
 jest.setTimeout(30000);
@@ -35,7 +35,9 @@ describe('Auth harness smoke test', () => {
       message: expect.any(String),
       isNewUser: true,
     });
-    const otp = extractDevOtp(res.body);
+    expect(res.body).not.toHaveProperty('devOtp');
+
+    const otp = lastSentOtp(harness, 'smoke@example.com');
     expect(otp).toMatch(/^\d{6}$/);
   });
 

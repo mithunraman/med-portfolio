@@ -144,47 +144,39 @@ describe('OtpService', () => {
       await expect(service.sendOtp(TEST_EMAIL)).rejects.toThrow(InternalServerErrorException);
     });
 
-    it('should include devOtp in non-production mode', async () => {
+    it('never returns the OTP code in the response, regardless of env', async () => {
       mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
       mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
 
-      const result = await service.sendOtp(TEST_EMAIL);
+      for (const env of ['development', 'test', 'production']) {
+        mockConfigService.get.mockImplementation((key: string, defaultValue?: unknown) => {
+          const config: Record<string, unknown> = {
+            'app.otp.expiryMinutes': 5,
+            'app.otp.maxAttempts': 3,
+            'app.otp.rateLimitMax': 3,
+            'app.otp.rateLimitWindowMinutes': 10,
+            'app.nodeEnv': env,
+          };
+          return config[key] ?? defaultValue;
+        });
 
-      expect(result.devOtp).toBeDefined();
-      expect(result.devOtp).toMatch(/^\d{6}$/);
+        const result = await createService().sendOtp(TEST_EMAIL);
+
+        expect(result).toEqual({ message: 'OTP sent successfully' });
+        expect(result).not.toHaveProperty('devOtp');
+      }
     });
 
-    it('should NOT include devOtp in production mode', async () => {
-      mockConfigService.get.mockImplementation((key: string, defaultValue?: unknown) => {
-        const config: Record<string, unknown> = {
-          'app.otp.expiryMinutes': 5,
-          'app.otp.maxAttempts': 3,
-          'app.otp.rateLimitMax': 3,
-          'app.otp.rateLimitWindowMinutes': 10,
-          NODE_ENV: 'production',
-        };
-        return config[key] ?? defaultValue;
-      });
-      // Re-create service so constructor reads fresh config
-      const prodService = createService();
+    it('delivers the generated code to the email service', async () => {
       mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
       mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
 
-      const result = await prodService.sendOtp(TEST_EMAIL);
-
-      expect(result.devOtp).toBeUndefined();
-    });
-
-    it('should call emailService.sendOtp with correct args', async () => {
-      mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
-      mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
-
-      const result = await service.sendOtp(TEST_EMAIL);
+      await service.sendOtp(TEST_EMAIL);
 
       expect(mockEmailService.sendOtp).toHaveBeenCalledWith(
         TEST_EMAIL,
-        result.devOtp, // in test mode devOtp is the raw code
-        5 // expiryMinutes
+        expect.stringMatching(/^\d{6}$/),
+        5
       );
     });
 

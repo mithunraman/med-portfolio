@@ -102,7 +102,11 @@ export interface IPdpGoalsRepository {
     statuses: PdpGoalStatus[]
   ): Promise<Result<number, DBError>>;
 
-  saveGoal(xid: string, data: SaveGoalData): Promise<Result<void, DBError>>;
+  saveGoal(
+    xid: string,
+    userId: Types.ObjectId,
+    data: SaveGoalData
+  ): Promise<Result<void, DBError>>;
 
   updateGoal(
     goalXid: string,

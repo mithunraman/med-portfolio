@@ -14,7 +14,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  otpSend: (email: string) => Promise<{ isNewUser: boolean; devOtp?: string }>;
+  otpSend: (email: string) => Promise<{ isNewUser: boolean }>;
   otpVerify: (email: string, code: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const otpSend = useCallback(async (email: string) => {
     const response = await api.auth.otpSend({ email });
-    return { isNewUser: response.isNewUser, devOtp: response.devOtp };
+    return { isNewUser: response.isNewUser };
   }, []);
 
   const otpVerify = useCallback(async (email: string, code: string, name?: string) => {

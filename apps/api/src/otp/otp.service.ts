@@ -12,6 +12,9 @@ import { EmailService } from '../email';
 import { EmailLockoutService } from './email-lockout.service';
 import { IOtpRepository, OTP_REPOSITORY } from './otp.repository.interface';
 
+const TEST_OTP_DOMAIN = '@logdit.app';
+const TEST_OTP_CODE = '112233';
+
 export interface SendOtpResult {
   message: string;
 }
@@ -28,6 +31,7 @@ export class OtpService {
   private readonly maxAttempts: number;
   private readonly rateLimitMax: number;
   private readonly rateLimitWindowMinutes: number;
+  private readonly isDevelopment: boolean;
 
   constructor(
     @Inject(OTP_REPOSITORY) private readonly otpRepo: IOtpRepository,
@@ -42,6 +46,11 @@ export class OtpService {
       'app.otp.rateLimitWindowMinutes',
       10
     );
+    this.isDevelopment = this.configService.get<boolean>('app.isDevelopment') ?? false;
+  }
+
+  private isTestEmail(email: string): boolean {
+    return this.isDevelopment && email.endsWith(TEST_OTP_DOMAIN);
   }
 
   async sendOtp(email: string): Promise<SendOtpResult> {
@@ -62,7 +71,8 @@ export class OtpService {
     // Delete old OTPs before creating the new one — ensures only one valid code
     await this.otpRepo.deleteByEmail(normalizedEmail);
 
-    const code = this.generateCode();
+    const useTestOtp = this.isTestEmail(normalizedEmail);
+    const code = useTestOtp ? TEST_OTP_CODE : this.generateCode();
     const codeHash = this.hashCode(code);
     const expiresAt = new Date(Date.now() + this.expiryMinutes * 60 * 1000);
 
@@ -77,10 +87,14 @@ export class OtpService {
       throw new InternalServerErrorException('Failed to create OTP');
     }
 
-    // Fire-and-forget — don't block the response on SMTP round-trip
-    this.emailService.sendOtp(normalizedEmail, code, this.expiryMinutes).catch((error) => {
-      this.logger.error(`Failed to send OTP email to ${normalizedEmail}`, error);
-    });
+    if (useTestOtp) {
+      this.logger.warn(`TEST OTP issued for ${normalizedEmail}`);
+    } else {
+      // Fire-and-forget — don't block the response on SMTP round-trip
+      this.emailService.sendOtp(normalizedEmail, code, this.expiryMinutes).catch((error) => {
+        this.logger.error(`Failed to send OTP email to ${normalizedEmail}`, error);
+      });
+    }
 
     return { message: 'OTP sent successfully' };
   }

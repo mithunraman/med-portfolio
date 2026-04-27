@@ -11,7 +11,7 @@ export class DevOnlyGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly configService: ConfigService,
   ) {
-    this.isDev = this.configService.get<string>('app.nodeEnv') === 'development';
+    this.isDev = this.configService.get<boolean>('app.isDevelopment') ?? false;
   }
 
   canActivate(context: ExecutionContext): boolean {

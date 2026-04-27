@@ -48,10 +48,9 @@ import { VersionPolicyModule } from './version-policy';
       useFactory: (config: ConfigService) => ({
         pinoHttp: {
           level: config.get('app.logLevel'),
-          transport:
-            config.get('app.nodeEnv') === 'development'
-              ? { target: 'pino-pretty', options: { colorize: true, singleLine: true } }
-              : undefined,
+          transport: config.get<boolean>('app.isDevelopment')
+            ? { target: 'pino-pretty', options: { colorize: true, singleLine: true } }
+            : undefined,
           // Phase 3: Correlation IDs — honour client X-Request-Id, else generate UUID
           genReqId: (req: Record<string, any>) => req.headers['x-request-id'] ?? randomUUID(),
           // Phase 2: HTTP request logging

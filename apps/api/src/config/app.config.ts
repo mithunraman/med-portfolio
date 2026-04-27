@@ -1,6 +1,13 @@
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
+export const NodeEnv = {
+  Development: 'development',
+  Test: 'test',
+  Production: 'production',
+} as const;
+export type NodeEnv = (typeof NodeEnv)[keyof typeof NodeEnv];
+
 /**
  * Environment variables schema with validation rules.
  */
@@ -10,7 +17,7 @@ export const envSchema = z.object({
     .string()
     .transform((val) => parseInt(val, 10))
     .pipe(z.number().int().min(1).max(65535)),
-  NODE_ENV: z.enum(['development', 'production', 'test']),
+  NODE_ENV: z.nativeEnum(NodeEnv),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
   // Database
@@ -146,6 +153,9 @@ export const appConfig = registerAs('app', () => {
   return {
     port: env.PORT,
     nodeEnv: env.NODE_ENV,
+    isDevelopment: env.NODE_ENV === NodeEnv.Development,
+    isTest: env.NODE_ENV === NodeEnv.Test,
+    isProduction: env.NODE_ENV === NodeEnv.Production,
     logLevel: env.LOG_LEVEL,
     mongodb: {
       uri: env.MONGODB_URI,

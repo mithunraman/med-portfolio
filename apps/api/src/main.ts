@@ -43,7 +43,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   // Simulate network latency in development
-  if (configService.get('app.nodeEnv') === 'development') {
+  if (configService.get<boolean>('app.isDevelopment')) {
     app.use((_req: Request, _res: Response, next: NextFunction) => setTimeout(next, 1000));
   }
 

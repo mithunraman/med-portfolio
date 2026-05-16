@@ -118,8 +118,6 @@ export interface SpecialtyConfig {
   entryTypes: EntryTypeDefinition[];
   /** All templates, keyed by template ID */
   templates: Record<string, ArtefactTemplate>;
-  /** Mapping from entry type code to template ID */
-  entryTypeToTemplate: Record<string, string>;
   /** All capabilities in the curriculum framework */
   capabilities: CapabilityDefinition[];
   /** Training stages for this specialty (e.g., ST1-ST3 for GP, CT1-CT3 + ST4-ST6 for Psychiatry) */

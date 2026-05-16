@@ -63,7 +63,7 @@ export default function PrivacySupportScreen() {
           <SettingsItem
             icon="help-circle-outline"
             label="Help & Feedback"
-            onPress={() => Alert.alert('Help', 'Contact support@example.com for help.')}
+            onPress={() => Alert.alert('Help', 'Contact support@logdit.app for help.')}
           />
           <SettingsItem
             icon="information-circle-outline"

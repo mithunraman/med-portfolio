@@ -66,7 +66,6 @@ describe('SpecialtiesController', () => {
         expect(raw['templates']).toBeUndefined();
         expect(raw['entryTypes']).toBeUndefined();
         expect(raw['capabilities']).toBeUndefined();
-        expect(raw['entryTypeToTemplate']).toBeUndefined();
       }
     });
   });

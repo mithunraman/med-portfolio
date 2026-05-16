@@ -62,9 +62,12 @@ export class LLMService {
     const assemblyaiApiKey = this.configService.get<string>('app.assemblyai.apiKey');
     if (!assemblyaiApiKey) throw new Error('Missing config: app.assemblyai.apiKey');
 
-    // AssemblyAI client for transcription with PII redaction
+    const assemblyaiBaseUrl = this.configService.get<string>('app.assemblyai.baseUrl');
+    if (!assemblyaiBaseUrl) throw new Error('Missing config: app.assemblyai.baseUrl');
+
     this.assemblyai = new AssemblyAI({
       apiKey: assemblyaiApiKey,
+      baseUrl: assemblyaiBaseUrl,
     });
   }
 

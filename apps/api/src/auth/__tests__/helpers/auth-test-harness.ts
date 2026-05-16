@@ -48,7 +48,7 @@ function testAppConfig() {
       mediaBucket: 'x',
     },
     openai: { apiKey: 'x' },
-    assemblyai: { apiKey: 'x' },
+    assemblyai: { apiKey: 'x', baseUrl: 'https://api.eu.assemblyai.com' },
     sentry: { dsn: 'https://x@x.ingest.sentry.io/x' },
     smtp: {
       host: undefined,

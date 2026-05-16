@@ -63,6 +63,18 @@ Consolidated from: `backend-failure-review.md`, `production-readiness-review.md`
 - **Fix:** Replace with real support email or integrate a feedback form.
 - **Effort:** Small
 
+### 8a. OpenAI Responses API: pass `store: false` on every call
+
+- **Source:** OpenAI org-level Data Controls (see `compliance/screenshots/openai_data_controls_*`)
+- **File:** `apps/api/src/llm/llm.service.ts` (and any other callsite that invokes the OpenAI SDK)
+- **Problem:** The org-level "API call logging" setting is `Disabled`, but the OpenAI UI explicitly notes: *"API calls from the Responses API are logged by default. Use the `store=false` API parameter to disable logging."* If our code uses the Responses API (rather than Chat Completions), payloads — which can include health-adjacent reflection text — are retained in OpenAI's infrastructure unless `store: false` is passed on every call.
+- **Fix:**
+  1. Identify which OpenAI API surface `invokeStructured<T>()` and any other callsite is using (Chat Completions vs Responses API).
+  2. If Responses API: add `store: false` to every request. Centralise it in the LLM service wrapper so individual callers can't accidentally forget.
+  3. If Chat Completions: no code change needed; document the verification in `compliance/policies/README.md` so future migrations to Responses API trigger this todo again.
+- **Effort:** Small (single file, ~15 min once API surface confirmed)
+- **Compliance note:** Required by DPIA — closes the residual OpenAI-side retention risk independently of ZDR approval.
+
 ### 8. ~~Fire-and-forget message processing can permanently stick conversations~~ NOT A CONCERN
 
 - **Source:** `backend-failure-review.md` risk #1
@@ -130,6 +142,7 @@ Consolidated from: `backend-failure-review.md`, `production-readiness-review.md`
 - [x] **High:** JWT user status check (resolved 2026-04-08)
 - [x] **High:** Apply @Roles() decorators (not a concern — intentional design, 2026-04-08)
 - [ ] **High:** Replace placeholder support email
+- [ ] **High:** OpenAI Responses API — pass `store: false` on every call (item 8a)
 - [x] **High:** Stuck message recovery (not a concern — outbox pattern already handles this, 2026-04-08)
 - [ ] **Medium:** Terms of Service
 - [ ] **Medium:** Test coverage for critical modules

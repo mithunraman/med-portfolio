@@ -59,6 +59,7 @@ export const envSchema = z.object({
   ASSEMBLYAI_API_KEY: z
     .string({ required_error: 'ASSEMBLYAI_API_KEY is required' })
     .min(1, 'ASSEMBLYAI_API_KEY cannot be empty'),
+  ASSEMBLYAI_BASE_URL: z.string().url().default('https://api.eu.assemblyai.com'),
 
   // Sentry
   SENTRY_DSN: z
@@ -177,6 +178,7 @@ export const appConfig = registerAs('app', () => {
     },
     assemblyai: {
       apiKey: env.ASSEMBLYAI_API_KEY,
+      baseUrl: env.ASSEMBLYAI_BASE_URL,
     },
     sentry: {
       dsn: env.SENTRY_DSN,

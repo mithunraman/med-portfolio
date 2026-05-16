@@ -104,9 +104,7 @@ describe('SpecialtyRegistry', () => {
       '%s: every entry type should map to an existing template',
       (_name, config) => {
         for (const entryType of config.entryTypes) {
-          const templateId = config.entryTypeToTemplate[entryType.code];
-          expect(templateId).toBeDefined();
-          expect(config.templates[templateId]).toBeDefined();
+          expect(config.templates[entryType.templateId]).toBeDefined();
         }
       }
     );

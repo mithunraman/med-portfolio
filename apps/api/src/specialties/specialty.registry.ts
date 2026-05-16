@@ -34,15 +34,15 @@ export function isValidTrainingStage(specialty: Specialty, stageCode: string): b
 }
 
 export function getTemplateForEntryType(config: SpecialtyConfig, entryTypeCode: string) {
-  const templateId = config.entryTypeToTemplate[entryTypeCode];
-  if (!templateId) {
+  const entryType = config.entryTypes.find((e) => e.code === entryTypeCode);
+  if (!entryType) {
     throw new Error(
-      `No template mapping for entry type "${entryTypeCode}" in specialty "${config.name}"`
+      `Entry type "${entryTypeCode}" not found in specialty "${config.name}"`
     );
   }
-  const template = config.templates[templateId];
+  const template = config.templates[entryType.templateId];
   if (!template) {
-    throw new Error(`Template "${templateId}" not found in specialty "${config.name}"`);
+    throw new Error(`Template "${entryType.templateId}" not found in specialty "${config.name}"`);
   }
   return template;
 }

@@ -24,27 +24,36 @@ const RICH_THRESHOLD = 2;
 /* ------------------------------------------------------------------ */
 
 /**
- * Each assignment maps a sentence or closely related group of sentences
- * from the transcript to the ONE section it primarily belongs to.
+ * Each assignment maps a DISTINCT IDEA from the transcript to the ONE
+ * section it primarily belongs to.
+ *
+ * Restatements of the same idea (common with voice input) must be
+ * collapsed into a single assignment — they are NOT separate ideas.
  *
  * Assignments with isSubstantive=false are tangential mentions (e.g.
  * "I reflected on the risks" embedded in a management sentence) — they
  * are logged but do not count toward section coverage.
  */
 const contentAssignmentSchema = z.object({
-  evidence: z
+  idea: z
     .string()
-    .describe('A sentence or closely related group of sentences from the transcript'),
+    .describe(
+      'The distinct claim, observation, action, or reflection being made. ' +
+        'If the trainee restated the same point across multiple utterances ' +
+        '(common with voice input where users re-record or add detail), use the ' +
+        'MOST SPECIFIC phrasing they used. Restatements are NOT separate ideas — ' +
+        'collapse them into a single assignment.'
+    ),
   sectionId: z
     .string()
     .describe(
-      'The ONE section this content primarily belongs to. ' +
-        'Choose the single best fit — do NOT assign the same content to multiple sections.'
+      'The ONE section this idea primarily belongs to. ' +
+        'Choose the single best fit — do NOT assign the same idea to multiple sections.'
     ),
   isSubstantive: z
     .boolean()
     .describe(
-      'true if this content is a dedicated, meaningful statement about the section topic. ' +
+      'true if this idea is a dedicated, meaningful statement about the section topic. ' +
         'false if it is a passing mention embedded in content that primarily belongs elsewhere ' +
         '(e.g., "I reflected on the risks" inside a management action).'
     ),
@@ -54,8 +63,9 @@ const completenessResponseSchema = z.object({
   assignments: z
     .array(contentAssignmentSchema)
     .describe(
-      'Each distinct statement from the transcript assigned to its primary section. ' +
-        'Every piece of meaningful content should appear exactly once.'
+      'Each DISTINCT IDEA from the transcript assigned to its primary section. ' +
+        'Restatements of the same idea must be collapsed into one assignment — ' +
+        'they are not separate ideas.'
     ),
 });
 
@@ -78,19 +88,42 @@ const completenessPrompt = ChatPromptTemplate.fromMessages([
 
 ## Instructions
 
-Your task is to ASSIGN each piece of content in the transcript to the ONE section it best belongs to. This prevents content from being double-counted across sections.
+Your task is to identify each DISTINCT IDEA in the transcript and assign it to the ONE section it primarily belongs to. This prevents content from being double-counted across sections and prevents restatements from inflating coverage.
+
+### What counts as a "distinct idea"
+
+A distinct idea is a unique claim, observation, action, decision, or reflection. Restatements are NOT separate ideas.
+
+- Trainees often restate the same point across multiple utterances when using voice input — re-recording, adding detail, or emphasising. Collapse all restatements into ONE assignment, using the most specific phrasing the trainee used.
+- Adding detail to a prior point is restatement, not a new idea.
+- A genuinely new observation, action, decision, or reflection is a new idea.
+
+#### Example — collapse restatements
+
+Transcript:
+- "There was a bite wound."
+- "There was a cat bite wound over the hand."
+- "There was a cat bite wound over the right hand."
+
+Correct: ONE assignment to the presentation section, with idea = "There was a cat bite wound over the right hand." (the most specific phrasing).
+
+Wrong: three assignments. The trainee described ONE wound, not three.
 
 ### How to assign
 
 1. Read the full transcript carefully.
-2. Break it into sentences or closely related groups of sentences (2-3 sentences that make one point).
-3. For EACH piece of content, decide which ONE section it PRIMARILY belongs to.
-4. A piece of content can only be assigned to ONE section — choose the best fit.
-5. If a sentence contains elements of multiple sections (e.g. "I switched her medication because I reflected on the risks"), assign it to the section where it contributes most. In this example, the primary action is management — the reflection is a passing mention.
+2. Identify each DISTINCT IDEA. Collapse restatements into one.
+3. For EACH idea, decide which ONE section it PRIMARILY belongs to.
+4. An idea can only be assigned to ONE section — choose the best fit.
+5. If an idea contains elements of multiple sections (e.g. "I switched her medication because I reflected on the risks"), assign it to the section where it contributes most. In this example, the primary action is management — the reflection is a passing mention.
 6. Mark each assignment as substantive (true) or not (false):
-   - Substantive: the content is a dedicated, meaningful statement about that section's topic.
+   - Substantive: the idea is a dedicated, meaningful statement about that section's topic.
    - Not substantive: it is a brief or tangential mention embedded in content that primarily serves another section.
 7. Skip filler content that doesn't meaningfully belong to any section.
+
+### Common mistake to avoid
+
+Do NOT count restatements as separate ideas. Three sentences saying the same thing in different words describe ONE idea, not three. Sentence count is not a proxy for content depth.
 
 ### Section-specific guidance
 
@@ -262,7 +295,7 @@ export function createCheckCompletenessNode(deps: GraphDeps) {
       const tag = assessableIds.has(a.sectionId) ? '' : ' [IGNORED — not assessable]';
       logger.log(
         `[${cid}]   assign → ${a.sectionId} substantive=${a.isSubstantive}${tag} ` +
-          `"${a.evidence.slice(0, 80)}..."`
+          `"${a.idea.slice(0, 80)}..."`
       );
     }
 

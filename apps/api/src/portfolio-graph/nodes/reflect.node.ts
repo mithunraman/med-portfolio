@@ -88,15 +88,22 @@ Organise the transcript into these sections, in order. Return ALL sections — s
 5. Do NOT paraphrase or synthesise — preserve the trainee's voice.
 6. Do NOT expand brief statements into detailed paragraphs.
 7. Write in first person ("I"), matching the trainee's own voice.
+8. When the trainee restates the same point across multiple utterances (common with voice input where users re-record or add detail), keep ONE version using the most specific phrasing they used. Do not invent details — only choose between phrasings the trainee actually said. If they said "hand" in one message and "right hand" in another about the same event, prefer "right hand".
+
+## Output length
+
+Output length should reflect the number of DISTINCT IDEAS in the transcript, not the number of input sentences or messages. Three utterances saying the same thing should produce one sentence. Do not pad a section with restatements to make it look more substantive.
 
 ## What "lightly formatting" means — examples
 
 OK: Joining fragments ("the ECG was. normal sinus" → "The ECG was normal sinus rhythm.")
 OK: Fixing speech-to-text errors ("met four men" → "Metformin")
 OK: Adding paragraph breaks between distinct points within a section
+OK: Merging restatements — "There was a bite wound. / There was a cat bite wound over the hand. / There was a cat bite wound over the right hand." → "There was a cat bite wound over my right hand." (one idea, most specific phrasing)
 NOT OK: "I was a bit relieved" → "I experienced initial reassurance"
 NOT OK: Adding transition phrases the trainee didn't say
 NOT OK: "I learned a lot" → "This case deepened my understanding of..."
+NOT OK: Stacking near-duplicate sentences verbatim when they describe the same event
 
 ## Capability Annotations
 
@@ -142,6 +149,44 @@ function formatCapabilityBlock(
   if (capabilities.length === 0) return 'None identified.';
 
   return capabilities.map((c) => `- ${c.code} ${c.name}: ${c.reasoning}`).join('\n');
+}
+
+/**
+ * Jaccard token overlap between two strings, ignoring case and non-word chars.
+ * Used as a cheap "are these sentences near-duplicates" signal.
+ */
+function jaccardOverlap(a: string, b: string): number {
+  const tokenize = (s: string) => new Set(s.toLowerCase().match(/\b[a-z0-9]+\b/g) ?? []);
+  const A = tokenize(a);
+  const B = tokenize(b);
+  if (A.size === 0 || B.size === 0) return 0;
+  let intersection = 0;
+  for (const t of A) if (B.has(t)) intersection++;
+  const union = A.size + B.size - intersection;
+  return intersection / union;
+}
+
+const NEAR_DUPLICATE_THRESHOLD = 0.7;
+
+/**
+ * Returns the pair of sentences (i, j) that are near-duplicates, or null.
+ * Sentence splitting is best-effort — terminal punctuation only.
+ */
+function findNearDuplicateSentences(text: string): { a: string; b: string } | null {
+  const sentences = text
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (sentences.length < 2) return null;
+
+  for (let i = 0; i < sentences.length; i++) {
+    for (let j = i + 1; j < sentences.length; j++) {
+      if (jaccardOverlap(sentences[i], sentences[j]) >= NEAR_DUPLICATE_THRESHOLD) {
+        return { a: sentences[i], b: sentences[j] };
+      }
+    }
+  }
+  return null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -211,12 +256,22 @@ export function createReflectNode(deps: GraphDeps) {
       0
     );
 
-    // Log per-section detail for traceability
+    // Log per-section detail for traceability + flag near-duplicate sentences
+    // (a signal the LLM concatenated restatements instead of merging them).
     for (const s of response.sections) {
       const sectionWords = s.text.split(/\s+/).filter(Boolean).length;
       logger.log(
         `[${cid}]   section=${s.sectionId} covered=${s.covered} words=${sectionWords}`
       );
+      if (s.covered) {
+        const dup = findNearDuplicateSentences(s.text);
+        if (dup) {
+          logger.warn(
+            `[${cid}]   section=${s.sectionId} has near-duplicate sentences ` +
+              `(possible dedup failure): "${dup.a.slice(0, 60)}..." vs "${dup.b.slice(0, 60)}..."`
+          );
+        }
+      }
     }
     logger.log(
       `[${cid}] Reflection organised: ${coveredCount}/${response.sections.length} sections covered, ` +

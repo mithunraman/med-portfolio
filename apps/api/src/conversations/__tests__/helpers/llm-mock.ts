@@ -126,26 +126,26 @@ export function classifyResponse(
  * get a substantive assignment; uncovered sections get none.
  */
 export function completenessResponse(
-  sections: Array<{ sectionId: string; covered: boolean; depth?: 'rich' | 'adequate' | 'shallow'; evidence?: string }>
+  sections: Array<{ sectionId: string; covered: boolean; depth?: 'rich' | 'adequate' | 'shallow'; idea?: string }>
 ) {
-  const assignments: Array<{ evidence: string; sectionId: string; isSubstantive: boolean }> = [];
+  const assignments: Array<{ idea: string; sectionId: string; isSubstantive: boolean }> = [];
 
   for (const s of sections) {
     if (!s.covered) continue;
 
     const depth = s.depth ?? 'adequate';
-    const evidence = s.evidence ?? 'Evidence from transcript';
+    const idea = s.idea ?? 'Idea from transcript';
 
     if (depth === 'rich') {
       // Rich = 2+ substantive assignments
-      assignments.push({ evidence, sectionId: s.sectionId, isSubstantive: true });
-      assignments.push({ evidence: `Additional detail for ${s.sectionId}`, sectionId: s.sectionId, isSubstantive: true });
+      assignments.push({ idea, sectionId: s.sectionId, isSubstantive: true });
+      assignments.push({ idea: `Additional detail for ${s.sectionId}`, sectionId: s.sectionId, isSubstantive: true });
     } else if (depth === 'adequate') {
       // Adequate = 1 substantive assignment
-      assignments.push({ evidence, sectionId: s.sectionId, isSubstantive: true });
+      assignments.push({ idea, sectionId: s.sectionId, isSubstantive: true });
     } else {
       // Shallow = only a non-substantive (tangential) mention
-      assignments.push({ evidence, sectionId: s.sectionId, isSubstantive: false });
+      assignments.push({ idea, sectionId: s.sectionId, isSubstantive: false });
     }
   }
 

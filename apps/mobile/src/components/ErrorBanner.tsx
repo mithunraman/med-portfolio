@@ -1,24 +1,26 @@
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { memo } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
 
 interface ErrorBannerProps {
   message: string;
   onRetry?: () => void;
   icon?: keyof typeof Ionicons.glyphMap;
+  style?: StyleProp<ViewStyle>;
 }
 
 export const ErrorBanner = memo(function ErrorBanner({
   message,
   onRetry,
   icon = 'warning-outline',
+  style,
 }: ErrorBannerProps) {
   const { colors } = useTheme();
 
   return (
     <View
-      style={[styles.container, { backgroundColor: colors.error + '15' }]}
+      style={[styles.container, { backgroundColor: colors.error + '15' }, style]}
       accessibilityRole="alert"
     >
       <Ionicons name={icon} size={18} color={colors.error} style={styles.icon} />

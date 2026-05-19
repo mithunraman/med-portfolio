@@ -408,7 +408,7 @@ export default function HomeScreen() {
   const activeReviewPeriod = useAppSelector((state) => state.dashboard.activeReviewPeriod);
   const pdpGoalsDueSoon = useAppSelector(selectPdpGoalsDueSoon);
   const pdpGoalsDueTotal = useAppSelector(selectPdpGoalsDueTotal);
-  const dashboardLoading = useAppSelector((state) => state.dashboard.loading);
+  const dashboardLoading = useAppSelector((state) => state.dashboard.status === 'loading');
   const dashboardError = useAppSelector((state) => state.dashboard.error);
   const dashboardStale = useAppSelector((state) => state.dashboard.stale);
   const user = useAppSelector((state) => state.auth.user);

@@ -27,12 +27,17 @@ const appReducer = combineReducers({
 });
 
 /**
- * Root reducer that resets user-specific state on logout.
+ * Root reducer that resets user-specific state on session end.
  * Preserves app-level state (onboarding, network) that is initialized once on mount.
- * Auth slice handles its own reset (status: 'unauthenticated') via logout.fulfilled.
+ *
+ * Both `auth/logout/fulfilled` (explicit logout) and `auth/setUnauthenticated`
+ * (401 from API client) are session boundaries — without resetting on the latter,
+ * dashboard.error and other user-scoped slices leak across a 401 → re-login.
  */
+const SESSION_END_ACTIONS = new Set(['auth/logout/fulfilled', 'auth/setUnauthenticated']);
+
 const rootReducer: Reducer<ReturnType<typeof appReducer>, Action> = (state, action) => {
-  if (action.type === 'auth/logout/fulfilled') {
+  if (SESSION_END_ACTIONS.has(action.type)) {
     return appReducer(
       state
         ? {

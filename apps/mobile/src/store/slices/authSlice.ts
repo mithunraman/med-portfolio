@@ -36,6 +36,33 @@ function assignUserIfChanged(state: { user: AuthUser | null }, next: AuthUser): 
 }
 
 /**
+ * Quota counterpart to `shallowEqualUser`. Frequent header-driven `updateQuota`
+ * dispatches and every /init fulfill would otherwise churn `state.quota`'s
+ * reference, re-rendering every consumer.
+ */
+function shallowEqualQuota(a: QuotaStatus | null, b: QuotaStatus | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.shortWindow.used === b.shortWindow.used &&
+    a.shortWindow.limit === b.shortWindow.limit &&
+    a.shortWindow.resetsAt === b.shortWindow.resetsAt &&
+    a.weeklyWindow.used === b.weeklyWindow.used &&
+    a.weeklyWindow.limit === b.weeklyWindow.limit &&
+    a.weeklyWindow.resetsAt === b.weeklyWindow.resetsAt
+  );
+}
+
+function assignQuotaIfChanged(
+  state: { quota: QuotaStatus | null },
+  next: QuotaStatus | null
+): void {
+  if (!shallowEqualQuota(state.quota, next)) {
+    state.quota = next;
+  }
+}
+
+/**
  * Update the stored `user` field while preserving other StoredUserSession fields.
  * No-op if there's no existing session in SecureStore.
  */
@@ -85,8 +112,10 @@ const initialState: AuthState = {
 /**
  * Initialize auth state on app launch.
  * Restores session from local secure storage — no network call.
- * Token validity is verified on the first API request (e.g. dashboard fetch);
- * if the token was revoked, the global onUnauthorized handler redirects to login.
+ * Token validity is verified on the first API request (e.g. /init fetch from
+ * `_layout.tsx`); if the token was revoked, the global onUnauthorized handler
+ * redirects to login. Cold-launch network hydration is the root layout's job,
+ * not this thunk's.
  */
 export const initializeAuth = createAsyncThunk('auth/initialize', async () => {
   authLogger.debug('Initializing auth');
@@ -329,7 +358,7 @@ const authSlice = createSlice({
       state.user = null;
     },
     updateQuota(state, action: { payload: QuotaStatus }) {
-      state.quota = action.payload;
+      assignQuotaIfChanged(state, action.payload);
     },
   },
   extraReducers: (builder) => {
@@ -424,7 +453,7 @@ const authSlice = createSlice({
       // Sync user profile + quota from init endpoint
       .addCase(fetchInit.fulfilled, (state, action) => {
         assignUserIfChanged(state, action.payload.user);
-        state.quota = action.payload.quota;
+        assignQuotaIfChanged(state, action.payload.quota);
       })
 
       // Request Deletion

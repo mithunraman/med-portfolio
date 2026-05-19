@@ -20,6 +20,25 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('app.port', 3001);
 
+  // Trust N upstream proxy hops so `req.ip` resolves from X-Forwarded-For.
+  // Without this, audit fields (e.g. acknowledgement IP) capture the proxy's
+  // address rather than the client's behind any LB/CDN. Must match deployment
+  // topology — too-permissive (`true`) lets clients spoof IPs via X-Forwarded-For.
+  const trustProxyHops = configService.get<number>('app.trustProxyHops', 0);
+  if (trustProxyHops > 0) {
+    app.getHttpAdapter().getInstance().set('trust proxy', trustProxyHops);
+  }
+  // Surface the resolved value at boot so a deployed-behind-a-proxy misconfig
+  // is visible on the first deploy log rather than discovered later in audit
+  // data. Warn when production + 0 hops — the specific footgun the default invites.
+  if (configService.get<boolean>('app.isProduction') && trustProxyHops === 0) {
+    logger.warn(
+      'TRUST_PROXY_HOPS=0 in production — req.ip will reflect the immediate upstream (proxy/LB), not the real client. Audit IPs (e.g. acknowledgement IP) will be wrong if any proxy fronts this service.'
+    );
+  } else {
+    logger.log(`Trust proxy hops: ${trustProxyHops}`);
+  }
+
   // Security headers
   app.use(helmet());
 

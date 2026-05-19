@@ -11,3 +11,4 @@ export * from './review-period.dto';
 export * from './specialty.dto';
 export * from './version-policy.dto';
 export * from './notice.dto';
+export * from './acknowledgement.dto';

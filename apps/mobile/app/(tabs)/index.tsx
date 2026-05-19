@@ -23,7 +23,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { randomUUID } from 'expo-crypto';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   RefreshControl,
@@ -408,7 +408,7 @@ export default function HomeScreen() {
   const activeReviewPeriod = useAppSelector((state) => state.dashboard.activeReviewPeriod);
   const pdpGoalsDueSoon = useAppSelector(selectPdpGoalsDueSoon);
   const pdpGoalsDueTotal = useAppSelector(selectPdpGoalsDueTotal);
-  const dashboardLoading = useAppSelector((state) => state.dashboard.loading);
+  const dashboardLoading = useAppSelector((state) => state.dashboard.status === 'loading');
   const dashboardError = useAppSelector((state) => state.dashboard.error);
   const dashboardStale = useAppSelector((state) => state.dashboard.stale);
   const user = useAppSelector((state) => state.auth.user);
@@ -451,10 +451,6 @@ export default function HomeScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, [dispatch]);
-
-  useEffect(() => {
-    dispatch(fetchInit());
   }, [dispatch]);
 
   // Refetch dashboard when connectivity returns, only if data is missing or errored

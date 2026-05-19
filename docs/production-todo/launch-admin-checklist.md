@@ -23,48 +23,50 @@ All DPAs in this list are **auto-incorporated** into the vendor's Terms of Servi
 - [x] **Linode (Akamai) Customer DPA** — auto-incorporated via Akamai MPA accepted at signup. PDF archived in `compliance/dpas/`. *(Partner DPA at `partner-data-protection-agreement.pdf` is the wrong document — that's for channel resellers, not customers.)*
 - [x] **AssemblyAI DPA** — auto-incorporated via ToS, "deemed signed" per the DPA itself + EU SCCs. PDF captured via browser print and archived. Production code switched to EU endpoint (`api.eu.assemblyai.com`) so audio stays in the EU under adequacy.
 - [x] **MongoDB Atlas DPA** — auto-incorporated via Cloud Terms of Service for self-serve customers (confirmed by MongoDB Privacy Hub §2.1). PDF captured and archived. Cluster region: AWS `eu-west-1` (Ireland), covered by UK→EEA adequacy.
-- [~] **OpenAI DPA** — auto-incorporated via Services Agreement (effective 2026-01-01). PDF archived. **Half-complete:** the DPA itself is in place, but the **ZDR amendment + UK data residency request** is deferred pending one of the documented trigger criteria (NHS sales, 1000+ users, institutional funding, ICO inquiry, redaction-bypass feature). Today the API runs on the default US-region Project under UK IDTA + EU SCCs — legally adequate, but not the strongest posture. A low-effort probe email to `sales@openai.com` is optional.
+- [~] **OpenAI DPA** — auto-incorporated via Services Agreement (effective 2026-01-01). PDF archived. ZDR correspondence archived at `compliance/dpas/openai-zdr-correspondence-2026-05-12.pdf`. **Half-complete:** the DPA itself is in place, but the **ZDR amendment + UK data residency request** is deferred. ZDR was probed via `sales@openai.com` on 2026-05-12; OpenAI confirmed ZDR eligibility requires **$25,000/year minimum annual spend commitment** — out of reach pre-revenue. Today the API runs on the default US-region Project under UK IDTA + EU SCCs — legally adequate. Revisit when ARR + usage justify the $25k commit, or when one of the documented trigger criteria fires (NHS sales, 1000+ users, institutional funding, ICO inquiry, redaction-bypass feature).
 - [x] PDFs archived in `compliance/dpas/` with provenance notes in `compliance/dpas/README.md`
 - **Why:** UK GDPR Art. 28 mandates DPAs for any processor handling personal/health data — but signature is not the mechanism for any of our vendors; incorporation-by-reference via ToS is.
 - **Source:** `compliance-checklist.md` §1
 - **Status:** **Mostly complete.** Three of four vendors fully done. OpenAI DPA itself is done; ZDR + UK residency upgrade deferred with documented trigger criteria.
 
 ### 1.2 Write and host a Privacy Policy
-- [ ] Draft covering data collected, lawful basis, sub-processors, retention, user rights, PII redaction approach, DPO/contact
-- [ ] Host publicly (e.g. `yourapp.com/privacy`)
-- [ ] Replace mobile placeholder `Alert.alert('Privacy Policy', 'will be available soon')` with link/WebView
-- [ ] Link from App Store + Play Store listings
+- [x] Drafted — `apps/landing/privacy.html` (17 sections, Pattern B sub-processor disclosure, DPO statement, contextual-redaction wording, Children clause split legal vs product threshold)
+- [x] Companion Sub-processors page drafted — `apps/landing/sub-processors.html`
+- [ ] Host publicly (deploy landing site to `logdit.app/privacy` and `logdit.app/sub-processors`)
+- [ ] Replace mobile placeholder `Alert.alert('Privacy Policy', 'will be available soon')` with link/WebView pointing at hosted URL
+- [ ] Link from App Store listing (Play Store deferred per 2.2)
 - [ ] Version the document so acknowledgements can reference exact bytes shown
 - **Why:** App stores reject submissions without a live privacy policy; UK GDPR Art. 13–14 require disclosure.
 - **Source:** `docs/production-readiness-review.md` (Critical #4); `docs/gtm-launch-plan.md` Phase 0 #1
-- **Status:** Pending
+- **Status:** **Drafted, not yet hosted.** Hosting + mobile wire-up blocks App Store submission.
 
 ### 1.3 Write and host Terms of Service
-- [ ] Draft covering acceptable use, AI-content disclaimer, user responsibility to review drafts, RCGP alignment, liability limits
-- [ ] Host alongside privacy policy
-- [ ] Link from app + store listings
+- [x] Drafted — `apps/landing/terms.html` (18 sections, B2C-tuned: monetary liability cap removed, sublicensable content licence with sub-processor scope, indemnity dropped matching consumer-app norms, Apple-only App Store clause)
+- [ ] Host alongside privacy policy at `logdit.app/terms`
+- [ ] Link from app + Apple App Store listing
 - **Why:** App Store requirement; defines liability boundary for AI-generated portfolio content.
 - **Source:** `docs/gtm-launch-plan.md` Phase 0 #2; `docs/production-readiness-review.md` (Low #23)
-- **Status:** Pending
+- **Status:** **Drafted, not yet hosted.** P1 items (liability cap, revocable licence, indemnity) closed without solicitor review; intentional founder-stage trade-off recorded in commit history.
 
 ### 1.4 Register with the ICO as a data controller
 - [x] Submitted application at ico.org.uk on 2026-05-12 (Tier 1, £52, Software Development, admin@logdit.app)
-- [ ] Pay annual fee — payment confirmation pending
-- [ ] Archive registration certificate + reference number to `compliance/ico-registration.pdf`
-- [ ] Add ICO reference number to `compliance/company_details.md` and to the Privacy Policy footer (1.2)
-- [ ] Set calendar reminder for renewal: 2027-04-12 (one month before anniversary)
+- [x] Annual fee paid — ICO payment confirmation received 2026-05-12
+- [x] Archive registration certificate + reference number to `compliance/ico-registration.pdf`
+- [x] Add ICO reference number to `compliance/company_details.md` (Privacy Policy footer wire-up deferred to 1.2)
+- [x] Set calendar reminder for renewal: 2027-04-12 (one month before anniversary)
 - **Why:** Mandatory for any UK business processing personal data. Non-registration fine up to £4,000 and aggravates any downstream enforcement action.
 - **Source:** `docs/gtm-launch-plan.md` Phase 0 #5; `docs/production-todo/compliance-implementation-plan.md` Phase 1.1
-- **Status:** **Submitted — awaiting confirmation.** Online registrations are usually confirmed within a few working days.
+- **Status:** **Done.** ICO reference will also need to surface in the Privacy Policy footer when 1.2 is drafted.
 
 ### 1.5 Complete a Data Protection Impact Assessment (DPIA)
-- [ ] Use ICO DPIA template
-- [ ] Document data flow (audio → AssemblyAI → OpenAI → MongoDB)
-- [ ] Document lawful basis, risk assessment, mitigations
-- [ ] Store as `compliance/dpia_v1.md`
+- [x] DPIA drafted — `docs/privacy/DPIA_CoreReflectionPipeline_2026-05-17.md`
+- [x] Data flow documented (audio → AssemblyAI → redaction → OpenAI → MongoDB)
+- [x] Lawful basis, risk assessment, mitigations covered
+- [x] Companion TIA (Transfer Impact Assessment) at `docs/privacy/TIA_2026-05-17.md` covering all sub-processor transfers under EDPB Recommendations 01/2020
+- [x] Companion DPA review for OpenAI at `docs/privacy/DPA_OpenAI_2026-05-17.md`
 - **Why:** UK GDPR Art. 35 makes a DPIA mandatory when processing special-category health data with AI.
 - **Source:** `compliance-checklist.md` §8; `docs/gtm-launch-plan.md` Phase 0 #7
-- **Status:** Pending
+- **Status:** **Done.** DPIA + TIA + OpenAI DPA review all drafted 2026-05-17. Marked "pending UK solicitor review" inside the documents — given founder solicitor-budget constraint, treat as the authoritative record for now and re-review when revenue supports legal counsel. Action items inside the DPIA (e.g. policy/code divergence fixes) are tracked separately.
 
 ### 1.6 Maintain a Record of Processing Activities (ROPA)
 - [ ] Fill ICO ROPA Excel template
@@ -87,11 +89,11 @@ All DPAs in this list are **auto-incorporated** into the vendor's Terms of Servi
 
 ### 1.8 UK Limited Company registration
 - [x] Filed at Companies House — **approved 2026-05-12**, company number received
-- [ ] Archive Certificate of Incorporation as `compliance/companies_house_certificate.pdf`
-- [ ] Record company number, registered office, and incorporation date in `compliance/company_details.md`
+- [x] Archive Certificate of Incorporation as `compliance/companies_house_certificate.pdf`
+- [x] Record company number, registered office, and incorporation date in `compliance/company_details.md`
 - **Why:** Limits personal liability for special-category data processing; expected by ICO, app stores, insurers.
 - **Source:** `docs/production-todo/compliance-implementation-plan.md` Phase 1.2
-- **Status:** **Incorporated.** Remaining: archive the certificate PDF and record the company details file. Unblocks ICO registration (1.4), insurance quotes (1.9), and Apple/Google Developer enrollments (2.1/2.2) being filed under the Ltd rather than personal.
+- **Status:** **Done.** Unblocks insurance quotes (1.9) and Apple/Google Developer enrollments (2.1/2.2) being filed under the Ltd rather than personal.
 
 ### 1.9 Purchase cyber liability / professional indemnity insurance
 - [ ] Quote from Hiscox
@@ -100,27 +102,26 @@ All DPAs in this list are **auto-incorporated** into the vendor's Terms of Servi
 - [ ] Purchase policy (target £1M cover, ~£300–600/yr)
 - **Why:** Medical data + AI exposure. Covers breach legal costs and harm claims.
 - **Source:** `docs/production-todo/compliance-implementation-plan.md` Phase 1.6 / 4.5
-- **Status:** Pending
+- **Status:** **Deferred to ~1,000-user trigger.** Pre-revenue / pre-scale, premium spend outweighs risk exposure. Reassess at 1,000 active users, first NHS/institutional sale, or first paid tier launch — whichever fires first.
 
 ---
 
 ## 2. App Store / Marketplace Setup (LAUNCH-BLOCKING)
 
 ### 2.1 Create Apple Developer account
-- [ ] Enroll at developer.apple.com ($99/yr)
-- [ ] Complete identity verification
-- [ ] Set up tax + banking forms (W-8BEN-E if non-US)
-- [ ] Register under Ltd company, not personal Apple ID
+- [x] Enrolled at developer.apple.com ($99/yr) — waiting for Apple identity-verification confirmation
+- [ ] Set up tax + banking forms (W-8BEN-E) — do once enrolment is confirmed
+- [x] Registered under LOGDIT LTD, not personal Apple ID
 - **Why:** Required for App Store submission; identity check can take days.
 - **Source:** `docs/production-todo/admin-checklist.md`
-- **Status:** Pending
+- **Status:** **Enrolment submitted, awaiting Apple confirmation.** Tax/banking forms remain after approval.
 
 ### 2.2 Create Google Play Developer account
 - [ ] Register at play.google.com/console ($25 one-time)
 - [ ] Complete identity + tax + banking setup
 - **Why:** Required for Play Store submission.
 - **Source:** `docs/production-todo/admin-checklist.md`
-- **Status:** Pending
+- **Status:** **Deferred — iOS-only launch.** Revisit when expanding to Android.
 
 ### 2.3 Prepare store listing assets
 - [ ] 4–5 screenshots (voice input, structured entry, coverage dashboard, etc.)
@@ -169,7 +170,7 @@ All DPAs in this list are **auto-incorporated** into the vendor's Terms of Servi
 - [ ] Obtain API key + hand off to engineering
 - **Why:** OTP login depends on deliverable email. Backend code exists; account does not.
 - **Source:** `docs/production-todo/admin-checklist.md`; `docs/production-todo/launch-audit/findings.md` (Critical #13)
-- **Status:** Pending (admin side)
+- **Status:** **Deferred to ~1,000-user trigger.** Interim: OTP/email sent manually via code path. Provision a real ESP before scale reveals deliverability/reputation issues — and before manual sending becomes a support bottleneck or a single point of failure on logins.
 
 ### 3.4 Build a simple landing page
 - [ ] Hero with demo video
@@ -316,11 +317,11 @@ These are not currently tracked in source docs but should be considered before l
 
 | Bucket | Items | Status |
 |--------|-------|--------|
-| Legal & Compliance | 9 | 1.1 done; 1.4 submitted (awaiting confirmation); 1.8 incorporated (cert/details file pending); rest pending |
-| App Store Setup | 4 | All pending |
-| Business Ops | 4 | 3.1 done; 3.2 mailbox + placeholder swap done (monitoring owner + SLA pending); 3.3/3.4 pending |
+| Legal & Compliance | 9 | 1.1 done; 1.2 drafted (hosting pending); 1.3 drafted (hosting pending); 1.4 done; 1.5 done (DPIA + TIA + OpenAI DPA review); 1.8 done; 1.9 deferred (1000-user trigger); 1.6/1.7 pending |
+| App Store Setup | 4 | 2.1 enrolment submitted (awaiting Apple); 2.2 deferred (iOS-only launch); 2.3/2.4 pending |
+| Business Ops | 4 | 3.1 done; 3.2 mailbox + placeholder swap done (monitoring owner + SLA pending); 3.3 deferred (1000-user trigger); 3.4 pending |
 | Support & Launch Readiness | 3 | All pending |
 | Billing / Payments | 1 | Pending (post-MVP) |
 | Likely Missing | 13 | To be triaged |
 
-**~15 items block public launch.** Realistic timeline: 6–8 weeks if compliance work starts immediately and beta recruitment begins in parallel.
+**~11 items block public launch** (revised down from ~15 as Privacy Policy + ToS + DPIA + TIA + OpenAI DPA review are now drafted). Remaining legal-track blockers: ROPA (1.6), Incident Response Plan (1.7), and hosting/wire-up of the drafted policy + ToS (1.2/1.3 tail tasks).

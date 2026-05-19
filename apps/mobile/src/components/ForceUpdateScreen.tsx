@@ -1,7 +1,7 @@
 import type { UpdatePolicy } from '@acme/shared';
 import { useTheme } from '@/theme';
+import { openSystemLink } from '@/utils/external-link';
 import { Ionicons } from '@expo/vector-icons';
-import * as Linking from 'expo-linking';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -14,7 +14,7 @@ export function ForceUpdateScreen({ updatePolicy }: Props) {
   const insets = useSafeAreaInsets();
 
   const handleUpdate = () => {
-    Linking.openURL(updatePolicy.storeUrl);
+    openSystemLink(updatePolicy.storeUrl);
   };
 
   return (

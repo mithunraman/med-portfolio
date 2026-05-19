@@ -1,5 +1,5 @@
 import { setOnQuotaUpdate, setOnUnauthorized } from '@/api/client';
-import { ErrorBoundary, LoadingProvider } from '@/components';
+import { Button, ErrorBoundary, LoadingProvider } from '@/components';
 import { ActiveBanner } from '@/components/ActiveBanner';
 import { ForceUpdateScreen } from '@/components/ForceUpdateScreen';
 import { NoticeModal } from '@/components/NoticeModal';
@@ -7,16 +7,22 @@ import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useBackgroundStaleTimer } from '@/hooks/useBackgroundStaleTimer';
 import { useNetworkListener } from '@/hooks/useNetworkListener';
 import {
+  fetchInit,
   initializeAuth,
   loadDismissedUpdateVersion,
   loadOnboardingState,
   selectHasMandatoryUpdate,
+  selectInitError,
+  selectInitEverLoaded,
+  selectInitLoading,
+  selectNeedsAcknowledgement,
   selectUpdatePolicy,
   setUnauthenticated,
   store,
   updateQuota,
 } from '@/store';
 import { ThemeProvider, useTheme } from '@/theme';
+import { decideOnboardingRoute } from '@/utils/routing/decide-onboarding-route';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 import * as Sentry from '@sentry/react-native';
 import * as Linking from 'expo-linking';
@@ -24,7 +30,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider as ReduxProvider } from 'react-redux';
@@ -32,6 +38,9 @@ import { Provider as ReduxProvider } from 'react-redux';
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
   environment: __DEV__ ? 'development' : 'production',
+
+  // Explicit (default is also false); matches the API config and our published privacy notice.
+  sendDefaultPii: false,
 
   // Sample 10% of transactions in production, 100% in dev
   tracesSampleRate: __DEV__ ? 1.0 : 1,
@@ -55,6 +64,22 @@ function LoadingScreen() {
   );
 }
 
+function InitErrorScreen({ onRetry, errorDetail }: { onRetry: () => void; errorDetail?: string | null }) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.errorScreen, { backgroundColor: colors.background }]}>
+      <Text style={[styles.errorTitle, { color: colors.text }]}>Couldn't load your data</Text>
+      <Text style={[styles.errorBody, { color: colors.textSecondary }]}>
+        Check your connection and try again.
+      </Text>
+      {__DEV__ && errorDetail ? (
+        <Text style={[styles.errorDetail, { color: colors.textSecondary }]}>{errorDetail}</Text>
+      ) : null}
+      <Button label="Retry" onPress={onRetry} style={styles.retryButton} />
+    </View>
+  );
+}
+
 function RootLayoutNav() {
   const router = useRouter();
   const segments = useSegments();
@@ -66,6 +91,10 @@ function RootLayoutNav() {
   const onboardingInitialized = useAppSelector((state) => state.onboarding.isInitialized);
   const updatePolicy = useAppSelector(selectUpdatePolicy);
   const hasMandatoryUpdate = useAppSelector(selectHasMandatoryUpdate);
+  const initEverLoaded = useAppSelector(selectInitEverLoaded);
+  const initLoading = useAppSelector(selectInitLoading);
+  const initError = useAppSelector(selectInitError);
+  const needsAck = useAppSelector(selectNeedsAcknowledgement);
 
   // Subscribe to network state changes
   useNetworkListener();
@@ -107,6 +136,15 @@ function RootLayoutNav() {
 
   const isLoading = authStatus === 'idle' || authStatus === 'loading' || !onboardingInitialized;
   const isLoggedIn = authStatus === 'authenticated' || authStatus === 'guest';
+
+  // Hoist /init dispatch into the root layout so the auth flow can read it
+  // before any post-login screen mounts. Auth thunks no longer fetch init
+  // themselves — see authSlice docs.
+  useEffect(() => {
+    if (isLoggedIn && !initEverLoaded && !initLoading && !initError) {
+      dispatch(fetchInit());
+    }
+  }, [isLoggedIn, initEverLoaded, initLoading, initError, dispatch]);
 
   // Handle deep linking
   useEffect(() => {
@@ -161,29 +199,35 @@ function RootLayoutNav() {
     }
   }, [isLoading]);
 
-  // Handle auth-based routing
-  const needsSpecialty = isLoggedIn && user && !user.specialty;
-
+  // Onboarding is a sequence of ordered gates over real data, not a state
+  // machine over a progress field. Routing logic lives in decideOnboardingRoute
+  // — pure function, unit-testable, each gate tests one condition. Screens
+  // update state and refresh /init — they do not navigate forward themselves.
   useEffect(() => {
     if (isLoading) return;
+    if (isLoggedIn && !initEverLoaded) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
-    const onSpecialtyScreen = segments[1] === 'select-specialty' || segments[1] === 'select-stage';
-
-    if (isLoggedIn && inAuthGroup && !needsSpecialty) {
-      // Logged in with specialty set — go to main app
-      router.replace('/(tabs)');
-    } else if (isLoggedIn && needsSpecialty && !onSpecialtyScreen) {
-      // Logged in but no specialty — go to specialty selection
-      router.replace('/(auth)/select-specialty');
-    } else if (!isLoggedIn && !inAuthGroup) {
-      // Not logged in — go to auth
-      router.replace('/(auth)/intro');
+    const decision = decideOnboardingRoute({
+      isLoggedIn,
+      needsAck,
+      hasSpecialty: user != null && user.specialty != null,
+      segments: segments as unknown as string[],
+    });
+    if (decision.kind === 'redirect') {
+      router.replace(decision.to);
     }
-  }, [isLoggedIn, needsSpecialty, segments, isLoading, router]);
+  }, [isLoading, isLoggedIn, initEverLoaded, needsAck, user, segments, router]);
 
-  if (isLoading) {
+  if (isLoading || (isLoggedIn && !initEverLoaded && !initError)) {
     return <LoadingScreen />;
+  }
+
+  // /init failed and the user has no way to recover from the loading state
+  // without an explicit retry. Bypasses the effect's `!initError` guard;
+  // `fetchInit.pending` resets `error=null`/`status='loading'`, restoring
+  // the normal flow.
+  if (isLoggedIn && initError) {
+    return <InitErrorScreen onRetry={() => dispatch(fetchInit())} errorDetail={initError} />;
   }
 
   if (hasMandatoryUpdate && updatePolicy) {
@@ -246,5 +290,32 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  errorScreen: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  errorBody: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  errorDetail: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 12,
+    opacity: 0.7,
+  },
+  retryButton: {
+    marginTop: 24,
+    paddingHorizontal: 32,
   },
 });

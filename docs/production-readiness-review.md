@@ -72,6 +72,13 @@
 - **Fix:** Replace with actual support email, or integrate a feedback form / link to a support portal.
 - **Impact:** User trust and support capability.
 
+### 25. Reflect node output is free-form and returned to client (prompt-leak channel)
+
+- **What's missing:** The reflect node ([apps/api/src/portfolio-graph/nodes/reflect.node.ts](../apps/api/src/portfolio-graph/nodes/reflect.node.ts)) produces `sections[].text` as an unbounded `z.string()` with `maxTokens` proportional to the transcript. That output is persisted to `Artefact.reflection` and returned verbatim by [apps/api/src/artefacts/mappers/artefact.mapper.ts:43](../apps/api/src/artefacts/mappers/artefact.mapper.ts#L43) on `GET /api/artefacts/:id`. The only defense is a single in-prompt instruction telling the model not to reveal its system prompt.
+- **Why it matters:** Of the 8 LLM call sites in the API, reflect is the only one whose free-form output reaches the client. A successful prompt-injection in the user transcript could exfiltrate the system prompt (giving an attacker recon for sharper attacks on the rest of the pipeline) or inject fabricated/harmful content into what the trainee sees as their own clinical reflection. Other nodes (classify, tag-capabilities, completeness) are protected structurally because their schemas only emit enums/booleans/scores or keep free-form reasoning in graph state.
+- **Fix:** Add a post-LLM validator in the reflect node (around [reflect.node.ts:253-280](../apps/api/src/portfolio-graph/nodes/reflect.node.ts#L253-L280) where sections are already iterated for logging) that rejects or scrubs any section whose text contains literal markers from the system prompt ("You are a medical portfolio formatting assistant", "Formatting Rules", "Security", etc.) or has high Jaccard overlap with the system prompt body. The existing `jaccardOverlap` helper at [reflect.node.ts:158-167](../apps/api/src/portfolio-graph/nodes/reflect.node.ts#L158-L167) can be reused.
+- **Impact:** Medical-record integrity and prompt confidentiality. Closes the literal-echo class of jailbreak.
+
 ---
 
 ## MEDIUM (Quality / polish issues)
@@ -188,7 +195,7 @@ Since the initial review, **11 of 18 open items have been fixed/removed** and **
 | Priority | Count | Items |
 |----------|-------|-------|
 | Critical | 2 | #3 Deployment infrastructure, #4 Privacy Policy |
-| High | 1 | #9 Help & Feedback placeholder email |
+| High | 2 | #9 Help & Feedback placeholder email, #25 Reflect node prompt-leak channel |
 | Medium | 0 | — |
 | Low | 2 | #20 Deep linking, #23 Terms of Service |
 

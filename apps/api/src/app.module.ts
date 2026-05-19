@@ -8,6 +8,7 @@ import { SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { randomUUID } from 'crypto';
 import { LoggerModule } from 'nestjs-pino';
 import { AccountCleanupModule } from './account-cleanup';
+import { AcknowledgementsModule } from './acknowledgements';
 import { AnalysisRunsModule } from './analysis-runs';
 import { ArtefactsModule } from './artefacts/artefacts.module';
 import { AuthModule } from './auth/auth.module';
@@ -92,6 +93,7 @@ import { VersionPolicyModule } from './version-policy';
     SpecialtiesModule,
     VersionPolicyModule,
     NoticesModule,
+    AcknowledgementsModule,
     HealthModule,
   ],
   providers: [

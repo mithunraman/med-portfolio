@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { initAcknowledgementSchema } from './acknowledgement.dto';
 import { AuthUserSchema } from './auth.dto';
 import { DashboardResponseSchema } from './dashboard.dto';
 import { AppNoticeSchema } from './notice.dto';
@@ -11,6 +12,7 @@ export const InitResponseSchema = z.object({
   quota: QuotaStatusSchema.nullable(),
   updatePolicy: UpdatePolicySchema.nullable(),
   notices: z.array(AppNoticeSchema),
+  acknowledgement: initAcknowledgementSchema,
 });
 
 export type InitResponse = z.infer<typeof InitResponseSchema>;

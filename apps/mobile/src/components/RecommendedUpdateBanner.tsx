@@ -2,9 +2,9 @@ import { SEVERITY_COLORS } from '@/constants/notices';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useBannerAnimation } from '@/hooks/useBannerAnimation';
 import { dismissRecommendedUpdate, selectRecommendedUpdateBannerVisible } from '@/store';
+import { openSystemLink } from '@/utils/external-link';
 import { NoticeSeverity, type UpdatePolicy } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
-import * as Linking from 'expo-linking';
 import { Animated, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { RECOMMENDED_UPDATE_BANNER_HEIGHT } from './bannerMetrics';
 
@@ -28,7 +28,7 @@ export function RecommendedUpdateBanner({ updatePolicy }: Props) {
   };
 
   const handleUpdate = () => {
-    Linking.openURL(storeUrl);
+    openSystemLink(storeUrl);
   };
 
   return (

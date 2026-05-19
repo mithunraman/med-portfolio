@@ -1,4 +1,5 @@
 export { default as noticesReducer } from './slice';
+export { acknowledgementSatisfied } from './slice';
 export {
   dismissNotice,
   dismissRecommendedUpdate,
@@ -10,4 +11,6 @@ export {
   selectRecommendedUpdateBannerVisible,
   selectBannerNotice,
   selectModalNotice,
+  selectAcknowledgement,
+  selectNeedsAcknowledgement,
 } from './selectors';

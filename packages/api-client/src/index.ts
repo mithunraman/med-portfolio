@@ -11,6 +11,7 @@ import { ReviewPeriodsClient } from './clients/review-periods.client';
 import { QuotaClient } from './clients/quota.client';
 import { SpecialtiesClient } from './clients/specialties.client';
 import { NoticesClient } from './clients/notices.client';
+import { AcknowledgementsClient } from './clients/acknowledgements.client';
 
 // Re-export types and adapters
 export * from './adapters/types';
@@ -37,6 +38,7 @@ export function createApiClient(config: ApiClientConfig) {
     quota: new QuotaClient(baseClient),
     specialties: new SpecialtiesClient(baseClient),
     notices: new NoticesClient(baseClient),
+    acknowledgements: new AcknowledgementsClient(baseClient),
   };
 }
 

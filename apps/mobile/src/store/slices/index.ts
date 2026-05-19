@@ -83,7 +83,16 @@ export type { DeliveryStatus, OptimisticMessage, RenderableMessage } from './mes
 export { loadOnboardingState } from './onboardingSlice';
 
 // ── Dashboard ──
-export { fetchInit, clearDashboard, markDashboardStale } from './dashboard';
+export {
+  fetchInit,
+  clearDashboard,
+  markDashboardStale,
+  selectInitStatus,
+  selectInitLoaded,
+  selectInitEverLoaded,
+  selectInitLoading,
+  selectInitError,
+} from './dashboard';
 
 // ── PDP Goals ──
 export {
@@ -124,6 +133,7 @@ export { setNetworkStatus, setBannerVisible, selectIsOffline, selectBannerVisibl
 
 // ── Notices ──
 export {
+  acknowledgementSatisfied,
   dismissNotice,
   dismissRecommendedUpdate,
   loadDismissedUpdateVersion,
@@ -132,4 +142,6 @@ export {
   selectRecommendedUpdateBannerVisible,
   selectBannerNotice,
   selectModalNotice,
+  selectAcknowledgement,
+  selectNeedsAcknowledgement,
 } from './notices';

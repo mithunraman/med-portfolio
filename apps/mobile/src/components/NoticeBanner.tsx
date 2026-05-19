@@ -3,10 +3,10 @@ import { useNoticeDismiss } from '@/hooks/useNoticeDismiss';
 import { selectBannerNotice } from '@/store';
 import { SEVERITY_COLORS } from '@/constants/notices';
 import { useTheme } from '@/theme';
+import { openSystemLink } from '@/utils/external-link';
 import type { AppNotice } from '@acme/shared';
 import { NoticeSeverity } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
-import * as Linking from 'expo-linking';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export function NoticeBanner() {
@@ -28,7 +28,7 @@ function NoticeBannerContent({ notice }: { notice: AppNotice }) {
 
   const handleAction = () => {
     if (notice.actionUrl) {
-      Linking.openURL(notice.actionUrl);
+      openSystemLink(notice.actionUrl);
     }
     if (dismissOnAction) {
       dismiss();

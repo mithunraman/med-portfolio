@@ -109,6 +109,17 @@ export const envSchema = z.object({
     .transform((val) => parseInt(val, 10))
     .pipe(z.number().int().min(1).max(60))
     .default('10'),
+
+  // Reverse-proxy hop count. Determines how many proxy hops Express trusts
+  // when resolving `req.ip` from X-Forwarded-For. 0 = no proxy (dev/bare).
+  // Set to 1 behind Render/ALB; 2 if Cloudflare fronts another proxy. Audit
+  // fields (acknowledgement IP, rate-limit IP) rely on this being correct
+  // for the deployment topology.
+  TRUST_PROXY_HOPS: z
+    .string()
+    .default('0')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().int().min(0).max(10)),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
@@ -191,6 +202,7 @@ export const appConfig = registerAs('app', () => {
       from: env.SMTP_FROM,
     },
     allowedOrigins: env.ALLOWED_ORIGINS,
+    trustProxyHops: env.TRUST_PROXY_HOPS,
     otp: {
       expiryMinutes: env.OTP_EXPIRY_MINUTES,
       maxAttempts: env.OTP_MAX_ATTEMPTS,

@@ -15,6 +15,7 @@ export default function AuthLayout() {
       <Stack.Screen name="intro" />
       <Stack.Screen name="welcome" />
       <Stack.Screen name="login" />
+      <Stack.Screen name="notice-and-ack" />
       <Stack.Screen name="select-specialty" />
       <Stack.Screen name="select-stage" />
     </Stack>

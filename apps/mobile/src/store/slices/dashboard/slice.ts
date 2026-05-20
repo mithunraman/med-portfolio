@@ -24,6 +24,8 @@ function isDashboardInvalidatingAction(actionType: string): boolean {
   return DASHBOARD_INVALIDATING_PREFIXES.some((prefix) => actionType === `${prefix}/fulfilled`);
 }
 
+export type InitStatus = 'idle' | 'loading' | 'ready' | 'error';
+
 export interface DashboardState {
   /** Recent entries — normalized: only IDs stored here, entities in artefacts slice. */
   recentEntryIds: string[] | null;
@@ -33,7 +35,10 @@ export interface DashboardState {
   pdpGoalsDueTotal: number;
   /** Active review period — still stored as full object (future normalization phase). */
   activeReviewPeriod: ActiveReviewPeriodSummary | null;
-  loading: boolean;
+  // Single source of truth for the /init thunk lifecycle. `ready` means
+  // fetchInit has fulfilled at least once. Replaces the prior split of
+  // `loading: boolean` here + `initLoaded: boolean` on the notices slice.
+  status: InitStatus;
   error: string | null;
   stale: boolean;
 }
@@ -44,7 +49,7 @@ const initialState: DashboardState = {
   pdpGoalsDueIds: null,
   pdpGoalsDueTotal: 0,
   activeReviewPeriod: null,
-  loading: false,
+  status: 'idle',
   error: null,
   stale: false,
 };
@@ -68,11 +73,11 @@ const dashboardSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchInit.pending, (state) => {
-        state.loading = true;
+        state.status = 'loading';
         state.error = null;
       })
       .addCase(fetchInit.fulfilled, (state, action) => {
-        state.loading = false;
+        state.status = 'ready';
         const dashboard = action.payload.dashboard;
         if (dashboard) {
           state.recentEntryIds = dashboard.recentEntries.items.map((a) => a.id);
@@ -90,7 +95,7 @@ const dashboardSlice = createSlice({
         state.stale = false;
       })
       .addCase(fetchInit.rejected, (state, action) => {
-        state.loading = false;
+        state.status = 'error';
         state.error = action.payload as string;
       })
       .addMatcher(

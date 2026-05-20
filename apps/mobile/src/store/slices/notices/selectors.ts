@@ -30,3 +30,7 @@ export const selectBannerNotice = createSelector(selectNotices, (notices) =>
 export const selectModalNotice = createSelector(selectNotices, (notices) =>
   notices.find((n) => n.type === NoticeType.MODAL) ?? null
 );
+
+export const selectAcknowledgement = (state: RootState) => state.notices.acknowledgement;
+export const selectNeedsAcknowledgement = (state: RootState) =>
+  state.notices.acknowledgement?.needs === true;

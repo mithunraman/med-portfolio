@@ -1,5 +1,5 @@
-import { EmptyState, StatusPill } from '@/components';
 import type { StatusVariant } from '@/components';
+import { EmptyState, StatusPill } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { fetchReviewPeriods, selectAllReviewPeriods } from '@/store';
 import { useTheme } from '@/theme';
@@ -31,7 +31,10 @@ function formatDate(isoDate: string): string {
   return `${day} ${month} ${year}`;
 }
 
-function getReviewPeriodStatusDisplay(status: ReviewPeriodStatus): { label: string; variant: StatusVariant } {
+function getReviewPeriodStatusDisplay(status: ReviewPeriodStatus): {
+  label: string;
+  variant: StatusVariant;
+} {
   switch (status) {
     case ReviewPeriodStatus.ACTIVE:
       return { label: 'Active', variant: 'success' };
@@ -50,13 +53,7 @@ const STATUS_FILTERS: { label: string; value: ReviewPeriodStatus | null }[] = [
 
 // ── List Item ────────────────────────────────────────────────────────────────
 
-function ReviewPeriodListItem({
-  item,
-  onPress,
-}: {
-  item: ReviewPeriod;
-  onPress: () => void;
-}) {
+function ReviewPeriodListItem({ item, onPress }: { item: ReviewPeriod; onPress: () => void }) {
   const { colors } = useTheme();
   const statusDisplay = getReviewPeriodStatusDisplay(item.status);
 
@@ -194,7 +191,9 @@ export default function ReviewPeriodListScreen() {
       ) : filteredPeriods.length === 0 ? (
         <EmptyState
           icon="calendar-outline"
-          title={activeFilter !== null ? 'No review periods with this status' : 'No review periods yet'}
+          title={
+            activeFilter !== null ? 'No review periods with this status' : 'No review periods yet'
+          }
           description={
             activeFilter !== null
               ? 'Try a different filter.'

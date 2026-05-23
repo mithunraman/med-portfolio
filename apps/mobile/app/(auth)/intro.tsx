@@ -57,7 +57,7 @@ const SLIDES: Slide[] = [
   {
     id: '4',
     title: 'Get Started',
-    description: 'Create an account or try it first \u2014 your entries are saved either way.',
+    description: 'Create an account or try it first - your entries are saved either way.',
     icon: 'rocket-outline',
   },
 ];

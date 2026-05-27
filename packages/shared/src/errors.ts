@@ -36,3 +36,9 @@ export class ForbiddenError extends AppError {
     this.name = 'ForbiddenError';
   }
 }
+
+/** Clients should branch on these literals rather than HTTP status or message text. */
+export enum QuotaErrorCode {
+  GUEST_ARTEFACT_LIMIT_REACHED = 'GUEST_ARTEFACT_LIMIT_REACHED',
+  QUOTA_EXCEEDED = 'QUOTA_EXCEEDED',
+}

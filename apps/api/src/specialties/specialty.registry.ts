@@ -5,8 +5,8 @@ import { PSYCHIATRY_SPECIALTY_CONFIG } from './psychiatry';
 
 const SPECIALTY_CONFIGS: Partial<Record<Specialty, SpecialtyRegistryEntry>> = {
   [Specialty.GP]: { config: GP_SPECIALTY_CONFIG, isActive: true },
-  [Specialty.INTERNAL_MEDICINE]: { config: IM_SPECIALTY_CONFIG, isActive: true },
-  [Specialty.PSYCHIATRY]: { config: PSYCHIATRY_SPECIALTY_CONFIG, isActive: true },
+  [Specialty.INTERNAL_MEDICINE]: { config: IM_SPECIALTY_CONFIG, isActive: false },
+  [Specialty.PSYCHIATRY]: { config: PSYCHIATRY_SPECIALTY_CONFIG, isActive: false },
 };
 
 export function getSpecialtyConfig(specialty: Specialty): SpecialtyConfig {
@@ -36,9 +36,7 @@ export function isValidTrainingStage(specialty: Specialty, stageCode: string): b
 export function getTemplateForEntryType(config: SpecialtyConfig, entryTypeCode: string) {
   const entryType = config.entryTypes.find((e) => e.code === entryTypeCode);
   if (!entryType) {
-    throw new Error(
-      `Entry type "${entryTypeCode}" not found in specialty "${config.name}"`
-    );
+    throw new Error(`Entry type "${entryTypeCode}" not found in specialty "${config.name}"`);
   }
   const template = config.templates[entryType.templateId];
   if (!template) {

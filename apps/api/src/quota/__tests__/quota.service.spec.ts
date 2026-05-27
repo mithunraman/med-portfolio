@@ -1,4 +1,4 @@
-import { UserRole } from '@acme/shared';
+import { QuotaErrorCode, UserRole } from '@acme/shared';
 import { Types } from 'mongoose';
 import { ok } from '../../common/utils/result.util';
 import { quotaPlans } from '../../config/quota.config';
@@ -58,7 +58,7 @@ describe('QuotaService', () => {
         fail('Should have thrown');
       } catch (error: any) {
         expect(error.status).toBe(429);
-        expect(error.response.code).toBe('QUOTA_EXCEEDED');
+        expect(error.response.code).toBe(QuotaErrorCode.QUOTA_EXCEEDED);
         expect(error.response.retryAfter).toBeGreaterThan(0);
         expect(error.response.quota.shortWindow.used).toBe(userPlan.shortWindow);
       }
@@ -75,7 +75,7 @@ describe('QuotaService', () => {
         fail('Should have thrown');
       } catch (error: any) {
         expect(error.status).toBe(429);
-        expect(error.response.code).toBe('QUOTA_EXCEEDED');
+        expect(error.response.code).toBe(QuotaErrorCode.QUOTA_EXCEEDED);
         expect(error.response.quota.weeklyWindow.used).toBe(userPlan.weeklyWindow);
       }
     });

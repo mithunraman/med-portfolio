@@ -8,17 +8,23 @@ import {
 
 describe('SpecialtyRegistry', () => {
   describe('getSpecialtyConfig', () => {
-    it.each([Specialty.GP, Specialty.PSYCHIATRY, Specialty.INTERNAL_MEDICINE])(
-      'should return config for active specialty %s',
-      (specialty) => {
-        const config = getSpecialtyConfig(specialty);
+    it('should return config for active specialty GP', () => {
+      const config = getSpecialtyConfig(Specialty.GP);
 
-        expect(config.specialty).toBe(specialty);
-        expect(config.name).toBeDefined();
-        expect(config.entryTypes.length).toBeGreaterThan(0);
-        expect(config.capabilities.length).toBeGreaterThan(0);
-        expect(config.trainingStages.length).toBeGreaterThan(0);
-        expect(Object.keys(config.templates).length).toBeGreaterThan(0);
+      expect(config.specialty).toBe(Specialty.GP);
+      expect(config.name).toBeDefined();
+      expect(config.entryTypes.length).toBeGreaterThan(0);
+      expect(config.capabilities.length).toBeGreaterThan(0);
+      expect(config.trainingStages.length).toBeGreaterThan(0);
+      expect(Object.keys(config.templates).length).toBeGreaterThan(0);
+    });
+
+    it.each([Specialty.PSYCHIATRY, Specialty.INTERNAL_MEDICINE])(
+      'should throw for inactive specialty %s',
+      (specialty) => {
+        expect(() => getSpecialtyConfig(specialty)).toThrow(
+          `No active configuration found for specialty: ${specialty}`
+        );
       }
     );
 
@@ -71,21 +77,19 @@ describe('SpecialtyRegistry', () => {
       expect(isValidTrainingStage(Specialty.GP, 'ST3')).toBe(true);
     });
 
-    it('should accept valid Psychiatry stages', () => {
-      expect(isValidTrainingStage(Specialty.PSYCHIATRY, 'CT1')).toBe(true);
-      expect(isValidTrainingStage(Specialty.PSYCHIATRY, 'CT3')).toBe(true);
-      expect(isValidTrainingStage(Specialty.PSYCHIATRY, 'ST6')).toBe(true);
+    it('should reject all stages for inactive Psychiatry specialty', () => {
+      expect(isValidTrainingStage(Specialty.PSYCHIATRY, 'CT1')).toBe(false);
+      expect(isValidTrainingStage(Specialty.PSYCHIATRY, 'CT3')).toBe(false);
+      expect(isValidTrainingStage(Specialty.PSYCHIATRY, 'ST6')).toBe(false);
     });
 
-    it('should accept valid IM stages', () => {
-      expect(isValidTrainingStage(Specialty.INTERNAL_MEDICINE, 'IMY1')).toBe(true);
-      expect(isValidTrainingStage(Specialty.INTERNAL_MEDICINE, 'IMY3')).toBe(true);
+    it('should reject all stages for inactive Internal Medicine specialty', () => {
+      expect(isValidTrainingStage(Specialty.INTERNAL_MEDICINE, 'IMY1')).toBe(false);
+      expect(isValidTrainingStage(Specialty.INTERNAL_MEDICINE, 'IMY3')).toBe(false);
     });
 
     it('should reject cross-specialty stage codes', () => {
       expect(isValidTrainingStage(Specialty.GP, 'CT1')).toBe(false);
-      expect(isValidTrainingStage(Specialty.PSYCHIATRY, 'ST1')).toBe(false);
-      expect(isValidTrainingStage(Specialty.INTERNAL_MEDICINE, 'ST1')).toBe(false);
     });
 
     it('should reject unknown stage codes', () => {

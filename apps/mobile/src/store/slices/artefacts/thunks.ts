@@ -1,10 +1,12 @@
 import type { EditArtefactRequest, PdpGoalSelection } from '@acme/shared';
-import { ArtefactStatus } from '@acme/shared';
+import { ArtefactStatus, QuotaErrorCode } from '@acme/shared';
+import { ApiError } from '@acme/api-client';
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { api } from '../../../api/client';
 import { classifyError } from '../../../utils/classifyError';
 import { logger } from '../../../utils/logger';
 import { retryRead } from '../../../utils/retry';
+import { markGuestArtefactLimitReached } from '../authSlice';
 
 export type { TypedError, ErrorKind } from '../../../utils/classifyError';
 
@@ -17,9 +19,13 @@ const artefactsLogger = logger.createScope('ArtefactsThunks');
 /**
  * Create a new artefact with its associated conversation.
  */
+function isGuestArtefactLimitError(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.code === QuotaErrorCode.GUEST_ARTEFACT_LIMIT_REACHED;
+}
+
 export const createArtefact = createAsyncThunk(
   'artefacts/createArtefact',
-  async (params: { artefactId: string }, { rejectWithValue }) => {
+  async (params: { artefactId: string }, { dispatch, rejectWithValue }) => {
     artefactsLogger.info('Creating artefact', { artefactId: params.artefactId });
 
     try {
@@ -32,7 +38,12 @@ export const createArtefact = createAsyncThunk(
       });
       return response;
     } catch (error) {
-      artefactsLogger.error('Failed to create artefact', { error });
+      if (isGuestArtefactLimitError(error)) {
+        artefactsLogger.info('Guest artefact limit reached', { source: 'create' });
+        dispatch(markGuestArtefactLimitReached());
+      } else {
+        artefactsLogger.error('Failed to create artefact', { error });
+      }
       return rejectWithValue(classifyError(error));
     }
   }
@@ -120,7 +131,7 @@ export const updateArtefactStatus = createAsyncThunk(
  */
 export const duplicateToReview = createAsyncThunk(
   'artefacts/duplicateToReview',
-  async (params: { artefactId: string }, { rejectWithValue }) => {
+  async (params: { artefactId: string }, { dispatch, rejectWithValue }) => {
     artefactsLogger.info('Duplicating artefact to review', { artefactId: params.artefactId });
 
     try {
@@ -128,7 +139,12 @@ export const duplicateToReview = createAsyncThunk(
       artefactsLogger.info('Duplicated artefact to review', { id: response.id });
       return response;
     } catch (error) {
-      artefactsLogger.error('Failed to duplicate artefact to review', { error });
+      if (isGuestArtefactLimitError(error)) {
+        artefactsLogger.info('Guest artefact limit reached', { source: 'duplicate' });
+        dispatch(markGuestArtefactLimitReached());
+      } else {
+        artefactsLogger.error('Failed to duplicate artefact to review', { error });
+      }
       return rejectWithValue(classifyError(error));
     }
   }

@@ -1,6 +1,8 @@
+import { UserRole } from '@acme/shared';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AcknowledgementsRepository } from '../../acknowledgements/acknowledgements.repository';
 import { NOTICE_REGISTRY } from '../../acknowledgements/registry';
+import { ARTEFACTS_REPOSITORY } from '../../artefacts/artefacts.repository.interface';
 import { AuthService } from '../../auth/auth.service';
 import { ok, err } from '../../common/utils/result.util';
 import { DashboardService } from '../../dashboard/dashboard.service';
@@ -12,7 +14,15 @@ import { InitService } from '../init.service';
 const USER_ID = '507f1f77bcf86cd799439011';
 const USER = { id: USER_ID, email: 'e@e', name: 'E', role: 0, specialty: null } as never;
 
-async function build(acksImpl: () => Promise<unknown>): Promise<InitService> {
+interface BuildOptions {
+  countByUser?: jest.Mock;
+}
+
+async function build(
+  acksImpl: () => Promise<unknown>,
+  options: BuildOptions = {}
+): Promise<InitService> {
+  const countByUser = options.countByUser ?? jest.fn().mockResolvedValue(ok(0));
   const module: TestingModule = await Test.createTestingModule({
     providers: [
       InitService,
@@ -27,6 +37,7 @@ async function build(acksImpl: () => Promise<unknown>): Promise<InitService> {
           findAcknowledgedVersions: jest.fn().mockImplementation(acksImpl),
         },
       },
+      { provide: ARTEFACTS_REPOSITORY, useValue: { countByUser } },
     ],
   }).compile();
   return module.get(InitService);
@@ -77,5 +88,41 @@ describe('InitService.acknowledgement (orchestration)', () => {
     const svc = await build(async () => ok(['v0.9-retired', activeVersion]));
     const res = await svc.getInit(USER_ID, 0);
     expect(res.acknowledgement).toEqual({ needs: false });
+  });
+});
+
+describe('InitService.guestArtefactLimitReached', () => {
+  const okAcks = async () => ok([]);
+
+  it('returns true for guest with >= 10 artefacts', async () => {
+    const countByUser = jest.fn().mockResolvedValue(ok(10));
+    const svc = await build(okAcks, { countByUser });
+    const res = await svc.getInit(USER_ID, UserRole.USER_GUEST);
+    expect(res.guestArtefactLimitReached).toBe(true);
+    expect(countByUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns false for guest under the limit', async () => {
+    const countByUser = jest.fn().mockResolvedValue(ok(9));
+    const svc = await build(okAcks, { countByUser });
+    const res = await svc.getInit(USER_ID, UserRole.USER_GUEST);
+    expect(res.guestArtefactLimitReached).toBe(false);
+  });
+
+  it('returns false for non-guests without querying count', async () => {
+    const countByUser = jest.fn();
+    const svc = await build(okAcks, { countByUser });
+    const res = await svc.getInit(USER_ID, UserRole.USER);
+    expect(res.guestArtefactLimitReached).toBe(false);
+    expect(countByUser).not.toHaveBeenCalled();
+  });
+
+  it('fails soft to false when count repository errors', async () => {
+    const countByUser = jest
+      .fn()
+      .mockResolvedValue(err({ code: 'DB_ERROR', message: 'boom' }));
+    const svc = await build(okAcks, { countByUser });
+    const res = await svc.getInit(USER_ID, UserRole.USER_GUEST);
+    expect(res.guestArtefactLimitReached).toBe(false);
   });
 });

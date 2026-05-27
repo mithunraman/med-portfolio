@@ -142,11 +142,12 @@ export class ArtefactsRepository implements IArtefactsRepository {
   }
 
   async countByUser(
-    userId: Types.ObjectId,
-    filter?: CountByUserFilter
+    userId: string,
+    filter?: CountByUserFilter,
+    session?: ClientSession
   ): Promise<Result<number, DBError>> {
     try {
-      const query: Record<string, unknown> = { userId };
+      const query: Record<string, unknown> = { userId: new Types.ObjectId(userId) };
 
       if (filter?.since) {
         query.createdAt = { $gte: filter.since };
@@ -155,7 +156,7 @@ export class ArtefactsRepository implements IArtefactsRepository {
         query.status = filter.status;
       }
 
-      const count = await this.artefactModel.countDocuments(query);
+      const count = await this.artefactModel.countDocuments(query).session(session ?? null);
       return ok(count);
     } catch (error) {
       this.logger.error('Failed to count artefacts', error);

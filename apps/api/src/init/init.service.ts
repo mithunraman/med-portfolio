@@ -1,9 +1,14 @@
 import type { InitResponse } from '@acme/shared';
 import { UserRole } from '@acme/shared';
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AcknowledgementsRepository, computeNeedsReAck, NOTICE_REGISTRY } from '../acknowledgements';
+import {
+  ARTEFACTS_REPOSITORY,
+  IArtefactsRepository,
+} from '../artefacts/artefacts.repository.interface';
 import { AuthService } from '../auth/auth.service';
 import { isErr } from '../common/utils/result.util';
+import { isGuestAtArtefactLimit } from '../config/quota.config';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { NoticesService } from '../notices/notices.service';
 import { QuotaService } from '../quota/quota.service';
@@ -19,7 +24,9 @@ export class InitService {
     private readonly quotaService: QuotaService,
     private readonly versionPolicyService: VersionPolicyService,
     private readonly noticesService: NoticesService,
-    private readonly acknowledgementsRepository: AcknowledgementsRepository
+    private readonly acknowledgementsRepository: AcknowledgementsRepository,
+    @Inject(ARTEFACTS_REPOSITORY)
+    private readonly artefactsRepository: IArtefactsRepository
   ) {}
 
   async getInit(
@@ -35,6 +42,7 @@ export class InitService {
       updatePolicyResult,
       noticesResult,
       latestAckResult,
+      guestLimitResult,
     ] = await Promise.allSettled([
       this.authService.getCurrentUser(userId),
       this.dashboardService.getDashboard(userId),
@@ -42,6 +50,7 @@ export class InitService {
       this.versionPolicyService.evaluate(platform, appVersion),
       this.noticesService.getNoticesForUser(userId, role),
       this.acknowledgementsRepository.findAcknowledgedVersions(userId),
+      this.computeGuestArtefactLimitReached(userId, role),
     ]);
 
     if (userResult.status === 'rejected') {
@@ -80,6 +89,15 @@ export class InitService {
 
     const acknowledgement = this.resolveAcknowledgement(userId, latestAckResult);
 
+    let guestArtefactLimitReached = false;
+    if (guestLimitResult.status === 'fulfilled') {
+      guestArtefactLimitReached = guestLimitResult.value;
+    } else {
+      this.logger.warn(
+        `Guest artefact limit check failed for user ${userId}: ${guestLimitResult.reason}`
+      );
+    }
+
     return {
       user: userResult.value,
       dashboard,
@@ -87,7 +105,22 @@ export class InitService {
       updatePolicy,
       notices,
       acknowledgement,
+      guestArtefactLimitReached,
     };
+  }
+
+  private async computeGuestArtefactLimitReached(
+    userId: string,
+    role: UserRole
+  ): Promise<boolean> {
+    if (role !== UserRole.USER_GUEST) return false;
+
+    const result = await this.artefactsRepository.countByUser(userId);
+    if (isErr(result)) {
+      this.logger.warn(`Guest artefact count failed for ${userId}: ${result.error.message}`);
+      return false;
+    }
+    return isGuestAtArtefactLimit(role, result.value);
   }
 
   private resolveAcknowledgement(

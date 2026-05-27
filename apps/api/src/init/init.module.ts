@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AcknowledgementsModule } from '../acknowledgements';
+import { ArtefactsModule } from '../artefacts/artefacts.module';
 import { AuthModule } from '../auth/auth.module';
 import { DashboardModule } from '../dashboard/dashboard.module';
 import { NoticesModule } from '../notices';
@@ -16,6 +17,7 @@ import { InitService } from './init.service';
     VersionPolicyModule,
     NoticesModule,
     AcknowledgementsModule,
+    ArtefactsModule,
   ],
   controllers: [InitController],
   providers: [InitService],

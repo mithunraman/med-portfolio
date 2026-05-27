@@ -7,9 +7,10 @@ import type {
   RestoreArtefactVersionRequest,
   UpdateArtefactStatusRequest,
 } from '@acme/shared';
-import { ArtefactStatus, MessageStatus, PdpGoalStatus } from '@acme/shared';
+import { ArtefactStatus, MessageStatus, PdpGoalStatus, QuotaErrorCode, UserRole } from '@acme/shared';
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -24,6 +25,7 @@ import {
   IAnalysisRunsRepository,
 } from '../analysis-runs/analysis-runs.repository.interface';
 import { ARTEFACT_STATE_CHANGED, type ArtefactStateChangedEvent } from '../common/events';
+import { GUEST_ARTEFACT_LIMIT, isGuestAtArtefactLimit } from '../config/quota.config';
 import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { isErr } from '../common/utils/result.util';
 import { isNotNull } from '../common/utils/type-guards.util';
@@ -90,6 +92,8 @@ export class ArtefactsService {
 
     return this.transactionService.withTransaction(
       async (session) => {
+        await this.assertGuestWithinArtefactLimit(user.role, userId, session);
+
         // Create artefact
         const defaultTitle = generateDefaultTitle();
 
@@ -390,6 +394,29 @@ export class ArtefactsService {
     return findResult.value;
   }
 
+  // Assumes lifetime counting via soft-delete: DELETED rows still occupy a slot.
+  // Add a monotonic counter on User if a hard-delete path is ever introduced.
+  private async assertGuestWithinArtefactLimit(
+    role: UserRole,
+    userId: string,
+    session?: ClientSession
+  ): Promise<void> {
+    if (role !== UserRole.USER_GUEST) return;
+
+    const countResult = await this.artefactsRepository.countByUser(userId, undefined, session);
+    if (isErr(countResult)) {
+      throw new InternalServerErrorException(countResult.error.message);
+    }
+
+    if (isGuestAtArtefactLimit(role, countResult.value)) {
+      throw new ForbiddenException({
+        code: QuotaErrorCode.GUEST_ARTEFACT_LIMIT_REACHED,
+        limit: GUEST_ARTEFACT_LIMIT,
+        message: `Guest accounts are limited to ${GUEST_ARTEFACT_LIMIT} artefacts. Upgrade to continue.`,
+      });
+    }
+  }
+
   private async archiveArtefact(
     artefactDoc: ArtefactSchema,
     archiveActivePdpGoals: boolean,
@@ -622,10 +649,14 @@ export class ArtefactsService {
     );
   }
 
-  async duplicateToReview(userId: string, xid: string): Promise<Artefact> {
+  async duplicateToReview(userId: string, role: UserRole, xid: string): Promise<Artefact> {
+    const userOid = new Types.ObjectId(userId);
+
     return this.transactionService.withTransaction(
       async (session) => {
-        const sourceArtefact = await this.findOrThrow(xid, new Types.ObjectId(userId), session);
+        await this.assertGuestWithinArtefactLimit(role, userId, session);
+
+        const sourceArtefact = await this.findOrThrow(xid, userOid, session);
 
         if (sourceArtefact.status !== ArtefactStatus.COMPLETED) {
           throw new BadRequestException('Only COMPLETED artefacts can be cloned');

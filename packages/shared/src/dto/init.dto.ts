@@ -13,6 +13,7 @@ export const InitResponseSchema = z.object({
   updatePolicy: UpdatePolicySchema.nullable(),
   notices: z.array(AppNoticeSchema),
   acknowledgement: initAcknowledgementSchema,
+  guestArtefactLimitReached: z.boolean(),
 });
 
 export type InitResponse = z.infer<typeof InitResponseSchema>;

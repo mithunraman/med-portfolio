@@ -1,5 +1,5 @@
-import { ArtefactStatus, PdpGoalStatus, Specialty } from '@acme/shared';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { ArtefactStatus, PdpGoalStatus, QuotaErrorCode, Specialty, UserRole } from '@acme/shared';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { ok } from '../../common/utils/result.util';
 import { ArtefactsService } from '../artefacts.service';
@@ -119,10 +119,16 @@ const mockEventEmitter = {
 };
 
 const mockUserModel = {
-  findById: jest.fn().mockReturnValue({
-    lean: jest.fn().mockResolvedValue({ specialty: 100, trainingStage: 'ST1' }),
-  }),
+  findById: jest.fn(),
 };
+
+function setUserMock(user: Record<string, unknown> | null) {
+  const leanResolved = jest.fn().mockResolvedValue(user);
+  mockUserModel.findById.mockReturnValue({
+    lean: leanResolved,
+    select: jest.fn().mockReturnValue({ lean: leanResolved }),
+  });
+}
 
 function createService(): ArtefactsService {
   return new ArtefactsService(
@@ -158,6 +164,7 @@ describe('ArtefactsService', () => {
     mockTransactionService.withTransaction.mockImplementation(
       (fn: (session: any) => Promise<any>) => fn({}),
     );
+    setUserMock({ role: UserRole.USER, specialty: 100, trainingStage: 'ST1' });
     service = createService();
   });
 
@@ -778,6 +785,68 @@ describe('ArtefactsService', () => {
       const snapshotOrder = mockVersionHistoryService.createVersion.mock.invocationCallOrder[0];
       const updateOrder = mockArtefactsRepo.updateArtefactById.mock.invocationCallOrder[0];
       expect(snapshotOrder).toBeLessThan(updateOrder);
+    });
+  });
+
+  // ─── Guest artefact limit ───
+
+  describe('guest artefact limit', () => {
+    const dto = { artefactId: 'client_abc12345' };
+
+    function mockCreatePathSuccess() {
+      mockArtefactsRepo.upsertArtefact.mockResolvedValue(ok(makeArtefactDoc()));
+      mockConversationsRepo.findActiveConversationByArtefact.mockResolvedValue(ok(null));
+      mockConversationsRepo.createConversation.mockResolvedValue(ok(makeConversationDoc()));
+    }
+
+    it('allows guest with fewer than 10 artefacts to create', async () => {
+      setUserMock({ role: UserRole.USER_GUEST, specialty: 100, trainingStage: 'ST1' });
+      mockArtefactsRepo.countByUser.mockResolvedValue(ok(9));
+      mockCreatePathSuccess();
+
+      await expect(service.createArtefact(userIdStr, dto)).resolves.toBeDefined();
+      expect(mockArtefactsRepo.upsertArtefact).toHaveBeenCalled();
+    });
+
+    it('blocks guest at the limit with structured ForbiddenException', async () => {
+      setUserMock({ role: UserRole.USER_GUEST, specialty: 100, trainingStage: 'ST1' });
+      mockArtefactsRepo.countByUser.mockResolvedValue(ok(10));
+
+      const promise = service.createArtefact(userIdStr, dto);
+      await expect(promise).rejects.toThrow(ForbiddenException);
+      await expect(promise).rejects.toMatchObject({
+        response: { code: QuotaErrorCode.GUEST_ARTEFACT_LIMIT_REACHED, limit: 10 },
+      });
+      expect(mockArtefactsRepo.upsertArtefact).not.toHaveBeenCalled();
+    });
+
+    it('counts deleted artefacts toward the limit (no status filter)', async () => {
+      setUserMock({ role: UserRole.USER_GUEST, specialty: 100, trainingStage: 'ST1' });
+      mockArtefactsRepo.countByUser.mockResolvedValue(ok(10));
+
+      await expect(service.createArtefact(userIdStr, dto)).rejects.toThrow(ForbiddenException);
+      expect(mockArtefactsRepo.countByUser).toHaveBeenCalledWith(
+        userIdStr,
+        undefined,
+        expect.anything(),
+      );
+    });
+
+    it('does not enforce the limit for non-guest users', async () => {
+      setUserMock({ role: UserRole.USER, specialty: 100, trainingStage: 'ST1' });
+      mockCreatePathSuccess();
+
+      await expect(service.createArtefact(userIdStr, dto)).resolves.toBeDefined();
+      expect(mockArtefactsRepo.countByUser).not.toHaveBeenCalled();
+    });
+
+    it('blocks duplicateToReview when guest is at the limit', async () => {
+      mockArtefactsRepo.countByUser.mockResolvedValue(ok(10));
+
+      await expect(
+        service.duplicateToReview(userIdStr, UserRole.USER_GUEST, 'art_abc123'),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockArtefactsRepo.upsertArtefact).not.toHaveBeenCalled();
     });
   });
 });

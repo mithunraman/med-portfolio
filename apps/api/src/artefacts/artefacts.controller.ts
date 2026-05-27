@@ -79,7 +79,7 @@ export class ArtefactsController {
     @CurrentUser() user: CurrentUserPayload,
     @Param('id') id: string
   ): Promise<Artefact> {
-    return this.artefactsService.duplicateToReview(user.userId, id);
+    return this.artefactsService.duplicateToReview(user.userId, user.role, id);
   }
 
   @Get(':id/versions')

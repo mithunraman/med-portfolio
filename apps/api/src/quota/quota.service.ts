@@ -1,5 +1,5 @@
 import type { QuotaStatus } from '@acme/shared';
-import { UserRole } from '@acme/shared';
+import { QuotaErrorCode, UserRole } from '@acme/shared';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { isErr } from '../common/utils/result.util';
@@ -15,7 +15,7 @@ import { IQuotaRepository, QUOTA_REPOSITORY } from './quota.repository.interface
 export interface QuotaExceededPayload {
   statusCode: 429;
   message: string;
-  code: 'QUOTA_EXCEEDED';
+  code: QuotaErrorCode.QUOTA_EXCEEDED;
   retryAfter: number;
   quota: QuotaStatus;
 }
@@ -151,7 +151,7 @@ export class QuotaService {
     const payload: QuotaExceededPayload = {
       statusCode: 429,
       message: 'Quota exceeded',
-      code: 'QUOTA_EXCEEDED',
+      code: QuotaErrorCode.QUOTA_EXCEEDED,
       retryAfter,
       quota,
     };

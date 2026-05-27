@@ -1,4 +1,5 @@
 import { CoverageRing, HomeSkeleton, SectionHeader, StatusPill, WelcomeModule } from '@/components';
+import { GuestLimitBanner } from '@/components/GuestLimitBanner';
 import { NoticeBanner } from '@/components/NoticeBanner';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
@@ -528,6 +529,7 @@ export default function HomeScreen() {
         </View>
 
         <NoticeBanner />
+        <GuestLimitBanner />
 
         {/* Module A: Start New Entry */}
         <StartNewEntryCard

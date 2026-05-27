@@ -13,7 +13,7 @@ describe('SpecialtiesController', () => {
       const result = controller.getSpecialties();
 
       expect(result.specialties).toBeDefined();
-      expect(result.specialties.length).toBe(3);
+      expect(result.specialties.length).toBe(1);
     });
 
     it('should include GP', () => {
@@ -25,22 +25,15 @@ describe('SpecialtiesController', () => {
       expect(gp!.trainingStages.length).toBe(3);
     });
 
-    it('should include Psychiatry', () => {
+    it('should exclude inactive specialties (Psychiatry, Internal Medicine)', () => {
       const result = controller.getSpecialties();
-      const psych = result.specialties.find((s) => s.specialty === Specialty.PSYCHIATRY);
 
-      expect(psych).toBeDefined();
-      expect(psych!.name).toBe('Psychiatry');
-      expect(psych!.trainingStages.length).toBe(6);
-    });
-
-    it('should include Internal Medicine', () => {
-      const result = controller.getSpecialties();
-      const im = result.specialties.find((s) => s.specialty === Specialty.INTERNAL_MEDICINE);
-
-      expect(im).toBeDefined();
-      expect(im!.name).toBe('Internal Medicine');
-      expect(im!.trainingStages.length).toBe(3);
+      expect(
+        result.specialties.find((s) => s.specialty === Specialty.PSYCHIATRY)
+      ).toBeUndefined();
+      expect(
+        result.specialties.find((s) => s.specialty === Specialty.INTERNAL_MEDICINE)
+      ).toBeUndefined();
     });
 
     it('should return training stages with code, label, and description', () => {

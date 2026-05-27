@@ -70,8 +70,9 @@ export interface IArtefactsRepository {
   ): Promise<Result<Artefact | null, DBError>>;
 
   countByUser(
-    userId: Types.ObjectId,
-    filter?: CountByUserFilter
+    userId: string,
+    filter?: CountByUserFilter,
+    session?: ClientSession
   ): Promise<Result<number, DBError>>;
 
   anonymizeArtefact(

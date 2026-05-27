@@ -98,6 +98,7 @@ export interface AuthState {
   error: string | null;
   isNewUser: boolean | null;
   specialties: SpecialtyOption[];
+  guestArtefactLimitReached: boolean;
 }
 
 const initialState: AuthState = {
@@ -107,6 +108,7 @@ const initialState: AuthState = {
   error: null,
   isNewUser: null,
   specialties: [],
+  guestArtefactLimitReached: false,
 };
 
 /**
@@ -360,6 +362,9 @@ const authSlice = createSlice({
     updateQuota(state, action: { payload: QuotaStatus }) {
       assignQuotaIfChanged(state, action.payload);
     },
+    markGuestArtefactLimitReached(state) {
+      state.guestArtefactLimitReached = true;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -427,6 +432,7 @@ const authSlice = createSlice({
         state.status = 'authenticated';
         state.user = action.payload;
         state.error = null;
+        state.guestArtefactLimitReached = false;
         Sentry.setUser({ id: action.payload.id });
       })
       .addCase(claimGuest.rejected, (state, action) => {
@@ -454,6 +460,7 @@ const authSlice = createSlice({
       .addCase(fetchInit.fulfilled, (state, action) => {
         assignUserIfChanged(state, action.payload.user);
         assignQuotaIfChanged(state, action.payload.quota);
+        state.guestArtefactLimitReached = action.payload.guestArtefactLimitReached;
       })
 
       // Request Deletion
@@ -468,5 +475,10 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, setUnauthenticated, updateQuota } = authSlice.actions;
+export const {
+  clearError,
+  setUnauthenticated,
+  updateQuota,
+  markGuestArtefactLimitReached,
+} = authSlice.actions;
 export default authSlice.reducer;

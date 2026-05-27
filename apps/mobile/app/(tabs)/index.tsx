@@ -1,7 +1,7 @@
 import { CoverageRing, HomeSkeleton, SectionHeader, StatusPill, WelcomeModule } from '@/components';
 import { GuestLimitBanner } from '@/components/GuestLimitBanner';
 import { NoticeBanner } from '@/components/NoticeBanner';
-import { useAppDispatch, useAppSelector } from '@/hooks';
+import { useAppDispatch, useAppSelector, useCanCreateArtefact } from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 import {
@@ -73,35 +73,46 @@ function StartNewEntryCard({
   lastEntryDate,
   prompt,
   helper,
+  disabled = false,
 }: {
   onPress: () => void;
   lastEntryDate?: string;
   prompt: string;
   helper: string;
+  disabled?: boolean;
 }) {
   const { colors } = useTheme();
   const recency = lastEntryDate ? `Last entry ${formatTimeAgo(lastEntryDate)}` : ' ';
+  const displayPrompt = disabled ? 'Guest limit reached — upgrade to continue' : prompt;
+  const displayHelper = disabled ? 'Tap to upgrade your account' : helper;
 
   return (
     <TouchableOpacity
-      style={[styles.captureCard, { backgroundColor: colors.primary + '12' }]}
+      style={[
+        styles.captureCard,
+        { backgroundColor: colors.primary + '12' },
+        disabled && styles.captureCardDisabled,
+      ]}
       onPress={onPress}
       activeOpacity={0.75}
       accessibilityRole="button"
-      accessibilityLabel="Start a new entry"
+      accessibilityLabel={disabled ? 'Upgrade to start new entries' : 'Start a new entry'}
+      accessibilityState={{ disabled }}
     >
       <Text style={[styles.capturePrompt, { color: colors.text }]} numberOfLines={1}>
-        {prompt}
+        {displayPrompt}
       </Text>
       <View style={styles.captureBottomRow}>
         <View style={styles.captureTextContent}>
-          <Text style={[styles.captureHelper, { color: colors.textSecondary }]}>{helper}</Text>
-          {recency ? (
+          <Text style={[styles.captureHelper, { color: colors.textSecondary }]}>
+            {displayHelper}
+          </Text>
+          {!disabled && recency ? (
             <Text style={[styles.captureHelper, { color: colors.textSecondary }]}>{recency}</Text>
           ) : null}
         </View>
         <View style={[styles.micCircle, { backgroundColor: colors.primary }]}>
-          <Ionicons name="mic" size={24} color="#fff" />
+          <Ionicons name={disabled ? 'lock-closed' : 'mic'} size={24} color="#fff" />
         </View>
       </View>
     </TouchableOpacity>
@@ -463,10 +474,13 @@ export default function HomeScreen() {
     }, [dispatch, dashboardLoading, recentEntryIds, dashboardError])
   );
 
+  const { canCreate, guard } = useCanCreateArtefact();
+
   const handleStartNew = useCallback(() => {
+    if (!guard()) return;
     const newConversationId = randomUUID();
     router.push(`/(messages)/${newConversationId}?isNew=true`);
-  }, [router]);
+  }, [guard, router]);
 
   const handleEntryPress = useCallback(
     (item: Artefact) => {
@@ -537,6 +551,7 @@ export default function HomeScreen() {
           lastEntryDate={recentArtefacts[0]?.updatedAt}
           prompt={prompt}
           helper={helper}
+          disabled={!canCreate}
         />
 
         {/* First-run: welcome explainer only. Returning: full dashboard modules. */}
@@ -623,6 +638,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 14,
     gap: 4,
+  },
+  captureCardDisabled: {
+    opacity: 0.6,
   },
   capturePrompt: {
     fontSize: 14,

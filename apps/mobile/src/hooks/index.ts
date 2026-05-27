@@ -9,3 +9,4 @@ export { useOtpFlow } from './useOtpFlow';
 export { useNetworkRecovery } from './useNetworkRecovery';
 export { useOfflineAwareInsets } from './useOfflineAwareInsets';
 export { useBannerVisibility } from './useBannerVisibility';
+export { useCanCreateArtefact } from './useCanCreateArtefact';

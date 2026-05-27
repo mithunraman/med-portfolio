@@ -117,7 +117,7 @@ export default function ClaimAccountScreen() {
               <TextInput
                 ref={flow.nameInputRef}
                 style={[s.input, { borderColor: colors.border, color: colors.text }]}
-                placeholder="Jane Doe"
+                placeholder=""
                 placeholderTextColor={colors.textSecondary}
                 autoCapitalize="words"
                 autoCorrect={false}

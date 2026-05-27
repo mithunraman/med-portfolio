@@ -1,7 +1,11 @@
 import type { InitResponse } from '@acme/shared';
 import { UserRole } from '@acme/shared';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { AcknowledgementsRepository, computeNeedsReAck, NOTICE_REGISTRY } from '../acknowledgements';
+import {
+  AcknowledgementsRepository,
+  computeNeedsReAck,
+  NOTICE_REGISTRY,
+} from '../acknowledgements';
 import {
   ARTEFACTS_REPOSITORY,
   IArtefactsRepository,
@@ -109,10 +113,7 @@ export class InitService {
     };
   }
 
-  private async computeGuestArtefactLimitReached(
-    userId: string,
-    role: UserRole
-  ): Promise<boolean> {
+  private async computeGuestArtefactLimitReached(userId: string, role: UserRole): Promise<boolean> {
     if (role !== UserRole.USER_GUEST) return false;
 
     const result = await this.artefactsRepository.countByUser(userId);
@@ -131,9 +132,7 @@ export class InitService {
   ): InitResponse['acknowledgement'] {
     if (latestAckResult.status !== 'fulfilled' || isErr(latestAckResult.value)) {
       const reason =
-        latestAckResult.status === 'rejected'
-          ? String(latestAckResult.reason)
-          : 'repository error';
+        latestAckResult.status === 'rejected' ? String(latestAckResult.reason) : 'repository error';
       this.logger.warn(`Ack lookup failed for user ${userId}; failing closed (${reason})`);
       return { needs: true, document: NOTICE_REGISTRY.active };
     }

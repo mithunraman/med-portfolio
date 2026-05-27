@@ -3,7 +3,7 @@ import { ChatComposer, MessageList, useLoading } from '@/components';
 import { type ActionBarState, ActionBar } from '@/components/ActionBar';
 import { ChatEmptyState } from '@/components/ChatEmptyState';
 import { CompletionCard } from '@/components/CompletionCard';
-import { useAppDispatch, useAppSelector, useAuth } from '@/hooks';
+import { useAppDispatch, useAppSelector, useAuth, useCanCreateArtefact } from '@/hooks';
 import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
 import { useBannerOffset } from '@/hooks/useBannerOffset';
 import {
@@ -225,6 +225,15 @@ export default function ChatScreen() {
     chatLogger.debug('[segmentWordCount] result', { count });
     return count;
   }, [mergedMessages]);
+
+  // Defense in depth: if a guest at the artefact limit lands here via deep link
+  // or stale back-stack, bounce them to the upgrade screen before they type.
+  const { canCreate } = useCanCreateArtefact();
+  useEffect(() => {
+    if (isPendingConversation && !canCreate) {
+      router.replace('/claim-account');
+    }
+  }, [isPendingConversation, canCreate, router]);
 
   // Fetch messages for existing conversations (not newly created ones)
   useEffect(() => {

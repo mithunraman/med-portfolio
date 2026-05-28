@@ -1,8 +1,8 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 
-type PlaybackSpeed = 1 | 1.5 | 2;
-const SPEED_CYCLE: PlaybackSpeed[] = [1, 1.5, 2];
+type PlaybackSpeed = 1 | 1.25 | 1.5 | 1.75 | 2;
+const SPEED_CYCLE: PlaybackSpeed[] = [1, 1.25, 1.5, 1.75, 2];
 
 interface AudioPlaybackResult {
   isPlaying: boolean;
@@ -22,6 +22,12 @@ export function useAudioPlayback(audioUrl: string | null | undefined): AudioPlay
   const player = useAudioPlayer(source as Parameters<typeof useAudioPlayer>[0]);
   const status = useAudioPlayerStatus(player);
 
+  useEffect(() => {
+    if (status.didJustFinish) {
+      player.seekTo(0);
+    }
+  }, [status.didJustFinish, player]);
+
   const play = useCallback(() => {
     player.play();
   }, [player]);
@@ -34,7 +40,7 @@ export function useAudioPlayback(audioUrl: string | null | undefined): AudioPlay
     const currentSpeed = (player.playbackRate ?? 1) as PlaybackSpeed;
     const currentIndex = SPEED_CYCLE.indexOf(currentSpeed);
     const nextSpeed = SPEED_CYCLE[(currentIndex + 1) % SPEED_CYCLE.length];
-    player.playbackRate = nextSpeed;
+    player.setPlaybackRate(nextSpeed, 'high');
   }, [player]);
 
   const currentSpeed = (player.playbackRate ?? 1) as PlaybackSpeed;

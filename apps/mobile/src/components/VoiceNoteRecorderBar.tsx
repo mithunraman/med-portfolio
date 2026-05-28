@@ -1,7 +1,16 @@
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Alert,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import {
   MAX_RECORDING_DURATION,
   useAudioRecorder,
@@ -317,7 +326,7 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
       {/* Max duration warning */}
       {maxDurationReached && (
         <Text style={[styles.maxDurationText, { color: COLORS.warningText }]}>
-          Max duration reached
+          {`Max audio duration reached (${Math.floor(MAX_RECORDING_DURATION / 60)} min). Send this and record more if you'd like.`}
         </Text>
       )}
 
@@ -331,16 +340,17 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
           testID={`${testIDPrefix}-trash`}
         />
 
-        {/* Pause / Resume button */}
-        <CircularButton
-          icon={pauseIcon}
-          backgroundColor="transparent"
-          borderColor={COLORS.pauseButton}
-          borderWidth={2}
-          onPress={handlePauseToggle}
-          accessibilityLabel={isPaused ? 'Resume recording' : 'Pause recording'}
-          testID={`${testIDPrefix}-pause`}
-        />
+        {!maxDurationReached && (
+          <CircularButton
+            icon={pauseIcon}
+            backgroundColor="transparent"
+            borderColor={COLORS.pauseButton}
+            borderWidth={2}
+            onPress={handlePauseToggle}
+            accessibilityLabel={isPaused ? 'Resume recording' : 'Pause recording'}
+            testID={`${testIDPrefix}-pause`}
+          />
+        )}
 
         {/* Send button */}
         <CircularButton
@@ -368,7 +378,7 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
     gap: 12,
   },
   timerText: {

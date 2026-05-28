@@ -8,6 +8,7 @@ export const InitiateUploadRequestSchema = z.object({
   mimeType: z.string().regex(ALLOWED_AUDIO_MIME_TYPES, {
     message: 'mimeType must be a valid audio type (webm, mp4, m4a, mpeg, wav)',
   }),
+  sizeBytes: z.number().int().positive(),
 });
 
 export type InitiateUploadRequest = z.infer<typeof InitiateUploadRequestSchema>;

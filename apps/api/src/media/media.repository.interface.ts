@@ -13,6 +13,7 @@ export interface CreateMediaData {
   key: string;
   mediaType: MediaType;
   mimeType: string;
+  sizeBytes: number;
 }
 
 export interface UpdateMediaStatusData {

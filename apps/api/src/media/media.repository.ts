@@ -28,6 +28,7 @@ export class MediaRepository implements IMediaRepository {
         key: data.key,
         mediaType: data.mediaType,
         mimeType: data.mimeType,
+        sizeBytes: data.sizeBytes,
         status: MediaStatus.PENDING,
       };
 

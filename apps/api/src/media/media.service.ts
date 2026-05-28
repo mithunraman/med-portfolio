@@ -16,6 +16,7 @@ import { StorageService } from '../storage/storage.service';
 import { IMediaRepository, MEDIA_REPOSITORY } from './media.repository.interface';
 
 const PRESIGNED_URL_EXPIRY_SECONDS = 3600; // 1 hour
+export const MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
 
 export interface InitiateUploadResult {
   mediaId: string;
@@ -50,13 +51,21 @@ export class MediaService {
   ) {}
 
   /**
-   * Initiate a media upload - creates media record and returns presigned URL
+   * Initiate a media upload - creates media record and returns presigned URL.
+   *
+   * The declared `sizeBytes` is signed into the URL as Content-Length, so S3
+   * itself rejects mismatched uploads. The cap is also enforced here.
    */
   async initiateUpload(
     userId: string,
     mediaType: MediaType,
-    mimeType: string
+    mimeType: string,
+    sizeBytes: number
   ): Promise<InitiateUploadResult> {
+    if (sizeBytes > MAX_UPLOAD_SIZE_BYTES) {
+      throw new BadRequestException('File exceeds maximum upload size');
+    }
+
     const userObjectId = new Types.ObjectId(userId);
     const bucket = this.storageService.getMediaBucket();
 
@@ -71,16 +80,18 @@ export class MediaService {
       key,
       mediaType,
       mimeType,
+      sizeBytes,
       xid,
     });
 
     if (isErr(createResult)) throw new InternalServerErrorException(createResult.error.message);
 
-    // Generate presigned upload URL
+    // Generate presigned upload URL with signed Content-Length
     const uploadUrl = await this.storageService.generatePresignedUploadUrl(
       bucket,
       key,
       mimeType,
+      sizeBytes,
       PRESIGNED_URL_EXPIRY_SECONDS
     );
 
@@ -130,10 +141,22 @@ export class MediaService {
       );
     }
 
+    // Defense in depth: even though S3 enforces ContentLength via the signed URL,
+    // re-check the actual size in case anything ever bypasses that path. If the
+    // HEAD response is missing ContentLength entirely, refuse the attach rather
+    // than persist a 0-byte placeholder or silently skip the cap check.
+    if (typeof headResult.ContentLength !== 'number') {
+      throw new InternalServerErrorException('Unable to determine uploaded file size');
+    }
+    const actualSizeBytes = headResult.ContentLength;
+    if (actualSizeBytes > MAX_UPLOAD_SIZE_BYTES) {
+      throw new BadRequestException('File exceeds maximum upload size');
+    }
+
     return {
       mediaId: media._id,
       xid: media.xid,
-      sizeBytes: headResult.ContentLength ?? 0,
+      sizeBytes: actualSizeBytes,
       mediaType: media.mediaType,
       mimeType: media.mimeType,
       durationMs: media.durationMs,

@@ -44,12 +44,16 @@ export class StorageService {
   }
 
   /**
-   * Generate a presigned URL for uploading a file
+   * Generate a presigned URL for uploading a file.
+   *
+   * `contentLength` is signed into the canonical request, so the client must
+   * send a body of exactly that size or S3 will reject the PUT with 403.
    */
   async generatePresignedUploadUrl(
     bucket: string,
     key: string,
     contentType: string,
+    contentLength: number,
     expiresIn: number = 3600
   ): Promise<string> {
     return this.withRetry(async () => {
@@ -57,9 +61,15 @@ export class StorageService {
         Bucket: bucket,
         Key: key,
         ContentType: contentType,
+        ContentLength: contentLength,
       });
 
-      return getSignedUrl(this.s3, command, { expiresIn });
+      // Force content-type and content-length into signed headers so the client
+      // must send them exactly as signed — S3 rejects mismatches with 403.
+      return getSignedUrl(this.s3, command, {
+        expiresIn,
+        signableHeaders: new Set(['content-type', 'content-length']),
+      });
     });
   }
 

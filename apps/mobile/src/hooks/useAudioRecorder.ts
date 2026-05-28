@@ -9,7 +9,7 @@ import {
 import { PermissionStatus } from 'expo-modules-core';
 import { useCallback, useRef, useState } from 'react';
 
-export const MAX_RECORDING_DURATION = 10; // 3 minutes
+export const MAX_RECORDING_DURATION = 180; // 3 minutes
 
 export type AudioRecordingResult = {
   uri: string;

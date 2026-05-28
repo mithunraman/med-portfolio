@@ -14,7 +14,12 @@ export class MediaController {
     @CurrentUser() user: CurrentUserPayload,
     @Body() dto: InitiateUploadDto
   ): Promise<InitiateUploadResult> {
-    return this.mediaService.initiateUpload(user.userId, dto.mediaType, dto.mimeType);
+    return this.mediaService.initiateUpload(
+      user.userId,
+      dto.mediaType,
+      dto.mimeType,
+      dto.sizeBytes
+    );
   }
 
   @Get(':mediaId')

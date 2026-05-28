@@ -241,16 +241,22 @@ export const sendVoiceNoteWithRetry = createAsyncThunk(
       const result = await ensureConversation(conversationId, isNewConversation, artefactId);
       conversationId = result.conversationId;
 
+      // Read the recording once. The file doesn't change between retries, and
+      // blob.size is what fetch will send as Content-Length on the PUT — which
+      // must match the value signed into the presigned URL.
+      const fileResponse = await fetch(recordingUri);
+      const blob = await fileResponse.blob();
+      const sizeBytes = blob.size;
+
       // 3. Upload + send with retry
       const response = await retryWrite(async () => {
         // Initiate upload + S3 PUT (re-done on each retry in case presigned URL expired)
         const { mediaId, uploadUrl } = await api.media.initiateUpload({
           mediaType: MediaType.AUDIO,
           mimeType: recordingMime,
+          sizeBytes,
         });
 
-        const fileResponse = await fetch(recordingUri);
-        const blob = await fileResponse.blob();
         await fetch(uploadUrl, {
           method: 'PUT',
           headers: { 'Content-Type': recordingMime },

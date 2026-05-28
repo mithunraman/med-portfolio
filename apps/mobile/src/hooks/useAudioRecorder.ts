@@ -9,7 +9,7 @@ import {
 import { PermissionStatus } from 'expo-modules-core';
 import { useCallback, useRef, useState } from 'react';
 
-export const MAX_RECORDING_DURATION = 120; // 2 minutes
+export const MAX_RECORDING_DURATION = 10; // 3 minutes
 
 export type AudioRecordingResult = {
   uri: string;
@@ -21,6 +21,7 @@ export type AudioPermissionStatus = 'granted' | 'denied' | 'undetermined';
 
 export function useAudioRecorder() {
   const [permissionStatus, setPermissionStatus] = useState<AudioPermissionStatus>('undetermined');
+  const [isPaused, setIsPaused] = useState(false);
   const isStartingRef = useRef(false);
   const startIdRef = useRef(0);
 
@@ -78,16 +79,38 @@ export function useAudioRecorder() {
       }
 
       recorder.record();
+      setIsPaused(false);
     } finally {
       isStartingRef.current = false;
     }
   }, [recorder, isRecording]);
 
+  const pauseRecording = useCallback(() => {
+    if (!isRecording) return;
+    try {
+      recorder.pause();
+      setIsPaused(true);
+    } catch {
+      // Pause not supported (e.g. Android <24) or recorder already stopped — ignore
+    }
+  }, [recorder, isRecording]);
+
+  const resumeRecording = useCallback(() => {
+    if (!isPaused) return;
+    try {
+      recorder.record();
+      setIsPaused(false);
+    } catch {
+      // Recorder may have been released — ignore
+    }
+  }, [recorder, isPaused]);
+
   const stopRecording = useCallback(async (): Promise<AudioRecordingResult | null> => {
     // Invalidate any in-flight start operations
     startIdRef.current++;
 
-    if (!isRecording) return null;
+    // Allow stopping when recording OR paused (a paused recorder still has a file to finalize)
+    if (!isRecording && !isPaused) return null;
 
     // Capture duration before stopping
     const finalDuration = duration;
@@ -95,9 +118,11 @@ export function useAudioRecorder() {
     try {
       await recorder.stop();
     } catch {
+      setIsPaused(false);
       return null;
     }
 
+    setIsPaused(false);
     const uri = recorder.uri;
 
     // Minimum 1 second recording
@@ -106,26 +131,30 @@ export function useAudioRecorder() {
     }
 
     return { uri, mime: 'audio/mp4', duration: finalDuration };
-  }, [recorder, isRecording, duration]);
+  }, [recorder, isRecording, isPaused, duration]);
 
   const cancelRecording = useCallback(async () => {
     // Invalidate any in-flight start operations
     startIdRef.current++;
 
-    if (isRecording) {
+    if (isRecording || isPaused) {
       try {
         await recorder.stop();
       } catch {
         // Recorder may already be stopped — safe to ignore
       }
     }
-  }, [recorder, isRecording]);
+    setIsPaused(false);
+  }, [recorder, isRecording, isPaused]);
 
   return {
     isRecording,
+    isPaused,
     duration,
     permissionStatus,
     startRecording,
+    pauseRecording,
+    resumeRecording,
     stopRecording,
     cancelRecording,
     checkAndRequestPermission,

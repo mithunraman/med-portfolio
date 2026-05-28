@@ -1,6 +1,7 @@
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import {
   MAX_RECORDING_DURATION,
   useAudioRecorder,
@@ -122,9 +123,12 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
   const { colors, isDark } = useTheme();
   const {
     isRecording,
+    isPaused,
     duration,
     permissionStatus,
     startRecording,
+    pauseRecording,
+    resumeRecording,
     stopRecording,
     cancelRecording,
     checkAndRequestPermission,
@@ -166,6 +170,7 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
   useEffect(() => {
     if (isRecording && duration >= MAX_RECORDING_DURATION) {
       setMaxDurationReached(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       stopRecording()
         .then((result) => {
           stoppedResultRef.current = result;
@@ -177,11 +182,50 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
   }, [isRecording, duration, stopRecording]);
 
   // Handlers
-  const handleDiscard = useCallback(async () => {
-    stoppedResultRef.current = null;
-    await cancelRecording();
-    onDiscard();
-  }, [cancelRecording, onDiscard]);
+  const handleDiscard = useCallback(() => {
+    // If actively recording, pause while the dialog is open so the timer doesn't
+    // eat into the cap and noise from the dialog isn't appended to the clip.
+    // Skip if already paused (user paused manually — don't auto-resume their pause)
+    // or if recording was auto-stopped at max duration.
+    const shouldAutoResume = isRecording;
+    if (shouldAutoResume) {
+      pauseRecording();
+    }
+
+    Alert.alert(
+      'Discard recording?',
+      'This will delete the current recording. This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => {
+            if (shouldAutoResume) {
+              resumeRecording();
+            }
+          },
+        },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: async () => {
+            stoppedResultRef.current = null;
+            await cancelRecording();
+            onDiscard();
+          },
+        },
+      ],
+      { cancelable: false }
+    );
+  }, [isRecording, pauseRecording, resumeRecording, cancelRecording, onDiscard]);
+
+  const handlePauseToggle = useCallback(() => {
+    if (isPaused) {
+      resumeRecording();
+    } else {
+      pauseRecording();
+    }
+  }, [isPaused, pauseRecording, resumeRecording]);
 
   const handleSend = useCallback(async () => {
     // If recording was already auto-stopped, use the saved result
@@ -203,19 +247,19 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
 
   // Memoized icons
   const trashIcon = useMemo(
-    () => <Feather name="trash-2" size={SPACING.iconSize} color={COLORS.iconWhite} />,
-    []
+    () => <Feather name="trash-2" size={SPACING.iconSize} color={colors.text} />,
+    [colors.text]
   );
 
   const pauseIcon = useMemo(
     () => (
       <Ionicons
-        name="pause"
+        name={isPaused ? 'play' : 'pause'}
         size={SPACING.iconSize}
         color={COLORS.pauseButton}
       />
     ),
-    []
+    [isPaused]
   );
 
   const sendIcon = useMemo(
@@ -259,10 +303,13 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
         <Text
           style={timerTextStyle}
           testID={`${testIDPrefix}-timer`}
-          accessibilityLabel={`Recording time: ${formatSeconds(duration)}`}
+          accessibilityLabel={`Recording time: ${formatSeconds(duration)} of ${formatSeconds(MAX_RECORDING_DURATION)}`}
           accessibilityRole="timer"
         >
           {formatSeconds(duration)}
+          <Text style={[styles.timerMaxText, { color: colors.textSecondary }]}>
+            {` / ${formatSeconds(MAX_RECORDING_DURATION)}`}
+          </Text>
         </Text>
         <DottedLine dotCount={35} />
       </View>
@@ -284,14 +331,14 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
           testID={`${testIDPrefix}-trash`}
         />
 
-        {/* Pause/Resume button (non-functional for now) */}
+        {/* Pause / Resume button */}
         <CircularButton
           icon={pauseIcon}
           backgroundColor="transparent"
           borderColor={COLORS.pauseButton}
           borderWidth={2}
-          onPress={() => {}}
-          accessibilityLabel="Pause recording"
+          onPress={handlePauseToggle}
+          accessibilityLabel={isPaused ? 'Resume recording' : 'Pause recording'}
           testID={`${testIDPrefix}-pause`}
         />
 
@@ -328,7 +375,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
-    minWidth: 50,
+    minWidth: 110,
+  },
+  timerMaxText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   dottedLineContainer: {
     flex: 1,

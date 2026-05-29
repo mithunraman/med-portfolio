@@ -54,12 +54,12 @@ const SLIDES: Slide[] = [
       'See which capabilities you\u2019ve evidenced and where the gaps are before your ARCP.',
     icon: 'analytics-outline',
   },
-  {
-    id: '4',
-    title: 'Get Started',
-    description: 'Create an account or try it first - your entries are saved either way.',
-    icon: 'rocket-outline',
-  },
+  // {
+  //   id: '4',
+  //   title: 'Get Started',
+  //   description: 'Create an account or try it first - your entries are saved either way.',
+  //   icon: 'rocket-outline',
+  // },
 ];
 
 export default function IntroScreen() {

@@ -1,18 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/hooks';
 import { useTheme } from '@/theme';
-
-/** Convert a hex colour to rgba with the given alpha (0–1). */
-function hexToRgba(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
+import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -44,20 +35,15 @@ export default function WelcomeScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Centred content block */}
       <View style={styles.content}>
-        {/* Logo — double-ring icon, matching intro screen */}
-        <View style={[styles.logoRing, { backgroundColor: hexToRgba(colors.primary, 0.06) }]}>
-          <View
-            style={[styles.logoContainer, { backgroundColor: hexToRgba(colors.primary, 0.12) }]}
-          >
-            <Ionicons name="briefcase-outline" size={48} color={colors.primary} />
-          </View>
-        </View>
+        {/* Logo — app icon */}
+        <Image
+          source={require('../../assets/images/splash-icon.png')}
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
 
         {/* Welcome text */}
         <Text style={[styles.title, { color: colors.text }]}>Your portfolio, simplified</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Speak about your clinical experiences. We'll do the paperwork.
-        </Text>
 
         {/* Error message */}
         {error && (
@@ -109,32 +95,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
-  logoRing: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
+  logoImage: {
+    width: 200,
+    height: 100,
     marginBottom: 40,
-  },
-  logoContainer: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
-    paddingHorizontal: 20,
   },
   errorContainer: {
     marginTop: 16,

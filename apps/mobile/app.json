@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "logdit",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.logdit.mobile",
@@ -21,8 +20,10 @@
       },
       "package": "app.logdit.mobile",
       "versionCode": 1,
-      "edgeToEdgeEnabled": true,
-      "permissions": ["android.permission.RECORD_AUDIO", "android.permission.MODIFY_AUDIO_SETTINGS"]
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "plugins": [
       "@sentry/react-native/expo",
@@ -58,7 +59,8 @@
         {
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone to record voice notes."
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true

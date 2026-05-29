@@ -60,7 +60,8 @@
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone to record voice notes."
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "./plugins/with-sentry-disable-upload"
     ],
     "experiments": {
       "typedRoutes": true

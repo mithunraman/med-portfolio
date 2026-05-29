@@ -188,6 +188,7 @@ export default function IntroScreen() {
             onValueChange={toggleMode}
             trackColor={{ false: colors.border, true: colors.primary }}
             thumbColor="#fff"
+            style={styles.themeSwitch}
           />
         </View>
       </View>
@@ -286,5 +287,9 @@ const styles = StyleSheet.create({
   themeToggleText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  themeSwitch: {
+    width: 51,
+    height: 31,
   },
 });

@@ -6,7 +6,7 @@
     <title>LOGDit - Curriculum-mapped portfolio entries from a 3-minute voice note</title>
     <meta
       name="description"
-      content="Speak your case. LOGDit turns it into a curriculum-mapped portfolio entry with reflections and PDP goals. UK GP trainees, private beta."
+      content="Speak your case. LOGDit turns it into a curriculum-mapped portfolio entry with reflections and PDP goals. UK GP trainees, beta."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -177,7 +177,7 @@
         margin-top: 64px;
         display: flex;
         justify-content: center;
-        align-items: flex-end;
+        align-items: center;
         gap: 24px;
         flex-wrap: wrap;
       }
@@ -193,11 +193,6 @@
           0 0 0 1px rgba(0, 0, 0, 0.05);
         background: var(--color-surface);
         object-fit: cover;
-      }
-
-      .screenshot-center {
-        width: 280px;
-        transform: translateY(-24px);
       }
 
       /* ── eportfolio bridge ── */
@@ -271,29 +266,29 @@
       }
 
       .pain-stats {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 24px;
+        max-width: 420px;
+        margin: 0 auto;
       }
 
       .pain-stat {
-        padding: 28px 16px;
+        padding: 40px 32px;
         background: var(--color-bg);
         border-radius: var(--radius-lg);
       }
 
       .pain-stat-number {
-        font-size: 36px;
+        font-size: 56px;
         font-weight: 700;
         color: var(--color-primary);
         line-height: 1;
+        letter-spacing: -1px;
       }
 
       .pain-stat-label {
-        font-size: 14px;
+        font-size: 16px;
         color: var(--color-text-secondary);
-        margin-top: 8px;
-        line-height: 1.4;
+        margin-top: 12px;
+        line-height: 1.5;
       }
 
       /* ── How it works ── */
@@ -416,7 +411,7 @@
 
       .features-grid {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
         gap: 24px;
       }
 
@@ -767,26 +762,12 @@
           padding-bottom: 48px;
         }
 
-        .pain-stats {
-          grid-template-columns: 1fr;
-          gap: 12px;
-        }
-
         .pain-stat {
-          padding: 20px;
-          display: flex;
-          align-items: center;
-          gap: 16px;
+          padding: 32px 24px;
         }
 
         .pain-stat-number {
-          font-size: 28px;
-          flex-shrink: 0;
-        }
-
-        .pain-stat-label {
-          margin-top: 0;
-          text-align: left;
+          font-size: 44px;
         }
 
         .steps {
@@ -808,11 +789,6 @@
 
         .screenshot {
           width: 180px;
-        }
-
-        .screenshot-center {
-          width: 200px;
-          transform: translateY(-16px);
         }
       }
 
@@ -859,7 +835,7 @@
           <svg viewBox="0 0 24 24">
             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
           </svg>
-          Private beta - UK GP trainees
+          Beta - UK GP trainees
         </div>
         <h1>Speak your case. Get a <span>curriculum-mapped</span> portfolio entry in 3 minutes.</h1>
         <p class="hero-sub">
@@ -906,15 +882,6 @@
       </div>
     </section>
 
-    <!-- eportfolio bridge -->
-    <section class="bridge">
-      <div class="container">
-        <div class="bridge-eyebrow">Works alongside your eportfolio</div>
-        <h2>Not an eportfolio replacement. Just makes filling yours in painless.</h2>
-        <p>Voice in. Structured PDF out. Paste into your eportfolio.</p>
-      </div>
-    </section>
-
     <!-- Problem -->
     <section class="problem">
       <div class="container">
@@ -925,20 +892,10 @@
         <p class="problem-source">What we heard from UK GP trainees:</p>
         <div class="pain-stats">
           <div class="pain-stat">
-            <div class="pain-stat-number">45–60 min</div>
+            <div class="pain-stat-number">45 – 60 min</div>
             <div class="pain-stat-label">
               Typical time to write one reflective entry from scratch
             </div>
-          </div>
-          <div class="pain-stat">
-            <div class="pain-stat-number">"No idea"</div>
-            <div class="pain-stat-label">
-              Most common answer to "which capabilities have you covered this year?"
-            </div>
-          </div>
-          <div class="pain-stat">
-            <div class="pain-stat-number">11pm Sun</div>
-            <div class="pain-stat-label">Peak portfolio-admin time</div>
           </div>
         </div>
       </div>
@@ -1019,28 +976,14 @@
             <div class="feature-icon">
               <svg viewBox="0 0 24 24">
                 <path
-                  d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"
-                />
-              </svg>
-            </div>
-            <h3>Curriculum mapping</h3>
-            <p>
-              Every entry tagged against the RCGP curriculum capabilities. No more guessing which
-              competencies you've covered.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="feature-icon">
-              <svg viewBox="0 0 24 24">
-                <path
                   d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"
                 />
               </svg>
             </div>
-            <h3>Coverage dashboard</h3>
+            <h3>Curriculum coverage at a glance</h3>
             <p>
-              See exactly where your portfolio stands by domain. Spot the gaps months before ARCP,
-              not the night before.
+              Every entry auto-tagged against RCGP capabilities, so your coverage dashboard shows
+              exactly where you stand - and where the gaps are - months before ARCP.
             </p>
           </div>
           <div class="feature-card">
@@ -1064,7 +1007,7 @@
     <!-- Trust -->
     <section class="trust">
       <div class="container">
-        <h2>Healthcare-grade privacy, in plain English</h2>
+        <h2>Patient confidentiality, by design</h2>
         <div class="trust-grid">
           <div class="trust-item">
             <div class="trust-item-icon">
@@ -1075,43 +1018,11 @@
               </svg>
             </div>
             <div>
-              <h3>PII redaction before AI</h3>
+              <h3>PII redaction</h3>
               <p>
                 Names, dates of birth, NHS numbers and addresses are removed from the transcript
-                before it reaches any language model.
-              </p>
-            </div>
-          </div>
-          <div class="trust-item">
-            <div class="trust-item-icon">
-              <svg viewBox="0 0 24 24">
-                <path
-                  d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-                />
-              </svg>
-            </div>
-            <div>
-              <h3>You control your data</h3>
-              <p>
-                Delete any recording, transcript or entry at any time. Full export on request.
-                Account closure removes all your content.
-              </p>
-            </div>
-          </div>
-          <div class="trust-item">
-            <div class="trust-item-icon">
-              <svg viewBox="0 0 24 24">
-                <path
-                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
-                />
-              </svg>
-            </div>
-            <div>
-              <h3>UK and EEA storage</h3>
-              <p>
-                Data stored on UK and EEA cloud infrastructure. Built to the UK GDPR. Full
-                <a href="sub-processors.html">sub-processor list</a> published; DPIA available on
-                request.
+                before it's used to draft your reflections, capability tags or PDP goals. Stored on
+                UK and EEA infrastructure, built to the UK GDPR.
               </p>
             </div>
           </div>
@@ -1145,7 +1056,7 @@
         <div class="built-by-eyebrow">Built with trainees, not at them</div>
         <h2>We're trainees and engineers who got tired of the Sunday-night portfolio panic.</h2>
         <p class="built-by-lead">
-          Shaped by GP trainees in private beta. We ship what they ask for. We cut what they don't
+          Shaped by GP trainees in beta. We ship what they ask for. We cut what they don't
           use.
         </p>
         <div class="beta-pill">
@@ -1154,7 +1065,7 @@
               d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
             />
           </svg>
-          Now in private beta with UK GP trainees
+          Now in beta with UK GP trainees
         </div>
       </div>
     </section>
@@ -1175,7 +1086,7 @@
           <details class="faq-item">
             <summary>Which specialties do you support?</summary>
             <div class="faq-item-body">
-              In private beta today: General Practice (RCGP) only. Internal Medicine (JRCPTB),
+              In beta today: General Practice (RCGP) only. Internal Medicine (JRCPTB),
               Psychiatry (RCPsych), Emergency Medicine and Paediatrics are on the roadmap. Email us
               with your specialty and we'll prioritise based on demand.
             </div>
@@ -1200,7 +1111,8 @@
           <details class="faq-item">
             <summary>Is it free?</summary>
             <div class="faq-item-body">
-              Free during private beta. Paid plan around £49/year when we launch.
+              Free while in beta - no card required, no trial timer. We'll announce pricing when
+              we launch a paid plan, with advance notice and no auto-charges. Final pricing TBD.
             </div>
           </details>
           <details class="faq-item">
@@ -1229,7 +1141,7 @@
     <section class="cta-section" id="cta">
       <div class="container">
         <h2>Get <span class="brand">LOGDit</span> before your next ARCP</h2>
-        <p class="cta-section-sub">Private beta access is open to UK GP trainees.</p>
+        <p class="cta-section-sub">Beta access is open to UK GP trainees.</p>
         <div class="waitlist">
           <a
             href="https://apps.apple.com/app/logdit"
@@ -1247,7 +1159,7 @@
             </span>
           </a>
         </div>
-        <p class="cta-micro">Free during private beta.</p>
+        <p class="cta-micro">Free during beta.</p>
       </div>
     </section>
 

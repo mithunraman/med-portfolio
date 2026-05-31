@@ -44,4 +44,24 @@ export interface IMediaRepository {
   ): Promise<Result<number, DBError>>;
 
   anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
+
+  // Deletion state machine: ATTACHED → PENDING_DELETE → DELETED.
+  // Transitions are guarded by current status in the filter, so invalid
+  // transitions are silent no-ops rather than data corruption.
+
+  markPendingDeleteByMessageIds(
+    messageIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>>;
+
+  markPendingDeleteByUser(
+    userId: string,
+    session?: ClientSession
+  ): Promise<Result<number, DBError>>;
+
+  findPendingDeleteBatch(limit: number): Promise<Result<Media[], DBError>>;
+
+  markDeleted(xids: string[]): Promise<Result<number, DBError>>;
+
+  incrementDeleteAttempts(xid: string): Promise<Result<void, DBError>>;
 }

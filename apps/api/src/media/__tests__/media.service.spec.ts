@@ -19,6 +19,11 @@ function createMockRepo(): jest.Mocked<IMediaRepository> {
     findByUser: jest.fn().mockResolvedValue(ok([])),
     markDeletedByMessageIds: jest.fn().mockResolvedValue(ok(0)),
     anonymizeByUser: jest.fn().mockResolvedValue(ok(0)),
+    markPendingDeleteByMessageIds: jest.fn().mockResolvedValue(ok(0)),
+    markPendingDeleteByUser: jest.fn().mockResolvedValue(ok(0)),
+    findPendingDeleteBatch: jest.fn().mockResolvedValue(ok([])),
+    markDeleted: jest.fn().mockResolvedValue(ok(0)),
+    incrementDeleteAttempts: jest.fn().mockResolvedValue(ok(undefined)),
   };
 }
 

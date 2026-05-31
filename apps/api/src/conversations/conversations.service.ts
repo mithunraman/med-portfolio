@@ -8,15 +8,15 @@ import type {
   SingleSelectQuestion,
 } from '@acme/shared';
 import {
+  ArtefactStatus,
   ConversationStatus,
   MediaRefCollection,
   MediaStatus,
   MediaType,
-  MessageStatus,
   MessageRole,
+  MessageStatus,
   MessageType,
 } from '@acme/shared';
-import { ArtefactStatus } from '@acme/shared';
 import {
   BadRequestException,
   ConflictException,
@@ -85,10 +85,7 @@ export class ConversationsService {
     private readonly contextService: ConversationContextService
   ) {}
 
-  async deleteConversation(
-    userId: string,
-    conversationXid: string
-  ): Promise<{ message: string }> {
+  async deleteConversation(userId: string, conversationXid: string): Promise<{ message: string }> {
     const userOid = new Types.ObjectId(userId);
 
     const convResult = await this.conversationsRepository.findConversationByXid(
@@ -128,15 +125,13 @@ export class ConversationsService {
           conversation._id.toString(),
           session
         );
-        if (isErr(cancelResult))
-          throw new InternalServerErrorException(cancelResult.error.message);
+        if (isErr(cancelResult)) throw new InternalServerErrorException(cancelResult.error.message);
         if (messageIds.length > 0) {
           const mediaResult = await this.mediaRepository.markDeletedByMessageIds(
             messageIds,
             session
           );
-          if (isErr(mediaResult))
-            throw new InternalServerErrorException(mediaResult.error.message);
+          if (isErr(mediaResult)) throw new InternalServerErrorException(mediaResult.error.message);
         }
         const convAnon = await this.conversationsRepository.anonymizeConversation(
           conversation._id,
@@ -162,11 +157,7 @@ export class ConversationsService {
     return { message: 'Conversation deleted successfully' };
   }
 
-  async deleteMessage(
-    userId: string,
-    conversationXid: string,
-    messageXid: string,
-  ): Promise<void> {
+  async deleteMessage(userId: string, conversationXid: string, messageXid: string): Promise<void> {
     const userOid = new Types.ObjectId(userId);
 
     await this.transactionService.withTransaction(
@@ -175,7 +166,7 @@ export class ConversationsService {
         const convResult = await this.conversationsRepository.findConversationByXid(
           conversationXid,
           userOid,
-          session,
+          session
         );
         if (isErr(convResult)) throw new InternalServerErrorException(convResult.error.message);
         if (!convResult.value) throw new NotFoundException('Conversation not found');
@@ -190,10 +181,7 @@ export class ConversationsService {
         }
 
         // 3. Guard: block deletion if analysis is in progress
-        const activeRun = await this.analysisRunsService.findActiveRun(
-          conversation._id,
-          session
-        );
+        const activeRun = await this.analysisRunsService.findActiveRun(conversation._id, session);
         if (activeRun) {
           throw new ConflictException('Cannot delete messages while analysis is in progress');
         }
@@ -202,7 +190,7 @@ export class ConversationsService {
         const msgResult = await this.conversationsRepository.findMessagesByXids(
           [messageXid],
           userOid,
-          session,
+          session
         );
         if (isErr(msgResult)) throw new InternalServerErrorException(msgResult.error.message);
         const message = msgResult.value[0];
@@ -213,10 +201,9 @@ export class ConversationsService {
           message._id,
           conversation._id,
           userOid,
-          session,
+          session
         );
-        if (isErr(deleteResult))
-          throw new InternalServerErrorException(deleteResult.error.message);
+        if (isErr(deleteResult)) throw new InternalServerErrorException(deleteResult.error.message);
         if (!deleteResult.value) throw new NotFoundException('Message not found');
       },
       { context: `deleteMessage:${conversationXid}:${messageXid}` }
@@ -452,10 +439,7 @@ export class ConversationsService {
           throw new BadRequestException('Cannot start analysis without any completed messages.');
 
         // Check for existing active run (e.g. user already triggered analysis)
-        const existingRun = await this.analysisRunsService.findActiveRun(
-          conversation._id,
-          session
-        );
+        const existingRun = await this.analysisRunsService.findActiveRun(conversation._id, session);
         if (existingRun) {
           throw new ConflictException(
             'An analysis run is already in progress for this conversation.'
@@ -531,7 +515,7 @@ export class ConversationsService {
     // 3. Reject terminal questions — these are informational and cannot be resumed
     if (activeRun.currentQuestion.questionType === 'terminal') {
       throw new BadRequestException(
-        'This analysis has ended. Start a new conversation to try again.',
+        'This analysis has ended. Start a new conversation to try again.'
       );
     }
 
@@ -761,19 +745,33 @@ export class ConversationsService {
     // context to 'analysing' so the client keeps its spinner and fast-polls — the
     // next poll (2s later) will pick up both the message and the correct context.
     if (context.activeQuestion) {
-      const questionInList = enriched.some(
-        (m) => m.id === context.activeQuestion!.messageId
-      );
+      const questionInList = enriched.some((m) => m.id === context.activeQuestion!.messageId);
       if (!questionInList) {
         context = {
           ...context,
           phase: 'analysing',
           activeQuestion: undefined,
           actions: {
-            sendMessage: { allowed: false, code: 'ANALYSIS_RUNNING', reason: 'Analysis is in progress.' },
-            sendAudio: { allowed: false, code: 'ANALYSIS_RUNNING', reason: 'Analysis is in progress.' },
-            startAnalysis: { allowed: false, code: 'ANALYSIS_RUNNING', reason: 'Analysis is already in progress.' },
-            resumeAnalysis: { allowed: false, code: 'ANALYSIS_RUNNING', reason: 'Analysis is running, not paused.' },
+            sendMessage: {
+              allowed: false,
+              code: 'ANALYSIS_RUNNING',
+              reason: 'Analysis is in progress.',
+            },
+            sendAudio: {
+              allowed: false,
+              code: 'ANALYSIS_RUNNING',
+              reason: 'Analysis is in progress.',
+            },
+            startAnalysis: {
+              allowed: false,
+              code: 'ANALYSIS_RUNNING',
+              reason: 'Analysis is already in progress.',
+            },
+            resumeAnalysis: {
+              allowed: false,
+              code: 'ANALYSIS_RUNNING',
+              reason: 'Analysis is running, not paused.',
+            },
           },
         };
       }
@@ -784,11 +782,14 @@ export class ConversationsService {
 
   /**
    * Generate a presigned download URL for audio messages.
-   * Returns null for non-audio messages or if the media is not yet attached.
+   * Returns null for non-audio messages, unattached media, or media that has
+   * entered the deletion lifecycle (PENDING_DELETE / DELETED) — the S3 object
+   * may be gone or scheduled for purge, so we never hand out a URL for it.
    */
   private async resolveAudioUrl(msg: MessageSchema): Promise<string | null> {
     if (msg.messageType !== MessageType.AUDIO || !msg.media) return null;
     const mediaDoc = msg.media as unknown as Media;
+    if (mediaDoc.status !== MediaStatus.ATTACHED) return null;
     try {
       return await this.mediaService.getPresignedUrl(mediaDoc.xid);
     } catch {

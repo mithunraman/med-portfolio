@@ -46,6 +46,16 @@ export class Media {
   @Prop({ type: Number, default: null })
   durationMs!: number | null;
 
+  // Deletion lifecycle
+  @Prop({ type: Date, default: null })
+  pendingDeleteAt!: Date | null;
+
+  @Prop({ type: Date, default: null })
+  deletedAt!: Date | null;
+
+  @Prop({ required: true, type: Number, default: 0 })
+  deleteAttempts!: number;
+
   createdAt!: Date;
   updatedAt!: Date;
 }
@@ -56,3 +66,5 @@ export const MediaSchema = SchemaFactory.createForClass(Media);
 
 // Indexes
 MediaSchema.index({ userId: 1, status: 1 });
+// Supports the sweeper's status-only scan of PENDING_DELETE rows.
+MediaSchema.index({ status: 1 });

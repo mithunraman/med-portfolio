@@ -10,7 +10,6 @@ import { MediaModule } from '../media';
 import { OutboxModule } from '../outbox';
 import { PdpGoalsModule } from '../pdp-goals/pdp-goals.module';
 import { ReviewPeriodsModule } from '../review-periods/review-periods.module';
-import { StorageModule } from '../storage';
 import { VersionHistoryModule } from '../version-history/version-history.module';
 import { AccountCleanupController } from './account-cleanup.controller';
 import { AccountCleanupService } from './account-cleanup.service';
@@ -28,7 +27,6 @@ import { AccountCleanupService } from './account-cleanup.service';
     ItemsModule,
     VersionHistoryModule,
     OutboxModule,
-    StorageModule,
   ],
   controllers: [AccountCleanupController],
   providers: [AccountCleanupService],

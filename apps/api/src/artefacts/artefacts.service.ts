@@ -196,9 +196,9 @@ export class ArtefactsService {
             throw new InternalServerErrorException(cancelResult.error.message);
         }
 
-        // Mark media as deleted
+        // Mark attached media for async S3 cleanup
         if (allMessageIds.length > 0) {
-          const mediaResult = await this.mediaRepository.markDeletedByMessageIds(
+          const mediaResult = await this.mediaRepository.markPendingDeleteByMessageIds(
             allMessageIds,
             session
           );

@@ -32,7 +32,6 @@ import {
   IReviewPeriodsRepository,
   REVIEW_PERIODS_REPOSITORY,
 } from '../review-periods/review-periods.repository.interface';
-import { StorageService } from '../storage/storage.service';
 import {
   IVersionHistoryRepository,
   VERSION_HISTORY_REPOSITORY,
@@ -55,8 +54,7 @@ export class AccountCleanupService {
     @Inject(VERSION_HISTORY_REPOSITORY)
     private readonly versionHistoryRepo: IVersionHistoryRepository,
     @Inject(OUTBOX_REPOSITORY) private readonly outboxRepo: IOutboxRepository,
-    @Inject(SESSION_REPOSITORY) private readonly sessionRepo: ISessionRepository,
-    private readonly storageService: StorageService
+    @Inject(SESSION_REPOSITORY) private readonly sessionRepo: ISessionRepository
   ) {}
 
   @Cron('0 0 5 * * *') // Daily at 5:00 AM
@@ -103,7 +101,7 @@ export class AccountCleanupService {
     const steps: Array<{ name: string; fn: () => Promise<void> }> = [
       { name: 'outbox', fn: () => this.cancelOutboxEntries(userId, conversationIds) },
       { name: 'analysisRuns', fn: () => this.anonymizeAnalysisRuns(conversationIds) },
-      { name: 'media', fn: () => this.deleteMediaFiles(userId) },
+      { name: 'media', fn: () => this.markUserMediaPendingDelete(userId) },
       { name: 'conversations', fn: () => this.anonymizeConversations(userId) },
       { name: 'artefacts', fn: () => this.anonymizeArtefacts(userId) },
       { name: 'pdpGoals', fn: () => this.anonymizePdpGoals(userId) },
@@ -150,19 +148,8 @@ export class AccountCleanupService {
     if (isErr(result)) throw new Error(result.error.message);
   }
 
-  private async deleteMediaFiles(userId: Types.ObjectId): Promise<void> {
-    const findResult = await this.mediaRepo.findByUser(userId);
-    if (isErr(findResult)) throw new Error(findResult.error.message);
-
-    for (const item of findResult.value) {
-      try {
-        await this.storageService.deleteObject(item.bucket, item.key);
-      } catch (error) {
-        this.logger.warn(`Failed to delete S3 object ${item.key}: ${error}`);
-      }
-    }
-
-    const result = await this.mediaRepo.anonymizeByUser(userId);
+  private async markUserMediaPendingDelete(userId: Types.ObjectId): Promise<void> {
+    const result = await this.mediaRepo.markPendingDeleteByUser(userId.toString());
     if (isErr(result)) throw new Error(result.error.message);
   }
 

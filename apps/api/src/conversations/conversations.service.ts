@@ -127,7 +127,7 @@ export class ConversationsService {
         );
         if (isErr(cancelResult)) throw new InternalServerErrorException(cancelResult.error.message);
         if (messageIds.length > 0) {
-          const mediaResult = await this.mediaRepository.markDeletedByMessageIds(
+          const mediaResult = await this.mediaRepository.markPendingDeleteByMessageIds(
             messageIds,
             session
           );
@@ -205,6 +205,13 @@ export class ConversationsService {
         );
         if (isErr(deleteResult)) throw new InternalServerErrorException(deleteResult.error.message);
         if (!deleteResult.value) throw new NotFoundException('Message not found');
+
+        // 6. Mark attached media for async S3 cleanup
+        const mediaResult = await this.mediaRepository.markPendingDeleteByMessageIds(
+          [message._id],
+          session
+        );
+        if (isErr(mediaResult)) throw new InternalServerErrorException(mediaResult.error.message);
       },
       { context: `deleteMessage:${conversationXid}:${messageXid}` }
     );

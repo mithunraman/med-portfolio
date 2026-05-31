@@ -47,6 +47,10 @@ const mockConversationsRepo = {
   softDeleteMessage: jest.fn(),
 };
 
+const mockMediaRepo = {
+  markPendingDeleteByMessageIds: jest.fn(),
+};
+
 const mockAnalysisRunsService = {
   findActiveRun: jest.fn(),
 };
@@ -62,7 +66,7 @@ function createService(): ConversationsService {
   return new ConversationsService(
     mockConversationsRepo as any,
     noopRepo, // artefactsRepository
-    noopRepo, // mediaRepository
+    mockMediaRepo as any, // mediaRepository
     noopRepo, // pdpGoalsRepository
     noopRepo, // analysisRunsRepository
     noopRepo, // outboxRepository
@@ -91,6 +95,7 @@ describe('ConversationsService.deleteMessage', () => {
     mockAnalysisRunsService.findActiveRun.mockResolvedValue(null);
     mockConversationsRepo.findMessagesByXids.mockResolvedValue(ok([makeMessage()]));
     mockConversationsRepo.softDeleteMessage.mockResolvedValue(ok(makeMessage({ status: MessageStatus.DELETED })));
+    mockMediaRepo.markPendingDeleteByMessageIds.mockResolvedValue(ok(0));
 
     await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).resolves.toBeUndefined();
 
@@ -98,6 +103,10 @@ describe('ConversationsService.deleteMessage', () => {
       messageOid,
       conversationOid,
       userId,
+      null,
+    );
+    expect(mockMediaRepo.markPendingDeleteByMessageIds).toHaveBeenCalledWith(
+      [messageOid],
       null,
     );
   });

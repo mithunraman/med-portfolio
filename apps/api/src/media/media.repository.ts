@@ -104,37 +104,6 @@ export class MediaRepository implements IMediaRepository {
     }
   }
 
-  async markDeletedByMessageIds(
-    messageIds: Types.ObjectId[],
-    session?: ClientSession
-  ): Promise<Result<number, DBError>> {
-    try {
-      if (messageIds.length === 0) return ok(0);
-      const result = await this.mediaModel.updateMany(
-        { refDocumentId: { $in: messageIds }, refCollection: MediaRefCollection.MESSAGES },
-        { $set: { status: MediaStatus.DELETED } },
-        { session }
-      );
-      return ok(result.modifiedCount);
-    } catch (error) {
-      this.logger.error('Failed to mark media deleted by message ids', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to mark media deleted' });
-    }
-  }
-
-  async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
-    try {
-      const result = await this.mediaModel.updateMany(
-        { userId },
-        { $set: { status: MediaStatus.DELETED } }
-      );
-      return ok(result.modifiedCount);
-    } catch (error) {
-      this.logger.error('Failed to anonymize media', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to anonymize media' });
-    }
-  }
-
   async markPendingDeleteByMessageIds(
     messageIds: Types.ObjectId[],
     session?: ClientSession

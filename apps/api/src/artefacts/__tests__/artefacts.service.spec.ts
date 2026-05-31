@@ -92,7 +92,7 @@ const mockPdpGoalsRepo = {
 };
 
 const mockMediaRepo = {
-  markDeletedByMessageIds: jest.fn(),
+  markPendingDeleteByMessageIds: jest.fn(),
 };
 
 const mockAnalysisRunsRepo = {
@@ -212,7 +212,7 @@ describe('ArtefactsService', () => {
         .fn()
         .mockResolvedValue(ok([msgId]));
       mockOutboxRepo.cancelByConversationId.mockResolvedValue(ok(1));
-      mockMediaRepo.markDeletedByMessageIds.mockResolvedValue(ok(1));
+      mockMediaRepo.markPendingDeleteByMessageIds.mockResolvedValue(ok(1));
       mockConversationsRepo.anonymizeConversation = jest.fn().mockResolvedValue(ok(2));
       mockArtefactsRepo.anonymizeArtefact = jest.fn().mockResolvedValue(ok(undefined));
       mockPdpGoalsRepo.anonymizeByArtefactId = jest.fn().mockResolvedValue(ok(1));
@@ -225,7 +225,7 @@ describe('ArtefactsService', () => {
         convId.toString(),
         expect.anything(),
       );
-      expect(mockMediaRepo.markDeletedByMessageIds).toHaveBeenCalledWith(
+      expect(mockMediaRepo.markPendingDeleteByMessageIds).toHaveBeenCalledWith(
         [msgId],
         expect.anything(),
       );

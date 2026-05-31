@@ -47,7 +47,7 @@ const mockArtefactsRepo = {
 };
 
 const mockMediaRepo = {
-  markDeletedByMessageIds: jest.fn(),
+  markPendingDeleteByMessageIds: jest.fn(),
 };
 
 const mockPdpGoalsRepo = {
@@ -141,7 +141,7 @@ describe('ConversationsService.deleteConversation', () => {
     mockArtefactsRepo.findById.mockResolvedValue(ok(makeArtefact()));
     mockConversationsRepo.findMessageIdsByConversation.mockResolvedValue(ok([msgId]));
     mockOutboxRepo.cancelByConversationId.mockResolvedValue(ok(1));
-    mockMediaRepo.markDeletedByMessageIds.mockResolvedValue(ok(1));
+    mockMediaRepo.markPendingDeleteByMessageIds.mockResolvedValue(ok(1));
     mockConversationsRepo.anonymizeConversation.mockResolvedValue(ok(2));
     mockArtefactsRepo.anonymizeArtefact.mockResolvedValue(ok(undefined));
     mockPdpGoalsRepo.anonymizeByArtefactId.mockResolvedValue(ok(1));
@@ -154,7 +154,7 @@ describe('ConversationsService.deleteConversation', () => {
       conversationOid.toString(),
       expect.anything(),
     );
-    expect(mockMediaRepo.markDeletedByMessageIds).toHaveBeenCalledWith(
+    expect(mockMediaRepo.markPendingDeleteByMessageIds).toHaveBeenCalledWith(
       [msgId],
       expect.anything(),
     );
@@ -188,6 +188,6 @@ describe('ConversationsService.deleteConversation', () => {
     const result = await service.deleteConversation(userIdStr, 'conv_abc');
 
     expect(result).toEqual({ message: 'Conversation deleted successfully' });
-    expect(mockMediaRepo.markDeletedByMessageIds).not.toHaveBeenCalled();
+    expect(mockMediaRepo.markPendingDeleteByMessageIds).not.toHaveBeenCalled();
   });
 });

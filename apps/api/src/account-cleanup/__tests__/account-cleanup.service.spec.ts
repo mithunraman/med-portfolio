@@ -21,6 +21,7 @@ function createMockRepo() {
     findByUser: jest.fn().mockResolvedValue(ok([])),
     deleteByUser: jest.fn().mockResolvedValue(ok(0)),
     cancelByUser: jest.fn().mockResolvedValue(ok(0)),
+    markPendingDeleteByUser: jest.fn().mockResolvedValue(ok(0)),
   };
 }
 
@@ -34,10 +35,6 @@ function createMockUserModel() {
     updateOne: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
   };
 }
-
-const mockStorageService = {
-  deleteObject: jest.fn().mockResolvedValue(undefined),
-};
 
 function createService() {
   const repos = {
@@ -69,8 +66,7 @@ function createService() {
     repos.itemsRepo as any,
     repos.versionHistoryRepo as any,
     repos.outboxRepo as any,
-    sessionRepo as any,
-    mockStorageService as any
+    sessionRepo as any
   );
 
   return { service, repos, userModel, sessionRepo };
@@ -93,7 +89,6 @@ function setupUserForDeletion(
 describe('AccountCleanupService', () => {
   beforeEach(() => {
     jest.resetAllMocks();
-    mockStorageService.deleteObject.mockResolvedValue(undefined);
   });
 
   // ── processExpiredDeletions ──
@@ -153,7 +148,7 @@ describe('AccountCleanupService', () => {
 
       expect(repos.artefactsRepo.anonymizeByUser).toHaveBeenCalledWith(targetUserId);
       expect(repos.conversationsRepo.anonymizeByUser).toHaveBeenCalledWith(targetUserId);
-      expect(repos.mediaRepo.anonymizeByUser).toHaveBeenCalledWith(targetUserId);
+      expect(repos.mediaRepo.markPendingDeleteByUser).toHaveBeenCalledWith(targetUserId.toString());
       expect(repos.pdpGoalsRepo.anonymizeByUser).toHaveBeenCalledWith(targetUserId);
       expect(repos.reviewPeriodsRepo.anonymizeByUser).toHaveBeenCalledWith(targetUserId);
       expect(repos.itemsRepo.anonymizeByUser).toHaveBeenCalledWith(targetUserId);
@@ -214,48 +209,18 @@ describe('AccountCleanupService', () => {
     });
   });
 
-  // ── S3 media deletion ──
+  // ── Media: mark PENDING_DELETE (sweeper handles S3 out-of-band) ──
 
-  describe('S3 media deletion', () => {
-    it('should delete each S3 object then mark media as DELETED via repo', async () => {
+  describe('media pending-delete marking', () => {
+    it('marks the user\'s media as PENDING_DELETE via the repo', async () => {
       const { service, repos, userModel } = createService();
       setupUserForDeletion(userModel, targetUserId);
-
-      const mediaItems = [
-        { bucket: 'media-bucket', key: 'media/file1.m4a' },
-        { bucket: 'media-bucket', key: 'media/file2.m4a' },
-      ];
-      repos.mediaRepo.findByUser.mockResolvedValue(ok(mediaItems));
 
       await service.processExpiredDeletions();
 
-      expect(mockStorageService.deleteObject).toHaveBeenCalledTimes(2);
-      expect(mockStorageService.deleteObject).toHaveBeenCalledWith('media-bucket', 'media/file1.m4a');
-      expect(mockStorageService.deleteObject).toHaveBeenCalledWith('media-bucket', 'media/file2.m4a');
-      expect(repos.mediaRepo.anonymizeByUser).toHaveBeenCalledWith(targetUserId);
-    });
-
-    it('should continue deleting remaining files if one S3 delete fails', async () => {
-      const { service, repos, userModel } = createService();
-      setupUserForDeletion(userModel, targetUserId);
-
-      repos.mediaRepo.findByUser.mockResolvedValue(
-        ok([
-          { bucket: 'b', key: 'f1' },
-          { bucket: 'b', key: 'f2' },
-          { bucket: 'b', key: 'f3' },
-        ])
+      expect(repos.mediaRepo.markPendingDeleteByUser).toHaveBeenCalledWith(
+        targetUserId.toString()
       );
-
-      mockStorageService.deleteObject
-        .mockResolvedValueOnce(undefined)
-        .mockRejectedValueOnce(new Error('S3 timeout'))
-        .mockResolvedValueOnce(undefined);
-
-      await service.processExpiredDeletions();
-
-      expect(mockStorageService.deleteObject).toHaveBeenCalledTimes(3);
-      expect(repos.mediaRepo.anonymizeByUser).toHaveBeenCalledWith(targetUserId);
     });
   });
 

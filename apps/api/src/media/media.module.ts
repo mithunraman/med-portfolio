@@ -6,6 +6,7 @@ import { MediaController } from './media.controller';
 import { MediaRepository } from './media.repository';
 import { MEDIA_REPOSITORY } from './media.repository.interface';
 import { MediaService } from './media.service';
+import { MediaSweeperService } from './media-sweeper.service';
 import { Media, MediaSchema } from './schemas/media.schema';
 
 @Module({
@@ -17,6 +18,7 @@ import { Media, MediaSchema } from './schemas/media.schema';
   controllers: [MediaController],
   providers: [
     MediaService,
+    MediaSweeperService,
     {
       provide: MEDIA_REPOSITORY,
       useClass: MediaRepository,

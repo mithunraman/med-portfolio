@@ -54,7 +54,9 @@ export interface IMediaRepository {
 
   findPendingDeleteBatch(limit: number): Promise<Result<Media[], DBError>>;
 
-  markDeleted(xids: string[]): Promise<Result<number, DBError>>;
+  countDeadLettered(): Promise<Result<number, DBError>>;
 
-  incrementDeleteAttempts(xid: string): Promise<Result<void, DBError>>;
+  markDeleted(ids: string[]): Promise<Result<number, DBError>>;
+
+  incrementDeleteAttempts(id: string): Promise<Result<void, DBError>>;
 }

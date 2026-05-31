@@ -10,6 +10,10 @@ import {
 } from './media.repository.interface';
 import { Media, MediaDocument } from './schemas/media.schema';
 
+// Sweep policy: a row that fails 24 hourly attempts is considered dead-lettered
+// and excluded from future sweeps. countDeadLettered() exposes the backlog for ops.
+const DEAD_LETTER_THRESHOLD = 24;
+
 @Injectable()
 export class MediaRepository implements IMediaRepository {
   private readonly logger = new Logger(MediaRepository.name);
@@ -149,7 +153,10 @@ export class MediaRepository implements IMediaRepository {
   async findPendingDeleteBatch(limit: number): Promise<Result<Media[], DBError>> {
     try {
       const media = await this.mediaModel
-        .find({ status: MediaStatus.PENDING_DELETE })
+        .find({
+          status: MediaStatus.PENDING_DELETE,
+          deleteAttempts: { $lt: DEAD_LETTER_THRESHOLD },
+        })
         .limit(limit)
         .lean();
       return ok(media);
@@ -159,11 +166,25 @@ export class MediaRepository implements IMediaRepository {
     }
   }
 
-  async markDeleted(xids: string[]): Promise<Result<number, DBError>> {
+  async countDeadLettered(): Promise<Result<number, DBError>> {
     try {
-      if (xids.length === 0) return ok(0);
+      const count = await this.mediaModel.countDocuments({
+        status: MediaStatus.PENDING_DELETE,
+        deleteAttempts: { $gte: DEAD_LETTER_THRESHOLD },
+      });
+      return ok(count);
+    } catch (error) {
+      this.logger.error('Failed to count dead-lettered media', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to count dead-lettered media' });
+    }
+  }
+
+  async markDeleted(ids: string[]): Promise<Result<number, DBError>> {
+    try {
+      if (ids.length === 0) return ok(0);
+      const objectIds = ids.map((id) => new Types.ObjectId(id));
       const result = await this.mediaModel.updateMany(
-        { xid: { $in: xids }, status: MediaStatus.PENDING_DELETE },
+        { _id: { $in: objectIds }, status: MediaStatus.PENDING_DELETE },
         { $set: { status: MediaStatus.DELETED, deletedAt: new Date() } }
       );
       return ok(result.modifiedCount);
@@ -173,10 +194,10 @@ export class MediaRepository implements IMediaRepository {
     }
   }
 
-  async incrementDeleteAttempts(xid: string): Promise<Result<void, DBError>> {
+  async incrementDeleteAttempts(id: string): Promise<Result<void, DBError>> {
     try {
       await this.mediaModel.updateOne(
-        { xid, status: MediaStatus.PENDING_DELETE },
+        { _id: new Types.ObjectId(id), status: MediaStatus.PENDING_DELETE },
         { $inc: { deleteAttempts: 1 } }
       );
       return ok(undefined);

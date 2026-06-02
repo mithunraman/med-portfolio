@@ -187,7 +187,7 @@ export class ArtefactsRepository implements IArtefactsRepository {
     }
   }
 
-  async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
+  async markDeletedByUserId(userId: Types.ObjectId): Promise<Result<number, DBError>> {
     try {
       const result = await this.artefactModel.updateMany(
         { userId, status: { $ne: ArtefactStatus.DELETED } },

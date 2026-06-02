@@ -116,7 +116,7 @@ export class ItemsRepository implements IItemsRepository {
     }
   }
 
-  async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
+  async markDeletedByUserId(userId: Types.ObjectId): Promise<Result<number, DBError>> {
     try {
       const result = await this.itemModel.updateMany(
         { userId },

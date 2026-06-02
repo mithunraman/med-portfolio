@@ -98,7 +98,7 @@ export class ReviewPeriodsRepository implements IReviewPeriodsRepository {
     }
   }
 
-  async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
+  async markDeletedByUserId(userId: Types.ObjectId): Promise<Result<number, DBError>> {
     try {
       const result = await this.model.updateMany(
         { userId },

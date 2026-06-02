@@ -363,7 +363,7 @@ export class ConversationsRepository implements IConversationsRepository {
     }
   }
 
-  async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
+  async markDeletedByUserId(userId: Types.ObjectId): Promise<Result<number, DBError>> {
     try {
       const convResult = await this.conversationModel.updateMany(
         { userId, status: { $ne: ConversationStatus.DELETED } },

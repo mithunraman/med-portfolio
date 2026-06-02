@@ -40,7 +40,7 @@ export interface IVersionHistoryRepository {
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
 
-  deleteByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
+  deleteByUserId(userId: Types.ObjectId): Promise<Result<number, DBError>>;
 
   /**
    * Anonymize version-history rows for the given entityType + entityIds by

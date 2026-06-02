@@ -158,10 +158,10 @@ export interface IConversationsRepository {
   ): Promise<Result<Types.ObjectId[], DBError>>;
 
   /**
-   * Anonymize all conversations and messages belonging to a user.
+   * Bulk tombstone all conversations and messages belonging to a user.
    * Returns the total number of modified documents.
    */
-  anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
+  markDeletedByUserId(userId: Types.ObjectId): Promise<Result<number, DBError>>;
 
   /**
    * Bulk tombstone conversations + scrub fields. Idempotent.

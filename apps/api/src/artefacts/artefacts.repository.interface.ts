@@ -75,7 +75,7 @@ export interface IArtefactsRepository {
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
 
-  anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
+  markDeletedByUserId(userId: Types.ObjectId): Promise<Result<number, DBError>>;
 
   markDeleted(
     ids: Types.ObjectId[],

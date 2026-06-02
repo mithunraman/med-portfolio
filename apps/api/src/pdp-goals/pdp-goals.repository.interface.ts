@@ -133,7 +133,7 @@ export interface IPdpGoalsRepository {
     session?: ClientSession
   ): Promise<Result<boolean, DBError>>;
 
-  anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
+  markDeletedByUserId(userId: Types.ObjectId): Promise<Result<number, DBError>>;
 
   /**
    * Bulk tombstone PdpGoals linked to any of the given artefact IDs. Idempotent.

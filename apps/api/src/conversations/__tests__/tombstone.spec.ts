@@ -27,7 +27,7 @@ describe('messageTombstoneUpdate', () => {
     const update = messageTombstoneUpdate();
 
     // All three must be unset on every tombstone path — verifying inclusion
-    // catches the "anonymizeByUser forgot to unset media" class of bug
+    // catches the "markDeletedByUserId forgot to unset media" class of bug
     // that drift between scattered call sites used to allow.
     expect(update.$unset).toEqual({ question: '', answer: '', media: '' });
   });

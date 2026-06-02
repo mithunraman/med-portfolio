@@ -95,7 +95,7 @@ export class VersionHistoryRepository implements IVersionHistoryRepository {
     }
   }
 
-  async deleteByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
+  async deleteByUserId(userId: Types.ObjectId): Promise<Result<number, DBError>> {
     try {
       const result = await this.versionHistoryModel.deleteMany({ userId });
       return ok(result.deletedCount);

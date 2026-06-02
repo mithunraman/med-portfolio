@@ -397,7 +397,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     }
   }
 
-  async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
+  async markDeletedByUserId(userId: Types.ObjectId): Promise<Result<number, DBError>> {
     try {
       const result = await this.pdpGoalModel.updateMany(
         { userId, status: { $ne: PdpGoalStatus.DELETED } },

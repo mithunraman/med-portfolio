@@ -419,6 +419,30 @@ describe('AccountCleanupService (integration)', () => {
     expect(outboxB!.status).toBe(OutboxStatus.PENDING);
   });
 
+  it('triggerDeletion refuses an unflagged user and leaves data intact', async () => {
+    // Seed a user WITHOUT deletionRequestedAt set, plus their data.
+    await seedUser(userAId, { deletion: false });
+    await seedFullData(userAId);
+
+    await expect(service.triggerDeletion(userAId.toString())).rejects.toThrow(
+      /has not requested deletion/
+    );
+
+    // Every user-scoped record must still be present and untouched.
+    const user = await userModel.findById(userAId).lean();
+    expect(user!.name).toBe(`User ${userAId.toString().slice(-4)}`);
+    expect(user!.anonymizedAt).toBeNull();
+
+    const artefact = await artefactModel.findOne({ userId: userAId }).lean();
+    expect(artefact!.status).toBe(ArtefactStatus.COMPLETED);
+
+    const conversation = await conversationModel.findOne({ userId: userAId }).lean();
+    expect(conversation!.status).toBe(ConversationStatus.ACTIVE);
+
+    const media = await mediaModel.findOne({ userId: userAId }).lean();
+    expect(media!.status).toBe(MediaStatus.ATTACHED);
+  });
+
   it('should be idempotent — second run is a no-op', async () => {
     await seedUser(userAId, { deletion: true });
     await seedFullData(userAId);

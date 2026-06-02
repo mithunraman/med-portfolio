@@ -48,5 +48,5 @@ export interface IReviewPeriodsRepository {
     session?: ClientSession
   ): Promise<Result<ReviewPeriod | null, DBError>>;
 
-  anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
+  markDeletedByUserId(userId: Types.ObjectId): Promise<Result<number, DBError>>;
 }

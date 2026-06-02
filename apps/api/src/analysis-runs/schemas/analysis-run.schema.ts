@@ -101,3 +101,10 @@ AnalysisRunSchema.index(
     },
   },
 );
+
+// Cascade resolver: markDeletedByArtefactIds filters on
+// { artefactId: { $in }, status: { $ne: DELETED } }. artefactId leads
+// (selective); status is in the index for read patterns that filter by
+// exact status. `$ne` itself can't use index bounds, so the second key
+// doesn't accelerate the cascade — it earns its keep on exact-status reads.
+AnalysisRunSchema.index({ artefactId: 1, status: 1 });

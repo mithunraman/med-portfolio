@@ -28,7 +28,11 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
   return {
     _id: messageOid,
     xid: 'msg_abc',
-    conversation: conversationOid,
+    // findMessagesByXids populates `conversation` and runs .lean(), so the
+    // real shape at runtime is { _id, xid } — NOT a raw Types.ObjectId.
+    // Tests must mirror this; using a raw ObjectId here previously hid a
+    // P0 where .equals() on the populated plain object threw at runtime.
+    conversation: { _id: conversationOid, xid: 'conv_abc' },
     userId,
     role: MessageRole.USER,
     status: MessageStatus.COMPLETE,
@@ -44,18 +48,17 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
 const mockConversationsRepo = {
   findConversationByXid: jest.fn(),
   findMessagesByXids: jest.fn(),
-  softDeleteMessage: jest.fn(),
+  markDeletedMessagesByIds: jest.fn().mockResolvedValue(ok(1)),
 };
 
-const mockMediaRepo = {
-  markPendingDeleteByMessageIds: jest.fn(),
+const mockMediaService = {
+  markPendingDeleteByMessageIds: jest.fn().mockResolvedValue(undefined),
 };
 
 const mockAnalysisRunsService = {
   findActiveRun: jest.fn(),
 };
 
-// Unused deps — ConversationsService requires them but deleteMessage doesn't use them
 const noopService = {} as any;
 const noopRepo = {} as any;
 const mockTransactionService = {
@@ -66,12 +69,9 @@ function createService(): ConversationsService {
   return new ConversationsService(
     mockConversationsRepo as any,
     noopRepo, // artefactsRepository
-    mockMediaRepo as any, // mediaRepository
-    noopRepo, // pdpGoalsRepository
-    noopRepo, // analysisRunsRepository
-    noopRepo, // outboxRepository
-    noopService, // mediaService
-    mockTransactionService as any, // transactionService
+    noopRepo, // mediaRepository
+    mockMediaService as any,
+    mockTransactionService as any,
     noopService, // portfolioGraphService
     mockAnalysisRunsService as any,
     noopService, // outboxService
@@ -87,25 +87,25 @@ describe('ConversationsService.deleteMessage', () => {
     mockTransactionService.withTransaction.mockImplementation(
       (fn: (session: any) => Promise<any>) => fn(null),
     );
+    mockConversationsRepo.markDeletedMessagesByIds.mockResolvedValue(ok(1));
+    mockMediaService.markPendingDeleteByMessageIds.mockResolvedValue(undefined);
     service = createService();
   });
 
-  it('deletes a user message in an active conversation', async () => {
+  it('cascades media + tombstones the message for a USER message in an active conversation', async () => {
     mockConversationsRepo.findConversationByXid.mockResolvedValue(ok(makeConversation()));
     mockAnalysisRunsService.findActiveRun.mockResolvedValue(null);
     mockConversationsRepo.findMessagesByXids.mockResolvedValue(ok([makeMessage()]));
-    mockConversationsRepo.softDeleteMessage.mockResolvedValue(ok(makeMessage({ status: MessageStatus.DELETED })));
-    mockMediaRepo.markPendingDeleteByMessageIds.mockResolvedValue(ok(0));
 
-    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).resolves.toBeUndefined();
+    await expect(
+      service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc'),
+    ).resolves.toBeUndefined();
 
-    expect(mockConversationsRepo.softDeleteMessage).toHaveBeenCalledWith(
-      messageOid,
-      conversationOid,
-      userId,
+    expect(mockMediaService.markPendingDeleteByMessageIds).toHaveBeenCalledWith(
+      [messageOid],
       null,
     );
-    expect(mockMediaRepo.markPendingDeleteByMessageIds).toHaveBeenCalledWith(
+    expect(mockConversationsRepo.markDeletedMessagesByIds).toHaveBeenCalledWith(
       [messageOid],
       null,
     );
@@ -148,14 +148,34 @@ describe('ConversationsService.deleteMessage', () => {
     );
   });
 
-  it('throws NotFoundException when softDeleteMessage returns null (not owned or not USER role)', async () => {
+  it('throws NotFoundException when message is not a USER message', async () => {
     mockConversationsRepo.findConversationByXid.mockResolvedValue(ok(makeConversation()));
     mockAnalysisRunsService.findActiveRun.mockResolvedValue(null);
-    mockConversationsRepo.findMessagesByXids.mockResolvedValue(ok([makeMessage()]));
-    mockConversationsRepo.softDeleteMessage.mockResolvedValue(ok(null));
+    mockConversationsRepo.findMessagesByXids.mockResolvedValue(
+      ok([makeMessage({ role: MessageRole.ASSISTANT })]),
+    );
 
     await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  it('throws NotFoundException when message belongs to a different conversation owned by the same user', async () => {
+    // Both conversations belong to the same user — the route names conv_abc
+    // (idle, no active run) while the message lives in conv_other (which
+    // could be running an analysis). Without the membership check, the
+    // active-run guard would be bypassed.
+    const otherConversationOid = oid();
+    mockConversationsRepo.findConversationByXid.mockResolvedValue(ok(makeConversation()));
+    mockAnalysisRunsService.findActiveRun.mockResolvedValue(null);
+    mockConversationsRepo.findMessagesByXids.mockResolvedValue(
+      ok([makeMessage({ conversation: { _id: otherConversationOid, xid: 'conv_other' } })]),
+    );
+
+    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(mockConversationsRepo.markDeletedMessagesByIds).not.toHaveBeenCalled();
+    expect(mockMediaService.markPendingDeleteByMessageIds).not.toHaveBeenCalled();
   });
 });

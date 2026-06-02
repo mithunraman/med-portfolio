@@ -127,11 +127,6 @@ export interface IPdpGoalsRepository {
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
 
-  anonymizeByArtefactId(
-    artefactId: Types.ObjectId,
-    session?: ClientSession
-  ): Promise<Result<number, DBError>>;
-
   anonymizeGoal(
     xid: string,
     userId: Types.ObjectId,
@@ -139,4 +134,12 @@ export interface IPdpGoalsRepository {
   ): Promise<Result<boolean, DBError>>;
 
   anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
+
+  /**
+   * Bulk tombstone PdpGoals linked to any of the given artefact IDs. Idempotent.
+   */
+  markDeletedByArtefactIds(
+    artefactIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>>;
 }

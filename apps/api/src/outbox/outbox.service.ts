@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ClientSession, Types } from 'mongoose';
+import { unwrapVoid } from '../common/utils/result.util';
 import {
   CreateOutboxEntryData,
   IOutboxRepository,
@@ -109,5 +110,17 @@ export class OutboxService {
       this.logger.warn(`Reset ${result.value} stale outbox locks`);
     }
     return result.value;
+  }
+
+  /**
+   * Cascade entry point: cancel pending/processing entries for the given
+   * conversations as part of conversation deletion.
+   */
+  async cancelByConversationIds(
+    conversationIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<void> {
+    const idStrings = conversationIds.map((id) => id.toString());
+    unwrapVoid(await this.repository.cancelByConversationIds(idStrings, session));
   }
 }

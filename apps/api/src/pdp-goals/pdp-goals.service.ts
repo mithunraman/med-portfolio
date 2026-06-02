@@ -6,10 +6,10 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { Types } from 'mongoose';
+import { ClientSession, Types } from 'mongoose';
 import { toISOStringOrNull } from '../common/utils/date.util';
 import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
-import { isErr } from '../common/utils/result.util';
+import { isErr, unwrapVoid } from '../common/utils/result.util';
 import { AddPdpGoalActionDto, UpdatePdpGoalActionDto, UpdatePdpGoalDto } from './dto';
 import {
   IPdpGoalsRepository,
@@ -230,5 +230,15 @@ export class PdpGoalsService {
     }
 
     return mapGoalWithArtefactToDto(goal);
+  }
+
+  /**
+   * Cascade entry point: tombstone PDP goals linked to the given artefacts.
+   */
+  async deleteByArtefactIds(
+    artefactIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<void> {
+    unwrapVoid(await this.pdpGoalsRepository.markDeletedByArtefactIds(artefactIds, session));
   }
 }

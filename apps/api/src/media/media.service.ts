@@ -8,10 +8,10 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { Types } from 'mongoose';
+import { ClientSession, Types } from 'mongoose';
 import { generateXid } from '../common/utils/nanoid.util';
 import { objectIdsEqual } from '../common/utils/objectid.util';
-import { isErr } from '../common/utils/result.util';
+import { isErr, unwrapVoid } from '../common/utils/result.util';
 import { StorageService } from '../storage/storage.service';
 import { IMediaRepository, MEDIA_REPOSITORY } from './media.repository.interface';
 
@@ -226,5 +226,16 @@ export class MediaService {
     if (isErr(findResult)) throw new InternalServerErrorException(findResult.error.message);
 
     return findResult.value;
+  }
+
+  /**
+   * Cascade entry point: flip media attached to the given messages into
+   * PENDING_DELETE for async S3 cleanup by the sweeper.
+   */
+  async markPendingDeleteByMessageIds(
+    messageIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<void> {
+    unwrapVoid(await this.mediaRepository.markPendingDeleteByMessageIds(messageIds, session));
   }
 }

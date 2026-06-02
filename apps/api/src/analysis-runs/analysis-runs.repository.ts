@@ -12,6 +12,22 @@ import { AnalysisRun, AnalysisRunDocument } from './schemas/analysis-run.schema'
 
 const TERMINAL_STATUSES = [AnalysisRunStatus.COMPLETED, AnalysisRunStatus.FAILED];
 
+/**
+ * Single source of truth for the AnalysisRun tombstone payload. Used by every
+ * deletion path on this repo. Adding a new sensitive field belongs here.
+ */
+export function analysisRunTombstoneUpdate() {
+  return {
+    $set: {
+      status: AnalysisRunStatus.DELETED,
+      langGraphThreadId: '[deleted]',
+      currentStep: null,
+      currentQuestion: null,
+      error: null,
+    },
+  };
+}
+
 @Injectable()
 export class AnalysisRunsRepository implements IAnalysisRunsRepository {
   private readonly logger = new Logger(AnalysisRunsRepository.name);
@@ -210,26 +226,51 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
     }
   }
 
-  async anonymizeByConversationIds(
-    conversationIds: Types.ObjectId[]
+  async markDeletedByConversationIds(
+    conversationIds: Types.ObjectId[],
+    session?: ClientSession
   ): Promise<Result<number, DBError>> {
+    if (conversationIds.length === 0) return ok(0);
     try {
       const result = await this.analysisRunModel.updateMany(
-        { conversationId: { $in: conversationIds } },
         {
-          $set: {
-            status: AnalysisRunStatus.DELETED,
-            langGraphThreadId: '[deleted]',
-            currentStep: null,
-            currentQuestion: null,
-            error: null,
-          },
-        }
+          conversationId: { $in: conversationIds },
+          status: { $ne: AnalysisRunStatus.DELETED },
+        },
+        analysisRunTombstoneUpdate(),
+        { session }
       );
       return ok(result.modifiedCount);
     } catch (error) {
-      this.logger.error('Failed to anonymize analysis runs', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to anonymize analysis runs' });
+      this.logger.error('Failed to mark analysis runs deleted by conversation ids', error);
+      return err({
+        code: 'DB_ERROR',
+        message: 'Failed to mark analysis runs deleted by conversation ids',
+      });
+    }
+  }
+
+  async markDeletedByArtefactIds(
+    artefactIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>> {
+    if (artefactIds.length === 0) return ok(0);
+    try {
+      const result = await this.analysisRunModel.updateMany(
+        {
+          artefactId: { $in: artefactIds },
+          status: { $ne: AnalysisRunStatus.DELETED },
+        },
+        analysisRunTombstoneUpdate(),
+        { session }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to mark analysis runs deleted by artefact ids', error);
+      return err({
+        code: 'DB_ERROR',
+        message: 'Failed to mark analysis runs deleted by artefact ids',
+      });
     }
   }
 }

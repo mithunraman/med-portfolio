@@ -8,7 +8,6 @@ import type {
   SingleSelectQuestion,
 } from '@acme/shared';
 import {
-  ArtefactStatus,
   ConversationStatus,
   MediaRefCollection,
   MediaStatus,
@@ -26,27 +25,19 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Types } from 'mongoose';
-import {
-  ANALYSIS_RUNS_REPOSITORY,
-  IAnalysisRunsRepository,
-} from '../analysis-runs/analysis-runs.repository.interface';
+import { ClientSession, Types } from 'mongoose';
 import { AnalysisRunsService } from '../analysis-runs/analysis-runs.service';
 import {
   ARTEFACTS_REPOSITORY,
   IArtefactsRepository,
 } from '../artefacts/artefacts.repository.interface';
 import { generateXid, nanoidAlphanumeric } from '../common/utils/nanoid.util';
+import { objectIdsEqual } from '../common/utils/objectid.util';
 import { isErr } from '../common/utils/result.util';
 import { TransactionService } from '../database';
 import { IMediaRepository, MEDIA_REPOSITORY, MediaService } from '../media';
 import { Media } from '../media/schemas/media.schema';
-import { IOutboxRepository, OUTBOX_REPOSITORY } from '../outbox/outbox.repository.interface';
 import { OutboxService } from '../outbox/outbox.service';
-import {
-  IPdpGoalsRepository,
-  PDP_GOALS_REPOSITORY,
-} from '../pdp-goals/pdp-goals.repository.interface';
 import {
   type InterruptNode,
   PortfolioGraphService,
@@ -71,12 +62,6 @@ export class ConversationsService {
     private readonly artefactsRepository: IArtefactsRepository,
     @Inject(MEDIA_REPOSITORY)
     private readonly mediaRepository: IMediaRepository,
-    @Inject(PDP_GOALS_REPOSITORY)
-    private readonly pdpGoalsRepository: IPdpGoalsRepository,
-    @Inject(ANALYSIS_RUNS_REPOSITORY)
-    private readonly analysisRunsRepository: IAnalysisRunsRepository,
-    @Inject(OUTBOX_REPOSITORY)
-    private readonly outboxRepository: IOutboxRepository,
     private readonly mediaService: MediaService,
     private readonly transactionService: TransactionService,
     private readonly portfolioGraphService: PortfolioGraphService,
@@ -84,78 +69,6 @@ export class ConversationsService {
     private readonly outboxService: OutboxService,
     private readonly contextService: ConversationContextService
   ) {}
-
-  async deleteConversation(userId: string, conversationXid: string): Promise<{ message: string }> {
-    const userOid = new Types.ObjectId(userId);
-
-    const convResult = await this.conversationsRepository.findConversationByXid(
-      conversationXid,
-      userOid
-    );
-    if (isErr(convResult)) throw new InternalServerErrorException(convResult.error.message);
-    if (!convResult.value) throw new NotFoundException('Conversation not found');
-
-    const conversation = convResult.value;
-
-    if (conversation.status === ConversationStatus.DELETED) {
-      throw new NotFoundException('Conversation not found');
-    }
-
-    const artefactResult = await this.artefactsRepository.findById(conversation.artefact);
-    if (isErr(artefactResult)) throw new InternalServerErrorException(artefactResult.error.message);
-    if (!artefactResult.value) throw new NotFoundException('Artefact not found');
-
-    const artefact = artefactResult.value;
-
-    if (artefact.status !== ArtefactStatus.IN_CONVERSATION) {
-      throw new BadRequestException(
-        'Conversation can only be deleted while the entry is in progress'
-      );
-    }
-
-    // Get message IDs for media cleanup
-    const msgIdsResult = await this.conversationsRepository.findMessageIdsByConversation(
-      conversation._id
-    );
-    const messageIds = isErr(msgIdsResult) ? [] : msgIdsResult.value;
-
-    await this.transactionService.withTransaction(
-      async (session) => {
-        const cancelResult = await this.outboxRepository.cancelByConversationId(
-          conversation._id.toString(),
-          session
-        );
-        if (isErr(cancelResult)) throw new InternalServerErrorException(cancelResult.error.message);
-        if (messageIds.length > 0) {
-          const mediaResult = await this.mediaRepository.markPendingDeleteByMessageIds(
-            messageIds,
-            session
-          );
-          if (isErr(mediaResult)) throw new InternalServerErrorException(mediaResult.error.message);
-        }
-        const convAnon = await this.conversationsRepository.anonymizeConversation(
-          conversation._id,
-          session
-        );
-        if (isErr(convAnon)) throw new InternalServerErrorException(convAnon.error.message);
-
-        const artAnon = await this.artefactsRepository.anonymizeArtefact(artefact._id, session);
-        if (isErr(artAnon)) throw new InternalServerErrorException(artAnon.error.message);
-
-        const goalsAnon = await this.pdpGoalsRepository.anonymizeByArtefactId(
-          artefact._id,
-          session
-        );
-        if (isErr(goalsAnon)) throw new InternalServerErrorException(goalsAnon.error.message);
-      },
-      { context: `deleteConversation:${conversationXid}` }
-    );
-
-    // Best-effort outside transaction (no session support on this method)
-    await this.analysisRunsRepository.anonymizeByConversationIds([conversation._id]);
-
-    return { message: 'Conversation deleted successfully' };
-  }
 
   async deleteMessage(userId: string, conversationXid: string, messageXid: string): Promise<void> {
     const userOid = new Types.ObjectId(userId);
@@ -194,24 +107,40 @@ export class ConversationsService {
         );
         if (isErr(msgResult)) throw new InternalServerErrorException(msgResult.error.message);
         const message = msgResult.value[0];
-        if (!message) throw new NotFoundException('Message not found');
+        // Return 404 for non-USER messages even though the row exists: surfacing
+        // a distinct "wrong role" error would leak the existence of assistant
+        // message xids to enumerators. The role-mismatch case is logged for
+        // internal debugging instead.
+        if (!message || message.role !== MessageRole.USER) {
+          if (message) {
+            this.logger.debug(
+              `Rejecting delete of non-USER message ${messageXid} (role=${message.role})`
+            );
+          }
+          throw new NotFoundException('Message not found');
+        }
+        // Membership check: message must belong to the route's conversation.
+        // Without this, a user with two conversations can bypass the
+        // ACTIVE-status and active-run guards above by routing the delete
+        // through an idle conversation while the message lives in one with
+        // an in-flight analysis. Same privacy treatment as the role check:
+        // surfacing a distinct "wrong conversation" error would leak that
+        // the message xid exists in another conversation the user owns.
+        //
+        // findMessagesByXids populates `conversation` and runs .lean(), so
+        // message.conversation is a plain { _id, xid } at runtime — NOT a
+        // Types.ObjectId, despite what the TS type claims. Don't call
+        // .equals() on it directly; extract _id first.
+        const messageConvId = (message.conversation as unknown as { _id: Types.ObjectId })._id;
+        if (!objectIdsEqual(messageConvId, conversation._id)) {
+          this.logger.debug(
+            `Rejecting delete of message ${messageXid} — belongs to ${messageConvId.toString()} not ${conversation._id.toString()}`
+          );
+          throw new NotFoundException('Message not found');
+        }
 
-        // 5. Soft-delete + anonymize
-        const deleteResult = await this.conversationsRepository.softDeleteMessage(
-          message._id,
-          conversation._id,
-          userOid,
-          session
-        );
-        if (isErr(deleteResult)) throw new InternalServerErrorException(deleteResult.error.message);
-        if (!deleteResult.value) throw new NotFoundException('Message not found');
-
-        // 6. Mark attached media for async S3 cleanup
-        const mediaResult = await this.mediaRepository.markPendingDeleteByMessageIds(
-          [message._id],
-          session
-        );
-        if (isErr(mediaResult)) throw new InternalServerErrorException(mediaResult.error.message);
+        // 5. Cascade-delete the message (tombstones + media cleanup).
+        await this.deleteMessagesByIds([message._id], session);
       },
       { context: `deleteMessage:${conversationXid}:${messageXid}` }
     );
@@ -802,5 +731,83 @@ export class ConversationsService {
     } catch {
       return null;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cascade primitives
+  //
+  // Bulk tombstone operations used both by user-triggered deletes and by
+  // higher-layer cascades (artefact deletion, account cleanup).
+  //
+  // All primitives:
+  // - accept a `session?: ClientSession` so callers control transaction scope
+  // - perform a single bulk write per affected collection
+  // - are idempotent (filter `status: { $ne: DELETED }`)
+  // - tombstone the parent FIRST, then cascade children
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Bulk tombstone messages by their IDs, including media cleanup.
+   */
+  async deleteMessagesByIds(ids: Types.ObjectId[], session?: ClientSession): Promise<void> {
+    if (ids.length === 0) return;
+    await this.mediaService.markPendingDeleteByMessageIds(ids, session);
+    const result = await this.conversationsRepository.markDeletedMessagesByIds(ids, session);
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
+  }
+
+  /**
+   * Bulk tombstone all messages belonging to the given conversations, including
+   * media cleanup. Used by conversation-level cascade.
+   */
+  async deleteMessagesByConversationIds(
+    conversationIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<void> {
+    if (conversationIds.length === 0) return;
+    // Intentionally sequential — Mongo forbids concurrent ops on a single session.
+    const messageIdsResult = await this.conversationsRepository.findMessageIdsByConversationIds(
+      conversationIds,
+      session
+    );
+    if (isErr(messageIdsResult)) {
+      throw new InternalServerErrorException(messageIdsResult.error.message);
+    }
+    await this.mediaService.markPendingDeleteByMessageIds(messageIdsResult.value, session);
+    const result = await this.conversationsRepository.markDeletedMessagesByConversationIds(
+      conversationIds,
+      session
+    );
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
+  }
+
+  /**
+   * Bulk tombstone conversations and cascade into their messages, analysis
+   * runs, and outbox entries.
+   */
+  async deleteByIds(ids: Types.ObjectId[], session?: ClientSession): Promise<void> {
+    if (ids.length === 0) return;
+    // Intentionally sequential — Mongo forbids concurrent ops on a single session.
+    const result = await this.conversationsRepository.markDeleted(ids, session);
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
+    await this.deleteMessagesByConversationIds(ids, session);
+    await this.analysisRunsService.deleteByConversationIds(ids, session);
+    await this.outboxService.cancelByConversationIds(ids, session);
+  }
+
+  /**
+   * Resolve conversation IDs for the given artefacts and cascade-delete them.
+   */
+  async deleteByArtefactIds(
+    artefactIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<void> {
+    if (artefactIds.length === 0) return;
+    const idsResult = await this.conversationsRepository.findIdsByArtefactIds(
+      artefactIds,
+      session
+    );
+    if (isErr(idsResult)) throw new InternalServerErrorException(idsResult.error.message);
+    return this.deleteByIds(idsResult.value, session);
   }
 }

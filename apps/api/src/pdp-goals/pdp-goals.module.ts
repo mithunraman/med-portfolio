@@ -16,6 +16,6 @@ import { PdpGoal, PdpGoalSchema } from './schemas/pdp-goal.schema';
       useClass: PdpGoalsRepository,
     },
   ],
-  exports: [PDP_GOALS_REPOSITORY],
+  exports: [PdpGoalsService, PDP_GOALS_REPOSITORY],
 })
 export class PdpGoalsModule {}

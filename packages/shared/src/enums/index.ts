@@ -20,3 +20,4 @@ export * from './notice-type.enum';
 export * from './notice-severity.enum';
 export * from './audience-type.enum';
 export * from './session-revoked-reason.enum';
+export * from './version-history-entity.enum';

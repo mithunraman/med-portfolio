@@ -16,7 +16,7 @@ const convId2 = oid();
 function createMockRepo() {
   return {
     anonymizeByUser: jest.fn().mockResolvedValue(ok(0)),
-    anonymizeByConversationIds: jest.fn().mockResolvedValue(ok(0)),
+    markDeletedByConversationIds: jest.fn().mockResolvedValue(ok(0)),
     findConversationIdsByUser: jest.fn().mockResolvedValue(ok([])),
     findByUser: jest.fn().mockResolvedValue(ok([])),
     deleteByUser: jest.fn().mockResolvedValue(ok(0)),
@@ -192,7 +192,7 @@ describe('AccountCleanupService', () => {
       await service.processExpiredDeletions();
 
       expect(repos.conversationsRepo.findConversationIdsByUser).toHaveBeenCalledWith(targetUserId);
-      expect(repos.analysisRunsRepo.anonymizeByConversationIds).toHaveBeenCalledWith([
+      expect(repos.analysisRunsRepo.markDeletedByConversationIds).toHaveBeenCalledWith([
         convId1,
         convId2,
       ]);
@@ -205,7 +205,7 @@ describe('AccountCleanupService', () => {
 
       await service.processExpiredDeletions();
 
-      expect(repos.analysisRunsRepo.anonymizeByConversationIds).not.toHaveBeenCalled();
+      expect(repos.analysisRunsRepo.markDeletedByConversationIds).not.toHaveBeenCalled();
     });
   });
 

@@ -1,6 +1,7 @@
+import type { VersionHistoryEntity } from '@acme/shared';
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ClientSession, Types } from 'mongoose';
-import { isErr } from '../common/utils/result.util';
+import { isErr, unwrapVoid } from '../common/utils/result.util';
 import type { VersionHistory } from './schemas/version-history.schema';
 import {
   IVersionHistoryRepository,
@@ -15,7 +16,7 @@ export class VersionHistoryService {
   ) {}
 
   async createVersion(
-    entityType: string,
+    entityType: VersionHistoryEntity,
     entityId: Types.ObjectId,
     userId: Types.ObjectId,
     snapshot: Record<string, unknown>,
@@ -50,7 +51,7 @@ export class VersionHistoryService {
     }
   }
 
-  async getVersions(entityType: string, entityId: Types.ObjectId): Promise<VersionHistory[]> {
+  async getVersions(entityType: VersionHistoryEntity, entityId: Types.ObjectId): Promise<VersionHistory[]> {
     const result = await this.versionHistoryRepository.findByEntity(entityType, entityId);
 
     if (isErr(result)) {
@@ -61,7 +62,7 @@ export class VersionHistoryService {
   }
 
   async getVersion(
-    entityType: string,
+    entityType: VersionHistoryEntity,
     entityId: Types.ObjectId,
     version: number,
     session?: ClientSession
@@ -76,7 +77,7 @@ export class VersionHistoryService {
   }
 
   async countVersions(
-    entityType: string,
+    entityType: VersionHistoryEntity,
     entityId: Types.ObjectId,
     session?: ClientSession
   ): Promise<number> {
@@ -87,5 +88,18 @@ export class VersionHistoryService {
     }
 
     return result.value;
+  }
+
+  /**
+   * Cascade entry point: scrub snapshot fields for the given entityType + entityIds.
+   */
+  async anonymizeByEntity(
+    entityType: VersionHistoryEntity,
+    entityIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<void> {
+    unwrapVoid(
+      await this.versionHistoryRepository.anonymizeByEntity(entityType, entityIds, session)
+    );
   }
 }

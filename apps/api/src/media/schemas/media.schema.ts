@@ -50,9 +50,6 @@ export class Media {
   @Prop({ type: Date, default: null })
   pendingDeleteAt!: Date | null;
 
-  @Prop({ type: Date, default: null })
-  deletedAt!: Date | null;
-
   @Prop({ required: true, type: Number, default: 0 })
   deleteAttempts!: number;
 
@@ -68,3 +65,7 @@ export const MediaSchema = SchemaFactory.createForClass(Media);
 MediaSchema.index({ userId: 1, status: 1 });
 // Supports the sweeper's status-only scan of PENDING_DELETE rows.
 MediaSchema.index({ status: 1 });
+// Cascade hot path: markPendingDeleteByMessageIds filters
+// { refDocumentId: { $in }, refCollection, status }. refDocumentId leads
+// (most selective); refCollection + status served from the index.
+MediaSchema.index({ refDocumentId: 1, refCollection: 1, status: 1 });

@@ -211,29 +211,10 @@ export class OutboxRepository implements IOutboxRepository {
     }
   }
 
-  async cancelByConversationId(
-    conversationId: string,
-    session?: ClientSession
-  ): Promise<Result<number, DBError>> {
-    try {
-      const result = await this.outboxModel.updateMany(
-        {
-          status: { $in: [OutboxStatus.PENDING, OutboxStatus.PROCESSING] },
-          'payload.conversationId': conversationId,
-        },
-        { $set: { status: OutboxStatus.FAILED, lastError: 'Entity deleted' } },
-        { session }
-      );
-      return ok(result.modifiedCount);
-    } catch (error) {
-      this.logger.error('Failed to cancel outbox entries for conversation', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to cancel outbox entries' });
-    }
-  }
-
   async cancelByUser(
     userId: Types.ObjectId,
-    conversationIds: string[]
+    conversationIds: string[],
+    session?: ClientSession
   ): Promise<Result<number, DBError>> {
     try {
       const result = await this.outboxModel.updateMany(
@@ -244,12 +225,37 @@ export class OutboxRepository implements IOutboxRepository {
             { 'payload.conversationId': { $in: conversationIds } },
           ],
         },
-        { $set: { status: OutboxStatus.FAILED, lastError: 'Account deleted' } }
+        { $set: { status: OutboxStatus.FAILED, lastError: 'Account deleted' } },
+        { session }
       );
       return ok(result.modifiedCount);
     } catch (error) {
       this.logger.error('Failed to cancel outbox entries for user', error);
       return err({ code: 'DB_ERROR', message: 'Failed to cancel outbox entries' });
+    }
+  }
+
+  async cancelByConversationIds(
+    conversationIds: string[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>> {
+    if (conversationIds.length === 0) return ok(0);
+    try {
+      const result = await this.outboxModel.updateMany(
+        {
+          status: { $in: [OutboxStatus.PENDING, OutboxStatus.PROCESSING] },
+          'payload.conversationId': { $in: conversationIds },
+        },
+        { $set: { status: OutboxStatus.FAILED, lastError: 'Entity deleted' } },
+        { session }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to cancel outbox entries for conversations', error);
+      return err({
+        code: 'DB_ERROR',
+        message: 'Failed to cancel outbox entries for conversations',
+      });
     }
   }
 }

@@ -1,3 +1,5 @@
+import { InternalServerErrorException } from '@nestjs/common';
+
 export interface Ok<T> {
   readonly ok: true;
   readonly value: T;
@@ -31,4 +33,16 @@ export function isErr<T, E>(result: Result<T, E>): result is Err<E> {
 export interface DBError {
   code: string;
   message: string;
+}
+
+/**
+ * Throws InternalServerErrorException if the result is an error.
+ * Use for cascade primitives that return Result<unknown, DBError> and need
+ * to surface as void to the caller. Centralizes the convention so wrappers
+ * can't drift back to bare `throw new Error(...)`.
+ */
+export function unwrapVoid<T>(result: Result<T, DBError>): void {
+  if (isErr(result)) {
+    throw new InternalServerErrorException(result.error.message);
+  }
 }

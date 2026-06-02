@@ -45,3 +45,10 @@ OutboxEntrySchema.index({ status: 1, processAfter: 1 });
 
 // Filter by job type
 OutboxEntrySchema.index({ type: 1, status: 1 });
+
+// Cascade hot paths: cancelByConversationIds and hasPendingByConversationId
+// filter on payload.conversationId + status.
+OutboxEntrySchema.index({ 'payload.conversationId': 1, status: 1 });
+
+// Cascade hot path: cancelByUser's $or branch on payload.userId + status.
+OutboxEntrySchema.index({ 'payload.userId': 1, status: 1 });

@@ -75,10 +75,10 @@ export interface IArtefactsRepository {
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
 
-  anonymizeArtefact(
-    artefactId: Types.ObjectId,
-    session?: ClientSession
-  ): Promise<Result<void, DBError>>;
-
   anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
+
+  markDeleted(
+    ids: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>>;
 }

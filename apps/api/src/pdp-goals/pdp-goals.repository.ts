@@ -17,6 +17,24 @@ import {
 } from './pdp-goals.repository.interface';
 import { PdpGoal, PdpGoalDocument } from './schemas/pdp-goal.schema';
 
+/**
+ * Single source of truth for the PdpGoal tombstone payload. Used by every
+ * deletion path on this repo. Adding a new sensitive field belongs here.
+ */
+export function pdpGoalTombstoneUpdate() {
+  return {
+    $set: {
+      goal: '[deleted]',
+      completionReview: null,
+      status: PdpGoalStatus.DELETED,
+      'actions.$[].action': '[deleted]',
+      'actions.$[].intendedEvidence': '[deleted]',
+      'actions.$[].completionReview': null,
+      'actions.$[].status': PdpGoalStatus.DELETED,
+    },
+  };
+}
+
 const ARTEFACT_LOOKUP_PIPELINE = [
   {
     $lookup: {
@@ -361,33 +379,6 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     }
   }
 
-  async anonymizeByArtefactId(
-    artefactId: Types.ObjectId,
-    session?: ClientSession
-  ): Promise<Result<number, DBError>> {
-    try {
-      const result = await this.pdpGoalModel.updateMany(
-        { artefactId },
-        {
-          $set: {
-            goal: '[deleted]',
-            completionReview: null,
-            status: PdpGoalStatus.DELETED,
-            'actions.$[].action': '[deleted]',
-            'actions.$[].intendedEvidence': '[deleted]',
-            'actions.$[].completionReview': null,
-            'actions.$[].status': PdpGoalStatus.DELETED,
-          },
-        },
-        { session }
-      );
-      return ok(result.modifiedCount);
-    } catch (error) {
-      this.logger.error('Failed to anonymize PDP goals by artefact', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to anonymize PDP goals by artefact' });
-    }
-  }
-
   async anonymizeGoal(
     xid: string,
     userId: Types.ObjectId,
@@ -395,18 +386,8 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
   ): Promise<Result<boolean, DBError>> {
     try {
       const result = await this.pdpGoalModel.updateOne(
-        { xid, userId },
-        {
-          $set: {
-            goal: '[deleted]',
-            completionReview: null,
-            status: PdpGoalStatus.DELETED,
-            'actions.$[].action': '[deleted]',
-            'actions.$[].intendedEvidence': '[deleted]',
-            'actions.$[].completionReview': null,
-            'actions.$[].status': PdpGoalStatus.DELETED,
-          },
-        },
+        { xid, userId, status: { $ne: PdpGoalStatus.DELETED } },
+        pdpGoalTombstoneUpdate(),
         { session }
       );
       return ok(result.modifiedCount > 0);
@@ -419,23 +400,34 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
   async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
     try {
       const result = await this.pdpGoalModel.updateMany(
-        { userId },
-        {
-          $set: {
-            goal: '[deleted]',
-            completionReview: null,
-            status: PdpGoalStatus.DELETED,
-            'actions.$[].action': '[deleted]',
-            'actions.$[].intendedEvidence': '[deleted]',
-            'actions.$[].completionReview': null,
-            'actions.$[].status': PdpGoalStatus.DELETED,
-          },
-        }
+        { userId, status: { $ne: PdpGoalStatus.DELETED } },
+        pdpGoalTombstoneUpdate()
       );
       return ok(result.modifiedCount);
     } catch (error) {
       this.logger.error('Failed to anonymize PDP goals', error);
       return err({ code: 'DB_ERROR', message: 'Failed to anonymize PDP goals' });
+    }
+  }
+
+  async markDeletedByArtefactIds(
+    artefactIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>> {
+    if (artefactIds.length === 0) return ok(0);
+    try {
+      const result = await this.pdpGoalModel.updateMany(
+        { artefactId: { $in: artefactIds }, status: { $ne: PdpGoalStatus.DELETED } },
+        pdpGoalTombstoneUpdate(),
+        { session }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to mark PDP goals deleted by artefact ids', error);
+      return err({
+        code: 'DB_ERROR',
+        message: 'Failed to mark PDP goals deleted by artefact ids',
+      });
     }
   }
 }

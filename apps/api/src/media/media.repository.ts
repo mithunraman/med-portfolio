@@ -185,7 +185,7 @@ export class MediaRepository implements IMediaRepository {
       const objectIds = ids.map((id) => new Types.ObjectId(id));
       const result = await this.mediaModel.updateMany(
         { _id: { $in: objectIds }, status: MediaStatus.PENDING_DELETE },
-        { $set: { status: MediaStatus.DELETED, deletedAt: new Date() } }
+        { $set: { status: MediaStatus.DELETED } }
       );
       return ok(result.modifiedCount);
     } catch (error) {

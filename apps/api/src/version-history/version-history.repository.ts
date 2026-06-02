@@ -1,3 +1,4 @@
+import type { VersionHistoryEntity } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
@@ -43,7 +44,7 @@ export class VersionHistoryRepository implements IVersionHistoryRepository {
   }
 
   async findByEntity(
-    entityType: string,
+    entityType: VersionHistoryEntity,
     entityId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<VersionHistory[], DBError>> {
@@ -61,7 +62,7 @@ export class VersionHistoryRepository implements IVersionHistoryRepository {
   }
 
   async findVersion(
-    entityType: string,
+    entityType: VersionHistoryEntity,
     entityId: Types.ObjectId,
     version: number,
     session?: ClientSession
@@ -79,7 +80,7 @@ export class VersionHistoryRepository implements IVersionHistoryRepository {
   }
 
   async countByEntity(
-    entityType: string,
+    entityType: VersionHistoryEntity,
     entityId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>> {
@@ -101,6 +102,28 @@ export class VersionHistoryRepository implements IVersionHistoryRepository {
     } catch (error) {
       this.logger.error('Failed to delete version history', error);
       return err({ code: 'DB_ERROR', message: 'Failed to delete version history' });
+    }
+  }
+
+  async anonymizeByEntity(
+    entityType: VersionHistoryEntity,
+    entityIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>> {
+    if (entityIds.length === 0) return ok(0);
+    try {
+      const result = await this.versionHistoryModel.updateMany(
+        { entityType, entityId: { $in: entityIds } },
+        { $set: { snapshot: {} } },
+        { session }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to anonymize version history by entity', error);
+      return err({
+        code: 'DB_ERROR',
+        message: 'Failed to anonymize version history by entity',
+      });
     }
   }
 }

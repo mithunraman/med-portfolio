@@ -25,7 +25,6 @@ function buildMedia(overrides: Partial<Media> = {}): Media {
     sizeBytes: null,
     durationMs: null,
     pendingDeleteAt: new Date(),
-    deletedAt: null,
     deleteAttempts: 0,
     createdAt: new Date(),
     updatedAt: new Date(),

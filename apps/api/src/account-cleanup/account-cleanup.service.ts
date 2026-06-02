@@ -144,7 +144,7 @@ export class AccountCleanupService {
 
   private async anonymizeAnalysisRuns(conversationIds: Types.ObjectId[]): Promise<void> {
     if (conversationIds.length === 0) return;
-    const result = await this.analysisRunsRepo.anonymizeByConversationIds(conversationIds);
+    const result = await this.analysisRunsRepo.markDeletedByConversationIds(conversationIds);
     if (isErr(result)) throw new Error(result.error.message);
   }
 

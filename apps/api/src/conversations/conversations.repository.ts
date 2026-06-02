@@ -14,6 +14,43 @@ import {
 import { Conversation, ConversationDocument } from './schemas/conversation.schema';
 import { Message, MessageDocument } from './schemas/message.schema';
 
+/**
+ * Single source of truth for the Conversation tombstone payload.
+ */
+export function conversationTombstoneUpdate() {
+  return {
+    $set: {
+      title: '[deleted]',
+      status: ConversationStatus.DELETED,
+    },
+  };
+}
+
+/**
+ * Canonical "live" filters for read paths — exclude tombstones.
+ * Cascade-write call sites keep their inline `$ne` because that's idempotency
+ * semantics ("don't re-tombstone"), not the read-time "exclude deleted" rule.
+ */
+const CONVERSATION_LIVE_FILTER = { status: { $ne: ConversationStatus.DELETED } } as const;
+const MESSAGE_LIVE_FILTER = { status: { $ne: MessageStatus.DELETED } } as const;
+
+/**
+ * Single source of truth for the Message tombstone update — covers both
+ * scrubbed `$set` fields and the `$unset` block (question/answer/media).
+ * Used by every message-deletion path on this repo.
+ */
+export function messageTombstoneUpdate() {
+  return {
+    $set: {
+      rawContent: '[deleted]',
+      cleanedContent: '[deleted]',
+      content: '[deleted]',
+      status: MessageStatus.DELETED,
+    },
+    $unset: { question: '', answer: '', media: '' },
+  };
+}
+
 @Injectable()
 export class ConversationsRepository implements IConversationsRepository {
   private readonly logger = new Logger(ConversationsRepository.name);
@@ -53,7 +90,7 @@ export class ConversationsRepository implements IConversationsRepository {
   ): Promise<Result<Conversation | null, DBError>> {
     try {
       const conversation = await this.conversationModel
-        .findById(conversationId)
+        .findOne({ _id: conversationId, ...CONVERSATION_LIVE_FILTER })
         .lean()
         .session(session || null);
       return ok(conversation);
@@ -70,7 +107,7 @@ export class ConversationsRepository implements IConversationsRepository {
   ): Promise<Result<Conversation | null, DBError>> {
     try {
       const conversation = await this.conversationModel
-        .findOne({ xid, userId })
+        .findOne({ xid, userId, ...CONVERSATION_LIVE_FILTER })
         .lean()
         .session(session || null);
       return ok(conversation);
@@ -201,7 +238,7 @@ export class ConversationsRepository implements IConversationsRepository {
   ): Promise<Result<ListMessagesResult, DBError>> {
     try {
       const messages = await this.messageModel
-        .find({ conversation: query.conversation, status: { $ne: MessageStatus.DELETED } })
+        .find({ conversation: query.conversation, ...MESSAGE_LIVE_FILTER })
         .populate('media')
         .sort({ _id: -1 })
         .lean()
@@ -262,7 +299,7 @@ export class ConversationsRepository implements IConversationsRepository {
   ): Promise<Result<MessageRole | null, DBError>> {
     try {
       const lastMessage = await this.messageModel
-        .findOne({ conversation: conversationId, status: { $ne: MessageStatus.DELETED } })
+        .findOne({ conversation: conversationId, ...MESSAGE_LIVE_FILTER })
         .sort({ _id: -1 })
         .select('role')
         .lean()
@@ -326,125 +363,122 @@ export class ConversationsRepository implements IConversationsRepository {
     }
   }
 
-  async findMessageIdsByConversation(
-    conversationId: Types.ObjectId,
-    session?: ClientSession
-  ): Promise<Result<Types.ObjectId[], DBError>> {
-    try {
-      const ids = await this.messageModel
-        .find({ conversation: conversationId })
-        .distinct('_id')
-        .session(session || null);
-      return ok(ids);
-    } catch (error) {
-      this.logger.error('Failed to find message ids by conversation', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to find message ids by conversation' });
-    }
-  }
-
-  async findConversationIdsByArtefact(
-    artefactId: Types.ObjectId,
-    session?: ClientSession
-  ): Promise<Result<Types.ObjectId[], DBError>> {
-    try {
-      const ids = await this.conversationModel
-        .find({ artefact: artefactId })
-        .distinct('_id')
-        .session(session || null);
-      return ok(ids);
-    } catch (error) {
-      this.logger.error('Failed to find conversation ids by artefact', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to find conversation ids by artefact' });
-    }
-  }
-
-  async softDeleteMessage(
-    messageId: Types.ObjectId,
-    conversationId: Types.ObjectId,
-    userId: Types.ObjectId,
-    session?: ClientSession,
-  ): Promise<Result<Message | null, DBError>> {
-    try {
-      const message = await this.messageModel
-        .findOneAndUpdate(
-          {
-            _id: messageId,
-            conversation: conversationId,
-            userId,
-            role: MessageRole.USER,
-            status: { $ne: MessageStatus.DELETED },
-          },
-          {
-            $set: {
-              status: MessageStatus.DELETED,
-              rawContent: '[deleted]',
-              cleanedContent: '[deleted]',
-              content: '[deleted]',
-            },
-            $unset: { media: '' },
-          },
-          { new: true, session: session || undefined },
-        )
-        .lean();
-      return ok(message);
-    } catch (error) {
-      this.logger.error('Failed to soft delete message', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to soft delete message' });
-    }
-  }
-
-  async anonymizeConversation(
-    conversationId: Types.ObjectId,
-    session?: ClientSession
-  ): Promise<Result<number, DBError>> {
-    try {
-      const convResult = await this.conversationModel.updateOne(
-        { _id: conversationId },
-        { $set: { title: '[deleted]', status: ConversationStatus.DELETED } },
-        { session }
-      );
-      const msgResult = await this.messageModel.updateMany(
-        { conversation: conversationId },
-        {
-          $set: {
-            rawContent: '[deleted]',
-            cleanedContent: '[deleted]',
-            content: '[deleted]',
-            status: MessageStatus.DELETED,
-          },
-          $unset: { question: '', answer: '' },
-        },
-        { session }
-      );
-      return ok(convResult.modifiedCount + msgResult.modifiedCount);
-    } catch (error) {
-      this.logger.error('Failed to anonymize conversation', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to anonymize conversation' });
-    }
-  }
-
   async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
     try {
       const convResult = await this.conversationModel.updateMany(
-        { userId },
-        { $set: { title: '[deleted]', status: ConversationStatus.DELETED } }
+        { userId, status: { $ne: ConversationStatus.DELETED } },
+        conversationTombstoneUpdate()
       );
       const msgResult = await this.messageModel.updateMany(
-        { userId },
-        {
-          $set: {
-            rawContent: '[deleted]',
-            cleanedContent: '[deleted]',
-            content: '[deleted]',
-            status: MessageStatus.DELETED,
-          },
-          $unset: { question: '', answer: '' },
-        }
+        { userId, status: { $ne: MessageStatus.DELETED } },
+        messageTombstoneUpdate()
       );
       return ok(convResult.modifiedCount + msgResult.modifiedCount);
     } catch (error) {
       this.logger.error('Failed to anonymize conversations', error);
       return err({ code: 'DB_ERROR', message: 'Failed to anonymize conversations' });
+    }
+  }
+
+  async markDeleted(
+    ids: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>> {
+    if (ids.length === 0) return ok(0);
+    try {
+      const result = await this.conversationModel.updateMany(
+        { _id: { $in: ids }, status: { $ne: ConversationStatus.DELETED } },
+        conversationTombstoneUpdate(),
+        { session }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to mark conversations deleted', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to mark conversations deleted' });
+    }
+  }
+
+  /**
+   * Cascade resolver: returns ALL conversation IDs for the given artefacts,
+   * including already-tombstoned ones. Deliberately does NOT filter
+   * `status: { $ne: DELETED }` — on retry of a partial cascade, the
+   * conversation may already be DELETED while its children (messages, media)
+   * are not. Re-cascading through them requires the tombstoned IDs.
+   * Do not add a status filter "for consistency" with other finders.
+   */
+  async findIdsByArtefactIds(
+    artefactIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<Types.ObjectId[], DBError>> {
+    if (artefactIds.length === 0) return ok([]);
+    try {
+      const ids = await this.conversationModel
+        .find({ artefact: { $in: artefactIds } })
+        .distinct('_id')
+        .session(session ?? null);
+      return ok(ids);
+    } catch (error) {
+      this.logger.error('Failed to find conversation ids by artefact ids', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find conversation ids by artefact ids' });
+    }
+  }
+
+  async markDeletedMessagesByIds(
+    ids: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>> {
+    if (ids.length === 0) return ok(0);
+    try {
+      const result = await this.messageModel.updateMany(
+        { _id: { $in: ids }, status: { $ne: MessageStatus.DELETED } },
+        messageTombstoneUpdate(),
+        { session }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to mark messages deleted by ids', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to mark messages deleted by ids' });
+    }
+  }
+
+  async markDeletedMessagesByConversationIds(
+    conversationIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>> {
+    if (conversationIds.length === 0) return ok(0);
+    try {
+      const result = await this.messageModel.updateMany(
+        {
+          conversation: { $in: conversationIds },
+          status: { $ne: MessageStatus.DELETED },
+        },
+        messageTombstoneUpdate(),
+        { session }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to mark messages deleted by conversation ids', error);
+      return err({
+        code: 'DB_ERROR',
+        message: 'Failed to mark messages deleted by conversation ids',
+      });
+    }
+  }
+
+  async findMessageIdsByConversationIds(
+    conversationIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<Types.ObjectId[], DBError>> {
+    if (conversationIds.length === 0) return ok([]);
+    try {
+      const ids = await this.messageModel
+        .find({ conversation: { $in: conversationIds } })
+        .distinct('_id')
+        .session(session ?? null);
+      return ok(ids);
+    } catch (error) {
+      this.logger.error('Failed to find message ids by conversation ids', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find message ids by conversation ids' });
     }
   }
 }

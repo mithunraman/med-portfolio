@@ -13,6 +13,29 @@ import {
 } from './artefacts.repository.interface';
 import { Artefact, ArtefactDocument } from './schemas/artefact.schema';
 
+/**
+ * Single source of truth for the Artefact tombstone payload. Used by every
+ * deletion path on this repo. Adding a new sensitive field belongs here.
+ */
+export function artefactTombstoneUpdate() {
+  return {
+    $set: {
+      title: '[deleted]',
+      reflection: [],
+      capabilities: [],
+      tags: {},
+      status: ArtefactStatus.DELETED,
+    },
+  };
+}
+
+/**
+ * Canonical "live" filter for read paths — excludes tombstones.
+ * Cascade-write call sites keep their inline `$ne` because that's idempotency
+ * semantics ("don't re-tombstone"), not the read-time "exclude deleted" rule.
+ */
+const ARTEFACT_LIVE_FILTER = { status: { $ne: ArtefactStatus.DELETED } } as const;
+
 @Injectable()
 export class ArtefactsRepository implements IArtefactsRepository {
   private readonly logger = new Logger(ArtefactsRepository.name);
@@ -28,7 +51,7 @@ export class ArtefactsRepository implements IArtefactsRepository {
   ): Promise<Result<Artefact | null, DBError>> {
     try {
       const artefact = await this.artefactModel
-        .findById(id)
+        .findOne({ _id: id, ...ARTEFACT_LIVE_FILTER })
         .session(session ?? null)
         .lean();
       return ok(artefact);
@@ -131,7 +154,7 @@ export class ArtefactsRepository implements IArtefactsRepository {
   ): Promise<Result<Artefact | null, DBError>> {
     try {
       const artefact = await this.artefactModel
-        .findOne({ xid, userId })
+        .findOne({ xid, userId, ...ARTEFACT_LIVE_FILTER })
         .lean()
         .session(session || null);
       return ok(artefact);
@@ -164,49 +187,34 @@ export class ArtefactsRepository implements IArtefactsRepository {
     }
   }
 
-  async anonymizeArtefact(
-    artefactId: Types.ObjectId,
-    session?: ClientSession
-  ): Promise<Result<void, DBError>> {
-    try {
-      await this.artefactModel.updateOne(
-        { _id: artefactId },
-        {
-          $set: {
-            title: '[deleted]',
-            reflection: [],
-            capabilities: [],
-            tags: {},
-            status: ArtefactStatus.DELETED,
-          },
-        },
-        { session }
-      );
-      return ok(undefined);
-    } catch (error) {
-      this.logger.error('Failed to anonymize artefact', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to anonymize artefact' });
-    }
-  }
-
   async anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>> {
     try {
       const result = await this.artefactModel.updateMany(
-        { userId },
-        {
-          $set: {
-            title: '[deleted]',
-            reflection: [],
-            capabilities: [],
-            tags: {},
-            status: ArtefactStatus.DELETED,
-          },
-        }
+        { userId, status: { $ne: ArtefactStatus.DELETED } },
+        artefactTombstoneUpdate()
       );
       return ok(result.modifiedCount);
     } catch (error) {
       this.logger.error('Failed to anonymize artefacts', error);
       return err({ code: 'DB_ERROR', message: 'Failed to anonymize artefacts' });
+    }
+  }
+
+  async markDeleted(
+    ids: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>> {
+    if (ids.length === 0) return ok(0);
+    try {
+      const result = await this.artefactModel.updateMany(
+        { _id: { $in: ids }, status: { $ne: ArtefactStatus.DELETED } },
+        artefactTombstoneUpdate(),
+        { session }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to mark artefacts deleted', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to mark artefacts deleted' });
     }
   }
 }

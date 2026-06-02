@@ -7,9 +7,17 @@ import type {
   RestoreArtefactVersionRequest,
   UpdateArtefactStatusRequest,
 } from '@acme/shared';
-import { ArtefactStatus, MessageStatus, PdpGoalStatus, QuotaErrorCode, UserRole } from '@acme/shared';
+import {
+  ArtefactStatus,
+  MessageStatus,
+  PdpGoalStatus,
+  QuotaErrorCode,
+  UserRole,
+  VersionHistoryEntity,
+} from '@acme/shared';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -20,28 +28,25 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectModel } from '@nestjs/mongoose';
 import { format } from 'date-fns';
 import { ClientSession, Model, Types } from 'mongoose';
-import {
-  ANALYSIS_RUNS_REPOSITORY,
-  IAnalysisRunsRepository,
-} from '../analysis-runs/analysis-runs.repository.interface';
+import { AnalysisRunsService } from '../analysis-runs/analysis-runs.service';
 import { ARTEFACT_STATE_CHANGED, type ArtefactStateChangedEvent } from '../common/events';
 import { GUEST_ARTEFACT_LIMIT, isGuestAtArtefactLimit } from '../config/quota.config';
 import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { isErr } from '../common/utils/result.util';
 import { isNotNull } from '../common/utils/type-guards.util';
+import { ConversationsService } from '../conversations/conversations.service';
 import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from '../conversations/conversations.repository.interface';
 import { TransactionService } from '../database';
-import { IMediaRepository, MEDIA_REPOSITORY } from '../media/media.repository.interface';
-import { IOutboxRepository, OUTBOX_REPOSITORY } from '../outbox/outbox.repository.interface';
 import {
   CreatePdpGoalData,
   IPdpGoalsRepository,
   PDP_GOALS_REPOSITORY,
   UpdatePdpGoalActionData,
 } from '../pdp-goals/pdp-goals.repository.interface';
+import { PdpGoalsService } from '../pdp-goals/pdp-goals.service';
 import { User, UserDocument } from '../auth/schemas/user.schema';
 import { VersionHistoryService } from '../version-history';
 import { ARTEFACTS_REPOSITORY, IArtefactsRepository } from './artefacts.repository.interface';
@@ -56,8 +61,6 @@ function generateDefaultTitle(): string {
 
 @Injectable()
 export class ArtefactsService {
-  private static readonly ENTITY_TYPE = 'artefact';
-
   constructor(
     @Inject(ARTEFACTS_REPOSITORY)
     private readonly artefactsRepository: IArtefactsRepository,
@@ -65,16 +68,13 @@ export class ArtefactsService {
     private readonly conversationsRepository: IConversationsRepository,
     @Inject(PDP_GOALS_REPOSITORY)
     private readonly pdpGoalsRepository: IPdpGoalsRepository,
-    @Inject(MEDIA_REPOSITORY)
-    private readonly mediaRepository: IMediaRepository,
-    @Inject(ANALYSIS_RUNS_REPOSITORY)
-    private readonly analysisRunsRepository: IAnalysisRunsRepository,
-    @Inject(OUTBOX_REPOSITORY)
-    private readonly outboxRepository: IOutboxRepository,
     @InjectModel(User.name)
     private readonly userModel: Model<UserDocument>,
     private readonly transactionService: TransactionService,
     private readonly versionHistoryService: VersionHistoryService,
+    private readonly conversationsService: ConversationsService,
+    private readonly pdpGoalsService: PdpGoalsService,
+    private readonly analysisRunsService: AnalysisRunsService,
     private readonly eventEmitter: EventEmitter2
   ) {}
 
@@ -152,86 +152,35 @@ export class ArtefactsService {
   async deleteArtefact(userId: string, xid: string): Promise<{ message: string }> {
     const userOid = new Types.ObjectId(userId);
 
-    const conversationIds = await this.transactionService.withTransaction(
+    await this.transactionService.withTransaction(
       async (session) => {
         const artefact = await this.findOrThrow(xid, userOid, session);
 
+        // While the entry is still in progress, an active analysis run may be
+        // mid-flight. Deleting underneath it would resurrect the tombstoned
+        // analysis_run doc when the worker writes its terminal status.
         if (artefact.status === ArtefactStatus.IN_CONVERSATION) {
-          throw new BadRequestException(
-            'Use conversation delete while entry is in progress'
-          );
-        }
-        if (artefact.status === ArtefactStatus.DELETED) {
-          throw new NotFoundException('Entry not found');
-        }
-
-        // Find all conversations linked to this artefact
-        const convIdsResult = await this.conversationsRepository.findConversationIdsByArtefact(
-          artefact._id,
-          session
-        );
-        if (isErr(convIdsResult))
-          throw new InternalServerErrorException(convIdsResult.error.message);
-        const conversationIds = convIdsResult.value;
-
-        // Collect message IDs across all conversations for media cleanup
-        const allMessageIds: Types.ObjectId[] = [];
-        for (const convId of conversationIds) {
-          const msgIdsResult = await this.conversationsRepository.findMessageIdsByConversation(
-            convId,
+          const convIdsResult = await this.conversationsRepository.findIdsByArtefactIds(
+            [artefact._id],
             session
           );
-          if (!isErr(msgIdsResult)) {
-            allMessageIds.push(...msgIdsResult.value);
+          if (isErr(convIdsResult)) {
+            throw new InternalServerErrorException(convIdsResult.error.message);
+          }
+          for (const convId of convIdsResult.value) {
+            const activeRun = await this.analysisRunsService.findActiveRun(convId, session);
+            if (activeRun) {
+              throw new ConflictException(
+                'Cannot delete entry while analysis is in progress'
+              );
+            }
           }
         }
 
-        // Cancel outbox entries for all conversations
-        for (const convId of conversationIds) {
-          const cancelResult = await this.outboxRepository.cancelByConversationId(
-            convId.toString(),
-            session
-          );
-          if (isErr(cancelResult))
-            throw new InternalServerErrorException(cancelResult.error.message);
-        }
-
-        // Mark attached media for async S3 cleanup
-        if (allMessageIds.length > 0) {
-          const mediaResult = await this.mediaRepository.markPendingDeleteByMessageIds(
-            allMessageIds,
-            session
-          );
-          if (isErr(mediaResult))
-            throw new InternalServerErrorException(mediaResult.error.message);
-        }
-
-        // Anonymize all conversations + messages
-        for (const convId of conversationIds) {
-          const convAnon = await this.conversationsRepository.anonymizeConversation(convId, session);
-          if (isErr(convAnon)) throw new InternalServerErrorException(convAnon.error.message);
-        }
-
-        // Anonymize artefact
-        const artAnon = await this.artefactsRepository.anonymizeArtefact(artefact._id, session);
-        if (isErr(artAnon)) throw new InternalServerErrorException(artAnon.error.message);
-
-        // Anonymize all linked PDP goals
-        const goalsAnon = await this.pdpGoalsRepository.anonymizeByArtefactId(
-          artefact._id,
-          session
-        );
-        if (isErr(goalsAnon)) throw new InternalServerErrorException(goalsAnon.error.message);
-
-        return conversationIds;
+        await this.deleteByIds([artefact._id], session);
       },
       { context: `deleteArtefact:${xid}` }
     );
-
-    // Best-effort outside transaction
-    if (conversationIds.length > 0) {
-      await this.analysisRunsRepository.anonymizeByConversationIds(conversationIds);
-    }
 
     this.emitStateChanged(userId);
     return { message: 'Entry deleted successfully' };
@@ -256,7 +205,7 @@ export class ArtefactsService {
     const [conversationResult, pdpGoalsResult, versionCount] = await Promise.all([
       this.conversationsRepository.findActiveConversationByArtefact(artefact._id),
       this.pdpGoalsRepository.findByArtefactId(artefact._id),
-      this.versionHistoryService.countVersions(ArtefactsService.ENTITY_TYPE, artefact._id),
+      this.versionHistoryService.countVersions(VersionHistoryEntity.ARTEFACT, artefact._id),
     ]);
 
     if (isErr(conversationResult)) {
@@ -493,7 +442,7 @@ export class ArtefactsService {
         }
 
         await this.versionHistoryService.createVersion(
-          ArtefactsService.ENTITY_TYPE,
+          VersionHistoryEntity.ARTEFACT,
           artefactDoc._id,
           new Types.ObjectId(userId),
           {
@@ -514,7 +463,7 @@ export class ArtefactsService {
         }
 
         const versionCount = await this.versionHistoryService.countVersions(
-          ArtefactsService.ENTITY_TYPE,
+          VersionHistoryEntity.ARTEFACT,
           artefactDoc._id,
           session
         );
@@ -534,7 +483,7 @@ export class ArtefactsService {
     const artefact = await this.findOrThrow(xid, new Types.ObjectId(userId));
 
     const versions = await this.versionHistoryService.getVersions(
-      ArtefactsService.ENTITY_TYPE,
+      VersionHistoryEntity.ARTEFACT,
       artefact._id
     );
 
@@ -562,7 +511,7 @@ export class ArtefactsService {
         }
 
         const targetVersion = await this.versionHistoryService.getVersion(
-          ArtefactsService.ENTITY_TYPE,
+          VersionHistoryEntity.ARTEFACT,
           artefactDoc._id,
           dto.version,
           session
@@ -574,7 +523,7 @@ export class ArtefactsService {
 
         // Snapshot current state before restoring
         await this.versionHistoryService.createVersion(
-          ArtefactsService.ENTITY_TYPE,
+          VersionHistoryEntity.ARTEFACT,
           artefactDoc._id,
           new Types.ObjectId(userId),
           {
@@ -607,7 +556,7 @@ export class ArtefactsService {
         }
 
         const versionCount = await this.versionHistoryService.countVersions(
-          ArtefactsService.ENTITY_TYPE,
+          VersionHistoryEntity.ARTEFACT,
           artefactDoc._id,
           session
         );
@@ -835,4 +784,37 @@ export class ArtefactsService {
   private emitStateChanged(userId: string): void {
     this.eventEmitter.emit(ARTEFACT_STATE_CHANGED, { userId } satisfies ArtefactStateChangedEvent);
   }
+
+  // ---------------------------------------------------------------------------
+  // Cascade primitives
+  //
+  // Bulk tombstone operations used both by user-triggered deletes and by
+  // higher-layer cascades (account cleanup).
+  //
+  // All primitives:
+  // - accept a `session?: ClientSession` so callers control transaction scope
+  // - perform a single bulk write per affected collection
+  // - are idempotent (filter `status: { $ne: DELETED }`)
+  // - tombstone the parent FIRST, then cascade children
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Bulk tombstone artefacts and cascade into conversations, PDP goals,
+   * analysis runs, and version history.
+   */
+  async deleteByIds(ids: Types.ObjectId[], session?: ClientSession): Promise<void> {
+    if (ids.length === 0) return;
+    // Intentionally sequential — Mongo forbids concurrent ops on a single session.
+    const result = await this.artefactsRepository.markDeleted(ids, session);
+    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
+    await this.conversationsService.deleteByArtefactIds(ids, session);
+    await this.pdpGoalsService.deleteByArtefactIds(ids, session);
+    await this.analysisRunsService.deleteByArtefactIds(ids, session);
+    await this.versionHistoryService.anonymizeByEntity(
+      VersionHistoryEntity.ARTEFACT,
+      ids,
+      session
+    );
+  }
+
 }

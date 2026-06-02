@@ -72,14 +72,15 @@ export interface IOutboxRepository {
    */
   cancelByUser(
     userId: Types.ObjectId,
-    conversationIds: string[]
+    conversationIds: string[],
+    session?: ClientSession
   ): Promise<Result<number, DBError>>;
 
   /**
-   * Cancel pending/processing entries for a specific conversation.
+   * Bulk cancel pending/processing entries for multiple conversations.
    */
-  cancelByConversationId(
-    conversationId: string,
+  cancelByConversationIds(
+    conversationIds: string[],
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
 }

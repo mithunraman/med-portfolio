@@ -37,6 +37,7 @@ import { ITEMS_REPOSITORY } from '../../items/items.repository.interface';
 import { Media, MediaSchema } from '../../media/schemas/media.schema';
 import { MediaRepository } from '../../media/media.repository';
 import { MEDIA_REPOSITORY } from '../../media/media.repository.interface';
+import { MediaSweeperService } from '../../media/media-sweeper.service';
 import { OutboxEntry, OutboxEntrySchema } from '../../outbox/schemas/outbox.schema';
 import { OutboxRepository } from '../../outbox/outbox.repository';
 import { OUTBOX_REPOSITORY } from '../../outbox/outbox.repository.interface';
@@ -72,6 +73,7 @@ describe('AccountCleanupService (integration)', () => {
   let mongod: MongoMemoryReplSet;
   let module: TestingModule;
   let service: AccountCleanupService;
+  let mediaSweeperService: MediaSweeperService;
   let userModel: Model<User>;
   let artefactModel: Model<Artefact>;
   let conversationModel: Model<Conversation>;
@@ -109,6 +111,7 @@ describe('AccountCleanupService (integration)', () => {
       ],
       providers: [
         AccountCleanupService,
+        MediaSweeperService,
         TransactionService,
         { provide: SESSION_REPOSITORY, useClass: SessionsRepository },
         { provide: ARTEFACTS_REPOSITORY, useClass: ArtefactsRepository },
@@ -125,6 +128,7 @@ describe('AccountCleanupService (integration)', () => {
     }).compile();
 
     service = module.get(AccountCleanupService);
+    mediaSweeperService = module.get(MediaSweeperService);
     userModel = module.get(getModelToken(User.name));
     artefactModel = module.get(getModelToken(Artefact.name));
     conversationModel = module.get(getModelToken(Conversation.name));
@@ -292,8 +296,9 @@ describe('AccountCleanupService (integration)', () => {
     await seedFullData(userAId);
     await seedFullData(userBId);
 
-    // Act
+    // Act: run cleanup (marks media PENDING_DELETE), then sweeper (S3 + DELETED)
     await service.processExpiredDeletions();
+    await mediaSweeperService.sweep();
 
     // ── Assert User A is anonymized ──
 
@@ -420,6 +425,7 @@ describe('AccountCleanupService (integration)', () => {
 
     // First run
     await service.processExpiredDeletions();
+    await mediaSweeperService.sweep();
 
     const userAfterFirst = await userModel.findById(userAId).lean();
     expect(userAfterFirst!.anonymizedAt).toBeInstanceOf(Date);
@@ -430,8 +436,9 @@ describe('AccountCleanupService (integration)', () => {
 
     // Second run — should skip (anonymizedAt is set, deletionScheduledFor is cleared)
     await service.processExpiredDeletions();
+    await mediaSweeperService.sweep();
 
-    // S3 delete should NOT be called again
+    // S3 delete should NOT be called again (media is already DELETED, not PENDING_DELETE)
     expect(mockStorageService.deleteObject).not.toHaveBeenCalled();
 
     // anonymizedAt should be unchanged

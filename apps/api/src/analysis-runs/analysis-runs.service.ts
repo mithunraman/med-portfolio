@@ -1,6 +1,7 @@
 import { AnalysisRunStatus } from '@acme/shared';
 import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { ClientSession, Types } from 'mongoose';
+import { unwrapVoid } from '../common/utils/result.util';
 import {
   ANALYSIS_RUNS_REPOSITORY,
   IAnalysisRunsRepository,
@@ -152,5 +153,25 @@ export class AnalysisRunsService {
       throw new Error(result.error.message);
     }
     return result.value;
+  }
+
+  /**
+   * Cascade entry point: tombstone analysis runs for the given conversations.
+   */
+  async deleteByConversationIds(
+    conversationIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<void> {
+    unwrapVoid(await this.repository.markDeletedByConversationIds(conversationIds, session));
+  }
+
+  /**
+   * Cascade entry point: tombstone analysis runs linked to the given artefacts.
+   */
+  async deleteByArtefactIds(
+    artefactIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<void> {
+    unwrapVoid(await this.repository.markDeletedByArtefactIds(artefactIds, session));
   }
 }

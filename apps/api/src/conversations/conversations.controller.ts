@@ -24,14 +24,6 @@ export class ConversationsController {
     return this.conversationsService.deleteMessage(user.userId, conversationId, messageId);
   }
 
-  @Delete(':conversationId')
-  async deleteConversation(
-    @CurrentUser() user: CurrentUserPayload,
-    @Param('conversationId') conversationId: string,
-  ): Promise<{ message: string }> {
-    return this.conversationsService.deleteConversation(user.userId, conversationId);
-  }
-
   @UseQuota('message')
   @Post(':conversationId/messages')
   async sendMessage(

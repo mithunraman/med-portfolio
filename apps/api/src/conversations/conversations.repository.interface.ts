@@ -158,45 +158,48 @@ export interface IConversationsRepository {
   ): Promise<Result<Types.ObjectId[], DBError>>;
 
   /**
-   * Return message IDs for a conversation.
-   */
-  findMessageIdsByConversation(
-    conversationId: Types.ObjectId,
-    session?: ClientSession
-  ): Promise<Result<Types.ObjectId[], DBError>>;
-
-  /**
-   * Find conversation IDs linked to an artefact.
-   */
-  findConversationIdsByArtefact(
-    artefactId: Types.ObjectId,
-    session?: ClientSession
-  ): Promise<Result<Types.ObjectId[], DBError>>;
-
-  /**
-   * Soft-delete a single user message: set status to DELETED, anonymize content, unset media.
-   * Only matches messages with role=USER owned by the given user.
-   * Returns null if message not found or not owned.
-   */
-  softDeleteMessage(
-    messageId: Types.ObjectId,
-    conversationId: Types.ObjectId,
-    userId: Types.ObjectId,
-    session?: ClientSession,
-  ): Promise<Result<Message | null, DBError>>;
-
-  /**
-   * Anonymize a single conversation and all its messages.
-   * Returns the total number of modified documents.
-   */
-  anonymizeConversation(
-    conversationId: Types.ObjectId,
-    session?: ClientSession
-  ): Promise<Result<number, DBError>>;
-
-  /**
    * Anonymize all conversations and messages belonging to a user.
    * Returns the total number of modified documents.
    */
   anonymizeByUser(userId: Types.ObjectId): Promise<Result<number, DBError>>;
+
+  /**
+   * Bulk tombstone conversations + scrub fields. Idempotent.
+   */
+  markDeleted(
+    ids: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>>;
+
+  /**
+   * Resolve live conversation IDs for a set of artefact IDs.
+   */
+  findIdsByArtefactIds(
+    artefactIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<Types.ObjectId[], DBError>>;
+
+  /**
+   * Bulk tombstone messages by their IDs. Idempotent.
+   */
+  markDeletedMessagesByIds(
+    ids: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>>;
+
+  /**
+   * Bulk tombstone all messages belonging to the given conversations. Idempotent.
+   */
+  markDeletedMessagesByConversationIds(
+    conversationIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>>;
+
+  /**
+   * Resolve message IDs across multiple conversations.
+   */
+  findMessageIdsByConversationIds(
+    conversationIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<Types.ObjectId[], DBError>>;
 }

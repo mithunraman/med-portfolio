@@ -110,7 +110,19 @@ export interface IAnalysisRunsRepository {
     session?: ClientSession,
   ): Promise<Result<AnalysisRun[], DBError>>;
 
-  anonymizeByConversationIds(
-    conversationIds: Types.ObjectId[]
+  /**
+   * Bulk tombstone analysis runs for the given conversations. Idempotent.
+   */
+  markDeletedByConversationIds(
+    conversationIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<number, DBError>>;
+
+  /**
+   * Bulk tombstone analysis runs linked to the given artefacts. Idempotent.
+   */
+  markDeletedByArtefactIds(
+    artefactIds: Types.ObjectId[],
+    session?: ClientSession
   ): Promise<Result<number, DBError>>;
 }

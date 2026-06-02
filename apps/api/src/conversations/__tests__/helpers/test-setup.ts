@@ -200,8 +200,10 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
         provide: MEDIA_REPOSITORY,
         useValue: {
           updateStatus: jest.fn(),
+          markPendingDeleteByMessageIds: jest.fn().mockResolvedValue({ ok: true, value: 0 }),
         },
       },
+
     ],
   }).compile();
 

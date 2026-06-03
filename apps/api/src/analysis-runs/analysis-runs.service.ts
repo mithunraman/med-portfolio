@@ -131,6 +131,22 @@ export class AnalysisRunsService {
     return result.value;
   }
 
+  /**
+   * Find a run a worker is processing or about to process (PENDING, RUNNING).
+   * Unlike findActiveRun, this excludes AWAITING_INPUT — a run parked at an
+   * interrupt waiting on the user is safe to delete underneath.
+   */
+  async findExecutingRun(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<AnalysisRun | null> {
+    const result = await this.repository.findExecutingRun(conversationId, session);
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+    return result.value;
+  }
+
   async findRunByXid(xid: string): Promise<AnalysisRun | null> {
     const result = await this.repository.findRunByXid(xid);
     if (!result.ok) {

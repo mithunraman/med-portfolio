@@ -131,7 +131,20 @@ export default function ChatScreen() {
 
   const { showActionSheetWithOptions } = useActionSheet();
 
+  // Conversation context — server-driven action state
+  const context = useAppSelector((state) =>
+    selectContextByConversation(state, effectiveConversationId)
+  );
+
+  // Artefact ID comes from the server-driven context (reliable across all flows)
+  const artefactId = context?.artefactId ?? artefactIdRef.current;
+
   const handleDeleteConversation = useCallback(() => {
+    // Deletion cascades from the parent artefact server-side, so we need its id.
+    if (!artefactId) {
+      Alert.alert('Error', 'Failed to delete conversation. Please try again.');
+      return;
+    }
     Alert.alert(
       'Delete Conversation',
       'This will permanently delete this conversation and the associated entry. This cannot be undone.',
@@ -142,18 +155,23 @@ export default function ChatScreen() {
           style: 'destructive',
           onPress: () => {
             setDeleting(true);
-            dispatch(deleteConversation({ conversationId: effectiveConversationId }))
+            dispatch(deleteConversation({ conversationId: effectiveConversationId, artefactId }))
               .unwrap()
               .then(() => router.replace('/(tabs)'))
-              .catch(() => {
+              .catch((message: unknown) => {
                 setDeleting(false);
-                Alert.alert('Error', 'Failed to delete conversation. Please try again.');
+                Alert.alert(
+                  'Error',
+                  typeof message === 'string'
+                    ? message
+                    : 'Failed to delete conversation. Please try again.'
+                );
               });
           },
         },
       ]
     );
-  }, [effectiveConversationId, dispatch, router]);
+  }, [effectiveConversationId, artefactId, dispatch, router]);
 
   const handleShowMenu = useCallback(() => {
     showActionSheetWithOptions(
@@ -170,13 +188,6 @@ export default function ChatScreen() {
 
   const loadingMessages = useAppSelector(selectMessagesLoading);
   const sendingMessage = useAppSelector(selectMessagesSending);
-  // Conversation context — server-driven action state
-  const context = useAppSelector((state) =>
-    selectContextByConversation(state, effectiveConversationId)
-  );
-
-  // Artefact ID comes from the server-driven context (reliable across all flows)
-  const artefactId = context?.artefactId ?? artefactIdRef.current;
 
   // Per-component selector instances — stable across renders, memoize per conversationId
   const selectServerMessages = useMemo(() => makeSelectServerMessages(), []);
@@ -417,9 +428,11 @@ export default function ChatScreen() {
   const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
 
-  // Show delete button in header when conversation is deletable (not completed/closed)
+  // Show delete button in header when conversation is deletable (not completed/closed).
+  // Hidden until the entry exists server-side: deletion cascades from the artefact,
+  // so there's nothing to delete before its id is known.
   useEffect(() => {
-    const showMenu = phase !== 'completed' && phase !== 'closed' && !deleting;
+    const showMenu = !!artefactId && phase !== 'completed' && phase !== 'closed' && !deleting;
     navigation.setOptions({
       headerRight: showMenu
         ? () => (
@@ -429,7 +442,7 @@ export default function ChatScreen() {
           )
         : undefined,
     });
-  }, [phase, deleting, navigation, colors.text, handleShowMenu]);
+  }, [artefactId, phase, deleting, navigation, colors.text, handleShowMenu]);
 
   // Clear the optimistic flag when the server phase leaves 'analysing'.
   // This works for both start and resume because the server now returns

@@ -12,6 +12,11 @@ import { AnalysisRun, AnalysisRunDocument } from './schemas/analysis-run.schema'
 
 const TERMINAL_STATUSES = [AnalysisRunStatus.COMPLETED, AnalysisRunStatus.FAILED];
 
+// Runs a worker is processing or about to process. AWAITING_INPUT is excluded
+// deliberately: it is parked at an interrupt waiting on the user, with no worker
+// attached, so it is safe to tombstone underneath.
+const EXECUTING_STATUSES = [AnalysisRunStatus.PENDING, AnalysisRunStatus.RUNNING];
+
 /**
  * Single source of truth for the AnalysisRun tombstone payload. Used by every
  * deletion path on this repo. Adding a new sensitive field belongs here.
@@ -134,6 +139,26 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
     } catch (error) {
       this.logger.error('Failed to find active analysis run', error);
       return err({ code: 'DB_ERROR', message: 'Failed to find active analysis run' });
+    }
+  }
+
+  async findExecutingRun(
+    conversationId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<AnalysisRun | null, DBError>> {
+    try {
+      const run = await this.analysisRunModel
+        .findOne({
+          conversationId,
+          status: { $in: EXECUTING_STATUSES },
+        })
+        .sort({ createdAt: -1 })
+        .lean()
+        .session(session || null);
+      return ok(run);
+    } catch (error) {
+      this.logger.error('Failed to find executing analysis run', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find executing analysis run' });
     }
   }
 

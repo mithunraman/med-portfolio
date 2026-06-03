@@ -156,9 +156,11 @@ export class ArtefactsService {
       async (session) => {
         const artefact = await this.findOrThrow(xid, userOid, session);
 
-        // While the entry is still in progress, an active analysis run may be
-        // mid-flight. Deleting underneath it would resurrect the tombstoned
-        // analysis_run doc when the worker writes its terminal status.
+        // While the entry is still in progress, an analysis run may be executing
+        // (PENDING/RUNNING). Deleting underneath it would resurrect the tombstoned
+        // analysis_run doc when the worker writes its terminal status. A run parked
+        // at an interrupt (AWAITING_INPUT) has no worker attached and is safe to
+        // delete, so we check findExecutingRun, not findActiveRun.
         if (artefact.status === ArtefactStatus.IN_CONVERSATION) {
           const convIdsResult = await this.conversationsRepository.findIdsByArtefactIds(
             [artefact._id],
@@ -168,8 +170,8 @@ export class ArtefactsService {
             throw new InternalServerErrorException(convIdsResult.error.message);
           }
           for (const convId of convIdsResult.value) {
-            const activeRun = await this.analysisRunsService.findActiveRun(convId, session);
-            if (activeRun) {
+            const executingRun = await this.analysisRunsService.findExecutingRun(convId, session);
+            if (executingRun) {
               throw new ConflictException(
                 'Cannot delete entry while analysis is in progress'
               );

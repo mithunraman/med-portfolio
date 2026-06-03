@@ -65,6 +65,17 @@ export interface IAnalysisRunsRepository {
   ): Promise<Result<AnalysisRun | null, DBError>>;
 
   /**
+   * Find a run a worker is processing or about to process (PENDING, RUNNING).
+   * Excludes AWAITING_INPUT, which is parked at an interrupt with no worker
+   * attached. Used by delete guards that only need to block genuinely in-flight
+   * work, not runs waiting on user input.
+   */
+  findExecutingRun(
+    conversationId: Types.ObjectId,
+    session?: ClientSession,
+  ): Promise<Result<AnalysisRun | null, DBError>>;
+
+  /**
    * Find the most recent run for a conversation, regardless of status.
    * Used by ConversationContextService to derive conversation phase.
    */

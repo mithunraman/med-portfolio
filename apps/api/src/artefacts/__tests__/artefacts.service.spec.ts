@@ -131,7 +131,7 @@ const mockPdpGoalsService = {
 
 const mockAnalysisRunsService = {
   deleteByArtefactIds: jest.fn().mockResolvedValue(undefined),
-  findActiveRun: jest.fn().mockResolvedValue(null),
+  findExecutingRun: jest.fn().mockResolvedValue(null),
 };
 
 function createService(): ArtefactsService {
@@ -173,7 +173,7 @@ describe('ArtefactsService', () => {
     mockConversationsService.deleteByArtefactIds.mockResolvedValue(undefined);
     mockPdpGoalsService.deleteByArtefactIds.mockResolvedValue(undefined);
     mockAnalysisRunsService.deleteByArtefactIds.mockResolvedValue(undefined);
-    mockAnalysisRunsService.findActiveRun.mockResolvedValue(null);
+    mockAnalysisRunsService.findExecutingRun.mockResolvedValue(null);
     mockVersionHistoryService.anonymizeByEntity.mockResolvedValue(undefined);
     mockVersionHistoryService.countVersions.mockResolvedValue(0);
     setUserMock({ role: UserRole.USER, specialty: 100, trainingStage: 'ST1' });
@@ -191,29 +191,30 @@ describe('ArtefactsService', () => {
       );
     });
 
-    it('throws ConflictException when IN_CONVERSATION artefact has an active analysis run', async () => {
+    it('throws ConflictException when IN_CONVERSATION artefact has an executing analysis run', async () => {
       const artefact = makeArtefactDoc({ status: ArtefactStatus.IN_CONVERSATION });
       const convId = oid();
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockConversationsRepo.findIdsByArtefactIds.mockResolvedValue(ok([convId]));
-      mockAnalysisRunsService.findActiveRun.mockResolvedValue({ _id: oid() });
+      mockAnalysisRunsService.findExecutingRun.mockResolvedValue({ _id: oid() });
 
       await expect(service.deleteArtefact(userIdStr, 'art_abc123')).rejects.toThrow(
         ConflictException,
       );
     });
 
-    it('allows delete for IN_CONVERSATION artefact when no active analysis run', async () => {
+    it('allows delete for IN_CONVERSATION artefact parked at an interrupt (no executing run)', async () => {
+      // AWAITING_INPUT runs surface as null from findExecutingRun — deletable.
       const artefact = makeArtefactDoc({ status: ArtefactStatus.IN_CONVERSATION });
       const convId = oid();
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockConversationsRepo.findIdsByArtefactIds.mockResolvedValue(ok([convId]));
-      mockAnalysisRunsService.findActiveRun.mockResolvedValue(null);
+      mockAnalysisRunsService.findExecutingRun.mockResolvedValue(null);
 
       const result = await service.deleteArtefact(userIdStr, 'art_abc123');
 
       expect(result).toEqual({ message: 'Entry deleted successfully' });
-      expect(mockAnalysisRunsService.findActiveRun).toHaveBeenCalledWith(
+      expect(mockAnalysisRunsService.findExecutingRun).toHaveBeenCalledWith(
         convId,
         expect.anything(),
       );

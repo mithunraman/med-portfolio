@@ -13,10 +13,12 @@ const logger = new Logger('ClassifyNode');
 /*  Zod schema — single source of truth for the LLM response shape    */
 /* ------------------------------------------------------------------ */
 
-const classificationAlternativeSchema = z.object({
+// Field order is load-bearing: reasoning precedes the verdict to elicit
+// chain-of-thought (OpenAI emits structured-output fields in schema order).
+export const classificationAlternativeSchema = z.object({
+  reasoning: z.string().describe('Why this alternative is plausible'),
   entryType: z.string().describe('Entry type code from the list above'),
   confidence: z.number().min(0).max(1).describe('Confidence score 0-1'),
-  reasoning: z.string().describe('Why this alternative is plausible'),
 });
 
 /**
@@ -24,7 +26,18 @@ const classificationAlternativeSchema = z.object({
  * The API constrains token generation to only produce valid JSON
  * matching this shape — no markdown fences, no parsing needed.
  */
-const classifyResponseSchema = z.object({
+// Field order is load-bearing: reasoning + signalsFound come first to elicit
+// chain-of-thought before any verdict (OpenAI emits structured-output fields in
+// schema order). isRelevant is placed before the fields whose `.describe()`
+// reference it (entryType/confidence), so the gate is emitted before its
+// dependents.
+export const classifyResponseSchema = z.object({
+  reasoning: z.string().describe('1-2 sentence explanation of why this type was chosen'),
+  signalsFound: z
+    .array(z.string())
+    .describe(
+      'Classification signals from the entry type definition that appear in the transcript'
+    ),
   isRelevant: z
     .boolean()
     .describe(
@@ -40,12 +53,6 @@ const classifyResponseSchema = z.object({
     .min(0)
     .max(1)
     .describe('Confidence score 0-1. Must be 0 if isRelevant is false.'),
-  reasoning: z.string().describe('1-2 sentence explanation of why this type was chosen'),
-  signalsFound: z
-    .array(z.string())
-    .describe(
-      'Classification signals from the entry type definition that appear in the transcript'
-    ),
   alternatives: z
     .array(classificationAlternativeSchema)
     .describe('Other plausible entry types, ordered by confidence'),

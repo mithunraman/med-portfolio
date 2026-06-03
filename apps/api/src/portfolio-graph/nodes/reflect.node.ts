@@ -22,11 +22,10 @@ const logger = new Logger('ReflectNode');
  * Capability annotations are returned as a separate metadata array —
  * they are NOT embedded in section text.
  */
-const reflectResponseSchema = z.object({
-  title: z
-    .string()
-    .max(100)
-    .describe('A concise title summarising the artefact for list views (max 100 chars)'),
+// Field order is load-bearing: title is emitted last so the model summarises
+// the content it has already produced, not a guess up front (OpenAI emits
+// structured-output fields in schema order).
+export const reflectResponseSchema = z.object({
   sections: z
     .array(
       z.object({
@@ -51,6 +50,10 @@ const reflectResponseSchema = z.object({
       })
     )
     .describe('Capabilities mapped to sections as metadata — NOT embedded in section text'),
+  title: z
+    .string()
+    .max(100)
+    .describe('A concise title summarising the artefact for list views (max 100 chars)'),
 });
 
 /* ------------------------------------------------------------------ */

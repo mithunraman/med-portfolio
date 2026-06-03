@@ -22,8 +22,19 @@ const CONFIDENCE_THRESHOLD = 0.5;
  * The LLM evaluates EVERY capability individually rather than
  * recalling which ones apply from an open-ended prompt.
  */
-const capabilityAssessmentSchema = z.object({
+// Field order is load-bearing: reasoning precedes the demonstrated/confidence
+// verdict to elicit chain-of-thought (OpenAI emits structured-output fields in
+// schema order). `code` stays first as the identifier anchoring which
+// capability is being judged — it is not a verdict.
+export const capabilityAssessmentSchema = z.object({
   code: z.string().describe('Capability code (e.g. "C-06")'),
+  reasoning: z
+    .string()
+    .describe(
+      'If demonstrated: 1-2 sentence explanation written in the first person ' +
+        '(e.g. "I considered broader patient care…") referencing specific transcript details. ' +
+        'If not demonstrated: empty string.'
+    ),
   demonstrated: z
     .boolean()
     .describe(
@@ -41,13 +52,6 @@ const capabilityAssessmentSchema = z.object({
         '0.5-0.69: partial or indirect demonstration. ' +
         'Below 0.5: not convincingly demonstrated. ' +
         'Set to 0 if demonstrated is false.'
-    ),
-  reasoning: z
-    .string()
-    .describe(
-      'If demonstrated: 1-2 sentence explanation written in the first person ' +
-        '(e.g. "I considered broader patient care…") referencing specific transcript details. ' +
-        'If not demonstrated: empty string.'
     ),
 });
 

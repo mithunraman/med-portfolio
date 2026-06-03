@@ -122,4 +122,41 @@ describe('ConversationsRepository — deleted message filtering', () => {
       expect(result.value!.messages[0].content).toBe('visible');
     });
   });
+
+  describe('updateMessage — resurrection guard', () => {
+    it('refuses to write to a tombstoned message and returns null', async () => {
+      // Simulates a processing pipeline finishing after the message was deleted.
+      const msg = await insertMessage({ status: MessageStatus.CLEANING, content: '[deleted]' });
+      await messageModel.updateOne(
+        { _id: msg._id },
+        { $set: { status: MessageStatus.DELETED, content: '[deleted]' } },
+      );
+
+      const result = await repo.updateMessage(msg._id, {
+        content: 'real redacted transcript',
+        status: MessageStatus.COMPLETE,
+      });
+
+      // No-op: caller sees null, and the persisted row stays scrubbed + deleted.
+      expect(result.ok).toBe(true);
+      expect(result.value).toBeNull();
+
+      const persisted = await messageModel.findById(msg._id).lean();
+      expect(persisted!.status).toBe(MessageStatus.DELETED);
+      expect(persisted!.content).toBe('[deleted]');
+    });
+
+    it('updates a live message and returns the new document', async () => {
+      const msg = await insertMessage({ status: MessageStatus.CLEANING });
+
+      const result = await repo.updateMessage(msg._id, {
+        content: 'cleaned',
+        status: MessageStatus.COMPLETE,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.value!.status).toBe(MessageStatus.COMPLETE);
+      expect(result.value!.content).toBe('cleaned');
+    });
+  });
 });

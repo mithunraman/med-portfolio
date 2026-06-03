@@ -221,8 +221,14 @@ export class ConversationsRepository implements IConversationsRepository {
     session?: ClientSession
   ): Promise<Result<Message | null, DBError>> {
     try {
+      // Guard against resurrecting a tombstoned message. A delete can race an
+      // in-flight (or still-queued) processing pipeline; a blind write by _id
+      // would flip a DELETED row back to COMPLETE and rewrite scrubbed content.
+      // Folding MESSAGE_LIVE_FILTER into the query makes the precondition atomic
+      // with the write. Returns null when the message is missing or deleted —
+      // callers treat that as a no-op.
       const message = await this.messageModel
-        .findByIdAndUpdate(messageId, { $set: data }, { new: true })
+        .findOneAndUpdate({ _id: messageId, ...MESSAGE_LIVE_FILTER }, { $set: data }, { new: true })
         .lean()
         .session(session || null);
       return ok(message);

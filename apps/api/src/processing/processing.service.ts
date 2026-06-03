@@ -10,6 +10,7 @@ import { isErr } from '../common/utils/result.util';
 import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
+  UpdateMessageData,
 } from '../conversations/conversations.repository.interface';
 import { Message } from '../conversations/schemas/message.schema';
 import { MediaService } from '../media/media.service';
@@ -114,7 +115,7 @@ export class ProcessingService {
     const media = message.media as unknown as Media;
 
     // Update status to TRANSCRIBING
-    await this.updateStatus(messageId, MessageStatus.TRANSCRIBING);
+    if (!(await this.applyUpdate(messageId, { status: MessageStatus.TRANSCRIBING }))) return;
 
     // Get presigned URL for the audio
     const audioUrl = await this.mediaService.getPresignedUrl(media.xid);
@@ -127,30 +128,35 @@ export class ProcessingService {
     );
 
     // Update with raw transcript and transcription metadata
-    await this.conversationsRepository.updateMessage(messageId, {
+    const cleaningAlive = await this.applyUpdate(messageId, {
       rawContent: transcriptionResult.text,
       status: MessageStatus.CLEANING,
       transcription: transcriptionResult.transcription,
     });
+    if (!cleaningAlive) return;
 
     // Stage 2: Cleaning
     this.logger.info(`Cleaning transcript for message ${message.xid}`);
     const cleaningResult = await this.cleaningStage.execute(transcriptionResult.text, context);
 
     // Update with cleaned content
-    await this.conversationsRepository.updateMessage(messageId, {
+    const deidentifyAlive = await this.applyUpdate(messageId, {
       cleanedContent: cleaningResult.text,
       status: MessageStatus.DEIDENTIFYING,
     });
+    if (!deidentifyAlive) return;
 
     // Stage 3: PII Redaction (regex + LLM)
     const redactedContent = await this.redactPii(cleaningResult.text, context);
 
     // Update with final redacted content
-    await this.conversationsRepository.updateMessage(messageId, {
-      content: redactedContent,
-      status: MessageStatus.COMPLETE,
-    });
+    if (
+      !(await this.applyUpdate(messageId, {
+        content: redactedContent,
+        status: MessageStatus.COMPLETE,
+      }))
+    )
+      return;
 
     this.logger.info(`Message processing complete for ${message.xid}`);
   }
@@ -162,7 +168,7 @@ export class ProcessingService {
     const messageId = message._id;
 
     // Update status to CLEANING
-    await this.updateStatus(messageId, MessageStatus.CLEANING);
+    if (!(await this.applyUpdate(messageId, { status: MessageStatus.CLEANING }))) return;
 
     // Stage 1: Cleaning
     this.logger.info(`Cleaning text for message ${message.xid}`);
@@ -173,19 +179,23 @@ export class ProcessingService {
     const cleaningResult = await this.cleaningStage.execute(message.rawContent, context);
 
     // Update with cleaned content
-    await this.conversationsRepository.updateMessage(messageId, {
+    const deidentifyAlive = await this.applyUpdate(messageId, {
       cleanedContent: cleaningResult.text,
       status: MessageStatus.DEIDENTIFYING,
     });
+    if (!deidentifyAlive) return;
 
     // Stage 2: PII Redaction (regex + LLM)
     const redactedContent = await this.redactPii(cleaningResult.text, context);
 
     // Update with final redacted content
-    await this.conversationsRepository.updateMessage(messageId, {
-      content: redactedContent,
-      status: MessageStatus.COMPLETE,
-    });
+    if (
+      !(await this.applyUpdate(messageId, {
+        content: redactedContent,
+        status: MessageStatus.COMPLETE,
+      }))
+    )
+      return;
 
     this.logger.info(`Message processing complete for ${message.xid}`);
   }
@@ -200,13 +210,26 @@ export class ProcessingService {
     return redactionResult.text;
   }
 
-  private async updateStatus(
+  /**
+   * Apply a message update that must not resurrect a tombstoned row. The repo
+   * filters out DELETED messages, so a null result means the message was deleted
+   * (a delete raced this in-flight pipeline). Returns true while the message is
+   * still live, false once it's gone — callers short-circuit to stop spending
+   * transcription/LLM budget on a doomed message.
+   */
+  private async applyUpdate(
     messageId: Types.ObjectId,
-    status: MessageStatus
-  ): Promise<void> {
-    await this.conversationsRepository.updateMessage(messageId, {
-      status: status,
-    });
+    data: UpdateMessageData
+  ): Promise<boolean> {
+    const result = await this.conversationsRepository.updateMessage(messageId, data);
+    if (isErr(result)) {
+      throw new Error(result.error.message);
+    }
+    if (!result.value) {
+      this.logger.warn(`Halting processing for message ${messageId} — deleted mid-pipeline`);
+      return false;
+    }
+    return true;
   }
 
   private async markFailed(messageId: Types.ObjectId, error: string): Promise<void> {

@@ -396,7 +396,7 @@ function ReviewPeriodCoverageModule({
             {coverage.coveredCount} of {coverage.totalCapabilities} capabilities covered
           </Text>
           <Text style={[styles.coverageCardDates, { color: colors.textSecondary }]}>
-            {formatPeriodDate(period.startDate)} — {formatPeriodDate(period.endDate)}
+            {formatPeriodDate(period.startDate)} - {formatPeriodDate(period.endDate)}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />

@@ -453,9 +453,13 @@ export default function EntryDetailScreen() {
     if (!artefact) return;
     navigation.setOptions({
       headerRight: () => (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+        <View style={styles.headerActions}>
           {canExport && (
-            <Pressable onPress={() => setExportSheetVisible(true)} hitSlop={8}>
+            <Pressable
+              onPress={() => setExportSheetVisible(true)}
+              hitSlop={8}
+              style={styles.headerButton}
+            >
               <Feather name="share" size={20} color={colors.text} />
             </Pressable>
           )}
@@ -464,6 +468,7 @@ export default function EntryDetailScreen() {
               onPress={updatingStatus ? undefined : handleShowMenu}
               hitSlop={8}
               disabled={updatingStatus}
+              style={[styles.headerButton, canExport && styles.headerButtonSpaced]}
             >
               <Ionicons
                 name="ellipsis-vertical"
@@ -820,6 +825,19 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerButtonSpaced: {
+    marginLeft: 8,
   },
   section: {
     paddingHorizontal: 16,

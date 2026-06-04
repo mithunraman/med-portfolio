@@ -1,4 +1,10 @@
-import { ArtefactStatus, Specialty } from '@acme/shared';
+import {
+  ARTEFACT_RATING_MAX,
+  ARTEFACT_RATING_MIN,
+  ARTEFACT_REVIEW_COMMENT_MAX_LENGTH,
+  ArtefactStatus,
+  Specialty,
+} from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
@@ -18,6 +24,20 @@ export class ReflectionSection {
 
   @Prop({ required: true })
   text!: string;
+}
+
+// Author's private review of the AI output. One per artefact, edit-only.
+// Embedded (not a separate collection) because it is 1:1, read on every
+// artefact-detail load, and must die with the artefact on delete.
+export class ArtefactReview {
+  @Prop({ required: true, type: Number, min: ARTEFACT_RATING_MIN, max: ARTEFACT_RATING_MAX })
+  rating!: number;
+
+  @Prop({ type: String, maxlength: ARTEFACT_REVIEW_COMMENT_MAX_LENGTH, default: null })
+  comment!: string | null;
+
+  @Prop({ required: true, type: Date })
+  updatedAt!: Date;
 }
 
 @Schema({
@@ -59,6 +79,10 @@ export class Artefact {
 
   @Prop({ type: Object, default: null })
   tags!: Record<string, string[]> | null;
+
+  // null until the author rates; never touched by the LLM pipeline or version snapshots.
+  @Prop({ type: ArtefactReview, default: null, _id: false })
+  review!: ArtefactReview | null;
 
   @Prop({ type: Date, default: null })
   completedAt!: Date | null;

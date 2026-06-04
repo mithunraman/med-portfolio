@@ -41,6 +41,11 @@ export interface CountByUserFilter {
   status?: ArtefactStatus;
 }
 
+export interface UpsertArtefactReviewData {
+  rating: number;
+  comment: string | null;
+}
+
 export interface IArtefactsRepository {
   findById(
     id: Types.ObjectId,
@@ -68,6 +73,13 @@ export interface IArtefactsRepository {
     userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Artefact | null, DBError>>;
+
+  upsertReview(
+    xid: string,
+    userId: Types.ObjectId,
+    data: UpsertArtefactReviewData,
+    session?: ClientSession
+  ): Promise<Result<Artefact, DBError>>;
 
   countByUser(
     userId: string,

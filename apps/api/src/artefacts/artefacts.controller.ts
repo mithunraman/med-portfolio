@@ -9,6 +9,7 @@ import {
   ListArtefactsDto,
   RestoreArtefactVersionDto,
   UpdateArtefactStatusDto,
+  UpsertArtefactReviewDto,
 } from './dto';
 
 @Controller('artefacts')
@@ -54,6 +55,15 @@ export class ArtefactsController {
     @Body() dto: EditArtefactDto
   ): Promise<Artefact> {
     return this.artefactsService.editArtefact(user.userId, id, dto);
+  }
+
+  @Put(':id/review')
+  async upsertReview(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string,
+    @Body() dto: UpsertArtefactReviewDto
+  ): Promise<Artefact> {
+    return this.artefactsService.upsertReview(user.userId, id, dto);
   }
 
   @Put(':id/status')

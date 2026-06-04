@@ -46,6 +46,23 @@ export const ReflectionSectionSchema = z.object({
 
 export type ReflectionSection = z.infer<typeof ReflectionSectionSchema>;
 
+// Single source of truth for the review invariants — referenced by the request
+// Zod schema below and the Mongoose @Prop bounds in the API. Changing the rating
+// scale or comment cap is a one-line edit here.
+export const ARTEFACT_RATING_MIN = 1;
+export const ARTEFACT_RATING_MAX = 5;
+export const ARTEFACT_REVIEW_COMMENT_MAX_LENGTH = 2000;
+
+// Artefact review (embedded in artefact response). Private to the author —
+// a 1–5 star rating of the AI output with an optional free-text comment.
+export const ArtefactReviewSchema = z.object({
+  rating: z.number().int().min(ARTEFACT_RATING_MIN).max(ARTEFACT_RATING_MAX),
+  comment: z.string().nullable(),
+  updatedAt: z.string().datetime(),
+});
+
+export type ArtefactReview = z.infer<typeof ArtefactReviewSchema>;
+
 // Active conversation (embedded in artefact response)
 export const ActiveConversationSchema = z.object({
   id: z.string(),
@@ -71,6 +88,7 @@ export const ArtefactSchema = z.object({
   pdpGoals: z.array(PdpGoalSchema).nullable(),
   capabilities: z.array(CapabilitySchema).nullable(),
   tags: z.record(z.array(z.string())).nullable(),
+  review: ArtefactReviewSchema.nullable(),
   conversation: ActiveConversationSchema,
   versionCount: z.number().default(0),
   createdAt: z.string().datetime(),
@@ -126,6 +144,14 @@ export const EditArtefactRequestSchema = z.object({
 });
 
 export type EditArtefactRequest = z.infer<typeof EditArtefactRequestSchema>;
+
+// Review request schema — upsert (create or overwrite) the author's review.
+export const UpsertArtefactReviewRequestSchema = z.object({
+  rating: z.number().int().min(ARTEFACT_RATING_MIN).max(ARTEFACT_RATING_MAX),
+  comment: z.string().max(ARTEFACT_REVIEW_COMMENT_MAX_LENGTH).nullable().optional(),
+});
+
+export type UpsertArtefactReviewRequest = z.infer<typeof UpsertArtefactReviewRequestSchema>;
 
 // Version schemas
 export const ArtefactVersionSchema = z.object({

@@ -63,6 +63,13 @@ export function toArtefactDto(
       evidence: cap.evidence,
     })) ?? null,
     tags: artefact.tags,
+    review: artefact.review
+      ? {
+          rating: artefact.review.rating,
+          comment: artefact.review.comment,
+          updatedAt: artefact.review.updatedAt.toISOString(),
+        }
+      : null,
     conversation: toActiveConversationDto(conversation),
     versionCount,
     createdAt: artefact.createdAt.toISOString(),

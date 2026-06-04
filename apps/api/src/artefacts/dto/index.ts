@@ -4,3 +4,4 @@ export * from './finalise-artefact.dto';
 export * from './list-artefacts.dto';
 export * from './restore-artefact-version.dto';
 export * from './update-artefact-status.dto';
+export * from './upsert-artefact-review.dto';

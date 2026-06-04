@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Types } from 'mongoose';
-import { ok } from '../../common/utils/result.util';
+import { err, ok } from '../../common/utils/result.util';
 import { ArtefactsService } from '../artefacts.service';
 
 // ── Helpers ──
@@ -71,6 +71,7 @@ const mockArtefactsRepo = {
   findByXid: jest.fn(),
   updateArtefactById: jest.fn(),
   upsertArtefact: jest.fn(),
+  upsertReview: jest.fn(),
   listArtefacts: jest.fn(),
   countByUser: jest.fn(),
   markDeleted: jest.fn().mockResolvedValue(ok(1)),
@@ -541,6 +542,23 @@ describe('ArtefactsService', () => {
       );
       expect(mockPdpGoalsRepo.updateManyByArtefactId).not.toHaveBeenCalled();
     });
+
+    it('returns the accurate versionCount even though a status change creates no version', async () => {
+      const artefact = makeArtefactDoc({ status: ArtefactStatus.IN_CONVERSATION });
+      const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.IN_REVIEW });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      setupBuildArtefactDtoMocks();
+      // Artefact already has 2 versions from prior edits — buildArtefactDto must
+      // surface that, not the old default of 0.
+      mockVersionHistoryService.countVersions.mockResolvedValue(2);
+
+      const result = await service.updateArtefactStatus(userIdStr, 'art_abc123', {
+        status: ArtefactStatus.IN_REVIEW,
+      });
+
+      expect(result.versionCount).toBe(2);
+    });
   });
 
   // ─── editArtefact ───
@@ -861,6 +879,67 @@ describe('ArtefactsService', () => {
         service.duplicateToReview(userIdStr, UserRole.USER_GUEST, 'art_abc123'),
       ).rejects.toThrow(ForbiddenException);
       expect(mockArtefactsRepo.upsertArtefact).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── upsertReview ───
+
+  describe('upsertReview', () => {
+    it('maps repo NOT_FOUND (missing or not owned) to NotFoundException', async () => {
+      mockArtefactsRepo.upsertReview.mockResolvedValue(
+        err({ code: 'NOT_FOUND', message: 'Artefact not found' }),
+      );
+
+      await expect(
+        service.upsertReview(userIdStr, 'art_abc123', { rating: 5 }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('upserts keyed by xid, normalising a missing comment to null', async () => {
+      const updated = makeArtefactDoc({
+        review: { rating: 4, comment: null, updatedAt: new Date() },
+      });
+      mockArtefactsRepo.upsertReview.mockResolvedValue(ok(updated));
+      mockVersionHistoryService.countVersions.mockResolvedValue(0);
+      setupBuildArtefactDtoMocks();
+
+      const result = await service.upsertReview(userIdStr, 'art_abc123', { rating: 4 });
+
+      expect(mockArtefactsRepo.upsertReview).toHaveBeenCalledWith('art_abc123', userId, {
+        rating: 4,
+        comment: null,
+      });
+      // No prior read — the single atomic upsert is the only repo call.
+      expect(mockArtefactsRepo.findByXid).not.toHaveBeenCalled();
+      expect(result.review).toEqual({
+        rating: 4,
+        comment: null,
+        updatedAt: expect.any(String),
+      });
+    });
+
+    it('passes through a provided comment', async () => {
+      mockArtefactsRepo.upsertReview.mockResolvedValue(
+        ok(makeArtefactDoc({ review: { rating: 3, comment: 'Helpful', updatedAt: new Date() } })),
+      );
+      setupBuildArtefactDtoMocks();
+
+      await service.upsertReview(userIdStr, 'art_abc123', { rating: 3, comment: 'Helpful' });
+
+      expect(mockArtefactsRepo.upsertReview).toHaveBeenCalledWith('art_abc123', userId, {
+        rating: 3,
+        comment: 'Helpful',
+      });
+    });
+
+    it('surfaces a non-NOT_FOUND repo error as InternalServerErrorException', async () => {
+      mockArtefactsRepo.upsertReview.mockResolvedValue(
+        err({ code: 'DB_ERROR', message: 'boom' }),
+      );
+
+      await expect(
+        service.upsertReview(userIdStr, 'art_abc123', { rating: 2 }),
+      ).rejects.toThrow('boom');
     });
   });
 });

@@ -10,6 +10,7 @@ import {
   ListArtefactsResult,
   UpdateArtefactData,
   UpsertArtefactData,
+  UpsertArtefactReviewData,
 } from './artefacts.repository.interface';
 import { Artefact, ArtefactDocument } from './schemas/artefact.schema';
 
@@ -24,6 +25,7 @@ export function artefactTombstoneUpdate() {
       reflection: [],
       capabilities: [],
       tags: {},
+      review: null,
       status: ArtefactStatus.DELETED,
     },
   };
@@ -161,6 +163,36 @@ export class ArtefactsRepository implements IArtefactsRepository {
     } catch (error) {
       this.logger.error('Failed to find artefact by xid', error);
       return err({ code: 'DB_ERROR', message: 'Failed to find artefact' });
+    }
+  }
+
+  async upsertReview(
+    xid: string,
+    userId: Types.ObjectId,
+    data: UpsertArtefactReviewData,
+    session?: ClientSession
+  ): Promise<Result<Artefact, DBError>> {
+    try {
+      // Single atomic write: { xid, userId } enforces ownership at the DB level —
+      // a non-owner gets NOT_FOUND, which is also the right HTTP shape (don't leak
+      // existence). ARTEFACT_LIVE_FILTER blocks rating a tombstoned artefact, so
+      // no prior read and no transaction are needed.
+      const artefact = await this.artefactModel
+        .findOneAndUpdate(
+          { xid, userId, ...ARTEFACT_LIVE_FILTER },
+          { $set: { review: { ...data, updatedAt: new Date() } } },
+          { new: true, session }
+        )
+        .lean();
+
+      if (!artefact) {
+        return err({ code: 'NOT_FOUND', message: 'Artefact not found' });
+      }
+
+      return ok(artefact);
+    } catch (error) {
+      this.logger.error('Failed to upsert artefact review', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to upsert artefact review' });
     }
   }
 

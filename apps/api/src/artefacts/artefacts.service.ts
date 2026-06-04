@@ -6,6 +6,7 @@ import type {
   FinaliseArtefactRequest,
   RestoreArtefactVersionRequest,
   UpdateArtefactStatusRequest,
+  UpsertArtefactReviewRequest,
 } from '@acme/shared';
 import {
   ArtefactStatus,
@@ -29,16 +30,18 @@ import { InjectModel } from '@nestjs/mongoose';
 import { format } from 'date-fns';
 import { ClientSession, Model, Types } from 'mongoose';
 import { AnalysisRunsService } from '../analysis-runs/analysis-runs.service';
+import { User, UserDocument } from '../auth/schemas/user.schema';
 import { ARTEFACT_STATE_CHANGED, type ArtefactStateChangedEvent } from '../common/events';
-import { GUEST_ARTEFACT_LIMIT, isGuestAtArtefactLimit } from '../config/quota.config';
 import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { isErr } from '../common/utils/result.util';
+import { runWithSession } from '../common/utils/run-with-session.util';
 import { isNotNull } from '../common/utils/type-guards.util';
-import { ConversationsService } from '../conversations/conversations.service';
+import { GUEST_ARTEFACT_LIMIT, isGuestAtArtefactLimit } from '../config/quota.config';
 import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from '../conversations/conversations.repository.interface';
+import { ConversationsService } from '../conversations/conversations.service';
 import { TransactionService } from '../database';
 import {
   CreatePdpGoalData,
@@ -47,7 +50,6 @@ import {
   UpdatePdpGoalActionData,
 } from '../pdp-goals/pdp-goals.repository.interface';
 import { PdpGoalsService } from '../pdp-goals/pdp-goals.service';
-import { User, UserDocument } from '../auth/schemas/user.schema';
 import { VersionHistoryService } from '../version-history';
 import { ARTEFACTS_REPOSITORY, IArtefactsRepository } from './artefacts.repository.interface';
 import { CreateArtefactDto, ListArtefactsDto } from './dto';
@@ -172,9 +174,7 @@ export class ArtefactsService {
           for (const convId of convIdsResult.value) {
             const executingRun = await this.analysisRunsService.findExecutingRun(convId, session);
             if (executingRun) {
-              throw new ConflictException(
-                'Cannot delete entry while analysis is in progress'
-              );
+              throw new ConflictException('Cannot delete entry while analysis is in progress');
             }
           }
         }
@@ -443,6 +443,8 @@ export class ArtefactsService {
           throw new BadRequestException('Artefact can only be edited in IN_REVIEW status');
         }
 
+        // Snapshots are { title, reflection } only — the embedded review is
+        // intentionally not versioned, so editing/restoring never touches it.
         await this.versionHistoryService.createVersion(
           VersionHistoryEntity.ARTEFACT,
           artefactDoc._id,
@@ -464,21 +466,36 @@ export class ArtefactsService {
           throw new InternalServerErrorException(updateResult.error.message);
         }
 
-        const versionCount = await this.versionHistoryService.countVersions(
-          VersionHistoryEntity.ARTEFACT,
-          artefactDoc._id,
-          session
-        );
-
-        return this.buildArtefactDto(
-          updateResult.value._id,
-          updateResult.value,
-          session,
-          versionCount
-        );
+        return this.buildArtefactDto(updateResult.value._id, updateResult.value, session);
       },
       { context: 'editArtefact' }
     );
+  }
+
+  async upsertReview(
+    userId: string,
+    xid: string,
+    dto: UpsertArtefactReviewRequest
+  ): Promise<Artefact> {
+    const userOid = new Types.ObjectId(userId);
+
+    // Ownership + liveness are enforced atomically in the repo's { xid, userId, live }
+    // filter, so there's no prior read and no transaction — it's a single-doc upsert.
+    const updateResult = await this.artefactsRepository.upsertReview(xid, userOid, {
+      rating: dto.rating,
+      comment: dto.comment ?? null,
+    });
+
+    if (isErr(updateResult)) {
+      if (updateResult.error.code === 'NOT_FOUND') {
+        throw new NotFoundException('Artefact not found');
+      }
+      throw new InternalServerErrorException(updateResult.error.message);
+    }
+
+    const artefact = updateResult.value;
+
+    return this.buildArtefactDto(artefact._id, artefact);
   }
 
   async getVersionHistory(userId: string, xid: string): Promise<ArtefactVersionHistoryResponse> {
@@ -557,18 +574,7 @@ export class ArtefactsService {
           throw new InternalServerErrorException(updateResult.error.message);
         }
 
-        const versionCount = await this.versionHistoryService.countVersions(
-          VersionHistoryEntity.ARTEFACT,
-          artefactDoc._id,
-          session
-        );
-
-        return this.buildArtefactDto(
-          updateResult.value._id,
-          updateResult.value,
-          session,
-          versionCount
-        );
+        return this.buildArtefactDto(updateResult.value._id, updateResult.value, session);
       },
       { context: 'restoreVersion' }
     );
@@ -577,13 +583,25 @@ export class ArtefactsService {
   private async buildArtefactDto(
     artefactId: Types.ObjectId,
     artefactDoc: ArtefactSchema,
-    session?: ClientSession,
-    versionCount?: number
+    session?: ClientSession
   ): Promise<Artefact> {
-    const [conversationResult, pdpGoalsResult] = await Promise.all([
-      this.conversationsRepository.findActiveConversationByArtefact(artefactId, session),
-      this.pdpGoalsRepository.findByArtefactId(artefactId, session),
-    ]);
+    // versionCount is computed here (not threaded in by callers) so every
+    // mutation response carries the accurate count. Mongo forbids concurrent ops
+    // on one session — runWithSession serialises these reads inside a transaction
+    // and parallelises them otherwise.
+    const [conversationResult, pdpGoalsResult, versionCount] = await runWithSession(
+      [
+        () => this.conversationsRepository.findActiveConversationByArtefact(artefactId, session),
+        () => this.pdpGoalsRepository.findByArtefactId(artefactId, session),
+        () =>
+          this.versionHistoryService.countVersions(
+            VersionHistoryEntity.ARTEFACT,
+            artefactId,
+            session
+          ),
+      ],
+      session
+    );
 
     if (isErr(conversationResult) || !conversationResult.value) {
       throw new InternalServerErrorException('Conversation not found');
@@ -592,12 +610,7 @@ export class ArtefactsService {
       throw new InternalServerErrorException(pdpGoalsResult.error.message);
     }
 
-    return toArtefactDto(
-      artefactDoc,
-      conversationResult.value,
-      pdpGoalsResult.value,
-      versionCount ?? 0
-    );
+    return toArtefactDto(artefactDoc, conversationResult.value, pdpGoalsResult.value, versionCount);
   }
 
   async duplicateToReview(userId: string, role: UserRole, xid: string): Promise<Artefact> {
@@ -812,11 +825,6 @@ export class ArtefactsService {
     await this.conversationsService.deleteByArtefactIds(ids, session);
     await this.pdpGoalsService.deleteByArtefactIds(ids, session);
     await this.analysisRunsService.deleteByArtefactIds(ids, session);
-    await this.versionHistoryService.anonymizeByEntity(
-      VersionHistoryEntity.ARTEFACT,
-      ids,
-      session
-    );
+    await this.versionHistoryService.anonymizeByEntity(VersionHistoryEntity.ARTEFACT, ids, session);
   }
-
 }

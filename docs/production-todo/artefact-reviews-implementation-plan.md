@@ -231,50 +231,98 @@ returns `review`.
 
 ---
 
-## Phase 5 — Mobile UI (App Store-style inline review card)
+## Phase 5 — Mobile UI (two-stage: inline stars → review sheet)
 
 ### Objective
-Always-visible, edit-in-place review card on the artefact detail screen.
+A light inline rating affordance on the artefact detail screen that opens a bottom sheet
+for the full rating + optional comment. Progressive-disclosure, edit-in-place.
 
 ### Scope
-**In:** `ReviewCard` component, redux integration, optimistic upsert, accessibility.
-**Out:** push prompts, deep links, share affordances.
+**In:** inline `StarRating` entry point, `ReviewSheet` (bottom sheet), redux integration,
+plain-merge upsert, accessibility.
+**Out:** push prompts, deep links, share affordances, autosave-on-tap, optimistic UI.
 
-### UX (App Store / Play Store conventions)
-- **Always inline**, never modal. Sits below the artefact content.
-- **Empty state**: card "Rate this entry", five outlined stars, optional placeholder text
-  area "Tell us about your experience (optional)", primary **Submit** (disabled until a star
-  is tapped).
-- **Tapping a star** fills it + all to its left.
-- **Submitted state**: header "Your rating", filled stars, comment as read-only text, subtle
-  **Edit** pencil top-right.
-- **Edit mode**: pre-fills current values, primary button becomes **Save**. Leaving the
-  screen without saving discards (standard mobile pattern). **No delete** by spec.
+### UX — progressive disclosure (two-stage capture)
+
+This is the **Play Store review-composer model, made private and always-on**: a light touch
+inline, depth on demand. It supersedes the earlier "always-visible inline card with an inline
+comment box" — the text box is moved into a sheet so the detail screen stays clean and the
+keyboard only appears when the user opts in.
+
+**Stage 1 — inline entry (on the detail screen):**
+- **Empty (unrated):** header "Rate this entry" + five outlined, tappable stars. No text box,
+  no Submit inline.
+- **Tapping a star** fills it + all to its left **and immediately opens the sheet**, pre-filled
+  to that rating. The inline star tap is the *commitment trigger* whose value is carried
+  forward (industry-standard — never re-ask the rating the user already gave).
+- **Submitted (rated):** header "Your rating" + filled stars (read-only inline) + an Edit
+  pencil. Below the stars:
+  - The comment as read-only text, **truncated to a maximum of 1 line followed by `…`**
+    (`numberOfLines={1}` + `ellipsizeMode="tail"`); omitted entirely if no comment was left.
+  - A quiet relative timestamp line — **"Rated {time} ago"** (e.g. "Rated 3d ago") — derived
+    from `review.updatedAt` (an ISO string) via the existing `apps/mobile/src/utils/formatTimeAgo.ts`
+    helper prefixed with "Rated ". No new date dependency.
+  Tapping anywhere on the row (or the Edit pencil) re-opens the sheet pre-filled with the
+  current rating + comment (edit = same surface as create; upsert). The inline stars are
+  read-only here — editing happens through the sheet, so an accidental tap can't silently
+  change a committed rating.
+
+**Stage 2 — the review sheet (modal bottom sheet):**
+- Opens pre-filled with the rating from the inline tap (or the existing review when editing).
+- Editable star row + optional text area ("Tell us about your experience — optional").
+- Primary **Submit** (label **Save** when editing). Enabled whenever a valid rating exists
+  (always true here, since a star is required to open the sheet).
+- Character counter appears only past ~1800 chars so the common short case stays uncluttered.
+- **Submit window (plain merge — no optimistic UI):** on tap, show a spinner and disable the
+  star row + text area; fire the request. On success, close the sheet; the inline row
+  re-renders into its submitted state from the merged artefact. On failure, **keep the sheet
+  open with all input preserved** + an inline error to retry.
+- **Dismiss without submitting discards** — and the inline stars **revert to empty** if the
+  artefact was previously unrated (nothing persists until Submit). **No delete** by spec.
 
 ### Implementation
-1. **State**: extend `artefactsSlice` — the artefact detail already holds `review`, so the
-   card reads it from the cached artefact. Add an `upsertReview` thunk with optimistic
-   update + rollback on rejection (same pattern as optimistic messaging).
-2. **Component** `apps/mobile/src/components/artefact/ReviewCard.tsx`:
-   - Drives off the artefact's `review` field; null → empty mode, non-null → submitted mode
-     (toggle to edit via local `isEditing`).
-   - `StarRating` sub-component — presentation-only (`value` + `onChange`), extract to
-     `components/common/StarRating.tsx` if not already present.
-   - Accessibility: each star labelled "Rate N of 5 stars"; text area labelled "Optional review".
-   - Character counter shown only past ~1800 chars so it doesn't clutter the common case.
-   - Scoped logger `logger.createScope('ReviewCard')` — never raw `console.*` (CLAUDE.md).
-3. **Mount point**: artefact detail screen, below reflection/capabilities.
+1. **State**: extend `artefactsSlice` — the artefact detail already holds `review`, so both the
+   inline row and the sheet read it from the cached artefact. Add a plain `upsertReview`
+   thunk (modelled on `editArtefact`): call `apiClient.artefacts.upsertReview(id, data)` and
+   on `fulfilled` replace the cached artefact with the server response (no optimistic update,
+   no rollback branch — the failure path is "input preserved in the still-open sheet").
+2. **`StarRating`** — `apps/mobile/src/components/common/StarRating.tsx`: presentation-only
+   (`value` + `onChange`), native `Pressable`, no thunk imports, no new dependency. Reused by
+   both the inline row and the sheet (and a future supervisor rating).
+3. **`ReviewSheet`** — `apps/mobile/src/components/artefact/ReviewSheet.tsx`: the capture
+   surface (modal bottom sheet). Holds local draft state (`rating`, `comment`, `isSaving`,
+   `error`), seeded from the artefact's `review` (or the inline tap value for first-time).
+   Dispatches the thunk on Submit; closes on success, stays open on failure.
+4. **Inline entry** on the detail screen: empty → "Rate this entry" + stars that open the
+   sheet pre-filled; rated → stars + one-line summary that re-opens the sheet to edit.
+5. **Accessibility:** each star labelled "Rate N of 5 stars"; text area labelled "Optional
+   review"; the sheet announces "Saving" → "Rating saved" via a live region.
+6. **Logging:** scoped logger `logger.createScope('ReviewSheet')` — never raw `console.*`
+   (CLAUDE.md).
+
+### Mount point
+Artefact detail screen ([app/(entry)/[artefactId].tsx]), inline row below
+reflection/capabilities (near the version-history row); the sheet is rendered as a modal
+overlay controlled by local `isSheetOpen` state.
 
 ### Deliverables
-Functional rating card on a real device, end-to-end persistence, lint + typecheck clean.
+Functional two-stage rating flow on a real device, end-to-end persistence, lint + typecheck
+clean.
 
 ### Patterns / guidance
-- **Optimistic UI** — stars fill instantly; rollback only on rare network failure.
-- **Don't autosave on star tap** — require explicit Submit/Save (users tap-then-correct
-  before committing).
-- `StarRating` must be reusable and presentation-only (no thunk imports). No new
-  star-rating dependency — native `Pressable` suffices.
-- Keep the card under ~200 lines; split out `StarRating` / `ReviewTextInput` if it grows.
+- **Progressive disclosure** — one tap inline (star) → sheet for depth. Don't front-load the
+  text box on the detail screen.
+- **Carry the tap forward** — the sheet must open pre-filled with the inline-tapped rating;
+  never re-ask it.
+- **Bottom sheet, not a center dialog or full screen** — keeps the artefact in context and
+  handles the keyboard cleanly for the optional comment.
+- **Explicit Submit, no autosave-on-tap** — autosave only fits star-only payloads (Apple's
+  system prompt); once a comment field exists you need a deliberate commit so rating + text
+  land together and a mis-tap can be corrected first.
+- **Plain merge, not optimistic** — the failure path is simply "the sheet stayed open with
+  your input"; nothing to roll back. Simpler and correct for a deliberate Submit.
+- `StarRating` stays reusable and presentation-only. Keep each component lean; split out a
+  `ReviewTextInput` only if the sheet grows.
 
 ---
 
@@ -287,7 +335,7 @@ Functional rating card on a real device, end-to-end persistence, lint + typechec
 - **Admin / analytics endpoints** — out by spec; revisit when product wants to read.
 - **Outbox `artefact.rated` event** — no consumer exists; YAGNI.
 - **PII redaction on comments** — out by spec.
-- **Nudge / prompt-to-rate state** — out by spec; always-visible card replaces it.
+- **Nudge / prompt-to-rate state** — out by spec; always-visible inline stars replace it.
 - **Per-dimension ratings** (accuracy/usefulness/tone) — single scalar by spec; trivial to
   add later.
 
@@ -301,6 +349,6 @@ Functional rating card on a real device, end-to-end persistence, lint + typechec
 4. `apps/api/src/artefacts/artefacts.controller.ts` — `PUT /artefacts/:id/review`.
 5. `packages/shared` — `review` on `Artefact` type + `UpsertArtefactReviewSchema`.
 6. `packages/api-client` — `upsertReview` on the artefacts client.
-7. `apps/mobile/src/components/artefact/ReviewCard.tsx` (+ `StarRating`) and `artefactsSlice` thunk.
+7. `apps/mobile/src/components/common/StarRating.tsx` + `apps/mobile/src/components/artefact/ReviewSheet.tsx`, inline stars on the artefact detail screen, and the `artefactsSlice` `upsertReview` thunk.
 
 No new module, collection, indexes, or cascade-delete wiring.

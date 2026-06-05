@@ -1,4 +1,8 @@
-import type { EditArtefactRequest, PdpGoalSelection } from '@acme/shared';
+import type {
+  EditArtefactRequest,
+  PdpGoalSelection,
+  UpsertArtefactReviewRequest,
+} from '@acme/shared';
 import { ArtefactStatus, QuotaErrorCode } from '@acme/shared';
 import { ApiError } from '@acme/api-client';
 import { createAsyncThunk } from '@reduxjs/toolkit';
@@ -168,6 +172,30 @@ export const editArtefact = createAsyncThunk(
       return response;
     } catch (error) {
       artefactsLogger.error('Failed to edit artefact', { error });
+      return rejectWithValue(classifyError(error));
+    }
+  }
+);
+
+/**
+ * Upsert (create or overwrite) the author's private review of an artefact.
+ * Plain merge — the returned artefact carries the embedded `review`.
+ */
+export const upsertReview = createAsyncThunk(
+  'artefacts/upsertReview',
+  async (
+    params: { artefactId: string } & UpsertArtefactReviewRequest,
+    { rejectWithValue }
+  ) => {
+    artefactsLogger.info('Upserting artefact review', { artefactId: params.artefactId });
+
+    try {
+      const { artefactId, ...reviewData } = params;
+      const response = await api.artefacts.upsertReview(artefactId, reviewData);
+      artefactsLogger.info('Upserted artefact review', { id: response.id });
+      return response;
+    } catch (error) {
+      artefactsLogger.error('Failed to upsert artefact review', { error });
       return rejectWithValue(classifyError(error));
     }
   }

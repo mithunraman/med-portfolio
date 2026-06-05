@@ -3,15 +3,7 @@ import { hexToRgba } from '@/utils/color';
 import type { PdpGoal } from '@acme/shared';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useCallback, useState } from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -34,7 +26,7 @@ interface PdpGoalSelectorProps {
 
 // ── Helpers ──
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function formatDate(date: Date): string {
   const day = date.getDate().toString().padStart(2, '0');
@@ -77,11 +69,11 @@ function initSelections(goals: PdpGoal[]): Map<string, GoalSelectionState> {
 // ── Quick chip presets ──
 
 const PRESETS = [
-  { label: '1 week',    getDays: () => addDays(new Date(), 7) },
-  { label: '2 weeks',   getDays: () => addDays(new Date(), 14) },
-  { label: '1 month',   getDays: () => addMonths(new Date(), 1) },
-  { label: '2 months',  getDays: () => addMonths(new Date(), 2) },
-  { label: '3 months',  getDays: () => addMonths(new Date(), 3) },
+  { label: '1 week', getDays: () => addDays(new Date(), 7) },
+  { label: '2 weeks', getDays: () => addDays(new Date(), 14) },
+  { label: '1 month', getDays: () => addMonths(new Date(), 1) },
+  { label: '2 months', getDays: () => addMonths(new Date(), 2) },
+  { label: '3 months', getDays: () => addMonths(new Date(), 3) },
 ];
 
 // ── Date picker bottom sheet ──
@@ -94,7 +86,13 @@ interface DatePickerSheetProps {
   onDismiss: () => void;
 }
 
-function DatePickerSheet({ visible, currentDate, onSelect, onClear, onDismiss }: DatePickerSheetProps) {
+function DatePickerSheet({
+  visible,
+  currentDate,
+  onSelect,
+  onClear,
+  onDismiss,
+}: DatePickerSheetProps) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [showCalendar, setShowCalendar] = useState(false);
@@ -103,16 +101,22 @@ function DatePickerSheet({ visible, currentDate, onSelect, onClear, onDismiss }:
   const minDateStr = toCalendarString(today);
   const selectedDateStr = currentDate ? toCalendarString(currentDate) : undefined;
 
-  const handlePreset = useCallback((getDate: () => Date) => {
-    onSelect(getDate());
-    onDismiss();
-  }, [onSelect, onDismiss]);
+  const handlePreset = useCallback(
+    (getDate: () => Date) => {
+      onSelect(getDate());
+      onDismiss();
+    },
+    [onSelect, onDismiss]
+  );
 
-  const handleCalendarDay = useCallback((day: { dateString: string }) => {
-    const [y, m, d] = day.dateString.split('-').map(Number);
-    onSelect(new Date(y, m - 1, d));
-    onDismiss();
-  }, [onSelect, onDismiss]);
+  const handleCalendarDay = useCallback(
+    (day: { dateString: string }) => {
+      const [y, m, d] = day.dateString.split('-').map(Number);
+      onSelect(new Date(y, m - 1, d));
+      onDismiss();
+    },
+    [onSelect, onDismiss]
+  );
 
   const handleDismiss = useCallback(() => {
     setShowCalendar(false);
@@ -120,15 +124,13 @@ function DatePickerSheet({ visible, currentDate, onSelect, onClear, onDismiss }:
   }, [onDismiss]);
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleDismiss}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleDismiss}>
       <Pressable style={styles.sheetOverlay} onPress={handleDismiss}>
         <Pressable
-          style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 }]}
+          style={[
+            styles.sheet,
+            { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 },
+          ]}
           onPress={(e) => e.stopPropagation()}
         >
           {/* Handle */}
@@ -138,7 +140,12 @@ function DatePickerSheet({ visible, currentDate, onSelect, onClear, onDismiss }:
           <View style={styles.sheetHeader}>
             <Text style={[styles.sheetTitle, { color: colors.text }]}>Set review date</Text>
             {currentDate && (
-              <Pressable onPress={() => { onClear(); onDismiss(); }}>
+              <Pressable
+                onPress={() => {
+                  onClear();
+                  onDismiss();
+                }}
+              >
                 <Text style={[styles.clearText, { color: colors.textSecondary }]}>Clear</Text>
               </Pressable>
             )}
@@ -150,7 +157,8 @@ function DatePickerSheet({ visible, currentDate, onSelect, onClear, onDismiss }:
               <View style={styles.chipsGrid}>
                 {PRESETS.map((preset) => {
                   const presetDate = preset.getDays();
-                  const isSelected = currentDate && toCalendarString(currentDate) === toCalendarString(presetDate);
+                  const isSelected =
+                    currentDate && toCalendarString(currentDate) === toCalendarString(presetDate);
                   return (
                     <Pressable
                       key={preset.label}
@@ -163,10 +171,17 @@ function DatePickerSheet({ visible, currentDate, onSelect, onClear, onDismiss }:
                         },
                       ]}
                     >
-                      <Text style={[styles.chipLabel, { color: isSelected ? '#ffffff' : colors.text }]}>
+                      <Text
+                        style={[styles.chipLabel, { color: isSelected ? '#ffffff' : colors.text }]}
+                      >
                         {preset.label}
                       </Text>
-                      <Text style={[styles.chipDate, { color: isSelected ? 'rgba(255,255,255,0.75)' : colors.textSecondary }]}>
+                      <Text
+                        style={[
+                          styles.chipDate,
+                          { color: isSelected ? 'rgba(255,255,255,0.75)' : colors.textSecondary },
+                        ]}
+                      >
                         {formatDate(presetDate)}
                       </Text>
                     </Pressable>
@@ -192,10 +207,18 @@ function DatePickerSheet({ visible, currentDate, onSelect, onClear, onDismiss }:
             <>
               <Pressable
                 onPress={() => setShowCalendar(false)}
-                style={[styles.quickPickPill, { backgroundColor: hexToRgba(colors.primary, 0.08), borderColor: hexToRgba(colors.primary, 0.25) }]}
+                style={[
+                  styles.quickPickPill,
+                  {
+                    backgroundColor: hexToRgba(colors.primary, 0.08),
+                    borderColor: hexToRgba(colors.primary, 0.25),
+                  },
+                ]}
               >
                 <Ionicons name="flash" size={14} color={colors.primary} />
-                <Text style={[styles.quickPickPillText, { color: colors.primary }]}>Quick pick</Text>
+                <Text style={[styles.quickPickPillText, { color: colors.primary }]}>
+                  Quick pick
+                </Text>
               </Pressable>
               <Calendar
                 minDate={minDateStr}
@@ -307,9 +330,7 @@ export function PdpGoalSelector({
                 </Pressable>
 
                 {/* Actions label */}
-                <Text style={[styles.actionsLabel, { color: colors.textSecondary }]}>
-                  Actions
-                </Text>
+                <Text style={[styles.actionsLabel, { color: colors.textSecondary }]}>Actions</Text>
 
                 {/* Actions */}
                 <View style={styles.actionsContainer}>
@@ -354,7 +375,7 @@ export function PdpGoalSelector({
               <View style={styles.skippedContainer}>
                 <Ionicons name="close-circle-outline" size={16} color={colors.textSecondary} />
                 <Text style={[styles.skippedText, { color: colors.textSecondary }]}>
-                  Skipped — will be archived
+                  Skipped - will be archived
                 </Text>
               </View>
             )}

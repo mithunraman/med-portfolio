@@ -1,5 +1,7 @@
 export { Button } from './Button';
+export { ReviewSheet } from './artefact/ReviewSheet';
 export { MessageList } from './chat';
+export { StarRating } from './common/StarRating';
 export { ChatComposer } from './ChatComposer';
 export { ChatEmptyState } from './ChatEmptyState';
 export { CoverageRing } from './CoverageRing';

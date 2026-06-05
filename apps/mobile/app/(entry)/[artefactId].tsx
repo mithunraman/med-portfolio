@@ -6,6 +6,8 @@ import {
   ExportSheet,
   FullScreenSectionEditor,
   PdpGoalSelector,
+  ReviewSheet,
+  StarRating,
   StatusPill,
 } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
@@ -20,6 +22,7 @@ import {
 } from '@/store';
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
+import { formatTimeAgo } from '@/utils/formatTimeAgo';
 import type { PdpGoalSelection, ReflectionSection } from '@acme/shared';
 import { ArtefactStatus, PdpGoalStatus } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
@@ -79,9 +82,7 @@ export default function EntryDetailScreen() {
   const { showActionSheetWithOptions } = useActionSheet();
 
   const artefact = useAppSelector((state) => selectArtefactById(state, artefactId ?? ''));
-  const entityStatus = useAppSelector(
-    (state) => state.artefacts.statusById[artefactId ?? '']
-  );
+  const entityStatus = useAppSelector((state) => state.artefacts.statusById[artefactId ?? '']);
   const updatingStatus = entityStatus === 'updating';
   const saving = entityStatus === 'saving';
 
@@ -103,6 +104,10 @@ export default function EntryDetailScreen() {
   const [goalSelections, setGoalSelections] = useState<Map<string, GoalSelectionState>>(new Map());
   const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
   const [exportSheetVisible, setExportSheetVisible] = useState(false);
+  const [reviewSheetVisible, setReviewSheetVisible] = useState(false);
+  // Seeds a first-time (create) review from the inline star tap. Ignored on the edit
+  // path, where the sheet seeds from the existing review.
+  const [reviewSeedRating, setReviewSeedRating] = useState<number | undefined>(undefined);
   const isEditable = artefact?.status === ArtefactStatus.IN_REVIEW;
   const canExport =
     artefact?.status === ArtefactStatus.IN_REVIEW || artefact?.status === ArtefactStatus.COMPLETED;
@@ -672,7 +677,9 @@ export default function EntryDetailScreen() {
 
                         <View style={styles.pdpActions}>
                           {visibleActions.map((action, actionIndex) => {
-                            const actionActive = action.status === PdpGoalStatus.STARTED || action.status === PdpGoalStatus.COMPLETED;
+                            const actionActive =
+                              action.status === PdpGoalStatus.STARTED ||
+                              action.status === PdpGoalStatus.COMPLETED;
 
                             return (
                               <View
@@ -722,6 +729,66 @@ export default function EntryDetailScreen() {
               )}
             </View>
           )}
+
+        {/* Your rating — hidden until the artefact has AI output to rate */}
+        {!hasChanges && artefact.status !== ArtefactStatus.IN_CONVERSATION && (
+          <View style={styles.section}>
+            {artefact.review ? (
+              <Pressable
+                style={[styles.reviewCard, { backgroundColor: colors.surface }]}
+                onPress={() => setReviewSheetVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Edit your rating"
+              >
+                <View style={styles.reviewHeader}>
+                  <View style={styles.reviewPromptRow}>
+                    <Ionicons name="sparkles" size={14} color={AI_REASONING_COLOR} />
+                    <Text style={[styles.reviewHeaderText, { color: colors.textSecondary }]}>
+                      Your rating of the AI
+                    </Text>
+                  </View>
+                  <Feather name="edit-2" size={15} color={colors.textSecondary} />
+                </View>
+                <StarRating value={artefact.review.rating} readOnly size={22} />
+                {artefact.review.comment ? (
+                  <Text
+                    style={[styles.reviewComment, { color: colors.text }]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {artefact.review.comment}
+                  </Text>
+                ) : null}
+                <Text style={[styles.reviewMeta, { color: colors.textSecondary }]}>
+                  Rated {formatTimeAgo(artefact.review.updatedAt)}
+                </Text>
+              </Pressable>
+            ) : (
+              <View style={[styles.reviewCard, { backgroundColor: colors.surface }]}>
+                <View style={styles.reviewPromptRow}>
+                  <Ionicons name="sparkles" size={15} color={AI_REASONING_COLOR} />
+                  <Text style={[styles.reviewPrompt, { color: colors.text }]}>
+                    How well did the AI capture this entry?
+                  </Text>
+                </View>
+                <Text style={[styles.reviewHelper, { color: colors.textSecondary }]}>
+                  Your feedback on the AI&rsquo;s response. Private to you - it helps us improve.
+                </Text>
+                <View style={styles.reviewEmptyStars}>
+                  <StarRating
+                    value={0}
+                    size={32}
+                    gap={12}
+                    onChange={(rating) => {
+                      setReviewSeedRating(rating);
+                      setReviewSheetVisible(true);
+                    }}
+                  />
+                </View>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Actions — hidden when there are unsaved changes */}
         {!hasChanges && (
@@ -813,6 +880,12 @@ export default function EntryDetailScreen() {
           artefact={artefact}
         />
       )}
+      <ReviewSheet
+        visible={reviewSheetVisible}
+        onClose={() => setReviewSheetVisible(false)}
+        artefact={artefact}
+        initialRating={reviewSeedRating}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -973,6 +1046,45 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 1,
+  },
+  reviewCard: {
+    borderRadius: 12,
+    padding: 16,
+    gap: 10,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  reviewPromptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+  },
+  reviewPrompt: {
+    fontSize: 15,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  reviewHelper: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  reviewHeaderText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  reviewEmptyStars: {
+    alignSelf: 'flex-start',
+  },
+  reviewComment: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  reviewMeta: {
+    fontSize: 12,
   },
   navGroup: {
     borderRadius: 12,

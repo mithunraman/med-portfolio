@@ -22,6 +22,7 @@ export {
   fetchVersionHistory,
   restoreVersion,
   finaliseArtefact,
+  upsertReview,
   markArtefactsStale,
   resetView,
   resetAllViews,

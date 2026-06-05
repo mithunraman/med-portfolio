@@ -20,6 +20,7 @@ import {
   finaliseArtefact,
   restoreVersion,
   updateArtefactStatus,
+  upsertReview,
 } from './thunks';
 
 import {
@@ -222,6 +223,18 @@ const artefactsSlice = createSlice({
         artefactsAdapter.upsertOne(state, action.payload);
       })
       .addCase(editArtefact.rejected, (state, action) => {
+        delete state.statusById[action.meta.arg.artefactId];
+      })
+
+      // upsertReview — embedded review change only, no view impact
+      .addCase(upsertReview.pending, (state, action) => {
+        state.statusById[action.meta.arg.artefactId] = 'saving';
+      })
+      .addCase(upsertReview.fulfilled, (state, action) => {
+        delete state.statusById[action.meta.arg.artefactId];
+        artefactsAdapter.upsertOne(state, action.payload);
+      })
+      .addCase(upsertReview.rejected, (state, action) => {
         delete state.statusById[action.meta.arg.artefactId];
       })
 

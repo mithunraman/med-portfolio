@@ -284,7 +284,7 @@ export function createReflectNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       reflectResponseSchema,
-      { model: OpenAIModels.GPT_4_1_MINI, temperature: 0.1, maxTokens }
+      { model: OpenAIModels.GPT_4_1, temperature: 0.1, maxTokens }
     );
 
     const coveredCount = response.sections.filter((s) => s.covered).length;

@@ -55,6 +55,16 @@ The trainee has already told you about their experience, but some sections need 
 
 {missingSectionBlock}
 
+## Already Covered Well — do NOT ask about these
+
+The trainee has already given good detail on these areas. Do not probe them again:
+{coveredSections}
+
+## Questions Already Asked — do NOT repeat or re-ask
+
+These questions were asked in previous rounds and the trainee has already responded (their answers are in the transcript below). Do NOT ask the same thing again, and do NOT ask a reworded version of it. If a section still needs more, ask about a genuinely DIFFERENT angle than what was already asked:
+{priorQuestions}
+
 ## Question Design Rules
 
 1. Ask ONE specific micro-question per section.
@@ -73,6 +83,8 @@ The trainee has already told you about their experience, but some sections need 
 4. Reference what the trainee has already said — acknowledge their input before asking for more.
 
 5. Keep questions warm and professional. Use "you" language. 1-2 sentences maximum.
+
+6. Never repeat or reword a question from "Questions Already Asked", and never probe an area listed under "Already Covered Well". If the trainee already answered a point anywhere in the transcript, do not ask it again — pick a genuinely different angle, or omit a question for that section entirely if there is nothing new worth asking.
 
 ## Hint Rules
 
@@ -186,6 +198,24 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
       return { followUpRound: state.followUpRound + 1, pendingFollowupQuestions: [] };
     }
 
+    // ── Build "already covered well" + "already asked" context (anti-redundancy) ──
+    // Sections the trainee has covered adequately (covered and not shallow) should
+    // not be probed again; questions asked in prior rounds must not be repeated.
+    const coveredSectionLabels = template.sections
+      .filter((s) => {
+        const assessment = state.sectionCoverage[s.id];
+        return assessment?.covered && assessment.depth !== 'shallow';
+      })
+      .map((s) => s.label);
+    const coveredSections =
+      coveredSectionLabels.length > 0
+        ? coveredSectionLabels.map((l) => `- ${l}`).join('\n')
+        : '- (none yet)';
+    const priorQuestions =
+      state.askedFollowupQuestions.length > 0
+        ? state.askedFollowupQuestions.map((q) => `- ${q}`).join('\n')
+        : '- (none — this is the first round)';
+
     // ── Contextualise questions via LLM (with fallback) ──
     let questions: FollowupQuestion[];
 
@@ -194,6 +224,8 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
         templateName: template.name,
         trainingStageContext: getStageContext(specialty, state.trainingStage),
         missingSectionBlock: formatMissingSectionBlock(missingSectionDefs, state.sectionCoverage),
+        coveredSections,
+        priorQuestions,
         transcript: state.fullTranscript,
       });
 
@@ -242,6 +274,8 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
     return {
       followUpRound: state.followUpRound + 1,
       pendingFollowupQuestions: questions,
+      // Append this round's question texts so future rounds don't re-ask them.
+      askedFollowupQuestions: questions.map((q) => q.question),
     };
   };
 }

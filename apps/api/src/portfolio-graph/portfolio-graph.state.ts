@@ -130,6 +130,14 @@ export const PortfolioState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => [],
   }),
+  /**
+   * Running history of every follow-up question text asked across all rounds.
+   * Appended (not replaced) each round so generate_followup can avoid re-asking.
+   */
+  askedFollowupQuestions: Annotation<string[]>({
+    reducer: (prev, next) => [...prev, ...next],
+    default: () => [],
+  }),
 
   // ── Capabilities ──
   capabilities: Annotation<CapabilityTag[]>({

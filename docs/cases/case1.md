@@ -169,3 +169,5 @@ trimethoprim for her UTI, since it doesn't push the INR up the way trimethoprim 
 it'd have been a much safer option for someone on warfarin. So really two things, check the
 interactions properly first, and if she does need an antibiotic pick one that's safe with
 her warfarin.
+
+**_ Case 4 _**

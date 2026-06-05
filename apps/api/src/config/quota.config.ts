@@ -14,7 +14,7 @@ export const quotaPlans: Record<number, { shortWindow: number; weeklyWindow: num
 export const SHORT_WINDOW_MS = 4 * 60 * 60 * 1000;
 
 /** Maximum lifetime artefacts a guest account can create. */
-export const GUEST_ARTEFACT_LIMIT = 10;
+export const GUEST_ARTEFACT_LIMIT = 50;
 
 export function isGuestAtArtefactLimit(role: UserRole, count: number): boolean {
   return role === UserRole.USER_GUEST && count >= GUEST_ARTEFACT_LIMIT;

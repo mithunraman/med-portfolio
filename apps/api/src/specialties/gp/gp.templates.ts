@@ -46,8 +46,9 @@ export const CCR_TEMPLATE: ArtefactTemplate = {
       label: 'Management & Actions',
       required: true,
       description:
-        'Treatment given, investigations ordered, referrals made, safety-netting advice, follow-up plan.',
-      promptHint: 'Detail the management plan and the rationale behind each decision.',
+        'Treatment the trainee gave or started, investigations they ordered, referrals they made, safety-netting advice, and the follow-up they themselves planned.',
+      promptHint:
+        "Detail the trainee's own management plan and the rationale behind each decision. Include only what the trainee personally did or planned. Investigation results that came back later, how the patient responded, and actions taken by other teams (e.g. a specialist clinic starting a drug) belong in Patient Outcome — do not place them here.",
       extractionQuestion: 'What management plan did you put in place?',
       weight: 0.15,
     },
@@ -55,8 +56,10 @@ export const CCR_TEMPLATE: ArtefactTemplate = {
       id: 'outcome',
       label: 'Patient Outcome',
       required: true,
-      description: 'What happened to the patient, follow-up results, resolution or ongoing plan.',
-      promptHint: 'Describe how the patient responded and any follow-up.',
+      description:
+        "What happened after the initial management: investigation results, how the patient responded, actions taken by other clinicians or services, and the patient's current status.",
+      promptHint:
+        "Describe results that came back, the patient's response, subsequent actions by other teams, and where things stand now. Do not restate the trainee's own management plan already covered in Management & Actions — only add what happened as a result.",
       extractionQuestion: 'What was the outcome for this patient?',
       weight: 0.1,
     },
@@ -98,9 +101,9 @@ export const SEA_TEMPLATE: ArtefactTemplate = {
       label: 'What Happened',
       required: true,
       description:
-        'Factual, chronological, anonymised account of the event. Who was involved, what occurred, when and where.',
+        'Factual, chronological, anonymised account of the event: who was involved, what occurred, when and where. State what was done, but do NOT evaluate whether it was good or bad here — that belongs in What Went Well and What Could Have Been Done Differently.',
       promptHint:
-        'Describe the event objectively and chronologically without judgment. Keep anonymised.',
+        'Describe the event objectively and chronologically without judgment. State actions; do not praise or critique them. Keep anonymised.',
       extractionQuestion: 'Can you walk me through exactly what happened?',
       weight: 0.15,
     },
@@ -109,8 +112,9 @@ export const SEA_TEMPLATE: ArtefactTemplate = {
       label: 'What Went Well',
       required: true,
       description:
-        'Aspects of the situation that were handled correctly. Good practice that should be maintained.',
-      promptHint: 'Identify positive aspects — what was done correctly, what worked.',
+        'Aspects that were handled correctly and good practice to maintain. Positives only — do NOT include anything that went wrong or could be improved (→ What Could Have Been Done Differently).',
+      promptHint:
+        'Identify positive aspects only — what was done correctly, what worked. Leave shortcomings to the improvement section.',
       extractionQuestion: 'Was there anything that was handled well during this event?',
       weight: 0.1,
     },
@@ -119,9 +123,9 @@ export const SEA_TEMPLATE: ArtefactTemplate = {
       label: 'What Could Have Been Done Differently',
       required: true,
       description:
-        'Honest assessment of where things went wrong or could have been better. Specific, not vague.',
+        'The counterfactual: specific actions or decisions that, in hindsight, should have been done differently at the time. Specific, not vague. Do NOT state the underlying causes of why it happened (→ Why It Happened), and do NOT describe changes actually made since (→ Changes Made).',
       promptHint:
-        'Describe specific actions or decisions that could have been different. Avoid vague generalisations.',
+        'Describe specific corrective actions or decisions that should have been different. Stay on "what should have happened", not "why it happened" or "what we changed afterwards". Avoid vague generalisations.',
       extractionQuestion:
         'Looking back, is there anything you or the team could have done differently?',
       weight: 0.15,
@@ -131,9 +135,9 @@ export const SEA_TEMPLATE: ArtefactTemplate = {
       label: 'Why It Happened',
       required: true,
       description:
-        'Root cause analysis — system factors, human factors, communication breakdown, resource issues. Not about blaming individuals.',
+        'Root cause analysis — the contributing system and human factors that explain WHY it happened (workflow, communication breakdown, alert design, workload, resource issues, knowledge gaps). Causes only: do NOT include the corrective actions you would take (→ What Could Have Been Done Differently) or changes already implemented (→ Changes Made). Not about blaming individuals.',
       promptHint:
-        'Analyse the contributing factors. Consider system issues, communication, workload, knowledge gaps. Avoid individual blame.',
+        'Analyse only the contributing factors — the "why". Consider system issues, communication, workload, knowledge gaps. Do not list fixes or actions here. Avoid individual blame.',
       extractionQuestion:
         'What do you think contributed to this happening? Were there any system or team factors?',
       weight: 0.2,
@@ -152,9 +156,9 @@ export const SEA_TEMPLATE: ArtefactTemplate = {
       label: 'Changes Made',
       required: true,
       description:
-        'Concrete actions taken or proposed — protocols changed, guidelines reviewed, team briefings, new processes. Must be specific.',
+        'Concrete actions actually taken or formally proposed SINCE the event — protocols changed, guidelines reviewed, team briefings, new processes — with who is responsible and timelines. Must be specific. Do NOT include hypothetical "should haves" (→ What Could Have Been Done Differently) or personal mindset takeaways (→ Personal Learning).',
       promptHint:
-        'Detail specific changes implemented or planned. Include who is responsible and timelines.',
+        'Detail specific changes already implemented or formally planned, with owner and timeline. Not hypothetical improvements, not personal reflections.',
       extractionQuestion: 'What has been done or changed as a result of this event?',
       weight: 0.2,
     },
@@ -163,9 +167,9 @@ export const SEA_TEMPLATE: ArtefactTemplate = {
       label: 'Personal Learning',
       required: true,
       description:
-        'What the trainee personally took away. How it shapes their practice going forward. Link to professional development.',
+        'What the trainee personally took away — the mindset shift or personal habit that shapes their own practice going forward. Link to professional development. Do NOT restate the concrete system/practice changes (→ Changes Made); keep this to personal growth.',
       promptHint:
-        'Connect to personal professional development. Address: What will I maintain, improve, or stop?',
+        'Connect to personal professional development — your own growth, not system changes. Address: What will I maintain, improve, or stop?',
       extractionQuestion: 'What did you personally take away from this experience?',
       weight: 0.1,
     },

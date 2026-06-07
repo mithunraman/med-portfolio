@@ -7,6 +7,7 @@ import { DatabaseModule } from '../database';
 import { PdpGoalsModule } from '../pdp-goals/pdp-goals.module';
 import { PortfolioGraphModule } from '../portfolio-graph';
 import { ProcessingModule } from '../processing/processing.module';
+import { AnalysisCompletionService } from './analysis-completion.service';
 import { AnalysisResumeHandler } from './handlers/analysis-resume.handler';
 import { AnalysisStartHandler } from './handlers/analysis-start.handler';
 import { MessageProcessingHandler } from './handlers/message-processing.handler';
@@ -32,6 +33,7 @@ import { OutboxEntry, OutboxEntrySchema } from './schemas/outbox.schema';
   providers: [
     OutboxService,
     OutboxConsumer,
+    AnalysisCompletionService,
     AnalysisStartHandler,
     AnalysisResumeHandler,
     MessageProcessingHandler,

@@ -1,24 +1,17 @@
-import { AnalysisRunStatus, ArtefactStatus } from '@acme/shared';
+import { AnalysisRunStatus } from '@acme/shared';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { AnalysisRunsService } from '../../analysis-runs/analysis-runs.service';
-import {
-  ARTEFACTS_REPOSITORY,
-  IArtefactsRepository,
-} from '../../artefacts/artefacts.repository.interface';
 import {
   CONVERSATIONS_REPOSITORY,
   IConversationsRepository,
 } from '../../conversations/conversations.repository.interface';
 import { TransactionService } from '../../database/transaction.service';
 import {
-  IPdpGoalsRepository,
-  PDP_GOALS_REPOSITORY,
-} from '../../pdp-goals/pdp-goals.repository.interface';
-import {
   type InterruptNode,
   PortfolioGraphService,
 } from '../../portfolio-graph/portfolio-graph.service';
+import { AnalysisCompletionService } from '../analysis-completion.service';
 import type { OutboxHandler } from '../outbox.consumer';
 
 export interface AnalysisResumePayload {
@@ -40,10 +33,7 @@ export class AnalysisResumeHandler implements OutboxHandler {
     private readonly transactionService: TransactionService,
     @Inject(CONVERSATIONS_REPOSITORY)
     private readonly conversationsRepository: IConversationsRepository,
-    @Inject(ARTEFACTS_REPOSITORY)
-    private readonly artefactsRepository: IArtefactsRepository,
-    @Inject(PDP_GOALS_REPOSITORY)
-    private readonly pdpGoalsRepository: IPdpGoalsRepository,
+    private readonly completionService: AnalysisCompletionService,
   ) {}
 
   async handle(payload: Record<string, unknown>): Promise<void> {
@@ -107,7 +97,11 @@ export class AnalysisResumeHandler implements OutboxHandler {
       if (pausedNode) {
         await this.handleInterrupt(runId, threadId);
       } else {
-        await this.handleCompletion(runId, threadId);
+        await this.completionService.persistCompletion(
+          runId,
+          threadId,
+          'resume-handler-completion',
+        );
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -191,83 +185,5 @@ export class AnalysisResumeHandler implements OutboxHandler {
         );
       }, { context: 'resume-handler-interrupt' });
     }
-  }
-
-  /**
-   * Handle graph completion: save artefact + PDP goals + transition to COMPLETED
-   * in a single transaction. Idempotent via delete-then-create for PDP goals
-   * and overwrite for artefact update.
-   */
-  private async handleCompletion(
-    runId: Types.ObjectId,
-    threadId: string,
-  ): Promise<void> {
-    const finalState = await this.portfolioGraphService.getFinalState(threadId);
-
-    // If the graph completed without producing an artefact (e.g. irrelevant content),
-    // just transition to COMPLETED without saving artefact/PDP data.
-    if (!finalState.entryType || !finalState.reflection) {
-      this.logger.warn(
-        `Graph completed without artefact output (entryType: ${finalState.entryType}) — skipping saves`
-      );
-      await this.analysisRunsService.transitionStatus(
-        runId,
-        AnalysisRunStatus.RUNNING,
-        AnalysisRunStatus.COMPLETED,
-        { currentStep: null },
-      );
-      return;
-    }
-
-    await this.transactionService.withTransaction(async (session) => {
-      const artefactOid = new Types.ObjectId(finalState.artefactId);
-      const userOid = new Types.ObjectId(finalState.userId);
-
-      // Artefact update (idempotent — overwrites same doc)
-      const artefactResult = await this.artefactsRepository.updateArtefactById(
-        artefactOid,
-        {
-          artefactType: finalState.entryType,
-          title: finalState.title,
-          reflection: finalState.reflection,
-          capabilities: finalState.capabilities.map((c) => ({
-            code: c.code,
-            evidence: c.reasoning,
-          })),
-          status: ArtefactStatus.IN_REVIEW,
-        },
-        session,
-      );
-      if (!artefactResult.ok) throw new Error(artefactResult.error.message);
-
-      // Delete-then-create for PDP goals (idempotent on replay)
-      const deleteResult = await this.pdpGoalsRepository.deleteByArtefactId(artefactOid, session);
-      if (!deleteResult.ok) throw new Error(deleteResult.error.message);
-
-      if (finalState.pdpGoals.length > 0) {
-        const pdpResult = await this.pdpGoalsRepository.create(
-          finalState.pdpGoals.map((g) => ({
-            userId: userOid,
-            artefactId: artefactOid,
-            goal: g.goal,
-            actions: g.actions.map((a) => ({
-              action: a.action,
-              intendedEvidence: a.intendedEvidence,
-            })),
-          })),
-          session,
-        );
-        if (!pdpResult.ok) throw new Error(pdpResult.error.message);
-      }
-
-      // Status transition in same transaction
-      await this.analysisRunsService.transitionStatus(
-        runId,
-        AnalysisRunStatus.RUNNING,
-        AnalysisRunStatus.COMPLETED,
-        { currentStep: null },
-        session,
-      );
-    }, { context: 'resume-handler-completion' });
   }
 }

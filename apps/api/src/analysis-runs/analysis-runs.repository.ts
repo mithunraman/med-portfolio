@@ -2,6 +2,7 @@ import { AnalysisRunStatus } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
+import { isTransientTransactionError } from '../common/utils/mongo-errors.util';
 import { DBError, Result, err, ok } from '../common/utils/result.util';
 import {
   CreateAnalysisRunData,
@@ -67,6 +68,12 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
           code: 'DUPLICATE_ACTIVE_RUN',
           message: 'An active run already exists for this conversation',
         });
+      }
+      // Let transient transaction errors bubble so the surrounding TransactionService
+      // can retry the whole transaction — converting them to a Result here would strip
+      // the TransientTransactionError label and turn a retryable blip into a hard failure.
+      if (isTransientTransactionError(error)) {
+        throw error;
       }
       this.logger.error('Failed to create analysis run', error);
       return err({ code: 'DB_ERROR', message: 'Failed to create analysis run' });

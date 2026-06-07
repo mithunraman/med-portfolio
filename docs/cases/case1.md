@@ -7,7 +7,7 @@ so she came back and yeah the cough had gone completely, think she said it went 
 
 honestly it was a good reminder to always check what meds someones on when they come in with something new. like its so easy to just think oh its a cough must be a chest thing and not even look at the medications. i think ill make more of a habit of reviewing recent prescribing changes whenever someones got a new symptom. also thinking about it now i probably should of told her to come back sooner if it got worse or if she got any swelling or anything, my safety netting wasnt great on this one
 
-[Case 2]
+**_ [Case 2] _**
 ok so um this is a case from last week, er, in the surgery. So I saw this gentleman, he's
 68, came in with um shortness of breath. Well, breathlessness I should say, that had been
 going on for, like, maybe three weeks? Three to four weeks. He said it was worse when he
@@ -63,9 +63,7 @@ bisoprolol and they also added in, um, ramipril, oh wait he was already on ramip
 blood pressure so they just, they upped the dose a bit. They're gonna titrate it up over the
 next few weeks.
 
-So the plan now is he stays under the heart failure nurses for the up-titration, and I'm
-gonna review him in a month to check his bloods, the kidney function and potassium, because
-of the medication changes. Um, and carry on monitoring his weight at home.
+So the plan now is he stays under the heart failure nurses for the up-titration, and I'm gonna review him in a month to check his bloods, the kidney function and potassium, because of the medication changes. Um, and carry on monitoring his weight at home.
 
 **_ [Case 3] SEA_**
 right so um, this one's been playing on my mind a bit, it happened a couple of weeks ago,
@@ -171,3 +169,17 @@ interactions properly first, and if she does need an antibiotic pick one that's 
 her warfarin.
 
 **_ Case 4 _**
+ok so um, saw a little boy today, he's six, came in with a sore throat, been off
+school a couple of days. mum was a bit worried it might need antibiotics. had a
+look, throat was a bit red, no pus really, glands up a bit in his neck. he didn't
+have a temperature when I checked. um, I think the fever pain score was low, so I
+said it's probably viral, no antibiotics needed, just paracetamol and fluids and
+told her to bring him back if he got worse or stopped drinking. yeah, that was
+about it really. think it went ok.
+
+I didn't really hear anything back from them, so I'm assuming he was
+fine and it settled on its own. He didn't re-attend as far as I know, and there
+was nothing else flagged up. So no further action really, I think it just
+resolved like most of these do.
+
+**_ [Case 5] _**

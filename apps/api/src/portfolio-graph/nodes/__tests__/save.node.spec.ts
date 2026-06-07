@@ -37,7 +37,9 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     hasEnoughInfo: true,
     followUpRound: 0,
     pendingFollowupQuestions: [],
-    capabilities: [{ code: 'CAP1', name: 'Cap 1', confidence: 0.9, reasoning: 'test' }],
+    capabilities: [
+      { code: 'CAP1', name: 'Cap 1', confidence: 0.9, reasoning: 'test', quote: 'a verbatim span' },
+    ],
     title: 'Test Entry',
     reflection: [{ sectionId: 'reflection', title: 'Reflection', text: 'Some reflection', covered: true }],
 

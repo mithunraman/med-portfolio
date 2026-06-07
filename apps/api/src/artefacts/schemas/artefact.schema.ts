@@ -26,6 +26,27 @@ export class ReflectionSection {
   text!: string;
 }
 
+// A required section left unmet when analysis finished, with why it is unmet
+// (`missing` = no content, `shallow` = too thin) and a display label.
+export class UnmetSection {
+  @Prop({ required: true })
+  sectionId!: string;
+
+  @Prop({ required: true })
+  label!: string;
+
+  @Prop({ required: true, type: String, enum: ['missing', 'shallow'] })
+  status!: 'missing' | 'shallow';
+}
+
+export class Completeness {
+  @Prop({ required: true, type: Boolean })
+  complete!: boolean;
+
+  @Prop({ type: [UnmetSection], default: [] })
+  unmetSections!: UnmetSection[];
+}
+
 // Author's private review of the AI output. One per artefact, edit-only.
 // Embedded (not a separate collection) because it is 1:1, read on every
 // artefact-detail load, and must die with the artefact on delete.
@@ -76,6 +97,11 @@ export class Artefact {
 
   @Prop({ type: [Capability], default: null })
   capabilities!: Capability[] | null;
+
+  // Which required sections were left unmet when analysis finished — drives a soft
+  // "needs your input" nudge. null until the analysis graph completes.
+  @Prop({ type: Completeness, default: null, _id: false })
+  completeness!: Completeness | null;
 
   @Prop({ type: Object, default: null })
   tags!: Record<string, string[]> | null;

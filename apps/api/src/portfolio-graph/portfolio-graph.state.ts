@@ -30,7 +30,14 @@ export type SectionCoverage = Record<string, SectionAssessment>;
 export interface CapabilityTag {
   code: string;
   name: string;
+  /** First-person explanation, shown to the user when confirming capabilities. */
   reasoning: string;
+  /**
+   * Verbatim transcript span evidencing the capability. Guaranteed to be a
+   * substring of the transcript — the tag node drops any capability whose quote
+   * cannot be found. Persisted as the artefact's capability `evidence`.
+   */
+  quote: string;
   confidence: number;
 }
 

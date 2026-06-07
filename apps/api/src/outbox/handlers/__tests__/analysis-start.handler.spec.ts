@@ -6,6 +6,7 @@ import type { IConversationsRepository } from '../../../conversations/conversati
 import { TransactionService } from '../../../database/transaction.service';
 import type { IPdpGoalsRepository } from '../../../pdp-goals/pdp-goals.repository.interface';
 import { PortfolioGraphService } from '../../../portfolio-graph/portfolio-graph.service';
+import { AnalysisCompletionService } from '../../analysis-completion.service';
 import { AnalysisStartHandler, type AnalysisStartPayload } from '../analysis-start.handler';
 
 // ── Helpers ──
@@ -59,11 +60,17 @@ function makeFinalState() {
     userId: oid().toString(),
     entryType: 'CLINICAL_ENCOUNTER',
     title: 'Test Entry',
-    reflection: [{ title: 'Reflection', text: 'Some text' }],
-    capabilities: [{ code: 'CAP1', name: 'Cap 1', confidence: 0.9, reasoning: 'good' }],
+    reflection: [{ sectionId: 'reflection', title: 'Reflection', text: 'Some text', covered: true }],
+    capabilities: [
+      { code: 'CAP1', name: 'Cap 1', confidence: 0.9, reasoning: 'good', quote: 'a verbatim span' },
+    ],
     pdpGoals: [
       { goal: 'Improve', actions: [{ action: 'Do X', intendedEvidence: 'Evidence Y' }] },
     ],
+    // Completeness fields a completed run always carries (set by check_completeness).
+    sectionCoverage: {},
+    missingSections: [],
+    hasEnoughInfo: true,
   };
 }
 
@@ -109,14 +116,21 @@ function createHandler(overrides: {
     create: overrides.pdpCreate ?? jest.fn().mockResolvedValue({ ok: true, value: [] }),
   } as unknown as IPdpGoalsRepository;
 
+  const completionService = new AnalysisCompletionService(
+    analysisRunsService,
+    portfolioGraphService,
+    transactionService,
+    artefactsRepository,
+    pdpGoalsRepository,
+  );
+
   return {
     handler: new AnalysisStartHandler(
       analysisRunsService,
       portfolioGraphService,
       transactionService,
       conversationsRepository,
-      artefactsRepository,
-      pdpGoalsRepository,
+      completionService,
     ),
     mocks: {
       analysisRunsService,

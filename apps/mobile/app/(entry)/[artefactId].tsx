@@ -1,5 +1,6 @@
 import type { GoalSelectionState, StatusVariant } from '@/components';
 import {
+  ArtefactAdvisoryBanner,
   Button,
   EditableReflectionSection,
   EditableTitle,
@@ -534,6 +535,9 @@ export default function EntryDetailScreen() {
             <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />
           </View>
         </View>
+
+        {/* Soft "needs your input" advisory — shows only in review with unmet sections */}
+        <ArtefactAdvisoryBanner artefactId={artefactId} />
 
         {/* Reflection Sections */}
         {displayReflection.length > 0 && (

@@ -47,6 +47,7 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     hasEnoughInfo: false,
     followUpRound: 0,
     pendingFollowupQuestions: [],
+    askedFollowupQuestions: [],
     capabilities: [],
     title: null,
     reflection: null,

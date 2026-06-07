@@ -5,6 +5,7 @@ import { NOTICE_REGISTRY } from '../../acknowledgements/registry';
 import { ARTEFACTS_REPOSITORY } from '../../artefacts/artefacts.repository.interface';
 import { AuthService } from '../../auth/auth.service';
 import { ok, err } from '../../common/utils/result.util';
+import { GUEST_ARTEFACT_LIMIT } from '../../config/quota.config';
 import { DashboardService } from '../../dashboard/dashboard.service';
 import { NoticesService } from '../../notices/notices.service';
 import { QuotaService } from '../../quota/quota.service';
@@ -94,8 +95,8 @@ describe('InitService.acknowledgement (orchestration)', () => {
 describe('InitService.guestArtefactLimitReached', () => {
   const okAcks = async () => ok([]);
 
-  it('returns true for guest with >= 10 artefacts', async () => {
-    const countByUser = jest.fn().mockResolvedValue(ok(10));
+  it('returns true for guest at or above the artefact limit', async () => {
+    const countByUser = jest.fn().mockResolvedValue(ok(GUEST_ARTEFACT_LIMIT));
     const svc = await build(okAcks, { countByUser });
     const res = await svc.getInit(USER_ID, UserRole.USER_GUEST);
     expect(res.guestArtefactLimitReached).toBe(true);
@@ -103,7 +104,7 @@ describe('InitService.guestArtefactLimitReached', () => {
   });
 
   it('returns false for guest under the limit', async () => {
-    const countByUser = jest.fn().mockResolvedValue(ok(9));
+    const countByUser = jest.fn().mockResolvedValue(ok(GUEST_ARTEFACT_LIMIT - 1));
     const svc = await build(okAcks, { countByUser });
     const res = await svc.getInit(USER_ID, UserRole.USER_GUEST);
     expect(res.guestArtefactLimitReached).toBe(false);

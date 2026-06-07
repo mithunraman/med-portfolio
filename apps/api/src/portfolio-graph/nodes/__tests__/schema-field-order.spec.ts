@@ -35,9 +35,10 @@ describe('structured-output schema field order', () => {
     ]);
   });
 
-  it('capabilityAssessmentSchema emits reasoning before demonstrated/confidence', () => {
+  it('capabilityAssessmentSchema emits quote then reasoning before demonstrated/confidence', () => {
     expect(Object.keys(capabilityAssessmentSchema.shape)).toEqual([
       'code',
+      'quote',
       'reasoning',
       'demonstrated',
       'confidence',

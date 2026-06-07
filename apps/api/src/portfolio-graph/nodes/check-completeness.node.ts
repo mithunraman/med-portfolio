@@ -55,7 +55,11 @@ const contentAssignmentSchema = z.object({
     .describe(
       'true if this idea is a dedicated, meaningful statement about the section topic. ' +
         'false if it is a passing mention embedded in content that primarily belongs elsewhere ' +
-        '(e.g., "I reflected on the risks" inside a management action).'
+        '(e.g., "I reflected on the risks" inside a management action). ' +
+        'For REFLECTIVE sections specifically, a bare evaluation or sign-off with no learning ' +
+        '("it went ok", "it was fine", "nothing I would change", "it resolved like these usually do") ' +
+        'is NOT substantive — set false. Only set true when the idea states a learning point, a change ' +
+        'to future practice, or what the trainee would do differently — even if briefly.'
     ),
 });
 
@@ -128,6 +132,9 @@ Do NOT count restatements as separate ideas. Three sentences saying the same thi
 ### Section-specific guidance
 
 - **Reflective sections** (reflection, learning, what went well, what could improve): These require the trainee to step back from WHAT HAPPENED and discuss WHAT THEY LEARNED, WHAT THEY WOULD DO DIFFERENTLY, or HOW THIS CHANGES THEIR FUTURE PRACTICE. Clinical reasoning about the case (e.g. discussing differentials) is NOT reflection — it belongs in clinical reasoning or similar factual sections.
+  - A **bare evaluation or sign-off is NOT substantive reflection**. Verdicts such as "it went ok", "it was fine", "I think it went well", "nothing I'd change", "happy with how it went", or "it resolved like these usually do" state a conclusion but contain no learning. Still assign them to the reflective section if that is where they belong, but mark \`isSubstantive: false\` — they do not show the trainee learned anything.
+  - **Test for substantive reflection**: an idea counts as substantive only if you could truthfully prefix it with "I learned…", "Next time I would…", or "This changed how I…". If you cannot, set \`isSubstantive: false\`.
+  - **Brief genuine learning still counts.** A single sentence like "I'll check recent prescribing changes whenever someone has a new symptom" IS substantive. Reject verdicts with no learning content — do NOT reject real learning just because it is short.
 - **Factual sections** (presentation, findings, management, outcome): Assign based on what the content describes, not the tone.
 
 ## Security

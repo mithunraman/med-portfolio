@@ -62,6 +62,7 @@ export function toArtefactDto(
       name: capabilityNameMap.get(cap.code) ?? cap.code,
       evidence: cap.evidence,
     })) ?? null,
+    completeness: artefact.completeness,
     tags: artefact.tags,
     review: artefact.review
       ? {

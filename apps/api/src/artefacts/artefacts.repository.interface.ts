@@ -1,4 +1,4 @@
-import { ArtefactStatus, Specialty } from '@acme/shared';
+import { ArtefactStatus, Completeness, Specialty } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
 import type { DBError, Result } from '../common/utils/result.util';
 import type { Artefact } from './schemas/artefact.schema';
@@ -31,6 +31,7 @@ export interface UpdateArtefactData {
   title?: string | null;
   reflection?: Array<{ title: string; text: string }> | null;
   capabilities?: Array<{ code: string; evidence: string }> | null;
+  completeness?: Completeness | null;
   tags?: Record<string, string[]> | null;
   status?: ArtefactStatus;
   completedAt?: Date | null;

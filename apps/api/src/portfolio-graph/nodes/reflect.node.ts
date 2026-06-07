@@ -91,7 +91,7 @@ Organise the transcript into these sections, in order. Return ALL sections — s
 ## Formatting Rules
 
 1. Preserve every fact, claim, number, and sentiment from the transcript. You may rephrase for clarity and fluency, but introduce no new content words, clinical terms, numbers, reasoning, or sentiment. Change *how* something is said, never *what* is said.
-2. You may fix grammar, punctuation, verb tense, pronouns, and sentence fragments, and remove fillers ("um", "er", "like", "you know").
+2. You may fix grammar, punctuation, verb tense, pronouns, and sentence fragments, and remove fillers ("um", "er", "like", "you know"). When fixing pronouns or completing a fragment, do NOT invent a subject or agent the trainee did not state. Speech often drops the subject (e.g. "and carry on monitoring his weight at home" — who monitors?); supplying one is adding content, and getting it wrong changes the clinical meaning (the patient self-monitoring at home vs the clinician monitoring). Attach the action to the nearest subject the trainee actually used, or leave it unattributed — never guess, and do not default to "I".
 3. You may reorder sentences so related content sits together within a section.
 4. Do NOT add reflective language, clinical reasoning, conclusions, or insights the trainee did not express. Before writing any sentence, check you could truthfully prefix it with "According to the trainee…". If it states reasoning they did not voice, cut it.
 5. You MAY rephrase awkward speech for readability, but you may NOT synthesise — i.e. do not combine statements into a new conclusion or infer anything beyond what was said.

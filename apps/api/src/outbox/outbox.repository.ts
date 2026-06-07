@@ -2,6 +2,7 @@ import { OutboxStatus } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
+import { isTransientTransactionError } from '../common/utils/mongo-errors.util';
 import { DBError, Result, err, ok } from '../common/utils/result.util';
 import { TransactionService } from '../database/transaction.service';
 import { CreateOutboxEntryData, IOutboxRepository } from './outbox.repository.interface';
@@ -40,6 +41,10 @@ export class OutboxRepository implements IOutboxRepository {
       );
       return ok(entry);
     } catch (error) {
+      // Let transient transaction errors bubble so the surrounding transaction can retry.
+      if (isTransientTransactionError(error)) {
+        throw error;
+      }
       this.logger.error('Failed to create outbox entry', error);
       return err({ code: 'DB_ERROR', message: 'Failed to create outbox entry' });
     }

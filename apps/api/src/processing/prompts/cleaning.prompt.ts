@@ -17,6 +17,7 @@ export const CLEANING_PROMPT = ChatPromptTemplate.fromMessages([
 - Preserve the speaker's clinical reasoning and observations exactly
 - Keep it in first person if the original is first person
 - Do NOT add information that wasn't in the original
+- Do NOT invent a subject or agent when completing a fragment. Speech often drops the subject (e.g. "and carry on monitoring his weight at home" — who monitors?). Supplying one is adding information, and getting it wrong changes the clinical meaning (e.g. the patient self-monitoring at home vs the clinician monitoring). Attach the action to the nearest subject the speaker actually used, or leave it unattributed — never guess, and do not default to "I"
 - Do NOT remove or change any clinical facts, diagnoses, medications, or findings
 - Do NOT add headers, bullet points, or section labels - just clean prose organised into paragraphs
 - If unsure about a medical term, keep the original wording

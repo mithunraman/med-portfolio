@@ -46,6 +46,26 @@ export const ReflectionSectionSchema = z.object({
 
 export type ReflectionSection = z.infer<typeof ReflectionSectionSchema>;
 
+// Completeness signal — which required sections were left unmet when the analysis
+// graph finished (loop exhausted or trainee disengaged). Drives a soft "needs your
+// input" nudge and lets the UI highlight the specific sections. null until analysis
+// completes. General across section types: a thin factual section and a thin
+// reflection both appear here.
+export const UnmetSectionSchema = z.object({
+  sectionId: z.string(),
+  label: z.string(),
+  status: z.enum(['missing', 'shallow']),
+});
+
+export type UnmetSection = z.infer<typeof UnmetSectionSchema>;
+
+export const CompletenessSchema = z.object({
+  complete: z.boolean(),
+  unmetSections: z.array(UnmetSectionSchema),
+});
+
+export type Completeness = z.infer<typeof CompletenessSchema>;
+
 // Single source of truth for the review invariants — referenced by the request
 // Zod schema below and the Mongoose @Prop bounds in the API. Changing the rating
 // scale or comment cap is a one-line edit here.
@@ -87,6 +107,7 @@ export const ArtefactSchema = z.object({
   reflection: z.array(ReflectionSectionSchema).nullable(),
   pdpGoals: z.array(PdpGoalSchema).nullable(),
   capabilities: z.array(CapabilitySchema).nullable(),
+  completeness: CompletenessSchema.nullable(),
   tags: z.record(z.array(z.string())).nullable(),
   review: ArtefactReviewSchema.nullable(),
   conversation: ActiveConversationSchema,

@@ -9,6 +9,7 @@ export { pdpGoalsReducer } from './pdpGoals';
 export { reviewPeriodsReducer } from './reviewPeriods';
 export { default as networkReducer } from './networkSlice';
 export { noticesReducer } from './notices';
+export { default as uiReducer } from './uiSlice';
 
 // ── Artefacts ──
 export {
@@ -146,3 +147,6 @@ export {
   selectAcknowledgement,
   selectNeedsAcknowledgement,
 } from './notices';
+
+// ── UI (ephemeral, session-scoped) ──
+export { dismissAdvisory, selectIsAdvisoryDismissed } from './uiSlice';

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { err, ok } from '../../common/utils/result.util';
+import { GUEST_ARTEFACT_LIMIT } from '../../config/quota.config';
 import { ArtefactsService } from '../artefacts.service';
 
 // ── Helpers ──
@@ -831,9 +832,9 @@ describe('ArtefactsService', () => {
       mockConversationsRepo.createConversation.mockResolvedValue(ok(makeConversationDoc()));
     }
 
-    it('allows guest with fewer than 10 artefacts to create', async () => {
+    it('allows guest under the artefact limit to create', async () => {
       setUserMock({ role: UserRole.USER_GUEST, specialty: 100, trainingStage: 'ST1' });
-      mockArtefactsRepo.countByUser.mockResolvedValue(ok(9));
+      mockArtefactsRepo.countByUser.mockResolvedValue(ok(GUEST_ARTEFACT_LIMIT - 1));
       mockCreatePathSuccess();
 
       await expect(service.createArtefact(userIdStr, dto)).resolves.toBeDefined();
@@ -842,19 +843,22 @@ describe('ArtefactsService', () => {
 
     it('blocks guest at the limit with structured ForbiddenException', async () => {
       setUserMock({ role: UserRole.USER_GUEST, specialty: 100, trainingStage: 'ST1' });
-      mockArtefactsRepo.countByUser.mockResolvedValue(ok(10));
+      mockArtefactsRepo.countByUser.mockResolvedValue(ok(GUEST_ARTEFACT_LIMIT));
 
       const promise = service.createArtefact(userIdStr, dto);
       await expect(promise).rejects.toThrow(ForbiddenException);
       await expect(promise).rejects.toMatchObject({
-        response: { code: QuotaErrorCode.GUEST_ARTEFACT_LIMIT_REACHED, limit: 10 },
+        response: {
+          code: QuotaErrorCode.GUEST_ARTEFACT_LIMIT_REACHED,
+          limit: GUEST_ARTEFACT_LIMIT,
+        },
       });
       expect(mockArtefactsRepo.upsertArtefact).not.toHaveBeenCalled();
     });
 
     it('counts deleted artefacts toward the limit (no status filter)', async () => {
       setUserMock({ role: UserRole.USER_GUEST, specialty: 100, trainingStage: 'ST1' });
-      mockArtefactsRepo.countByUser.mockResolvedValue(ok(10));
+      mockArtefactsRepo.countByUser.mockResolvedValue(ok(GUEST_ARTEFACT_LIMIT));
 
       await expect(service.createArtefact(userIdStr, dto)).rejects.toThrow(ForbiddenException);
       expect(mockArtefactsRepo.countByUser).toHaveBeenCalledWith(
@@ -873,7 +877,7 @@ describe('ArtefactsService', () => {
     });
 
     it('blocks duplicateToReview when guest is at the limit', async () => {
-      mockArtefactsRepo.countByUser.mockResolvedValue(ok(10));
+      mockArtefactsRepo.countByUser.mockResolvedValue(ok(GUEST_ARTEFACT_LIMIT));
 
       await expect(
         service.duplicateToReview(userIdStr, UserRole.USER_GUEST, 'art_abc123'),

@@ -196,6 +196,7 @@ export function tagCapabilitiesResponse(
       demonstrated: boolean;
       confidence: number;
       reasoning: string;
+      quote: string;
     }>;
   }>
 ) {
@@ -206,24 +207,27 @@ export function tagCapabilitiesResponse(
         demonstrated: true,
         confidence: 0.88,
         reasoning: 'Managed the patient with type 2 diabetes, demonstrating ability to handle complex medical cases.',
+        // Verbatim substring of the seeded transcript — must survive the tag node's quote gate.
+        quote: 'I saw a 55-year-old patient with poorly controlled type 2 diabetes',
       },
       {
         code: 'C-08',
         demonstrated: true,
         confidence: 0.75,
         reasoning: 'Independently decided to start metformin, showing autonomous clinical decision-making.',
+        quote: 'I started metformin and discussed lifestyle changes',
       },
-      { code: 'C-01', demonstrated: false, confidence: 0, reasoning: '' },
-      { code: 'C-02', demonstrated: false, confidence: 0, reasoning: '' },
-      { code: 'C-03', demonstrated: false, confidence: 0, reasoning: '' },
-      { code: 'C-04', demonstrated: false, confidence: 0, reasoning: '' },
-      { code: 'C-05', demonstrated: false, confidence: 0, reasoning: '' },
-      { code: 'C-07', demonstrated: false, confidence: 0, reasoning: '' },
-      { code: 'C-09', demonstrated: false, confidence: 0, reasoning: '' },
-      { code: 'C-10', demonstrated: false, confidence: 0, reasoning: '' },
-      { code: 'C-11', demonstrated: false, confidence: 0, reasoning: '' },
-      { code: 'C-12', demonstrated: false, confidence: 0, reasoning: '' },
-      { code: 'C-13', demonstrated: false, confidence: 0, reasoning: '' },
+      { code: 'C-01', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
+      { code: 'C-02', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
+      { code: 'C-03', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
+      { code: 'C-04', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
+      { code: 'C-05', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
+      { code: 'C-07', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
+      { code: 'C-09', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
+      { code: 'C-10', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
+      { code: 'C-11', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
+      { code: 'C-12', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
+      { code: 'C-13', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
     ],
   };
 }

@@ -11,6 +11,7 @@ import {
   onboardingReducer,
   pdpGoalsReducer,
   reviewPeriodsReducer,
+  uiReducer,
 } from './slices';
 
 const appReducer = combineReducers({
@@ -24,6 +25,7 @@ const appReducer = combineReducers({
   dashboard: dashboardReducer,
   pdpGoals: pdpGoalsReducer,
   reviewPeriods: reviewPeriodsReducer,
+  ui: uiReducer,
 });
 
 /**
@@ -53,6 +55,7 @@ const rootReducer: Reducer<ReturnType<typeof appReducer>, Action> = (state, acti
             notices: undefined as never,
             pdpGoals: undefined as never,
             reviewPeriods: undefined as never,
+            ui: undefined as never,
           }
         : undefined,
       action,

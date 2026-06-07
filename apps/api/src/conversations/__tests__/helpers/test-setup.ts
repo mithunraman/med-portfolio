@@ -24,6 +24,7 @@ import { LLMService } from '../../../llm/llm.service';
 import { MEDIA_REPOSITORY } from '../../../media/media.repository.interface';
 import { MediaService } from '../../../media/media.service';
 import { Media, MediaSchema } from '../../../media/schemas/media.schema';
+import { AnalysisCompletionService } from '../../../outbox/analysis-completion.service';
 import { AnalysisResumeHandler } from '../../../outbox/handlers/analysis-resume.handler';
 import { AnalysisStartHandler } from '../../../outbox/handlers/analysis-start.handler';
 import { OUTBOX_HANDLERS, OutboxConsumer } from '../../../outbox/outbox.consumer';
@@ -133,6 +134,7 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
         provide: OUTBOX_REPOSITORY,
         useClass: OutboxRepository,
       },
+      AnalysisCompletionService,
       AnalysisStartHandler,
       AnalysisResumeHandler,
       MessageProcessingHandler,

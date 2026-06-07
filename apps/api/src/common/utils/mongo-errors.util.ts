@@ -9,3 +9,27 @@ export function isMongoDuplicateKeyError(e: unknown, keyPattern?: string): boole
   const pattern = (e as { keyPattern?: Record<string, unknown> }).keyPattern;
   return !!pattern && keyPattern in pattern;
 }
+
+/**
+ * Detect a MongoDB transient transaction error — write conflicts, catalog
+ * changes, primary step-downs, etc. The driver tags these by attaching the
+ * `TransientTransactionError` label, signalling that the whole transaction can
+ * be safely retried from the top.
+ *
+ * Repositories follow the Result pattern (never throw), but a transient error is
+ * an infrastructure retry signal that belongs to the transaction layer, not a
+ * domain error. Swallowing it into a `Result` strips the label and defeats
+ * {@link TransactionService}'s backoff retry. Repositories should re-throw when
+ * this returns true so the surrounding transaction can retry.
+ */
+export function isTransientTransactionError(e: unknown): boolean {
+  return (
+    typeof e === 'object' &&
+    e !== null &&
+    'hasErrorLabel' in e &&
+    typeof (e as { hasErrorLabel: unknown }).hasErrorLabel === 'function' &&
+    (e as { hasErrorLabel: (label: string) => boolean }).hasErrorLabel(
+      'TransientTransactionError',
+    )
+  );
+}

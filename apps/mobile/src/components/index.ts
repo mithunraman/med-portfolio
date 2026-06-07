@@ -1,3 +1,4 @@
+export { ArtefactAdvisoryBanner } from './ArtefactAdvisoryBanner';
 export { Button } from './Button';
 export { ReviewSheet } from './artefact/ReviewSheet';
 export { MessageList } from './chat';

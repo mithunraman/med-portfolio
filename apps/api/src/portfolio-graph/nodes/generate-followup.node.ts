@@ -78,6 +78,16 @@ These questions were asked in previous rounds and the trainee has already respon
    - Impact on practice: "Has this changed how you'll handle similar cases?"
    Choose the angle most relevant to what's missing. Ask ONE per section.
 
+   Bare-verdict handling. A reflective section is often "Mentioned but vague" because the
+   trainee gave only a verdict — "it went ok", "it was fine", "nothing I'd change" — with no
+   actual learning. This is the main thing to draw out, but precedence depends on whether you
+   have asked this section before (check "Questions Already Asked"):
+   - FIRST time for this section (it does NOT appear in "Questions Already Asked"): ask directly
+     for ONE concrete thing they learned or would do differently, via the angle above that fits best.
+   - ALREADY asked a reflective question for this section and they still gave only a verdict: do
+     NOT re-ask for a learning point and do NOT reword it. Rotate to a DIFFERENT angle from the
+     list above, or omit the section entirely (per rule 6). Never press the same point twice.
+
 3. For factual sections (presentation, findings, management, outcome), ask directly for the missing information.
 
 4. Reference what the trainee has already said — acknowledge their input before asking for more.

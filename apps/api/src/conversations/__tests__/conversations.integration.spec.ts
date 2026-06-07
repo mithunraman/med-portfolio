@@ -362,7 +362,10 @@ describe('Conversations Integration Tests', () => {
       // Capabilities — only the user-selected C-06
       expect(artefact.capabilities).toHaveLength(1);
       expect(artefact.capabilities![0].code).toBe('C-06');
-      expect(artefact.capabilities![0].evidence).toBeDefined(); // reasoning mapped to evidence field on artefact
+      // evidence is the verbatim quote from the tag node (substring of the transcript)
+      expect(artefact.capabilities![0].evidence).toBe(
+        'I saw a 55-year-old patient with poorly controlled type 2 diabetes'
+      );
 
       // PDP goals — stored in pdp_goals collection with embedded actions
       const pdpGoals = await getPdpGoalsForArtefact();

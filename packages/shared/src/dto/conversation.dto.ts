@@ -44,6 +44,44 @@ export const FollowupQuestionSchema = z.object({
 });
 export type FollowupQuestion = z.infer<typeof FollowupQuestionSchema>;
 
+// ── Readiness snapshot (Entry Card) ──
+// Rides on the question message each turn so the client can render the live
+// readiness card alongside the coaching question. Reuses the existing question
+// channel — no separate message type.
+
+export const ReadinessSectionSchema = z.object({
+  sectionId: z.string(),
+  label: z.string(),
+  tier: z.enum(['missing', 'shallow', 'adequate', 'strong']),
+  meetsThreshold: z.boolean(),
+});
+export type ReadinessSection = z.infer<typeof ReadinessSectionSchema>;
+
+export const ReadinessCapabilitySchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  justified: z.boolean(),
+});
+export type ReadinessCapability = z.infer<typeof ReadinessCapabilitySchema>;
+
+export const ReadinessDocumentFieldSchema = z.object({
+  sectionId: z.string(),
+  label: z.string(),
+  text: z.string(),
+});
+export type ReadinessDocumentField = z.infer<typeof ReadinessDocumentFieldSchema>;
+
+export const ReadinessSnapshotSchema = z.object({
+  /** Overall readiness on a 0–10 scale. */
+  score: z.number(),
+  draftStatus: z.enum(['in_progress', 'ready', 'needs_attention']),
+  sections: z.array(ReadinessSectionSchema),
+  capabilities: z.array(ReadinessCapabilitySchema),
+  /** The composed document fields — empty until the entry has been organised. */
+  document: z.array(ReadinessDocumentFieldSchema),
+});
+export type ReadinessSnapshot = z.infer<typeof ReadinessSnapshotSchema>;
+
 // ── Question sub-schemas ──
 
 export const QuestionOptionSchema = z.object({
@@ -75,12 +113,14 @@ export const SingleSelectQuestionSchema = z.object({
   questionType: z.literal('single_select'),
   options: z.array(QuestionOptionSchema),
   suggestedKey: z.string().optional(),
+  readiness: ReadinessSnapshotSchema.optional(),
 });
 export type SingleSelectQuestion = z.infer<typeof SingleSelectQuestionSchema>;
 
 export const MultiSelectQuestionSchema = z.object({
   questionType: z.literal('multi_select'),
   options: z.array(QuestionOptionSchema),
+  readiness: ReadinessSnapshotSchema.optional(),
 });
 export type MultiSelectQuestion = z.infer<typeof MultiSelectQuestionSchema>;
 
@@ -90,6 +130,7 @@ export const FreeTextQuestionSchema = z.object({
   missingSections: z.array(z.string()).optional(),
   followUpRound: z.number().optional(),
   entryType: z.string().optional(),
+  readiness: ReadinessSnapshotSchema.optional(),
 });
 export type FreeTextQuestion = z.infer<typeof FreeTextQuestionSchema>;
 

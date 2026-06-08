@@ -178,11 +178,33 @@ export const CCR_ASSESSABLE_SECTIONS = [
   'reflection',
 ] as const;
 
-/** Completeness response where all CCR sections are covered. */
+/**
+ * Completeness response where all CCR sections clear their readiness threshold.
+ *
+ * `clinical_reasoning` and `reflection` carry a `strong` threshold (Phase 1), so
+ * they need `rich` depth (2+ substantive ideas) to count as met; the factual
+ * sections clear at `adequate`.
+ */
 export function allCoveredResponse() {
+  const strongThreshold = new Set(['clinical_reasoning', 'reflection']);
   return completenessResponse(
-    CCR_ASSESSABLE_SECTIONS.map((id) => ({ sectionId: id, covered: true }))
+    CCR_ASSESSABLE_SECTIONS.map((id) => ({
+      sectionId: id,
+      covered: true,
+      depth: strongThreshold.has(id) ? 'rich' : 'adequate',
+    }))
   );
+}
+
+/**
+ * Build a canned elicit-justification response (Phase 2).
+ * One entry per confirmed capability: the trainee's descriptor-linked actions
+ * plus whether that justification is strong.
+ */
+export function elicitJustificationResponse(
+  justifications: Array<{ code: string; justification: string; isStrong: boolean }>
+) {
+  return { justifications };
 }
 
 /**

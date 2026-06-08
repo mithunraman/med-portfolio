@@ -1,4 +1,4 @@
-import { Specialty } from '@acme/shared';
+import { leafProbes, Specialty } from '@acme/shared';
 import {
   getAllRegisteredConfigs,
   getAllSpecialtyOptions,
@@ -114,10 +114,10 @@ describe('SpecialtyRegistry', () => {
     );
 
     it.each(allConfigs.map((c) => [c.name, c] as const))(
-      '%s: template section weights should sum to approximately 1.0',
+      '%s: template probe weights should sum to approximately 1.0',
       (_name, config) => {
         for (const [_, template] of Object.entries(config.templates)) {
-          const totalWeight = template.sections.reduce((sum, s) => sum + s.weight, 0);
+          const totalWeight = leafProbes(template).reduce((sum, p) => sum + p.weight, 0);
           expect(totalWeight).toBeCloseTo(1.0, 1);
         }
       }

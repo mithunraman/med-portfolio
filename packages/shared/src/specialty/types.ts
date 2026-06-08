@@ -1,38 +1,79 @@
 import { Specialty } from '../enums/specialty.enum';
 
+/** Readiness tier a probe/section must reach to count as complete. */
+export type ReadinessTier = 'adequate' | 'strong';
+
 /**
- * A section within an artefact template.
- * Defines what content is expected, how the LLM should generate it,
- * and what to ask the trainee if the information is missing.
+ * A probe is the leaf elicitation/scoring unit of a template.
+ *
+ * Probes drive targeted questions and per-dimension gap detection. Several
+ * probes are composed into one OutputSection at render time (e.g. presentation,
+ * reasoning, management and outcome all compose into "Brief description").
+ *
+ * Probes carry what TemplateSection historically carried; the only additions
+ * are `descriptorCriteria` (graded-rubric depth cues, Phase 1) and the implicit
+ * parent OutputSection that owns them.
  */
-export interface TemplateSection {
-  /** Unique identifier for this section (e.g., "clinical_reasoning") */
+export interface Probe {
+  /** Unique identifier for this probe (e.g., "clinical_reasoning") */
   id: string;
-  /** Human-readable heading shown in the generated entry */
+  /** Human-readable label (used in coaching + the readiness card) */
   label: string;
-  /** Whether this section must be present for ARCP */
+  /** Whether this probe must be present for ARCP */
   required: boolean;
-  /** What this section should contain (used for completeness checking) */
+  /** What this probe should contain (used for completeness checking) */
   description: string;
-  /** Instruction for the LLM when generating this section */
+  /** Instruction for the renderer when organising this probe's content */
   promptHint: string;
-  /** Question to ask the trainee if this section's info is missing. Null = never ask. */
+  /** Question to ask the trainee if this probe's info is missing. Null = never ask. */
   extractionQuestion: string | null;
   /** Relative importance for quality scoring (weights within a template sum to 1.0) */
   weight: number;
+  /**
+   * What "strong" looks like for this probe, expressed against the RCGP word
+   * descriptors. Drives graded depth scoring and targeted follow-up questions.
+   * Optional during migration; required for graded probes.
+   */
+  descriptorCriteria?: string;
+  /**
+   * Minimum readiness tier this probe must reach to stop being a gap.
+   * Defaults to 'adequate'; reflective/heavy probes set 'strong'.
+   */
+  threshold?: ReadinessTier;
+}
+
+/**
+ * An output section is a field of the final document (e.g. the FourteenFish
+ * "Brief description"). It owns one or more elicitation probes. The document
+ * the trainee submits is the projection of probe content grouped by section.
+ */
+export interface OutputSection {
+  /** Unique identifier for this document field (e.g., "brief_description") */
+  id: string;
+  /** Human-readable heading shown in the rendered entry */
+  label: string;
+  /** Render order within the document */
+  order: number;
+  /** Whether this field must be present for ARCP */
+  required: boolean;
+  /** Elicitation/scoring probes composed into this field */
+  probes: Probe[];
 }
 
 /**
  * A template defining the structure of a specific artefact type.
  * Templates are the single source of truth for what a complete entry looks like.
+ *
+ * `sections` is the OUTPUT document shape; each section owns the granular probes
+ * used for questioning and scoring. Use `leafProbes()` to iterate probes.
  */
 export interface ArtefactTemplate {
   /** Unique template identifier (e.g., "CCR_TEMPLATE") */
   id: string;
   /** Human-readable template name */
   name: string;
-  /** Ordered list of sections that make up the entry */
-  sections: TemplateSection[];
+  /** Ordered list of output sections (document fields) that make up the entry */
+  sections: OutputSection[];
   /** Target word count range for the generated reflection */
   wordCountRange: { min: number; max: number };
 }
@@ -65,6 +106,12 @@ export interface CapabilityDefinition {
   name: string;
   /** Description of what this capability covers */
   description: string;
+  /**
+   * What "strong" justification looks like for this capability, expressed
+   * against the RCGP word descriptors. Drives the linking question and grades
+   * the trainee's justification (Phase 2). Optional during migration.
+   */
+  descriptorCriteria?: string;
   /** Parent domain or category code, if applicable */
   domainCode: string | null;
   /** Parent domain or category name, if applicable */

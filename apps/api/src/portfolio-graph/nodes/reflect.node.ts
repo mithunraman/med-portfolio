@@ -1,10 +1,11 @@
-import { Specialty } from '@acme/shared';
+import { leafProbes, Specialty } from '@acme/shared';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { OpenAIModels } from '../../llm/llm.service';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
+import { composeDocument } from '../compose';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PortfolioStateType } from '../portfolio-graph.state';
 
@@ -276,7 +277,7 @@ export function createReflectNode(deps: GraphDeps) {
     const messages = await reflectPrompt.formatMessages({
       specialtyName: config.name,
       trainingStageContext: getStageContext(specialty, state.trainingStage),
-      sectionBlock: formatSectionBlock(template.sections),
+      sectionBlock: formatSectionBlock(leafProbes(template)),
       capabilityBlock: formatCapabilityBlock(state.capabilities),
       transcript: state.fullTranscript,
     });
@@ -314,9 +315,14 @@ export function createReflectNode(deps: GraphDeps) {
         `maxTokens=${maxTokens}, transcriptWords=${transcriptWordCount}`
     );
 
+    // Project the granular probe content into the output document fields
+    // (deterministic, no LLM — preserves the trainee's words verbatim).
+    const composedDocument = composeDocument(template, response.sections);
+
     return {
       title: response.title,
       reflection: response.sections,
+      composedDocument,
     };
   };
 }

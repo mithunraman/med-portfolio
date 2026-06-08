@@ -1,4 +1,4 @@
-import { ArtefactTemplate } from '@acme/shared';
+import { ArtefactTemplate, flatSections } from '@acme/shared';
 
 // ---------------------------------------------------------------------------
 // Template 1: IM_MINIEX (Mini-CEX / Clinical Case Review)
@@ -8,7 +8,7 @@ export const IM_MINIEX_TEMPLATE: ArtefactTemplate = {
   id: 'IM_MINIEX_TEMPLATE',
   name: 'Clinical Case Review (Mini-CEX)',
   wordCountRange: { min: 200, max: 400 },
-  sections: [
+  sections: flatSections([
     {
       id: 'presentation',
       label: 'Clinical Presentation',
@@ -86,7 +86,7 @@ export const IM_MINIEX_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: null,
       weight: 0.05,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ export const IM_CBD_TEMPLATE: ArtefactTemplate = {
   id: 'IM_CBD_TEMPLATE',
   name: 'Case-Based Discussion (CbD)',
   wordCountRange: { min: 200, max: 400 },
-  sections: [
+  sections: flatSections([
     {
       id: 'case_summary',
       label: 'Case Summary',
@@ -162,7 +162,7 @@ export const IM_CBD_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: null,
       weight: 0.1,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -173,7 +173,7 @@ export const IM_ACAT_TEMPLATE: ArtefactTemplate = {
   id: 'IM_ACAT_TEMPLATE',
   name: 'Acute Care Assessment (ACAT)',
   wordCountRange: { min: 250, max: 450 },
-  sections: [
+  sections: flatSections([
     {
       id: 'clinical_context',
       label: 'Clinical Context',
@@ -239,7 +239,7 @@ export const IM_ACAT_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: null,
       weight: 0.15,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -250,7 +250,7 @@ export const IM_SEA_TEMPLATE: ArtefactTemplate = {
   id: 'IM_SEA_TEMPLATE',
   name: 'Significant Event Analysis',
   wordCountRange: { min: 300, max: 500 },
-  sections: [
+  sections: flatSections([
     {
       id: 'event_description',
       label: 'What Happened',
@@ -307,7 +307,7 @@ export const IM_SEA_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: 'What did you personally take away from this experience?',
       weight: 0.2,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -318,7 +318,7 @@ export const IM_REFLECTION_TEMPLATE: ArtefactTemplate = {
   id: 'IM_REFLECTION_TEMPLATE',
   name: 'Reflective Practice Entry',
   wordCountRange: { min: 200, max: 400 },
-  sections: [
+  sections: flatSections([
     {
       id: 'experience',
       label: 'The Experience',
@@ -365,7 +365,7 @@ export const IM_REFLECTION_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: 'Did you consult any guidelines or evidence?',
       weight: 0.15,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -376,7 +376,7 @@ export const IM_DOPS_TEMPLATE: ArtefactTemplate = {
   id: 'IM_DOPS_TEMPLATE',
   name: 'Procedural Skills (DOPS)',
   wordCountRange: { min: 150, max: 300 },
-  sections: [
+  sections: flatSections([
     {
       id: 'procedure_context',
       label: 'Procedure & Context',
@@ -431,7 +431,7 @@ export const IM_DOPS_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: null,
       weight: 0.1,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -442,7 +442,7 @@ export const IM_OPCAT_TEMPLATE: ArtefactTemplate = {
   id: 'IM_OPCAT_TEMPLATE',
   name: 'Outpatient Care Assessment (OPCAT)',
   wordCountRange: { min: 200, max: 350 },
-  sections: [
+  sections: flatSections([
     {
       id: 'clinic_context',
       label: 'Clinic & Patient Context',
@@ -488,7 +488,7 @@ export const IM_OPCAT_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: null,
       weight: 0.15,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -499,7 +499,7 @@ export const IM_TEACHING_TEMPLATE: ArtefactTemplate = {
   id: 'IM_TEACHING_TEMPLATE',
   name: 'Teaching & Supervision Activity',
   wordCountRange: { min: 150, max: 300 },
-  sections: [
+  sections: flatSections([
     {
       id: 'activity_description',
       label: 'Activity Description',
@@ -554,7 +554,7 @@ export const IM_TEACHING_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: null,
       weight: 0.1,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -565,7 +565,7 @@ export const IM_QIP_TEMPLATE: ArtefactTemplate = {
   id: 'IM_QIP_TEMPLATE',
   name: 'Quality Improvement Project (QIPAT)',
   wordCountRange: { min: 500, max: 800 },
-  sections: [
+  sections: flatSections([
     {
       id: 'rationale',
       label: 'Rationale & Problem Statement',
@@ -638,7 +638,7 @@ export const IM_QIP_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: null,
       weight: 0.1,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -649,7 +649,7 @@ export const IM_FEEDBACK_TEMPLATE: ArtefactTemplate = {
   id: 'IM_FEEDBACK_TEMPLATE',
   name: 'Reflection on Feedback',
   wordCountRange: { min: 200, max: 400 },
-  sections: [
+  sections: flatSections([
     {
       id: 'feedback_source',
       label: 'Feedback Source',
@@ -704,7 +704,7 @@ export const IM_FEEDBACK_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: 'Have you noticed any changes since acting on this feedback?',
       weight: 0.1,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------

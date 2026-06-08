@@ -34,6 +34,8 @@ export const CapabilitySchema = z.object({
   code: z.string(),
   name: z.string(),
   evidence: z.string(),
+  // The trainee's descriptor-linked justification (their own words). '' until elicited.
+  justification: z.string().default(''),
 });
 
 export type Capability = z.infer<typeof CapabilitySchema>;
@@ -65,6 +67,22 @@ export const CompletenessSchema = z.object({
 });
 
 export type Completeness = z.infer<typeof CompletenessSchema>;
+
+// Draft lifecycle status (graded readiness verdict). Coexists with `completeness`:
+// `ready` = the rubric cleared; `needs_attention` = gaps remain or the trainee
+// stopped early. null until the analysis graph completes.
+export const DraftStatusSchema = z.enum(['in_progress', 'ready', 'needs_attention']);
+export type DraftStatus = z.infer<typeof DraftStatusSchema>;
+
+// A rendered output document field — the granular probes projected into the
+// FourteenFish-style fields the trainee submits (e.g. "Brief Description").
+export const ComposedDocumentFieldSchema = z.object({
+  sectionId: z.string(),
+  label: z.string(),
+  text: z.string(),
+});
+
+export type ComposedDocumentField = z.infer<typeof ComposedDocumentFieldSchema>;
 
 // Single source of truth for the review invariants — referenced by the request
 // Zod schema below and the Mongoose @Prop bounds in the API. Changing the rating
@@ -108,6 +126,10 @@ export const ArtefactSchema = z.object({
   pdpGoals: z.array(PdpGoalSchema).nullable(),
   capabilities: z.array(CapabilitySchema).nullable(),
   completeness: CompletenessSchema.nullable(),
+  // Graded readiness outputs (coexist with completeness). null until analysis completes.
+  draftStatus: DraftStatusSchema.nullable(),
+  readinessScore: z.number().nullable(),
+  composedDocument: z.array(ComposedDocumentFieldSchema).nullable(),
   tags: z.record(z.array(z.string())).nullable(),
   review: ArtefactReviewSchema.nullable(),
   conversation: ActiveConversationSchema,

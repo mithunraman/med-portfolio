@@ -81,9 +81,13 @@ export class AnalysisCompletionService {
             capabilities: finalState.capabilities.map((c) => ({
               code: c.code,
               evidence: c.quote,
+              justification: c.justification ?? '',
             })),
             status: ArtefactStatus.IN_REVIEW,
             completeness: deriveCompleteness(finalState),
+            draftStatus: finalState.draftStatus,
+            readinessScore: finalState.readinessScore,
+            composedDocument: finalState.composedDocument,
           },
           session,
         );

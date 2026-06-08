@@ -30,6 +30,7 @@ import {
   PDP_GOALS_REPOSITORY,
 } from '../pdp-goals/pdp-goals.repository.interface';
 import { buildPortfolioGraph } from './portfolio-graph.builder';
+import { buildReadinessSnapshot } from './readiness-snapshot';
 import type { PortfolioStateType } from './portfolio-graph.state';
 
 /**
@@ -41,6 +42,7 @@ export interface GraphResumeMap {
   ask_followup: true;
   ask_clarification: true;
   present_capabilities: { selectedCodes: string[] };
+  present_draft: { confirmed: boolean };
 }
 
 export type InterruptNode = keyof GraphResumeMap;
@@ -277,6 +279,7 @@ export class PortfolioGraphService implements OnModuleInit {
       'ask_followup',
       'ask_clarification',
       'present_capabilities',
+      'present_draft',
     ]);
 
     if (interruptNodes.has(nextNode)) {
@@ -328,6 +331,9 @@ export class PortfolioGraphService implements OnModuleInit {
       conversationId: string;
       userId: string;
     };
+
+    // Live readiness snapshot for the Entry Card — rides on each question message.
+    const readiness = buildReadinessSnapshot(snapshot.values as PortfolioStateType);
 
     const pausedNode = snapshot.next?.[0] as InterruptNode | undefined;
     if (!pausedNode) return null;
@@ -459,6 +465,7 @@ export class PortfolioGraphService implements OnModuleInit {
           missingSections: interruptValue.missingSections as string[],
           followUpRound,
           entryType: interruptValue.entryType as string,
+          readiness,
         };
 
         return {
@@ -517,6 +524,7 @@ export class PortfolioGraphService implements OnModuleInit {
             confidence: o.confidence,
             reasoning: o.reasoning,
           })),
+          readiness,
         };
 
         return {
@@ -530,6 +538,43 @@ export class PortfolioGraphService implements OnModuleInit {
             messageType: MessageType.TEXT,
             rawContent: capContent,
             content: capContent,
+            status: MessageStatus.COMPLETE,
+            question,
+            idempotencyKey,
+          },
+        };
+      }
+
+      case 'draft': {
+        const draftStatus = interruptValue.draftStatus as 'ready' | 'needs_attention';
+        const draftContent =
+          draftStatus === 'ready'
+            ? "Your entry is ARCP-ready. Here's the assembled draft in your own words — submit it, or save as a draft to keep editing."
+            : "Here's your assembled draft. Some sections could still be stronger — submit as-is, or save as a draft to keep working on it.";
+
+        // The sign-off verdict lives in the interrupt payload (save hasn't run yet,
+        // so state.draftStatus is still 'in_progress') — reflect it on the card.
+        const question: SingleSelectQuestion = {
+          questionType: 'single_select',
+          options: [
+            { key: 'submit', label: 'Submit' },
+            { key: 'draft', label: 'Save as draft' },
+          ],
+          suggestedKey: draftStatus === 'ready' ? 'submit' : 'draft',
+          readiness: readiness ? { ...readiness, draftStatus } : undefined,
+        };
+
+        return {
+          idempotencyKey,
+          pausedNode,
+          questionType: 'single_select',
+          messageData: {
+            conversation: conversationOid,
+            userId: userOid,
+            role: MessageRole.ASSISTANT,
+            messageType: MessageType.TEXT,
+            rawContent: draftContent,
+            content: draftContent,
             status: MessageStatus.COMPLETE,
             question,
             idempotencyKey,

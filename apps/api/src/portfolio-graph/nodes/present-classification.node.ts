@@ -77,6 +77,20 @@ export function createPresentClassificationNode(deps: GraphDeps) {
       });
     }
 
+    // Offer the FULL entry-type list (not just the classifier's guesses) so the
+    // trainee can confirm or pick any type. The recommended one stays flagged via
+    // `suggestedEntryType`; ranked suggestions lead, remaining types follow.
+    const presentedCodes = new Set(options.map((o) => o.code));
+    for (const et of config.entryTypes) {
+      if (presentedCodes.has(et.code)) continue;
+      options.push({
+        code: et.code,
+        label: et.label,
+        confidence: 0,
+        reasoning: et.description,
+      });
+    }
+
     // Pause the graph — the interrupt payload is read by PortfolioGraphService
     // to write the ASSISTANT message. Returns the resume value on second execution.
     const resumeValue = interrupt({

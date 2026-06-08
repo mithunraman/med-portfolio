@@ -511,6 +511,9 @@ export class ConversationsService {
       case 'present_capabilities':
         resumeValue = { selectedCodes: selectedKeys };
         break;
+      case 'present_draft':
+        resumeValue = { confirmed: selectedKey === 'submit' };
+        break;
       case 'ask_followup':
         resumeValue = true;
         break;

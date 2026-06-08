@@ -1,4 +1,4 @@
-import { ArtefactTemplate } from '@acme/shared';
+import { ArtefactTemplate, flatSections } from '@acme/shared';
 
 // ---------------------------------------------------------------------------
 // Template 1: PSY_ACE (Assessment of Clinical Expertise / Clinical Case Review)
@@ -8,7 +8,7 @@ export const PSY_ACE_TEMPLATE: ArtefactTemplate = {
   id: 'PSY_ACE_TEMPLATE',
   name: 'Clinical Case Review (ACE)',
   wordCountRange: { min: 200, max: 400 },
-  sections: [
+  sections: flatSections([
     {
       id: 'presentation',
       label: 'Clinical Presentation',
@@ -90,7 +90,7 @@ export const PSY_ACE_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: null,
       weight: 0.05,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ export const PSY_CBD_TEMPLATE: ArtefactTemplate = {
   id: 'PSY_CBD_TEMPLATE',
   name: 'Case-Based Discussion (CbD)',
   wordCountRange: { min: 200, max: 400 },
-  sections: [
+  sections: flatSections([
     {
       id: 'case_summary',
       label: 'Case Summary',
@@ -168,7 +168,7 @@ export const PSY_CBD_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: null,
       weight: 0.1,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -179,7 +179,7 @@ export const PSY_SEA_TEMPLATE: ArtefactTemplate = {
   id: 'PSY_SEA_TEMPLATE',
   name: 'Significant Event Analysis',
   wordCountRange: { min: 300, max: 500 },
-  sections: [
+  sections: flatSections([
     {
       id: 'event_description',
       label: 'What Happened',
@@ -259,7 +259,7 @@ export const PSY_SEA_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: 'What did you personally take away from this experience?',
       weight: 0.1,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -270,7 +270,7 @@ export const PSY_REFLECTION_TEMPLATE: ArtefactTemplate = {
   id: 'PSY_REFLECTION_TEMPLATE',
   name: 'Reflective Practice Entry',
   wordCountRange: { min: 200, max: 400 },
-  sections: [
+  sections: flatSections([
     {
       id: 'experience',
       label: 'The Experience',
@@ -338,7 +338,7 @@ export const PSY_REFLECTION_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: 'Did you discuss this in supervision or a Balint group?',
       weight: 0.05,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -349,7 +349,7 @@ export const PSY_SAPE_TEMPLATE: ArtefactTemplate = {
   id: 'PSY_SAPE_TEMPLATE',
   name: 'Psychotherapy Case Reflection (SAPE)',
   wordCountRange: { min: 300, max: 500 },
-  sections: [
+  sections: flatSections([
     {
       id: 'case_overview',
       label: 'Case Overview & Modality',
@@ -429,7 +429,7 @@ export const PSY_SAPE_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: null,
       weight: 0.05,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -440,7 +440,7 @@ export const PSY_DONCS_TEMPLATE: ArtefactTemplate = {
   id: 'PSY_DONCS_TEMPLATE',
   name: 'Direct Observation of Non-Clinical Skills (DONCS)',
   wordCountRange: { min: 150, max: 300 },
-  sections: [
+  sections: flatSections([
     {
       id: 'activity_description',
       label: 'Activity Observed',
@@ -502,7 +502,7 @@ export const PSY_DONCS_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: null,
       weight: 0.05,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -513,7 +513,7 @@ export const PSY_MHA_TEMPLATE: ArtefactTemplate = {
   id: 'PSY_MHA_TEMPLATE',
   name: 'Mental Health Act Application',
   wordCountRange: { min: 250, max: 450 },
-  sections: [
+  sections: flatSections([
     {
       id: 'clinical_context',
       label: 'Clinical Context',
@@ -593,7 +593,7 @@ export const PSY_MHA_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: null,
       weight: 0.05,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -604,7 +604,7 @@ export const PSY_TEACHING_TEMPLATE: ArtefactTemplate = {
   id: 'PSY_TEACHING_TEMPLATE',
   name: 'Teaching & Education Activity',
   wordCountRange: { min: 150, max: 300 },
-  sections: [
+  sections: flatSections([
     {
       id: 'activity_description',
       label: 'Activity Description',
@@ -666,7 +666,7 @@ export const PSY_TEACHING_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: null,
       weight: 0.1,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -677,7 +677,7 @@ export const PSY_QIP_TEMPLATE: ArtefactTemplate = {
   id: 'PSY_QIP_TEMPLATE',
   name: 'Quality Improvement Project',
   wordCountRange: { min: 500, max: 800 },
-  sections: [
+  sections: flatSections([
     {
       id: 'rationale',
       label: 'Rationale & Problem Statement',
@@ -755,7 +755,7 @@ export const PSY_QIP_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: 'What did you learn from leading this project?',
       weight: 0.2,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -766,7 +766,7 @@ export const PSY_FEEDBACK_TEMPLATE: ArtefactTemplate = {
   id: 'PSY_FEEDBACK_TEMPLATE',
   name: 'Reflection on Feedback',
   wordCountRange: { min: 200, max: 400 },
-  sections: [
+  sections: flatSections([
     {
       id: 'feedback_source',
       label: 'Feedback Source',
@@ -825,7 +825,7 @@ export const PSY_FEEDBACK_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: 'Have you noticed any changes since acting on this feedback?',
       weight: 0.1,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------

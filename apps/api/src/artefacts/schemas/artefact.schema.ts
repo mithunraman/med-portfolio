@@ -16,11 +16,28 @@ export class Capability {
 
   @Prop({ required: true })
   evidence!: string;
+
+  // The trainee's descriptor-linked justification (their own words). '' until elicited.
+  @Prop({ type: String, default: '' })
+  justification!: string;
 }
 
 export class ReflectionSection {
   @Prop({ required: true })
   title!: string;
+
+  @Prop({ required: true })
+  text!: string;
+}
+
+// A rendered output document field — the granular probes projected into the
+// document fields the trainee submits (e.g. "Brief Description").
+export class ComposedSection {
+  @Prop({ required: true })
+  sectionId!: string;
+
+  @Prop({ required: true })
+  label!: string;
 
   @Prop({ required: true })
   text!: string;
@@ -102,6 +119,17 @@ export class Artefact {
   // "needs your input" nudge. null until the analysis graph completes.
   @Prop({ type: Completeness, default: null, _id: false })
   completeness!: Completeness | null;
+
+  // Graded readiness outputs (coexist with `completeness`). null until analysis completes.
+  @Prop({ type: String, enum: ['in_progress', 'ready', 'needs_attention'], default: null })
+  draftStatus!: 'in_progress' | 'ready' | 'needs_attention' | null;
+
+  @Prop({ type: Number, default: null })
+  readinessScore!: number | null;
+
+  // The reflection projected into the output document fields the trainee submits.
+  @Prop({ type: [ComposedSection], default: null, _id: false })
+  composedDocument!: ComposedSection[] | null;
 
   @Prop({ type: Object, default: null })
   tags!: Record<string, string[]> | null;

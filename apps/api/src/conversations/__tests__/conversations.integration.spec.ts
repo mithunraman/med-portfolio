@@ -25,6 +25,7 @@ import {
 import {
   allCoveredResponse,
   classifyResponse,
+  elicitJustificationResponse,
   followupQuestionsResponse,
   generatePdpResponse,
   reflectResponse,
@@ -206,8 +207,14 @@ describe('Conversations Integration Tests', () => {
       // ask_followup is interrupt-only (no LLM call, no replay response needed)
       llmMock.enqueue(allCoveredResponse()); // 3: check_completeness (all covered)
       llmMock.enqueue(tagCapabilitiesResponse()); // 4: tag_capabilities
-      llmMock.enqueue(reflectResponse()); // 5: reflect
-      llmMock.enqueue(generatePdpResponse()); // 6: generate_pdp
+      llmMock.enqueue(
+        // 5: elicit_justification (for selected C-06)
+        elicitJustificationResponse([
+          { code: 'C-06', justification: 'I initiated metformin after reviewing the HbA1c.', isStrong: true },
+        ])
+      );
+      llmMock.enqueue(reflectResponse()); // 6: reflect
+      llmMock.enqueue(generatePdpResponse()); // 7: generate_pdp
 
       // ── Step 1: Start analysis → classify → pause at present_classification ──
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
@@ -307,17 +314,35 @@ describe('Conversations Integration Tests', () => {
       const tagHumanContent = tagHumanMsg.content as string;
       expect(tagHumanContent).toContain('type 2 diabetes');
 
-      // ── Step 4: Resume capabilities (select only C-06) → reflect → generate_pdp → save → END ──
+      // ── Step 4: Resume capabilities (select only C-06) → justify → reflect → pdp → present_draft ──
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
         type: 'resume',
         messageId: capabilityMsg.xid,
         value: { selectedKeys: ['C-06'] },
       });
+      const draftStatus = await waitForRunStable(harness, conv._id, true);
+
+      expect(draftStatus).toEqual({ status: 'awaiting_input', node: 'present_draft' });
+      expect(llmMock.callCount).toBe(8); // +elicit_justification + reflect + generate_pdp
+      llmMock.assertAllConsumed();
+
+      // ── Step 5: Resume present_draft (submit) → save → END ──
+      const draftMsgs = await getMessagesForConversation(conv._id);
+      const draftMsg = draftMsgs.find(
+        (m) =>
+          m.role === MessageRole.ASSISTANT &&
+          (m.question as SingleSelectQuestion | undefined)?.options?.some((o) => o.key === 'submit')
+      );
+      assertDefined(draftMsg);
+
+      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
+        type: 'resume',
+        messageId: draftMsg.xid,
+        value: { selectedKey: 'submit' },
+      });
       const finalStatus = await waitForRunStable(harness, conv._id, true);
 
       expect(finalStatus).toEqual({ status: 'completed' });
-      expect(llmMock.callCount).toBe(7); // +reflect + generate_pdp
-      llmMock.assertAllConsumed();
 
       // ── Final assertions: messages ──
       const allMsgs = await getMessagesForConversation(conv._id);
@@ -333,15 +358,15 @@ describe('Conversations Integration Tests', () => {
       assertDefined(capabilityAudit);
       expect(capabilityAudit.content).toBe('Selected: Decision-making and diagnosis');
 
-      // reflect prompt (call index 5) includes selected capability C-06
-      const reflectCall = llmMock.calls[5];
+      // reflect prompt (call index 6) includes selected capability C-06
+      const reflectCall = llmMock.calls[6];
       const reflectSystemMsg = reflectCall.messages.find((m) => m._getType() === 'system');
       assertDefined(reflectSystemMsg);
       const reflectSystem = reflectSystemMsg.content as string;
       expect(reflectSystem).toContain('C-06');
 
-      // generate_pdp prompt (call index 6) receives the reflection
-      const pdpCall = llmMock.calls[6];
+      // generate_pdp prompt (call index 7) receives the reflection
+      const pdpCall = llmMock.calls[7];
       const pdpHumanMsg = pdpCall.messages.find((m) => m._getType() === 'human');
       assertDefined(pdpHumanMsg);
       const pdpHuman = pdpHumanMsg.content as string;
@@ -488,7 +513,7 @@ describe('Conversations Integration Tests', () => {
       expect(llmMock.callCount).toBe(7); // no followup replay calls
     });
 
-    it('A4. Max follow-up rounds reached — graph proceeds anyway', async () => {
+    it('A4. Follow-up loop exits when the rubric clears', async () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a diabetic patient.');
 
@@ -513,7 +538,7 @@ describe('Conversations Integration Tests', () => {
         // 7: generate_followup (round 3)
         followupQuestionsResponse([{ sectionId: 'reflection', question: 'Any final reflections?' }])
       );
-      llmMock.enqueue(someMissingResponse(['reflection'])); // 8: check_completeness (still missing, but max rounds)
+      llmMock.enqueue(allCoveredResponse()); // 8: check_completeness — rubric now clears
       llmMock.enqueue(tagCapabilitiesResponse()); // 9: tag_capabilities
 
       // Start → classify → pause
@@ -603,7 +628,7 @@ describe('Conversations Integration Tests', () => {
       });
       const finalStatus = await waitForRunStable(harness, conv._id, true);
 
-      // Graph did NOT pause at ask_followup a fourth time — proceeded to present_capabilities
+      // Rubric cleared after round 3 — loop exits to capabilities (no 4th follow-up)
       expect(finalStatus).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
     });
   });

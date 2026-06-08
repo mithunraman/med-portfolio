@@ -6,6 +6,9 @@ import { PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('PresentCapabilitiesNode');
 
+/** RCGP allows at most 3 capabilities per entry. */
+const MAX_CONFIRMED_CAPABILITIES = 3;
+
 interface CapabilitiesResumeValue {
   selectedCodes: string[];
 }
@@ -66,10 +69,15 @@ export function createPresentCapabilitiesNode(deps: GraphDeps) {
 
   if (selectedCodes.length > 0) {
     const selectedSet = new Set(selectedCodes);
-    const filteredCapabilities = state.capabilities.filter((cap) => selectedSet.has(cap.code));
+    // Keep the confidence-ranked order from state.capabilities and cap at the
+    // RCGP maximum of 3 — if the user selected more, keep the strongest.
+    const filteredCapabilities = state.capabilities
+      .filter((cap) => selectedSet.has(cap.code))
+      .slice(0, MAX_CONFIRMED_CAPABILITIES);
 
     logger.log(
-      `[${cid}] User confirmed ${filteredCapabilities.length} capabilities: ${selectedCodes.join(', ')}`
+      `[${cid}] User confirmed ${filteredCapabilities.length} capabilities ` +
+        `(of ${selectedCodes.length} selected): ${filteredCapabilities.map((c) => c.code).join(', ')}`
     );
 
     return { capabilities: filteredCapabilities };

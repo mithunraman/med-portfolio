@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
-import { PortfolioStateType } from '../portfolio-graph.state';
+import { DraftStatus, PortfolioStateType } from '../portfolio-graph.state';
 
 /**
  * Validation gate before graph completion.
@@ -35,7 +35,17 @@ export function createSaveNode(deps: GraphDeps) {
     if (!state.reflection) throw new Error(`[${cid}] Cannot save: reflection is not set`);
     if (state.capabilities.length === 0) throw new Error(`[${cid}] Cannot save: no capabilities`);
 
-    logger.log(`[${cid}] Validation passed for artefact ${state.artefactId}`);
-    return {};
+    // ── Readiness gate (Phase 6): never finalise silently as "complete" ──
+    // An entry is 'ready' only when the rubric cleared; if the trainee stopped
+    // early or gaps remain, it is saved as 'needs_attention' so the residual
+    // gaps stay visible rather than implying the entry is done.
+    const draftStatus: DraftStatus =
+      state.hasEnoughInfo && !state.userStopped ? 'ready' : 'needs_attention';
+
+    logger.log(
+      `[${cid}] Validation passed for artefact ${state.artefactId} ` +
+        `(readiness ${state.readinessScore}/10, status=${draftStatus})`
+    );
+    return { draftStatus };
   };
 }

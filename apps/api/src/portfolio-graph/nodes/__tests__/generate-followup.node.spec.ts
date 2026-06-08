@@ -152,62 +152,42 @@ describe('GenerateFollowupNode', () => {
       const state = makeState();
       const result = await node(state);
 
-      expect(result.pendingFollowupQuestions).toHaveLength(3);
-      expect(result.pendingFollowupQuestions!.map((q) => q.sectionId)).toEqual(
-        expect.arrayContaining(['reflection', 'clinical_reasoning', 'management'])
-      );
+      // One leverage-ranked question per round.
+      expect(result.pendingFollowupQuestions).toHaveLength(1);
       expect(result.followUpRound).toBe(1);
     });
 
-    it('should select top 3 missing sections by weight', async () => {
+    it('should select the single highest-leverage missing section', async () => {
       const deps = makeDeps();
       (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({
         data: { questions: [] },
       });
 
       const node = createGenerateFollowupNode(deps);
-      // 4 missing sections — only top 3 by weight should be asked
+      // 4 missing sections — only the highest-leverage one is asked. With no
+      // readiness recorded, leverage reduces to weight, so reflection (0.25) wins.
       const state = makeState({
         missingSections: ['clinical_reasoning', 'management', 'outcome', 'reflection'],
       });
       const result = await node(state);
 
-      // LLM returned empty, so backfill kicks in for the top 3 by weight:
-      // reflection (0.25), clinical_reasoning (0.20), management (0.15)
-      // outcome (0.10) is excluded
-      expect(result.pendingFollowupQuestions).toHaveLength(3);
-      const sectionIds = result.pendingFollowupQuestions!.map((q) => q.sectionId);
-      expect(sectionIds).toContain('reflection');
-      expect(sectionIds).toContain('clinical_reasoning');
-      expect(sectionIds).toContain('management');
-      expect(sectionIds).not.toContain('outcome');
+      expect(result.pendingFollowupQuestions).toHaveLength(1);
+      expect(result.pendingFollowupQuestions![0].sectionId).toBe('reflection');
     });
 
-    it('should backfill sections the LLM missed with default questions', async () => {
+    it('should backfill the selected section when the LLM returns nothing', async () => {
       const deps = makeDeps();
-      // LLM only returns 1 question, but 2 sections are missing
+      // LLM returns no questions — the node backfills the selected section.
       (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({
-        data: {
-          questions: [
-            {
-              sectionId: 'reflection',
-              question: 'Contextualised reflection question',
-              hints: { examples: ['Example'] },
-            },
-          ],
-        },
+        data: { questions: [] },
       });
 
       const node = createGenerateFollowupNode(deps);
-      const state = makeState({ missingSections: ['reflection', 'outcome'] });
+      const state = makeState({ missingSections: ['outcome'] });
       const result = await node(state);
 
-      expect(result.pendingFollowupQuestions).toHaveLength(2);
-
-      const reflectionQ = result.pendingFollowupQuestions!.find((q) => q.sectionId === 'reflection');
-      expect(reflectionQ!.question).toBe('Contextualised reflection question');
-
-      // outcome should be backfilled with default extraction question from template
+      expect(result.pendingFollowupQuestions).toHaveLength(1);
+      // outcome should be backfilled with the default extraction question from template
       const outcomeQ = result.pendingFollowupQuestions!.find((q) => q.sectionId === 'outcome');
       expect(outcomeQ!.question).toBe('What was the outcome for this patient?');
     });
@@ -249,9 +229,10 @@ describe('GenerateFollowupNode', () => {
       const state = makeState({ missingSections: ['reflection', 'outcome'] });
       const result = await node(state);
 
-      expect(result.pendingFollowupQuestions).toHaveLength(2);
+      // One question per round — reflection (weight 0.25) outranks outcome (0.10).
+      expect(result.pendingFollowupQuestions).toHaveLength(1);
 
-      // Should use default extraction questions from template
+      // Should use the default extraction question from template
       const reflectionQ = result.pendingFollowupQuestions!.find((q) => q.sectionId === 'reflection');
       expect(reflectionQ!.question).toBe(
         'What did you learn from this case, and would you do anything differently?'

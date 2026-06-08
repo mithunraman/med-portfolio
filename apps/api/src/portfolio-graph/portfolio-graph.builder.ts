@@ -6,11 +6,13 @@ import {
   createAskFollowupNode,
   createCheckCompletenessNode,
   createClassifyNode,
+  createElicitJustificationNode,
   createGatherContextNode,
   createGenerateFollowupNode,
   createGeneratePdpNode,
   createPresentCapabilitiesNode,
   createPresentClassificationNode,
+  createPresentDraftNode,
   createReflectNode,
   createSaveNode,
   createTagCapabilitiesNode,
@@ -18,7 +20,9 @@ import {
 import { PortfolioState, PortfolioStateType } from './portfolio-graph.state';
 
 // ── Max loop limits ──
-export const MAX_FOLLOWUP_ROUNDS = 3;
+// The planner asks one question per round and exits when the rubric clears
+// (hasEnoughInfo). This is a circuit-breaker backstop, not the exit condition.
+export const MAX_FOLLOWUP_ROUNDS = 8;
 export const CONFIDENCE_THRESHOLD = 0.7;
 export const MAX_CLARIFICATION_ROUNDS = 2;
 
@@ -61,7 +65,13 @@ export function classifyRouter(
  * After check_completeness: proceed to tag capabilities or generate follow-up questions.
  */
 function completenessRouter(state: PortfolioStateType): 'generate_followup' | 'tag_capabilities' {
-  if (!state.hasEnoughInfo && state.followUpRound < MAX_FOLLOWUP_ROUNDS) {
+  // Exit the elicitation loop when the rubric clears (hasEnoughInfo), when the
+  // trainee chooses to stop, or — as a backstop — when the round cap is hit.
+  if (
+    !state.hasEnoughInfo &&
+    !state.userStopped &&
+    state.followUpRound < MAX_FOLLOWUP_ROUNDS
+  ) {
     return 'generate_followup';
   }
   return 'tag_capabilities';
@@ -101,8 +111,10 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
     .addNode('ask_followup', createAskFollowupNode(deps))
     .addNode('tag_capabilities', createTagCapabilitiesNode(deps))
     .addNode('present_capabilities', createPresentCapabilitiesNode(deps))
+    .addNode('elicit_justification', createElicitJustificationNode(deps))
     .addNode('reflect', createReflectNode(deps))
     .addNode('generate_pdp', createGeneratePdpNode(deps))
+    .addNode('present_draft', createPresentDraftNode(deps))
     .addNode('save', createSaveNode(deps))
 
     // ── Edges ──
@@ -132,11 +144,13 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
     .addEdge('generate_followup', 'ask_followup')
     .addEdge('ask_followup', 'gather_context') // Loop back, re-gather + re-check completeness
 
-    // Linear chain: tag → present capabilities → reflect → PDP → save → end
+    // Linear chain: tag → present → justify → reflect → PDP → save → end
     .addEdge('tag_capabilities', 'present_capabilities')
-    .addEdge('present_capabilities', 'reflect')
+    .addEdge('present_capabilities', 'elicit_justification')
+    .addEdge('elicit_justification', 'reflect')
     .addEdge('reflect', 'generate_pdp')
-    .addEdge('generate_pdp', 'save')
+    .addEdge('generate_pdp', 'present_draft')
+    .addEdge('present_draft', 'save')
     .addEdge('save', END);
 
   return graph.compile({ checkpointer });

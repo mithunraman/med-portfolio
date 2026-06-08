@@ -1,88 +1,127 @@
-import { ArtefactTemplate } from '@acme/shared';
+import { ArtefactTemplate, flatSections, Probe } from '@acme/shared';
 
 // ---------------------------------------------------------------------------
 // Template 1: CCR (Clinical Case Review)
 // Used by: CLINICAL_CASE_REVIEW, OUT_OF_HOURS
 // ---------------------------------------------------------------------------
+// CCR uses a true hierarchy: the five factual probes compose into one "Brief
+// description" document field, matching the FourteenFish form, while the granular
+// probes still drive targeted questions and per-dimension scoring.
+const CCR_BRIEF_DESCRIPTION_PROBES: Probe[] = [
+  {
+    id: 'presentation',
+    label: 'Clinical Presentation',
+    required: true,
+    description:
+      'Patient demographics (anonymised), presenting complaint, relevant history, context of consultation.',
+    promptHint:
+      'Describe the clinical scenario concisely. Include age, gender, setting, and presenting complaint. Keep anonymised.',
+    extractionQuestion: 'Can you describe the patient and what they presented with?',
+    weight: 0.15,
+  },
+  {
+    id: 'clinical_findings',
+    label: 'Clinical Findings',
+    required: false,
+    description: 'Examination findings, investigation results, observations.',
+    promptHint: 'Summarise relevant positive and negative findings.',
+    extractionQuestion: 'What did you find on examination or investigation?',
+    weight: 0.1,
+  },
+  {
+    id: 'clinical_reasoning',
+    label: 'Clinical Reasoning',
+    required: true,
+    threshold: 'strong',
+    descriptorCriteria:
+      'Strong = names specific differentials AND the reasoning that discriminated between them ' +
+      '(what pointed toward the working diagnosis, what was ruled out and why). Adequate = a diagnosis ' +
+      'with some justification. Shallow = a bare diagnosis label with no reasoning.',
+    description:
+      'Differential diagnosis considered, why the working diagnosis was reached, what was considered and ruled out.',
+    promptHint:
+      'Explain the thought process behind the diagnosis. Include what was considered and why alternatives were excluded.',
+    extractionQuestion:
+      'What differentials did you consider, and what led you to your working diagnosis?',
+    weight: 0.2,
+  },
+  {
+    id: 'management',
+    label: 'Management & Actions',
+    required: true,
+    description:
+      'Treatment the trainee gave or started, investigations they ordered, referrals they made, safety-netting advice, and the follow-up they themselves planned.',
+    promptHint:
+      "Detail the trainee's own management plan and the rationale behind each decision. Include only what the trainee personally did or planned. Investigation results that came back later, how the patient responded, and actions taken by other teams (e.g. a specialist clinic starting a drug) belong in Patient Outcome — do not place them here.",
+    extractionQuestion: 'What management plan did you put in place?',
+    weight: 0.15,
+  },
+  {
+    id: 'outcome',
+    label: 'Patient Outcome',
+    required: true,
+    description:
+      "What happened after the initial management: investigation results, how the patient responded, actions taken by other clinicians or services, and the patient's current status.",
+    promptHint:
+      "Describe results that came back, the patient's response, subsequent actions by other teams, and where things stand now. Do not restate the trainee's own management plan already covered in Management & Actions — only add what happened as a result.",
+    extractionQuestion: 'What was the outcome for this patient?',
+    weight: 0.1,
+  },
+];
+
 export const CCR_TEMPLATE: ArtefactTemplate = {
   id: 'CCR_TEMPLATE',
   name: 'Clinical Case Review',
   wordCountRange: { min: 150, max: 300 },
   sections: [
     {
-      id: 'presentation',
-      label: 'Clinical Presentation',
+      id: 'brief_description',
+      label: 'Brief Description',
+      order: 0,
       required: true,
-      description:
-        'Patient demographics (anonymised), presenting complaint, relevant history, context of consultation.',
-      promptHint:
-        'Describe the clinical scenario concisely. Include age, gender, setting, and presenting complaint. Keep anonymised.',
-      extractionQuestion: 'Can you describe the patient and what they presented with?',
-      weight: 0.15,
-    },
-    {
-      id: 'clinical_findings',
-      label: 'Clinical Findings',
-      required: false,
-      description: 'Examination findings, investigation results, observations.',
-      promptHint: 'Summarise relevant positive and negative findings.',
-      extractionQuestion: 'What did you find on examination or investigation?',
-      weight: 0.1,
-    },
-    {
-      id: 'clinical_reasoning',
-      label: 'Clinical Reasoning',
-      required: true,
-      description:
-        'Differential diagnosis considered, why the working diagnosis was reached, what was considered and ruled out.',
-      promptHint:
-        'Explain the thought process behind the diagnosis. Include what was considered and why alternatives were excluded.',
-      extractionQuestion:
-        'What differentials did you consider, and what led you to your working diagnosis?',
-      weight: 0.2,
-    },
-    {
-      id: 'management',
-      label: 'Management & Actions',
-      required: true,
-      description:
-        'Treatment the trainee gave or started, investigations they ordered, referrals they made, safety-netting advice, and the follow-up they themselves planned.',
-      promptHint:
-        "Detail the trainee's own management plan and the rationale behind each decision. Include only what the trainee personally did or planned. Investigation results that came back later, how the patient responded, and actions taken by other teams (e.g. a specialist clinic starting a drug) belong in Patient Outcome — do not place them here.",
-      extractionQuestion: 'What management plan did you put in place?',
-      weight: 0.15,
-    },
-    {
-      id: 'outcome',
-      label: 'Patient Outcome',
-      required: true,
-      description:
-        "What happened after the initial management: investigation results, how the patient responded, actions taken by other clinicians or services, and the patient's current status.",
-      promptHint:
-        "Describe results that came back, the patient's response, subsequent actions by other teams, and where things stand now. Do not restate the trainee's own management plan already covered in Management & Actions — only add what happened as a result.",
-      extractionQuestion: 'What was the outcome for this patient?',
-      weight: 0.1,
+      probes: CCR_BRIEF_DESCRIPTION_PROBES,
     },
     {
       id: 'reflection',
       label: 'Reflection & Learning',
+      order: 1,
       required: true,
-      description:
-        'What went well, what could be improved, what was learned, how this changes future practice. Should demonstrate critical thinking, not just description.',
-      promptHint:
-        'Reflect on personal learning and impact on future practice. Address: What will I maintain, improve, or stop?',
-      extractionQuestion:
-        'What did you learn from this case, and would you do anything differently?',
-      weight: 0.25,
+      probes: [
+        {
+          id: 'reflection',
+          label: 'Reflection & Learning',
+          required: true,
+          threshold: 'strong',
+          descriptorCriteria:
+            'Strong = states a specific learning point AND how it changes future practice (what the ' +
+            'trainee will do differently). Adequate = one genuine learning point. Shallow = a bare ' +
+            'verdict with no learning ("it went ok", "nothing I would change").',
+          description:
+            'What went well, what could be improved, what was learned, how this changes future practice. Should demonstrate critical thinking, not just description.',
+          promptHint:
+            'Reflect on personal learning and impact on future practice. Address: What will I maintain, improve, or stop?',
+          extractionQuestion:
+            'What did you learn from this case, and would you do anything differently?',
+          weight: 0.25,
+        },
+      ],
     },
     {
-      id: 'ethical_legal',
+      id: 'considerations',
       label: 'Ethical / Legal Considerations',
+      order: 2,
       required: false,
-      description: 'Consent, capacity, confidentiality, safeguarding concerns if relevant.',
-      promptHint: 'Note any ethical, legal, or safeguarding dimensions if applicable.',
-      extractionQuestion: null,
-      weight: 0.05,
+      probes: [
+        {
+          id: 'ethical_legal',
+          label: 'Ethical / Legal Considerations',
+          required: false,
+          description: 'Consent, capacity, confidentiality, safeguarding concerns if relevant.',
+          promptHint: 'Note any ethical, legal, or safeguarding dimensions if applicable.',
+          extractionQuestion: null,
+          weight: 0.05,
+        },
+      ],
     },
   ],
 };
@@ -95,7 +134,7 @@ export const SEA_TEMPLATE: ArtefactTemplate = {
   id: 'SEA_TEMPLATE',
   name: 'Significant Event Analysis',
   wordCountRange: { min: 300, max: 500 },
-  sections: [
+  sections: flatSections([
     {
       id: 'event_description',
       label: 'What Happened',
@@ -173,7 +212,7 @@ export const SEA_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: 'What did you personally take away from this experience?',
       weight: 0.1,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -184,7 +223,7 @@ export const LEA_TEMPLATE: ArtefactTemplate = {
   id: 'LEA_TEMPLATE',
   name: 'Learning Event Analysis',
   wordCountRange: { min: 200, max: 400 },
-  sections: [
+  sections: flatSections([
     {
       id: 'event_description',
       label: 'What Happened',
@@ -250,7 +289,7 @@ export const LEA_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: "Can you give an example of how you've applied this learning since?",
       weight: 0.1,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -261,7 +300,7 @@ export const FEEDBACK_TEMPLATE: ArtefactTemplate = {
   id: 'FEEDBACK_TEMPLATE',
   name: 'Reflection on Feedback',
   wordCountRange: { min: 200, max: 400 },
-  sections: [
+  sections: flatSections([
     {
       id: 'feedback_source',
       label: 'Feedback Source',
@@ -328,7 +367,7 @@ export const FEEDBACK_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: 'Have you noticed any changes since acting on this feedback?',
       weight: 0.1,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -339,7 +378,7 @@ export const LEADERSHIP_TEMPLATE: ArtefactTemplate = {
   id: 'LEADERSHIP_TEMPLATE',
   name: 'Leadership Activity',
   wordCountRange: { min: 200, max: 400 },
-  sections: [
+  sections: flatSections([
     {
       id: 'activity_description',
       label: 'Activity Description',
@@ -415,7 +454,7 @@ export const LEADERSHIP_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: null,
       weight: 0.05,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -426,7 +465,7 @@ export const QIP_TEMPLATE: ArtefactTemplate = {
   id: 'QIP_TEMPLATE',
   name: 'Quality Improvement Project',
   wordCountRange: { min: 500, max: 800 },
-  sections: [
+  sections: flatSections([
     {
       id: 'rationale',
       label: 'Rationale & Problem Statement',
@@ -510,7 +549,7 @@ export const QIP_TEMPLATE: ArtefactTemplate = {
         'What did you learn about the improvement process? What would you do differently?',
       weight: 0.2,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -521,7 +560,7 @@ export const QIA_TEMPLATE: ArtefactTemplate = {
   id: 'QIA_TEMPLATE',
   name: 'Quality Improvement Activity',
   wordCountRange: { min: 200, max: 400 },
-  sections: [
+  sections: flatSections([
     {
       id: 'title_context',
       label: 'Title & Context',
@@ -572,7 +611,7 @@ export const QIA_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: 'Reflecting on this activity, what would you maintain, improve, or stop?',
       weight: 0.25,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------
@@ -583,7 +622,7 @@ export const PRESCRIBING_TEMPLATE: ArtefactTemplate = {
   id: 'PRESCRIBING_TEMPLATE',
   name: 'Prescribing Assessment',
   wordCountRange: { min: 200, max: 400 },
-  sections: [
+  sections: flatSections([
     {
       id: 'prescribing_context',
       label: 'Prescribing Context',
@@ -661,7 +700,7 @@ export const PRESCRIBING_TEMPLATE: ArtefactTemplate = {
       extractionQuestion: 'What specific steps will you take to improve your prescribing?',
       weight: 0.1,
     },
-  ],
+  ]),
 };
 
 // ---------------------------------------------------------------------------

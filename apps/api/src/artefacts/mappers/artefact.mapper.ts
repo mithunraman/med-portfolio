@@ -61,8 +61,17 @@ export function toArtefactDto(
       code: cap.code,
       name: capabilityNameMap.get(cap.code) ?? cap.code,
       evidence: cap.evidence,
+      justification: cap.justification ?? '',
     })) ?? null,
     completeness: artefact.completeness,
+    draftStatus: artefact.draftStatus ?? null,
+    readinessScore: artefact.readinessScore ?? null,
+    composedDocument:
+      artefact.composedDocument?.map((s) => ({
+        sectionId: s.sectionId,
+        label: s.label,
+        text: s.text,
+      })) ?? null,
     tags: artefact.tags,
     review: artefact.review
       ? {

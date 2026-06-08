@@ -7,6 +7,8 @@ export { createAskFollowupNode } from './ask-followup.node';
 export { createAskClarificationNode } from './ask-clarification.node';
 export { createTagCapabilitiesNode } from './tag-capabilities.node';
 export { createPresentCapabilitiesNode } from './present-capabilities.node';
+export { createElicitJustificationNode } from './elicit-justification.node';
 export { createReflectNode } from './reflect.node';
 export { createGeneratePdpNode } from './generate-pdp.node';
+export { createPresentDraftNode } from './present-draft.node';
 export { createSaveNode } from './save.node';

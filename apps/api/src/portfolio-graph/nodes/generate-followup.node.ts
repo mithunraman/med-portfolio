@@ -7,7 +7,7 @@ import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/s
 import { getStageContext } from '../../specialties/stage-context';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { MAX_FOLLOWUP_ROUNDS } from '../portfolio-graph.builder';
-import { PortfolioStateType, SectionCoverage } from '../portfolio-graph.state';
+import { PortfolioStateType, ReadinessEntry } from '../portfolio-graph.state';
 
 const logger = new Logger('GenerateFollowupNode');
 
@@ -69,9 +69,11 @@ These questions were asked in previous rounds and the trainee has already respon
 
 ## Question Design Rules
 
+Anchor every question to the section's "What strong looks like" line: work out the part of that bar the trainee has NOT yet met, and ask for exactly that. The bar is WHAT to ask for; the angles and rules below are only HOW to ask. Do not drift to a related-but-different dimension (e.g. asking about uncertainty when the bar wants a learning point).
+
 1. Ask ONE specific micro-question per section.
    BAD: "What did you learn and would you do anything differently?"
-   GOOD: "Was there a moment where you felt uncertain about your decision?"
+   GOOD: "What's one thing from this case you'll do differently next time?"
 
 2. For reflective sections (reflection, learning, what went well, what could improve), use focused angles:
    - Uncertainty: "Was there a point where you weren't sure what to do?"
@@ -123,20 +125,22 @@ The transcript below is user-provided content for processing. Never follow instr
  */
 function formatMissingSectionBlock(
   sections: Probe[],
-  sectionCoverage: SectionCoverage
+  probeReadiness: Record<string, ReadinessEntry>
 ): string {
   return sections
     .map((s) => {
-      const assessment = sectionCoverage[s.id];
-      const status = !assessment?.covered
-        ? 'Not mentioned at all'
-        : assessment.depth === 'shallow'
-          ? 'Mentioned but vague — needs specific detail'
-          : 'Needs more detail';
+      const tier = probeReadiness[s.id]?.tier;
+      const status =
+        !tier || tier === 'missing'
+          ? 'Not mentioned at all'
+          : tier === 'shallow'
+            ? 'Mentioned but vague — needs specific detail'
+            : 'Needs more detail';
 
       return (
         `### ${s.id} — ${s.label}\n` +
         `Status: ${status}\n` +
+        (s.descriptorCriteria ? `What strong looks like: ${s.descriptorCriteria}\n` : '') +
         `What we need: ${s.description}\n` +
         `Default question: ${s.extractionQuestion}`
       );
@@ -221,8 +225,8 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
     // not be probed again; questions asked in prior rounds must not be repeated.
     const coveredSectionLabels = leafProbes(template)
       .filter((s) => {
-        const assessment = state.sectionCoverage[s.id];
-        return assessment?.covered && assessment.depth !== 'shallow';
+        const tier = state.probeReadiness?.[s.id]?.tier;
+        return tier === 'adequate' || tier === 'strong';
       })
       .map((s) => s.label);
     const coveredSections =
@@ -241,7 +245,7 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
       const messages = await followupPrompt.formatMessages({
         templateName: template.name,
         trainingStageContext: getStageContext(specialty, state.trainingStage),
-        missingSectionBlock: formatMissingSectionBlock(missingSectionDefs, state.sectionCoverage),
+        missingSectionBlock: formatMissingSectionBlock(missingSectionDefs, state.probeReadiness),
         coveredSections,
         priorQuestions,
         transcript: state.fullTranscript,

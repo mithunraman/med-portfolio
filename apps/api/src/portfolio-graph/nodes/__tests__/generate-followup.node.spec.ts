@@ -36,12 +36,12 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     alternatives: [],
     classificationConfirmed: true,
     clarificationRound: 0,
-    sectionCoverage: {
-      presentation: { covered: true, depth: 'adequate' },
-      clinical_reasoning: { covered: false, depth: 'shallow' },
-      management: { covered: false, depth: 'shallow' },
-      outcome: { covered: false, depth: 'shallow' },
-      reflection: { covered: false, depth: 'shallow' },
+    probeReadiness: {
+      presentation: { score: 0.7, tier: 'adequate', meetsThreshold: true },
+      clinical_reasoning: { score: 0, tier: 'missing', meetsThreshold: false },
+      management: { score: 0, tier: 'missing', meetsThreshold: false },
+      outcome: { score: 0, tier: 'missing', meetsThreshold: false },
+      reflection: { score: 0, tier: 'missing', meetsThreshold: false },
     },
     missingSections: ['clinical_reasoning', 'management', 'outcome', 'reflection'],
     hasEnoughInfo: false,
@@ -96,6 +96,24 @@ describe('GenerateFollowupNode', () => {
       const state = makeState({ followUpRound: 0 });
 
       await expect(node(state)).resolves.not.toThrow();
+    });
+  });
+
+  describe('rubric-aware prompt (Option A)', () => {
+    it("injects each missing section's descriptorCriteria so questions target the grading bar", async () => {
+      const deps = makeDeps();
+      const mock = deps.llmService.invokeStructured as jest.Mock;
+      mock.mockResolvedValue({
+        data: { questions: [{ sectionId: 'reflection', question: 'q', hints: { examples: ['e'] } }] },
+      });
+
+      await createGenerateFollowupNode(deps)(makeState({ followUpRound: 0 }));
+
+      const systemPrompt = String(mock.mock.calls[0][0][0].content);
+      expect(systemPrompt).toContain('What strong looks like:');
+      // The CCR reflection rubric phrase must reach the prompt, so the question
+      // is steered to elicit a learning point + change to practice (not uncertainty).
+      expect(systemPrompt).toContain('how it changes future practice');
     });
   });
 

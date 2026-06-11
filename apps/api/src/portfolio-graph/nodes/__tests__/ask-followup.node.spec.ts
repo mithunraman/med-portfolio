@@ -38,7 +38,6 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     alternatives: [],
     classificationConfirmed: true,
     clarificationRound: 0,
-    sectionCoverage: {},
     missingSections: ['reflection', 'outcome'],
     hasEnoughInfo: false,
     followUpRound: 1,

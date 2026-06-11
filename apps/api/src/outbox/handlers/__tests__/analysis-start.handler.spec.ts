@@ -68,7 +68,6 @@ function makeFinalState() {
       { goal: 'Improve', actions: [{ action: 'Do X', intendedEvidence: 'Evidence Y' }] },
     ],
     // Completeness fields a completed run always carries (set by check_completeness).
-    sectionCoverage: {},
     missingSections: [],
     hasEnoughInfo: true,
   };

@@ -18,9 +18,10 @@ import { PortfolioStateType } from './portfolio-graph.state';
  */
 export function deriveCompleteness(state: PortfolioStateType): Completeness {
   const unmetSections = state.missingSections.map((sectionId) => {
-    const coverage = state.sectionCoverage[sectionId];
+    const tier = state.probeReadiness?.[sectionId]?.tier;
     const label = state.reflection?.find((s) => s.sectionId === sectionId)?.title ?? sectionId;
-    const status: 'missing' | 'shallow' = coverage?.covered ? 'shallow' : 'missing';
+    // `missing` = no content at all; any covered-but-below-threshold tier is `shallow`.
+    const status: 'missing' | 'shallow' = !tier || tier === 'missing' ? 'missing' : 'shallow';
     return { sectionId, label, status };
   });
 

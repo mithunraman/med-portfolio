@@ -11,20 +11,6 @@ export interface ClassificationAlternative {
 }
 
 /**
- * Assessment of how thoroughly a section is covered by the transcript.
- */
-export interface SectionAssessment {
-  covered: boolean;
-  depth: 'rich' | 'adequate' | 'shallow';
-}
-
-/**
- * Section coverage result from completeness check.
- * Key = section ID, value = coverage assessment with depth.
- */
-export type SectionCoverage = Record<string, SectionAssessment>;
-
-/**
  * Capability tag extracted from the transcript.
  */
 export interface CapabilityTag {
@@ -139,10 +125,6 @@ export const PortfolioState = Annotation.Root({
   }),
 
   // ── Completeness ──
-  sectionCoverage: Annotation<SectionCoverage>({
-    reducer: (_, next) => next,
-    default: () => ({}),
-  }),
   missingSections: Annotation<string[]>({
     reducer: (_, next) => next,
     default: () => [],

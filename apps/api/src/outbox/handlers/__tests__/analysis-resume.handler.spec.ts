@@ -65,7 +65,6 @@ function makeFinalState() {
     ],
     pdpGoals: [],
     // Completeness fields a completed run always carries (set by check_completeness).
-    sectionCoverage: {},
     missingSections: [],
     hasEnoughInfo: true,
   };

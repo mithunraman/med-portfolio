@@ -1,4 +1,5 @@
 import { capabilityAssessmentSchema } from '../tag-capabilities.node';
+import { completenessResponseSchema } from '../check-completeness.node';
 import { classificationAlternativeSchema, classifyResponseSchema } from '../classify.node';
 import { reflectResponseSchema } from '../reflect.node';
 
@@ -50,6 +51,25 @@ describe('structured-output schema field order', () => {
       'sections',
       'capabilityAnnotations',
       'title',
+    ]);
+  });
+
+  it('completenessResponseSchema emits the partition (assignments) before grades', () => {
+    expect(Object.keys(completenessResponseSchema.shape)).toEqual(['assignments', 'sectionGrades']);
+  });
+
+  it('completeness assignment emits idea before its section', () => {
+    expect(Object.keys(completenessResponseSchema.shape.assignments.element.shape)).toEqual([
+      'idea',
+      'sectionId',
+    ]);
+  });
+
+  it('completeness section grade emits tierReason before the tier verdict', () => {
+    expect(Object.keys(completenessResponseSchema.shape.sectionGrades.element.shape)).toEqual([
+      'sectionId',
+      'tierReason',
+      'tier',
     ]);
   });
 });

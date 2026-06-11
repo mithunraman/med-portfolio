@@ -1,11 +1,14 @@
 import { deriveCompleteness } from '../completeness';
-import { PortfolioStateType } from '../portfolio-graph.state';
+import { PortfolioStateType, ReadinessEntry, ReadinessTier } from '../portfolio-graph.state';
+
+/** Terse ReadinessEntry — deriveCompleteness only reads `.tier`. */
+const entry = (tier: ReadinessTier): ReadinessEntry => ({ score: 0, tier, meetsThreshold: false });
 
 /** Build a minimal state — deriveCompleteness only reads four fields. */
 function makeState(overrides: Partial<PortfolioStateType>): PortfolioStateType {
   return {
     missingSections: [],
-    sectionCoverage: {},
+    probeReadiness: {},
     hasEnoughInfo: true,
     reflection: null,
     ...overrides,
@@ -18,12 +21,12 @@ describe('deriveCompleteness', () => {
     expect(result).toEqual({ complete: true, unmetSections: [] });
   });
 
-  it('marks an uncovered section as missing', () => {
+  it('marks an uncovered (missing-tier) section as missing', () => {
     const result = deriveCompleteness(
       makeState({
         hasEnoughInfo: false,
         missingSections: ['reflection'],
-        sectionCoverage: { reflection: { covered: false, depth: 'shallow' } },
+        probeReadiness: { reflection: entry('missing') },
         reflection: [
           { sectionId: 'reflection', title: 'Reflection & Learning', text: '', covered: false },
         ],
@@ -40,7 +43,7 @@ describe('deriveCompleteness', () => {
       makeState({
         hasEnoughInfo: false,
         missingSections: ['reflection'],
-        sectionCoverage: { reflection: { covered: true, depth: 'shallow' } },
+        probeReadiness: { reflection: entry('shallow') },
         reflection: [
           { sectionId: 'reflection', title: 'Reflection & Learning', text: 'it went ok', covered: true },
         ],
@@ -54,10 +57,7 @@ describe('deriveCompleteness', () => {
       makeState({
         hasEnoughInfo: false,
         missingSections: ['outcome', 'reflection'],
-        sectionCoverage: {
-          outcome: { covered: false, depth: 'shallow' },
-          reflection: { covered: true, depth: 'shallow' },
-        },
+        probeReadiness: { outcome: entry('missing'), reflection: entry('shallow') },
         reflection: [
           { sectionId: 'outcome', title: 'Patient Outcome', text: '', covered: false },
           { sectionId: 'reflection', title: 'Reflection & Learning', text: 'fine', covered: true },
@@ -74,7 +74,7 @@ describe('deriveCompleteness', () => {
       makeState({
         hasEnoughInfo: false,
         missingSections: ['management'],
-        sectionCoverage: { management: { covered: false, depth: 'shallow' } },
+        probeReadiness: { management: entry('missing') },
         reflection: null,
       })
     );

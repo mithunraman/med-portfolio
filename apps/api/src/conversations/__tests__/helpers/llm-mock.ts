@@ -121,35 +121,35 @@ export function classifyResponse(
 }
 
 /**
- * Build a canned completeness response (assignment-based).
- * Provide section IDs with their coverage status. Covered sections
- * get a substantive assignment; uncovered sections get none.
+ * Build a canned completeness response (partition + rubric-grade).
+ * Provide section IDs with their coverage status. Covered sections get one
+ * assignment plus a grade whose tier maps to the requested depth; uncovered
+ * sections get neither (the node's structural floor then marks them missing).
  */
 export function completenessResponse(
   sections: Array<{ sectionId: string; covered: boolean; depth?: 'rich' | 'adequate' | 'shallow'; idea?: string }>
 ) {
-  const assignments: Array<{ idea: string; sectionId: string; isSubstantive: boolean }> = [];
+  const TIER_BY_DEPTH = { rich: 'strong', adequate: 'adequate', shallow: 'shallow' } as const;
+  const assignments: Array<{ idea: string; sectionId: string }> = [];
+  const sectionGrades: Array<{
+    sectionId: string;
+    tierReason: string;
+    tier: 'strong' | 'adequate' | 'shallow';
+  }> = [];
 
   for (const s of sections) {
     if (!s.covered) continue;
 
     const depth = s.depth ?? 'adequate';
-    const idea = s.idea ?? 'Idea from transcript';
-
-    if (depth === 'rich') {
-      // Rich = 2+ substantive assignments
-      assignments.push({ idea, sectionId: s.sectionId, isSubstantive: true });
-      assignments.push({ idea: `Additional detail for ${s.sectionId}`, sectionId: s.sectionId, isSubstantive: true });
-    } else if (depth === 'adequate') {
-      // Adequate = 1 substantive assignment
-      assignments.push({ idea, sectionId: s.sectionId, isSubstantive: true });
-    } else {
-      // Shallow = only a non-substantive (tangential) mention
-      assignments.push({ idea, sectionId: s.sectionId, isSubstantive: false });
-    }
+    assignments.push({ idea: s.idea ?? 'Idea from transcript', sectionId: s.sectionId });
+    sectionGrades.push({
+      sectionId: s.sectionId,
+      tierReason: `graded ${depth}`,
+      tier: TIER_BY_DEPTH[depth],
+    });
   }
 
-  return { assignments };
+  return { assignments, sectionGrades };
 }
 
 /**

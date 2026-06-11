@@ -1,8 +1,15 @@
 import { leafProbes } from '@acme/shared';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../../specialties/specialty.registry';
-import { createCheckCompletenessNode } from '../check-completeness.node';
+import * as Sentry from '@sentry/nestjs';
+import {
+  createCheckCompletenessNode,
+  deriveReadiness,
+  deriveTiers,
+} from '../check-completeness.node';
 import type { GraphDeps } from '../../graph-deps';
 import type { PortfolioStateType } from '../../portfolio-graph.state';
+
+jest.mock('@sentry/nestjs', () => ({ captureException: jest.fn() }));
 
 function makeDeps(): GraphDeps {
   return {
@@ -10,7 +17,9 @@ function makeDeps(): GraphDeps {
     conversationsRepository: {} as any,
     pdpGoalsRepository: {} as any,
     transactionService: {} as any,
-    llmService: { invokeStructured: jest.fn().mockResolvedValue({ data: { assignments: [] } }) } as any,
+    llmService: {
+      invokeStructured: jest.fn().mockResolvedValue({ data: { assignments: [], sectionGrades: [] } }),
+    } as any,
     eventEmitter: { emit: jest.fn() } as any,
   };
 }
@@ -31,7 +40,6 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     alternatives: [],
     classificationConfirmed: true,
     clarificationRound: 0,
-    sectionCoverage: {},
     missingSections: [],
     hasEnoughInfo: false,
     followUpRound: 0,
@@ -45,52 +53,118 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
   } as PortfolioStateType;
 }
 
-// The GP Clinical Case Review template's assessable section ids (the source the
-// node itself uses to build the enum), used to assert valid vs invalid targets.
-const assessableIds = leafProbes(getTemplateForEntryType(getSpecialtyConfig(100), 'CLINICAL_CASE_REVIEW'))
-  .filter((p) => p.required && p.extractionQuestion !== null)
-  .map((p) => p.id);
+const ccrTemplate = getTemplateForEntryType(getSpecialtyConfig(100), 'CLINICAL_CASE_REVIEW');
+const ccrAssessable = leafProbes(ccrTemplate).filter(
+  (p) => p.required && p.extractionQuestion !== null
+);
+const ccrIds = new Set(ccrAssessable.map((p) => p.id));
 
-describe('checkCompletenessNode — template-constrained assignment schema', () => {
+describe('deriveTiers — LLM grade + structural floors', () => {
+  it('passes the rubric grade straight through as the readiness tier', () => {
+    const tiers = deriveTiers(
+      [{ idea: 'reflected and changed practice', sectionId: 'reflection' }],
+      [{ sectionId: 'reflection', tierReason: 'learning + change', tier: 'strong' }],
+      ccrIds
+    );
+    expect(tiers['reflection']).toBe('strong');
+  });
+
+  it('floors a section with NO assigned content to missing, even if graded', () => {
+    const tiers = deriveTiers(
+      [],
+      [{ sectionId: 'presentation', tierReason: 'x', tier: 'strong' }],
+      new Set(['presentation'])
+    );
+    expect(tiers['presentation']).toBe('missing');
+  });
+
+  it('treats content with no grade conservatively as shallow', () => {
+    const tiers = deriveTiers(
+      [{ idea: 'a presentation detail', sectionId: 'presentation' }],
+      [],
+      new Set(['presentation'])
+    );
+    expect(tiers['presentation']).toBe('shallow');
+  });
+});
+
+describe('readiness regression — one deep reflection meets the strong threshold', () => {
+  it('a single strong-graded reflection is NOT a gap (the count-based false-negative is fixed)', () => {
+    // Under the old count-based rule this needed TWO substantive ideas to reach
+    // 'rich'/'strong'; one excellent reflection scored 'adequate' and was flagged.
+    const tiers = deriveTiers(
+      [{ idea: 'I learned X and will now always do Y', sectionId: 'reflection' }],
+      [{ sectionId: 'reflection', tierReason: 'learning point AND change to practice', tier: 'strong' }],
+      ccrIds
+    );
+    const r = deriveReadiness(tiers, ccrAssessable, ccrTemplate);
+
+    expect(r.probeReadiness['reflection'].tier).toBe('strong');
+    expect(r.probeReadiness['reflection'].meetsThreshold).toBe(true);
+    expect(r.missingProbeIds).not.toContain('reflection');
+  });
+});
+
+describe('checkCompletenessNode — schema & resilience', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  // Grab the schema the node hands to invokeStructured for a GP CCR state.
   async function captureSchema() {
     const deps = makeDeps();
     await createCheckCompletenessNode(deps)(makeState());
     const mock = deps.llmService.invokeStructured as jest.Mock;
-    expect(mock).toHaveBeenCalled(); // proves the template has assessable sections
+    expect(mock).toHaveBeenCalled();
     return mock.mock.calls[0][1];
   }
 
-  const okAssignment = {
-    idea: 'patient presented with chest pain',
-    sectionId: assessableIds[0],
-    substantiveReason: 'dedicated statement about the presentation',
-    isSubstantive: true,
-  };
-
-  it('emits substantiveReason immediately before isSubstantive (CoT ordering)', async () => {
+  it('constrains sectionId to assessable sections and tier to the grade enum', async () => {
     const schema = await captureSchema();
-    const keys = Object.keys((schema as any).shape.assignments.element.shape);
-    expect(keys).toEqual(['idea', 'sectionId', 'substantiveReason', 'isSubstantive']);
+    const validId = [...ccrIds][0];
+
+    expect(
+      schema.safeParse({
+        assignments: [{ idea: 'x', sectionId: validId }],
+        sectionGrades: [{ sectionId: validId, tierReason: 'r', tier: 'adequate' }],
+      }).success
+    ).toBe(true);
+
+    // bogus section id
+    expect(
+      schema.safeParse({
+        assignments: [{ idea: 'x', sectionId: 'BOGUS' }],
+        sectionGrades: [],
+      }).success
+    ).toBe(false);
+
+    // bogus tier
+    expect(
+      schema.safeParse({
+        assignments: [{ idea: 'x', sectionId: validId }],
+        sectionGrades: [{ sectionId: validId, tierReason: 'r', tier: 'amazing' }],
+      }).success
+    ).toBe(false);
   });
 
-  it('accepts an assignment to a valid assessable section', async () => {
-    const schema = await captureSchema();
-    expect(schema.safeParse({ assignments: [okAssignment] }).success).toBe(true);
-  });
+  it('degrades safely when the LLM fails: proceeds without follow-ups, reports to Sentry', async () => {
+    const deps = makeDeps();
+    (deps.llmService.invokeStructured as jest.Mock).mockRejectedValue(new Error('boom'));
 
-  it('rejects an assignment to a section id not in the template', async () => {
-    const schema = await captureSchema();
-    expect(schema.safeParse({ assignments: [{ ...okAssignment, sectionId: 'BOGUS' }] }).success).toBe(
-      false
+    const result = await createCheckCompletenessNode(deps)(makeState({ conversationId: 'conv-xyz' }));
+
+    expect(result.hasEnoughInfo).toBe(true);
+    expect(result.missingSections).toEqual([]);
+    expect(Sentry.captureException).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        tags: expect.objectContaining({ step: 'check_completeness' }),
+        extra: expect.objectContaining({ conversationId: 'conv-xyz' }),
+      })
     );
   });
 
-  it('requires substantiveReason on every assignment', async () => {
-    const schema = await captureSchema();
-    const { substantiveReason: _omit, ...withoutReason } = okAssignment;
-    expect(schema.safeParse({ assignments: [withoutReason] }).success).toBe(false);
+  it('short-circuits with hasEnoughInfo when there is no entry type', async () => {
+    const deps = makeDeps();
+    const result = await createCheckCompletenessNode(deps)(makeState({ entryType: null }));
+    expect(result.hasEnoughInfo).toBe(true);
+    expect(deps.llmService.invokeStructured).not.toHaveBeenCalled();
   });
 });

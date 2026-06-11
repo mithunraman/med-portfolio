@@ -1,3 +1,4 @@
+import type { Message } from '@acme/shared';
 import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '../../index';
 import type { OptimisticMessage } from './slice';
@@ -46,4 +47,29 @@ export const makeSelectOptimisticMessages = () =>
       Object.values(messagesState.optimisticMessages).filter(
         (m): m is OptimisticMessage => m != null && m.conversationId === conversationId,
       ),
+  );
+
+/**
+ * Select the most recent readiness snapshot for a conversation.
+ *
+ * The backend rides the live readiness payload on each question message
+ * (`question.readiness`). We pick the snapshot from the latest message
+ * (by createdAt) that carries one — robust to server ordering. Returns
+ * null until the first readiness-bearing question arrives.
+ */
+export const makeSelectLatestReadiness = () =>
+  createSelector(
+    [selectMessagesSlice, (_: RootState, conversationId: string) => conversationId],
+    (messagesState, conversationId) => {
+      const ids = messagesState.idsByConversation[conversationId] ?? [];
+      let latest: Message | undefined;
+      for (const id of ids) {
+        const msg = messageSelectors.selectById(messagesState, id);
+        if (!msg?.question?.readiness) continue;
+        if (!latest || msg.createdAt.localeCompare(latest.createdAt) > 0) {
+          latest = msg;
+        }
+      }
+      return latest?.question?.readiness ?? null;
+    },
   );

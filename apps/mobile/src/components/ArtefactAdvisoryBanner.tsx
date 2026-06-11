@@ -28,7 +28,14 @@ export function ArtefactAdvisoryBanner({ artefactId }: Props) {
   if (!artefact) return null;
 
   const { incomplete, labels } = getArtefactAdvisory(artefact);
-  if (!incomplete || labels.length === 0 || dismissed) return null;
+  if (!incomplete || dismissed) return null;
+
+  // Specific copy when we know which sections are thin; otherwise a generic nudge
+  // (e.g. the graded verdict fired but no per-section gaps were recorded).
+  const body =
+    labels.length > 0
+      ? `${formatList(labels)} could use more detail. Tap a section below to add to it.`
+      : 'This entry isn’t ARCP-ready yet. Add more detail below before submitting.';
 
   const handleDismiss = () => {
     log.info('Advisory dismissed', { artefactId });
@@ -52,9 +59,7 @@ export function ArtefactAdvisoryBanner({ artefactId }: Props) {
       />
       <View style={styles.textContainer}>
         <Text style={[styles.title, { color: colors.warning }]}>Before you submit</Text>
-        <Text style={[styles.body, { color: colors.text }]}>
-          {formatList(labels)} could use more detail. Tap a section below to add to it.
-        </Text>
+        <Text style={[styles.body, { color: colors.text }]}>{body}</Text>
       </View>
       <TouchableOpacity
         onPress={handleDismiss}

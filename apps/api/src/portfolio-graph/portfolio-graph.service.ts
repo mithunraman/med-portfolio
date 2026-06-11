@@ -30,8 +30,8 @@ import {
   PDP_GOALS_REPOSITORY,
 } from '../pdp-goals/pdp-goals.repository.interface';
 import { buildPortfolioGraph } from './portfolio-graph.builder';
-import { buildReadinessSnapshot } from './readiness-snapshot';
 import type { PortfolioStateType } from './portfolio-graph.state';
+import { buildReadinessSnapshot } from './readiness-snapshot';
 
 /**
  * Maps each interrupt node to its expected resume value type.
@@ -53,7 +53,7 @@ const CLASSIFICATION_PROMPTS = [
   'Here are the entry types I think fit best. Select one, or go with something else.',
   "Based on what you've shared, these entry types seem most relevant. Which one fits?",
   'I narrowed it down to a few entry types. Choose the closest match below.',
-  'Take a look at the options below — which entry type feels right?',
+  'Take a look at the options below - which entry type feels right?',
   "These entry types look like the best fit. Select one, or pick a different one if you'd prefer.",
   'I think one of these entry types matches your input. Which would you go with?',
   "Here's what I came up with - select the entry type that fits best, or choose your own.",
@@ -62,26 +62,26 @@ const CLASSIFICATION_PROMPTS = [
 
 const FOLLOWUP_PROMPTS: Record<string, readonly string[]> = {
   initial: [
-    'Thanks for sharing that. I have a couple more questions to strengthen your portfolio entry. Take your time — answer all at once or one by one.',
+    'Thanks for sharing that. I have a couple more questions to strengthen your portfolio entry. Take your time - answer all at once or one by one.',
     "Great input! Just a couple more things I'd like to know to make your entry shine.",
-    'Nearly there — I have a couple more questions to round out your portfolio entry.',
+    'Nearly there - I have a couple more questions to round out your portfolio entry.',
     'Thanks! A couple more quick questions to make sure we capture everything.',
     'Appreciate the detail. Just a couple more questions to fill in the gaps.',
     "That's really helpful. I have a couple more follow-ups to get the full picture.",
-    'Good stuff — a couple more questions and your entry will be in great shape.',
+    'Good stuff - a couple more questions and your entry will be in great shape.',
     'Thanks for that. A couple more things to cover so your portfolio entry stands out.',
     'Nice work so far. Just a couple more questions to bring it all together.',
-    'Almost done — I have a couple more questions to make your entry as strong as possible.',
+    'Almost done - I have a couple more questions to make your entry as strong as possible.',
   ],
   final: [
     "You're almost there! Just a few final questions to polish your portfolio entry.",
     'Thanks for sticking with it. A few final questions to wrap things up.',
-    "We're in the home stretch — a few final things to make your entry complete.",
+    "We're in the home stretch - a few final things to make your entry complete.",
     'Nearly finished! Just a few final questions to tie everything together.',
-    'Last stretch — I have a few final questions to round off your entry.',
+    'Last stretch - I have a few final questions to round off your entry.',
     'Great progress. A few final questions and your portfolio entry will be ready.',
     'Thanks for all the detail so far. Just a few final follow-ups.',
-    'Almost there — a few final questions to make sure nothing is missed.',
+    'Almost there - a few final questions to make sure nothing is missed.',
     "You've done the hard part. A few final questions to finish strong.",
     'Just a few final things to cover, then your entry will be all set.',
   ],
@@ -97,12 +97,12 @@ const CAPABILITIES_PROMPTS = [
   "These capabilities seem to align with your entry. Deselect any that aren't a match.",
   "Your entry maps to the capabilities below. Confirm the ones you'd like to include.",
   'I found some relevant capabilities in your input. Review and adjust the selection.',
-  "Here's what I identified — select the capabilities that best reflect your entry.",
+  "Here's what I identified - select the capabilities that best reflect your entry.",
 ] as const;
 
 const CLARIFICATION_PROMPTS: Record<string, readonly string[]> = {
   initial: [
-    "I wasn't able to identify the entry type from what you've shared. Could you describe the clinical situation in more detail — for example, what happened, your role, and what you learned?",
+    "I wasn't able to identify the entry type from what you've shared. Could you describe the clinical situation in more detail - for example, what happened, your role, and what you learned?",
     'I need a bit more context to categorise this entry. Could you tell me more about the clinical situation, your involvement, and the outcome?',
     'Could you share more detail about the clinical experience? A brief description of what happened, your role, and any reflections would help.',
   ],
@@ -152,7 +152,7 @@ export class PortfolioGraphService implements OnModuleInit {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const client = this.connection.getClient() as any;
     const db = this.connection.db;
-    if (!db) throw new Error('MongoDB not connected — cannot initialize checkpointer');
+    if (!db) throw new Error('MongoDB not connected - cannot initialize checkpointer');
     this.checkpointer = new MongoDBSaver({ client, dbName: db.databaseName });
 
     // The JS MongoDBSaver doesn't create indexes (unlike the Python version).
@@ -182,7 +182,7 @@ export class PortfolioGraphService implements OnModuleInit {
   /**
    * Start a new graph execution for a conversation.
    * Returns the interrupt node name if the graph paused, null if it completed.
-   * No side effects (message creation) — the handler is responsible for those.
+   * No side effects (message creation) - the handler is responsible for those.
    *
    * threadId is the LangGraph thread namespace (e.g. `${conversationId}:${runNumber}`).
    */
@@ -212,7 +212,7 @@ export class PortfolioGraphService implements OnModuleInit {
       config
     );
 
-    // graph.invoke() returns normally when a node calls interrupt() —
+    // graph.invoke() returns normally when a node calls interrupt() -
     // it does NOT throw. Check the checkpoint for a pending interrupt.
     return this.getPausedNode(threadId);
   }
@@ -220,7 +220,7 @@ export class PortfolioGraphService implements OnModuleInit {
   /**
    * Resume a paused graph after the user responds (to classification, follow-up, or review).
    * Returns the interrupt node name if the graph paused again, null if it completed.
-   * No side effects (message creation) — the handler is responsible for those.
+   * No side effects (message creation) - the handler is responsible for those.
    *
    * threadId is the LangGraph thread namespace (e.g. `${conversationId}:${runNumber}`).
    * Type-safe: each interrupt node declares its resume value shape in GraphResumeMap.
@@ -248,7 +248,7 @@ export class PortfolioGraphService implements OnModuleInit {
    *
    * Note: graph.getState() returns a StateSnapshot with default channel values
    * even for threads that have never been invoked. We check for `conversationId`
-   * which has no default — it's only set when startGraph() provides initial input.
+   * which has no default - it's only set when startGraph() provides initial input.
    */
   async hasCheckpoint(conversationId: string): Promise<boolean> {
     const config = { configurable: { thread_id: conversationId } };
@@ -308,7 +308,7 @@ export class PortfolioGraphService implements OnModuleInit {
    * to create the ASSISTANT question message. **No DB writes.**
    *
    * The handler is responsible for creating the message and transitioning
-   * the run status — both wrapped in a single transaction (Phase 3).
+   * the run status - both wrapped in a single transaction (Phase 3).
    *
    * Idempotency key is derived deterministically from
    * `${conversationId}:${pausedNode}:${checkpointId}` so retries produce
@@ -332,7 +332,7 @@ export class PortfolioGraphService implements OnModuleInit {
       userId: string;
     };
 
-    // Live readiness snapshot for the Entry Card — rides on each question message.
+    // Live readiness snapshot for the Entry Card - rides on each question message.
     const readiness = buildReadinessSnapshot(snapshot.values as PortfolioStateType);
 
     const pausedNode = snapshot.next?.[0] as InterruptNode | undefined;
@@ -549,11 +549,11 @@ export class PortfolioGraphService implements OnModuleInit {
         const draftStatus = interruptValue.draftStatus as 'ready' | 'needs_attention';
         const draftContent =
           draftStatus === 'ready'
-            ? "Your entry is ARCP-ready. Here's the assembled draft in your own words — submit it, or save as a draft to keep editing."
-            : "Here's your assembled draft. Some sections could still be stronger — submit as-is, or save as a draft to keep working on it.";
+            ? "Your entry is ARCP-ready. Here's the assembled draft in your own words - submit it, or save as a draft to keep editing."
+            : "Here's your assembled draft. Some sections could still be stronger - submit as-is, or save as a draft to keep working on it.";
 
         // The sign-off verdict lives in the interrupt payload (save hasn't run yet,
-        // so state.draftStatus is still 'in_progress') — reflect it on the card.
+        // so state.draftStatus is still 'in_progress') - reflect it on the card.
         const question: SingleSelectQuestion = {
           questionType: 'single_select',
           options: [

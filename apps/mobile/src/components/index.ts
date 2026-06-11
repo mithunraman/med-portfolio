@@ -1,5 +1,6 @@
 export { ArtefactAdvisoryBanner } from './ArtefactAdvisoryBanner';
 export { Button } from './Button';
+export { CompositeDocument } from './artefact/CompositeDocument';
 export { ReviewSheet } from './artefact/ReviewSheet';
 export { MessageList } from './chat';
 export { StarRating } from './common/StarRating';
@@ -21,6 +22,14 @@ export { LoadingProvider, useLoading } from './LoadingHUD';
 export { MultiSelect, type MultiSelectOption } from './MultiSelect';
 export { OfflineBanner } from './OfflineBanner';
 export { PdpGoalSelector, type GoalSelectionState } from './PdpGoalSelector';
+export {
+  DraftStatusPill,
+  ReadinessBar,
+  ReadinessHeader,
+  TierChip,
+  TIER_VISUALS,
+  type ReadinessTier,
+} from './readiness';
 export { SectionHeader } from './SectionHeader';
 export { SettingsItem, type SettingsItemProps } from './SettingsItem';
 export { SettingsSection } from './SettingsSection';

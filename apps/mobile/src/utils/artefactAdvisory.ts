@@ -10,13 +10,19 @@ export interface ArtefactAdvisory {
 /**
  * Pure derivation of the "needs your input" advisory from an artefact.
  *
- * The banner shows only in IN_REVIEW — the one status where `completeness` exists
+ * The banner shows only in IN_REVIEW — the one status where the signals exist
  * AND inline editing is enabled — so the nudge is always actionable. After
  * COMPLETED (finalised) or before review it stays silent.
+ *
+ * Two coexisting signals both flag the entry as not-yet-ready (deduped here so
+ * the banner shows once): the legacy per-section `completeness`, and the graded
+ * `draftStatus === 'needs_attention'` verdict (rubric not cleared / trainee
+ * stopped early). `labels` may be empty when only the verdict fired.
  */
 export function getArtefactAdvisory(artefact: Artefact): ArtefactAdvisory {
   const incomplete =
-    artefact.status === ArtefactStatus.IN_REVIEW && artefact.completeness?.complete === false;
+    artefact.status === ArtefactStatus.IN_REVIEW &&
+    (artefact.completeness?.complete === false || artefact.draftStatus === 'needs_attention');
   const labels = artefact.completeness?.unmetSections.map((s) => s.label) ?? [];
   return { incomplete, labels };
 }

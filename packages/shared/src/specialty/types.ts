@@ -92,8 +92,6 @@ export interface EntryTypeDefinition {
   templateId: string;
   /** Keywords and phrases that signal this entry type in a transcript */
   classificationSignals: string[];
-  /** Minimum required frequency (informational, for portfolio gap analysis) */
-  frequency: string | null;
 }
 
 /**

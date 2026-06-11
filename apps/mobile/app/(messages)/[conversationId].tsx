@@ -1,5 +1,5 @@
 import { api } from '@/api/client';
-import { ChatComposer, MessageList, useLoading } from '@/components';
+import { ChatComposer, MessageList, ReadinessHeader, useLoading } from '@/components';
 import { type ActionBarState, ActionBar } from '@/components/ActionBar';
 import { ChatEmptyState } from '@/components/ChatEmptyState';
 import { CompletionCard } from '@/components/CompletionCard';
@@ -20,6 +20,7 @@ import {
   startAnalysis,
 } from '@/store';
 import {
+  makeSelectLatestReadiness,
   makeSelectOptimisticMessages,
   makeSelectServerMessages,
   selectContextByConversation,
@@ -192,6 +193,13 @@ export default function ChatScreen() {
   // Per-component selector instances — stable across renders, memoize per conversationId
   const selectServerMessages = useMemo(() => makeSelectServerMessages(), []);
   const selectOptimisticMessages = useMemo(() => makeSelectOptimisticMessages(), []);
+  const selectLatestReadiness = useMemo(() => makeSelectLatestReadiness(), []);
+
+  // Live readiness snapshot — rides on the latest question message. null until
+  // the first readiness-bearing question arrives.
+  const latestReadiness = useAppSelector((state) =>
+    selectLatestReadiness(state, effectiveConversationId)
+  );
 
   const serverMessages = useAppSelector((state) =>
     selectServerMessages(state, effectiveConversationId)
@@ -669,6 +677,11 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={headerHeight + bannerOffset}
       >
+        {/* Live readiness meter — pinned above the thread while analysis is active */}
+        {latestReadiness && (phase === 'analysing' || phase === 'awaiting_input') && (
+          <ReadinessHeader readiness={latestReadiness} />
+        )}
+
         <View style={phase === 'completed' ? styles.dimmed : styles.flex}>
           {showEmptyState ? (
             <ChatEmptyState />

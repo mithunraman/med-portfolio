@@ -2,6 +2,8 @@ import type { GoalSelectionState, StatusVariant } from '@/components';
 import {
   ArtefactAdvisoryBanner,
   Button,
+  CompositeDocument,
+  DraftStatusPill,
   EditableReflectionSection,
   EditableTitle,
   ExportSheet,
@@ -101,6 +103,7 @@ export default function EntryDetailScreen() {
   const [selectedCapability, setSelectedCapability] = useState<{
     name: string;
     evidence: string;
+    justification: string;
   } | null>(null);
   const [goalSelections, setGoalSelections] = useState<Map<string, GoalSelectionState>>(new Map());
   const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
@@ -118,6 +121,10 @@ export default function EntryDetailScreen() {
   // Current displayed values (edited or server)
   const displayTitle = editedTitle ?? artefact?.title ?? '';
   const displayReflection = editedReflection ?? artefact?.reflection ?? [];
+  // Composed document — the canonical FourteenFish-shaped entry. When present it
+  // leads the screen; the editable Reflection section is then shown only while in
+  // review (for refinement) or as a fallback for legacy entries that lack it.
+  const composedDocument = artefact?.composedDocument ?? [];
 
   // ── Edit Handlers ──
 
@@ -533,14 +540,29 @@ export default function EntryDetailScreen() {
               </View>
             )}
             <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />
+            {artefact.draftStatus && <DraftStatusPill status={artefact.draftStatus} />}
+            {artefact.readinessScore != null && (
+              <Text style={[styles.readinessScore, { color: colors.textSecondary }]}>
+                {Math.round(artefact.readinessScore)}/10
+              </Text>
+            )}
           </View>
         </View>
 
         {/* Soft "needs your input" advisory — shows only in review with unmet sections */}
         <ArtefactAdvisoryBanner artefactId={artefactId} />
 
-        {/* Reflection Sections */}
-        {displayReflection.length > 0 && (
+        {/* Composed entry document — the canonical FourteenFish-shaped output */}
+        {composedDocument.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Entry</Text>
+            <CompositeDocument fields={composedDocument} />
+          </View>
+        )}
+
+        {/* Reflection Sections — primary when there's no composed document, otherwise
+            kept only while editable so reviewers can still refine the text. */}
+        {displayReflection.length > 0 && (composedDocument.length === 0 || isEditable) && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Reflection</Text>
             {displayReflection.map((section, index) => (
@@ -563,7 +585,13 @@ export default function EntryDetailScreen() {
             {artefact.capabilities.map((cap, index) => (
               <Pressable
                 key={index}
-                onPress={() => setSelectedCapability(cap)}
+                onPress={() =>
+                  setSelectedCapability({
+                    name: cap.name,
+                    evidence: cap.evidence,
+                    justification: cap.justification ?? '',
+                  })
+                }
                 style={[styles.capabilityRow, { backgroundColor: colors.surface }]}
               >
                 <Text style={[styles.capabilityCode, { color: colors.primary }]}>{cap.name}</Text>
@@ -598,6 +626,22 @@ export default function EntryDetailScreen() {
                 <Text style={[styles.modalText, { color: colors.text }]}>
                   {selectedCapability?.evidence}
                 </Text>
+                {!!selectedCapability?.justification && (
+                  <>
+                    <Text
+                      style={[
+                        styles.modalLabel,
+                        styles.modalLabelSpaced,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Justification
+                    </Text>
+                    <Text style={[styles.modalText, { color: colors.text }]}>
+                      {selectedCapability.justification}
+                    </Text>
+                  </>
+                )}
               </ScrollView>
             </View>
           </View>
@@ -935,6 +979,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  readinessScore: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   sectionTitle: {
     fontSize: 17,
     fontWeight: '600',
@@ -996,6 +1044,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 8,
+  },
+  modalLabelSpaced: {
+    marginTop: 20,
   },
   modalText: {
     fontSize: 15,

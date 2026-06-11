@@ -31,7 +31,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
       'investigation results',
       'no adverse event',
     ],
-    frequency: '36 per year (3 per month)',
   },
   {
     code: GpEntryType.SIGNIFICANT_EVENT,
@@ -52,7 +51,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
       'serious incident',
       'GMC threshold',
     ],
-    frequency: 'At least 1 per 6 months',
   },
   {
     code: GpEntryType.LEARNING_EVENT,
@@ -69,7 +67,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
       'interesting case',
       'unusual presentation',
     ],
-    frequency: 'At least 1 per year',
   },
   {
     code: GpEntryType.FEEDBACK_REFLECTION,
@@ -90,7 +87,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
       'scores',
       'ratings',
     ],
-    frequency: 'After each feedback cycle',
   },
   {
     code: GpEntryType.LEADERSHIP_ACTIVITY,
@@ -110,7 +106,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
       'protocol development',
       'wellbeing initiative',
     ],
-    frequency: 'Required in ST3',
   },
   {
     code: GpEntryType.ACADEMIC_ACTIVITY,
@@ -129,7 +124,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
       'poster',
       'lecture',
     ],
-    frequency: 'When applicable (academic trainees)',
   },
   {
     code: GpEntryType.OUT_OF_HOURS,
@@ -148,7 +142,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
       'walk-in',
       'emergency',
     ],
-    frequency: 'When applicable',
   },
   {
     code: GpEntryType.QI_PROJECT,
@@ -167,7 +160,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
       'practice-wide',
       'sustainability',
     ],
-    frequency: 'At least 1 during primary care placements',
   },
   {
     code: GpEntryType.QI_ACTIVITY,
@@ -184,7 +176,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
       'identified a gap',
       'implemented a change',
     ],
-    frequency: 'At least 1 per year',
   },
   {
     code: GpEntryType.PRESCRIBING,
@@ -204,6 +195,5 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
       '50 prescriptions',
       'prescribing proficiencies',
     ],
-    frequency: 'Required in ST3',
   },
 ];

@@ -37,7 +37,6 @@ export const PSYCHIATRY_ENTRY_TYPES: EntryTypeDefinition[] = [
       'community visit',
       'crisis assessment',
     ],
-    frequency: '6 per year (at least 1 per placement)',
   },
   {
     code: PsychiatryEntryType.CASE_BASED_DISCUSSION,
@@ -56,7 +55,6 @@ export const PSYCHIATRY_ENTRY_TYPES: EntryTypeDefinition[] = [
       'supervisor meeting',
       'reviewed with consultant',
     ],
-    frequency: '4 per year (at least 1 per placement)',
   },
   {
     code: PsychiatryEntryType.SIGNIFICANT_EVENT,
@@ -82,7 +80,6 @@ export const PSYCHIATRY_ENTRY_TYPES: EntryTypeDefinition[] = [
       'serious untoward incident',
       'SUI',
     ],
-    frequency: 'At least 1 per year',
   },
   {
     code: PsychiatryEntryType.REFLECTIVE_PRACTICE,
@@ -104,7 +101,6 @@ export const PSYCHIATRY_ENTRY_TYPES: EntryTypeDefinition[] = [
       'interesting situation',
       'ethical dilemma',
     ],
-    frequency: 'Regular throughout training',
   },
   {
     code: PsychiatryEntryType.PSYCHOTHERAPY_CASE,
@@ -131,7 +127,6 @@ export const PSYCHIATRY_ENTRY_TYPES: EntryTypeDefinition[] = [
       'therapeutic alliance',
       'SAPE',
     ],
-    frequency: 'Minimum 2 modalities during core training',
   },
   {
     code: PsychiatryEntryType.DONCS,
@@ -153,7 +148,6 @@ export const PSYCHIATRY_ENTRY_TYPES: EntryTypeDefinition[] = [
       'inter-agency',
       'DONCS',
     ],
-    frequency: '2 per year',
   },
   {
     code: PsychiatryEntryType.MHA_APPLICATION,
@@ -181,7 +175,6 @@ export const PSYCHIATRY_ENTRY_TYPES: EntryTypeDefinition[] = [
       'nearest relative',
       'AMHP',
     ],
-    frequency: 'When applicable (at least 2 during training)',
   },
   {
     code: PsychiatryEntryType.TEACHING_ACTIVITY,
@@ -204,7 +197,6 @@ export const PSYCHIATRY_ENTRY_TYPES: EntryTypeDefinition[] = [
       'medical student',
       'nursing student',
     ],
-    frequency: 'At least 1 per year',
   },
   {
     code: PsychiatryEntryType.QI_PROJECT,
@@ -224,7 +216,6 @@ export const PSYCHIATRY_ENTRY_TYPES: EntryTypeDefinition[] = [
       'baseline measurement',
       're-audit',
     ],
-    frequency: 'At least 1 during training',
   },
   {
     code: PsychiatryEntryType.FEEDBACK_REFLECTION,
@@ -245,6 +236,5 @@ export const PSYCHIATRY_ENTRY_TYPES: EntryTypeDefinition[] = [
       'ratings',
       'scores',
     ],
-    frequency: 'After each feedback cycle',
   },
 ];

@@ -35,7 +35,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
       'post-take',
       'on-call',
     ],
-    frequency: '6 per year',
   },
   {
     code: ImEntryType.CASE_BASED_DISCUSSION,
@@ -54,7 +53,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
       'reviewed with consultant',
       'post-take discussion',
     ],
-    frequency: '4 per year',
   },
   {
     code: ImEntryType.ACUTE_CARE_ASSESSMENT,
@@ -77,7 +75,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
       'acute assessment',
       'handover',
     ],
-    frequency: '4 per year',
   },
   {
     code: ImEntryType.SIGNIFICANT_EVENT,
@@ -98,7 +95,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
       'incident report',
       'mortality review',
     ],
-    frequency: 'At least 1 per year',
   },
   {
     code: ImEntryType.REFLECTIVE_PRACTICE,
@@ -118,7 +114,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
       'difficult conversation',
       'end of life',
     ],
-    frequency: 'Regular throughout training',
   },
   {
     code: ImEntryType.PROCEDURAL_SKILLS,
@@ -140,7 +135,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
       'arterial blood gas',
       'cannulation',
     ],
-    frequency: 'As required for procedural competencies',
   },
   {
     code: ImEntryType.OUTPATIENT_ASSESSMENT,
@@ -161,7 +155,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
       'new patient',
       'review appointment',
     ],
-    frequency: '2 per year',
   },
   {
     code: ImEntryType.TEACHING_ACTIVITY,
@@ -182,7 +175,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
       'journal club',
       'case presentation',
     ],
-    frequency: 'At least 1 per year',
   },
   {
     code: ImEntryType.QI_PROJECT,
@@ -202,7 +194,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
       'protocol change',
       're-audit',
     ],
-    frequency: 'At least 1 during training',
   },
   {
     code: ImEntryType.FEEDBACK_REFLECTION,
@@ -223,6 +214,5 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
       'MCR',
       'multiple consultant report',
     ],
-    frequency: 'After each feedback cycle',
   },
 ];

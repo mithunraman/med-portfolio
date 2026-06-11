@@ -1,6 +1,7 @@
 import { Specialty } from '@acme/shared';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import { z } from 'zod';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
@@ -13,50 +14,78 @@ const logger = new Logger('ClassifyNode');
 /*  Zod schema — single source of truth for the LLM response shape    */
 /* ------------------------------------------------------------------ */
 
-// Field order is load-bearing: reasoning precedes the verdict to elicit
-// chain-of-thought (OpenAI emits structured-output fields in schema order).
-export const classificationAlternativeSchema = z.object({
-  reasoning: z.string().describe('Why this alternative is plausible'),
-  entryType: z.string().describe('Entry type code from the list above'),
-  confidence: z.number().min(0).max(1).describe('Confidence score 0-1'),
-});
+/**
+ * Builders for the classification schemas.
+ *
+ * `entryTypeSchema` is injected so the runtime node can constrain it to the
+ * specialty's valid codes with `z.enum(...)` (see buildSpecialtySchema below) —
+ * making invalid codes unrepresentable at generation time rather than caught
+ * after the fact. The exported canonical schemas pass a plain `z.string()`,
+ * which preserves type inference and the field-order contract test.
+ *
+ * Field order is load-bearing: reasoning (+ signalsFound) come first to elicit
+ * chain-of-thought before any verdict (OpenAI emits structured-output fields in
+ * schema order). isRelevant is placed before the fields whose `.describe()`
+ * reference it (entryType/confidence), so the gate is emitted before its
+ * dependents. Keep these builders in sync with that ordering.
+ */
+function buildAlternativeSchema<T extends z.ZodTypeAny>(entryTypeSchema: T) {
+  return z.object({
+    reasoning: z.string().describe('Why this alternative is plausible'),
+    entryType: entryTypeSchema.describe('Entry type code from the list above'),
+    confidence: z.number().min(0).max(1).describe('Confidence score 0-1'),
+  });
+}
+
+function buildClassifyResponseSchema<T extends z.ZodTypeAny, A extends z.ZodTypeAny>(
+  entryTypeSchema: T,
+  alternativeEntryTypeSchema: A
+) {
+  return z.object({
+    reasoning: z.string().describe('1-2 sentence explanation of why this type was chosen'),
+    signalsFound: z
+      .array(z.string())
+      .describe(
+        'Classification signals from the entry type definition that appear in the transcript'
+      ),
+    isRelevant: z
+      .boolean()
+      .describe(
+        'Whether the transcript describes a clinical experience, learning event, ' +
+          'or professional development activity relevant to medical training. ' +
+          'false for non-medical content, personal messages, or off-topic text.'
+      ),
+    entryType: entryTypeSchema.describe(
+      'The best-matching entry type code, or "none" if isRelevant is false'
+    ),
+    confidence: z
+      .number()
+      .min(0)
+      .max(1)
+      .describe('Confidence score 0-1. Must be 0 if isRelevant is false.'),
+    alternatives: z
+      .array(buildAlternativeSchema(alternativeEntryTypeSchema))
+      .describe('Other plausible entry types, ordered by confidence'),
+  });
+}
 
 /**
- * Schema passed to OpenAI's structured output (function calling).
- * The API constrains token generation to only produce valid JSON
- * matching this shape — no markdown fences, no parsing needed.
+ * Canonical schemas with a string-typed `entryType`. Exported for type
+ * inference and the field-order contract test; the node invokes an
+ * enum-constrained variant built per specialty (see buildSpecialtySchema).
  */
-// Field order is load-bearing: reasoning + signalsFound come first to elicit
-// chain-of-thought before any verdict (OpenAI emits structured-output fields in
-// schema order). isRelevant is placed before the fields whose `.describe()`
-// reference it (entryType/confidence), so the gate is emitted before its
-// dependents.
-export const classifyResponseSchema = z.object({
-  reasoning: z.string().describe('1-2 sentence explanation of why this type was chosen'),
-  signalsFound: z
-    .array(z.string())
-    .describe(
-      'Classification signals from the entry type definition that appear in the transcript'
-    ),
-  isRelevant: z
-    .boolean()
-    .describe(
-      'Whether the transcript describes a clinical experience, learning event, ' +
-        'or professional development activity relevant to medical training. ' +
-        'false for non-medical content, personal messages, or off-topic text.'
-    ),
-  entryType: z
-    .string()
-    .describe('The best-matching entry type code, or "none" if isRelevant is false'),
-  confidence: z
-    .number()
-    .min(0)
-    .max(1)
-    .describe('Confidence score 0-1. Must be 0 if isRelevant is false.'),
-  alternatives: z
-    .array(classificationAlternativeSchema)
-    .describe('Other plausible entry types, ordered by confidence'),
-});
+export const classificationAlternativeSchema = buildAlternativeSchema(z.string());
+export const classifyResponseSchema = buildClassifyResponseSchema(z.string(), z.string());
+
+/**
+ * Build the schema actually sent to OpenAI for a given specialty, constraining
+ * `entryType` to that specialty's codes. Alternatives are limited to real codes;
+ * the top-level entryType also allows the "none" sentinel for irrelevant content.
+ */
+function buildSpecialtySchema(validCodes: string[]) {
+  const codes = validCodes as [string, ...string[]];
+  return buildClassifyResponseSchema(z.enum([...codes, 'none'] as [string, ...string[]]), z.enum(codes));
+}
 
 type ClassifyResponse = z.infer<typeof classifyResponseSchema>;
 
@@ -220,6 +249,11 @@ export function createClassifyNode(deps: GraphDeps) {
     const config = getSpecialtyConfig(specialty);
     const validCodes = new Set(config.entryTypes.map((et) => et.code));
 
+    // Constrain the LLM's entryType output to this specialty's codes at
+    // generation time, so an invalid code is unrepresentable rather than caught
+    // after the fact.
+    const responseSchema = buildSpecialtySchema([...validCodes]);
+
     // Format the prompt template with runtime data
     const messages = await classificationPrompt.formatMessages({
       specialtyName: config.name,
@@ -228,40 +262,63 @@ export function createClassifyNode(deps: GraphDeps) {
       transcript: state.fullTranscript,
     });
 
-    const { data: classification } = await deps.llmService.invokeStructured(
-      messages,
-      classifyResponseSchema,
-      { temperature: 0.1, maxTokens: 800 }
-    );
+    try {
+      const { data: classification } = await deps.llmService.invokeStructured(
+        messages,
+        responseSchema,
+        { temperature: 0.1, maxTokens: 800 }
+      );
 
-    // Only validate entry type code when the content is medically relevant
-    if (classification.isRelevant) {
-      validateEntryType(classification, validCodes);
+      // Belt-and-suspenders: the enum schema already guarantees a valid code,
+      // but assert it when the content is medically relevant.
+      if (classification.isRelevant) {
+        validateEntryType(classification, validCodes);
+      }
+
+      const wordCount = state.fullTranscript.split(/\s+/).filter(Boolean).length;
+
+      const adjustedConfidence = adjustConfidence(
+        classification.confidence,
+        wordCount,
+        classification.signalsFound.length,
+        classification.alternatives,
+        classification.isRelevant
+      );
+
+      logger.log(
+        `[${cid}] Classification: ${classification.entryType} ` +
+          `(relevant: ${classification.isRelevant}, raw: ${classification.confidence}, ` +
+          `adjusted: ${adjustedConfidence}, signals: ${classification.signalsFound.length}, ` +
+          `words: ${wordCount})`
+      );
+
+      return {
+        isRelevant: classification.isRelevant,
+        entryType: classification.isRelevant ? classification.entryType : null,
+        classificationConfidence: adjustedConfidence,
+        classificationReasoning: classification.reasoning,
+        alternatives: classification.isRelevant ? classification.alternatives : [],
+      };
+    } catch (error) {
+      // Fail safe. The LLM service has already exhausted retries (backoff +
+      // Sentry) before throwing, so this is a terminal failure. Rather than
+      // aborting the whole analysis run, degrade to a low-confidence result:
+      // isRelevant=true + confidence=0 makes classifyRouter send the trainee to
+      // ask_clarification (or to present_classification once rounds are spent).
+      logger.error(`[${cid}] Classification failed; degrading to clarification`, error as Error);
+      Sentry.captureException(error, {
+        tags: { operation: 'classifyNode', step: 'classify' },
+        extra: { conversationId: cid },
+      });
+
+      return {
+        isRelevant: true,
+        entryType: null,
+        classificationConfidence: 0,
+        classificationReasoning:
+          'Automatic classification was unavailable, so we need a quick clarification.',
+        alternatives: [],
+      };
     }
-
-    const wordCount = state.fullTranscript.split(/\s+/).filter(Boolean).length;
-
-    const adjustedConfidence = adjustConfidence(
-      classification.confidence,
-      wordCount,
-      classification.signalsFound.length,
-      classification.alternatives,
-      classification.isRelevant
-    );
-
-    logger.log(
-      `[${cid}] Classification: ${classification.entryType} ` +
-        `(relevant: ${classification.isRelevant}, raw: ${classification.confidence}, ` +
-        `adjusted: ${adjustedConfidence}, signals: ${classification.signalsFound.length}, ` +
-        `words: ${wordCount})`
-    );
-
-    return {
-      isRelevant: classification.isRelevant,
-      entryType: classification.isRelevant ? classification.entryType : null,
-      classificationConfidence: adjustedConfidence,
-      classificationReasoning: classification.reasoning,
-      alternatives: classification.isRelevant ? classification.alternatives : [],
-    };
   };
 }

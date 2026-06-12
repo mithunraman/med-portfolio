@@ -109,11 +109,53 @@ describe('GenerateFollowupNode', () => {
 
       await createGenerateFollowupNode(deps)(makeState({ followUpRound: 0 }));
 
-      const systemPrompt = String(mock.mock.calls[0][0][0].content);
-      expect(systemPrompt).toContain('What strong looks like:');
+      const prompt = (mock.mock.calls[0][0] as Array<{ content: unknown }>)
+        .map((m) => String(m.content))
+        .join('\n');
+      expect(prompt).toContain('What strong looks like:');
       // The CCR reflection rubric phrase must reach the prompt, so the question
       // is steered to elicit a learning point + change to practice (not uncertainty).
-      expect(systemPrompt).toContain('how it changes future practice');
+      expect(prompt).toContain('how it changes future practice');
+    });
+  });
+
+  describe('cache-friendly layout', () => {
+    // Capture the BaseMessage[] the node sends to the LLM for a given state.
+    async function promptFor(state: PortfolioStateType) {
+      const deps = makeDeps();
+      const mock = deps.llmService.invokeStructured as jest.Mock;
+      mock.mockResolvedValue({
+        data: { questions: [{ sectionId: 'x', question: 'q', hints: { examples: ['e'] } }] },
+      });
+      await createGenerateFollowupNode(deps)(state);
+      return mock.mock.calls[0][0] as Array<{ content: unknown }>;
+    }
+
+    it('keeps the static instruction prefix byte-identical across entry type, stage, and round', async () => {
+      const a = await promptFor(makeState({ followUpRound: 0 }));
+      const b = await promptFor(
+        makeState({
+          followUpRound: 1,
+          entryType: 'SIGNIFICANT_EVENT', // different template
+          trainingStage: 'ST3', // different stage context
+          missingSections: ['root_cause', 'changes_made'],
+          askedFollowupQuestions: ['What happened?'],
+        })
+      );
+
+      // message[0] = static instructions → the cacheable prefix, must NOT vary.
+      expect(String(a[0].content)).toBe(String(b[0].content));
+      // message[1] = per-call context → must vary with state (dynamic content moved out).
+      expect(String(a[1].content)).not.toBe(String(b[1].content));
+    });
+
+    it('keeps all per-call fields out of the static prefix', async () => {
+      const [systemInstructions] = await promptFor(makeState());
+      const prefix = String(systemInstructions.content);
+      // None of the dynamic values may appear in the cached prefix.
+      expect(prefix).not.toContain('Clinical Case Review'); // templateName
+      expect(prefix).not.toContain('ST1'); // stage
+      expect(prefix).not.toContain('## Context for this entry'); // context block
     });
   });
 

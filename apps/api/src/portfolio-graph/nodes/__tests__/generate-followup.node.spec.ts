@@ -114,8 +114,8 @@ describe('GenerateFollowupNode', () => {
         .join('\n');
       expect(prompt).toContain('What strong looks like:');
       // The CCR reflection rubric phrase must reach the prompt, so the question
-      // is steered to elicit a learning point + change to practice (not uncertainty).
-      expect(prompt).toContain('how it changes future practice');
+      // is steered to elicit maintain/improve/stop evaluation (not uncertainty).
+      expect(prompt).toContain('maintain, improve, or stop in future practice');
     });
   });
 
@@ -295,7 +295,7 @@ describe('GenerateFollowupNode', () => {
       // Should use the default extraction question from template
       const reflectionQ = result.pendingFollowupQuestions!.find((q) => q.sectionId === 'reflection');
       expect(reflectionQ!.question).toBe(
-        'What did you learn from this case, and would you do anything differently?'
+        'Looking back, what would you maintain, improve, or stop, and why?'
       );
       expect(reflectionQ!.hints.examples).toEqual(['A couple of sentences with specific details is ideal.']);
     });

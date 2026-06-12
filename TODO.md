@@ -5,3 +5,5 @@
 - When AI is asking examples, make sure to give more examples, people found it very useful.
 - Always store Audio chat to local async storage first, and then send from there. In case there is no internet, atleast it will be saved locally and can be send later.
 - When capabilities are presented, we are shown all the options. We need to show only X options and should have an option to show all options.
+- Allow users to edit the message
+- Audio not playing fully.

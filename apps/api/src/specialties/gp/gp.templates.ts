@@ -1,266 +1,4 @@
-import { ArtefactTemplate, flatSections, Probe } from '@acme/shared';
-
-// ---------------------------------------------------------------------------
-// Template 1: CCR (Clinical Case Review)
-// Used by: CLINICAL_CASE_REVIEW, OUT_OF_HOURS
-// ---------------------------------------------------------------------------
-// CCR uses a true hierarchy: the five factual probes compose into one "Brief
-// description" document field, matching the FourteenFish form, while the granular
-// probes still drive targeted questions and per-dimension scoring.
-const CCR_BRIEF_DESCRIPTION_PROBES: Probe[] = [
-  {
-    id: 'presentation',
-    label: 'Clinical Presentation',
-    required: true,
-    descriptorCriteria:
-      'Strong = an anonymised, situated picture of the patient (age, gender, setting) AND a specific ' +
-      'presenting complaint with the relevant history and context that frames the consultation. ' +
-      'Adequate = the patient and presenting complaint stated with some context. Shallow = a bare ' +
-      'one-line mention of a symptom with no demographics, setting, or history.',
-    description:
-      'Patient demographics (anonymised), presenting complaint, relevant history, context of consultation.',
-    promptHint:
-      'Describe the clinical scenario concisely. Include age, gender, setting, and presenting complaint. Keep anonymised.',
-    extractionQuestion: 'Can you describe the patient and what they presented with?',
-    weight: 0.15,
-  },
-  {
-    id: 'clinical_findings',
-    label: 'Clinical Findings',
-    required: false,
-    description: 'Examination findings, investigation results, observations.',
-    promptHint: 'Summarise relevant positive and negative findings.',
-    extractionQuestion: 'What did you find on examination or investigation?',
-    weight: 0.1,
-  },
-  {
-    id: 'clinical_reasoning',
-    label: 'Clinical Reasoning',
-    required: true,
-    threshold: 'strong',
-    descriptorCriteria:
-      'Strong = names specific differentials AND the reasoning that discriminated between them ' +
-      '(what pointed toward the working diagnosis, what was ruled out and why). Adequate = a diagnosis ' +
-      'with some justification. Shallow = a bare diagnosis label with no reasoning.',
-    description:
-      'Differential diagnosis considered, why the working diagnosis was reached, what was considered and ruled out.',
-    promptHint:
-      'Explain the thought process behind the diagnosis. Include what was considered and why alternatives were excluded.',
-    extractionQuestion:
-      'What differentials did you consider, and what led you to your working diagnosis?',
-    weight: 0.2,
-  },
-  {
-    id: 'management',
-    label: 'Management & Actions',
-    required: true,
-    descriptorCriteria:
-      "Strong = the trainee's own specific actions (treatment started, investigations ordered, " +
-      'referrals, safety-netting, planned follow-up) AND the rationale behind each decision. ' +
-      'Adequate = a management plan stated with some justification. Shallow = a vague gesture at a ' +
-      'plan ("treated and reviewed") with no specific actions or reasoning.',
-    description:
-      'Treatment the trainee gave or started, investigations they ordered, referrals they made, safety-netting advice, and the follow-up they themselves planned.',
-    promptHint:
-      "Detail the trainee's own management plan and the rationale behind each decision. Include only what the trainee personally did or planned. Investigation results that came back later, how the patient responded, and actions taken by other teams (e.g. a specialist clinic starting a drug) belong in Patient Outcome — do not place them here.",
-    extractionQuestion: 'What management plan did you put in place?',
-    weight: 0.15,
-  },
-  {
-    id: 'outcome',
-    label: 'Patient Outcome',
-    required: true,
-    descriptorCriteria:
-      'Strong = a specific account of what happened after management (investigation results, how the ' +
-      "patient responded, actions by other teams) AND the patient's current status. Adequate = the " +
-      'outcome stated with some detail. Shallow = a bare verdict ("patient was fine") with no results ' +
-      'or current status.',
-    description:
-      "What happened after the initial management: investigation results, how the patient responded, actions taken by other clinicians or services, and the patient's current status.",
-    promptHint:
-      "Describe results that came back, the patient's response, subsequent actions by other teams, and where things stand now. Do not restate the trainee's own management plan already covered in Management & Actions — only add what happened as a result.",
-    extractionQuestion: 'What was the outcome for this patient?',
-    weight: 0.1,
-  },
-];
-
-export const CCR_TEMPLATE: ArtefactTemplate = {
-  id: 'CCR_TEMPLATE',
-  name: 'Clinical Case Review',
-  wordCountRange: { min: 150, max: 300 },
-  sections: [
-    {
-      id: 'brief_description',
-      label: 'Brief Description',
-      order: 0,
-      required: true,
-      probes: CCR_BRIEF_DESCRIPTION_PROBES,
-    },
-    {
-      id: 'reflection',
-      label: 'Reflection & Learning',
-      order: 1,
-      required: true,
-      probes: [
-        {
-          id: 'reflection',
-          label: 'Reflection & Learning',
-          required: true,
-          threshold: 'strong',
-          descriptorCriteria:
-            'Strong = states a specific learning point AND how it changes future practice (what the ' +
-            'trainee will do differently). Adequate = one genuine learning point. Shallow = a bare ' +
-            'verdict with no learning ("it went ok", "nothing I would change").',
-          description:
-            'What went well, what could be improved, what was learned, how this changes future practice. Should demonstrate critical thinking, not just description.',
-          promptHint:
-            'Reflect on personal learning and impact on future practice. Address: What will I maintain, improve, or stop?',
-          extractionQuestion:
-            'What did you learn from this case, and would you do anything differently?',
-          weight: 0.25,
-        },
-      ],
-    },
-    {
-      id: 'considerations',
-      label: 'Ethical / Legal Considerations',
-      order: 2,
-      required: false,
-      probes: [
-        {
-          id: 'ethical_legal',
-          label: 'Ethical / Legal Considerations',
-          required: false,
-          description: 'Consent, capacity, confidentiality, safeguarding concerns if relevant.',
-          promptHint: 'Note any ethical, legal, or safeguarding dimensions if applicable.',
-          extractionQuestion: null,
-          weight: 0.05,
-        },
-      ],
-    },
-  ],
-};
-
-// ---------------------------------------------------------------------------
-// Template 2: SEA (Significant Event Analysis)
-// Used by: SIGNIFICANT_EVENT
-// ---------------------------------------------------------------------------
-export const SEA_TEMPLATE: ArtefactTemplate = {
-  id: 'SEA_TEMPLATE',
-  name: 'Significant Event Analysis',
-  wordCountRange: { min: 300, max: 500 },
-  sections: flatSections([
-    {
-      id: 'event_description',
-      label: 'What Happened',
-      required: true,
-      descriptorCriteria:
-        'Strong = a clear chronological, anonymised account stating who was involved, what occurred, ' +
-        'when and where, factually and without evaluation. Adequate = a factual account with some ' +
-        'sequence and context. Shallow = a vague one-liner that gives no chronology or detail, or that ' +
-        'slips into judging what was done.',
-      description:
-        'Factual, chronological, anonymised account of the event: who was involved, what occurred, when and where. State what was done, but do NOT evaluate whether it was good or bad here — that belongs in What Went Well and What Could Have Been Done Differently.',
-      promptHint:
-        'Describe the event objectively and chronologically without judgment. State actions; do not praise or critique them. Keep anonymised.',
-      extractionQuestion: 'Can you walk me through exactly what happened?',
-      weight: 0.15,
-    },
-    {
-      id: 'what_went_well',
-      label: 'What Went Well',
-      required: true,
-      descriptorCriteria:
-        'Strong = specific aspects that were handled correctly AND why they represent good practice ' +
-        'worth maintaining. Adequate = a genuine positive identified with some substance. Shallow = a ' +
-        'generic affirmation ("the team did well") with no specific action, or content that drifts into ' +
-        'what went wrong.',
-      description:
-        'Aspects that were handled correctly and good practice to maintain. Positives only — do NOT include anything that went wrong or could be improved (→ What Could Have Been Done Differently).',
-      promptHint:
-        'Identify positive aspects only — what was done correctly, what worked. Leave shortcomings to the improvement section.',
-      extractionQuestion: 'Was there anything that was handled well during this event?',
-      weight: 0.1,
-    },
-    {
-      id: 'what_could_improve',
-      label: 'What Could Have Been Done Differently',
-      required: true,
-      descriptorCriteria:
-        'Strong = specific counterfactual actions or decisions that should have been done differently ' +
-        'at the time AND what should have happened instead. Adequate = a concrete improvement point ' +
-        'identified. Shallow = a vague generalisation ("could have communicated better") with no ' +
-        'specific action, or content that slips into causes or changes already made.',
-      description:
-        'The counterfactual: specific actions or decisions that, in hindsight, should have been done differently at the time. Specific, not vague. Do NOT state the underlying causes of why it happened (→ Why It Happened), and do NOT describe changes actually made since (→ Changes Made).',
-      promptHint:
-        'Describe specific corrective actions or decisions that should have been different. Stay on "what should have happened", not "why it happened" or "what we changed afterwards". Avoid vague generalisations.',
-      extractionQuestion:
-        'Looking back, is there anything you or the team could have done differently?',
-      weight: 0.15,
-    },
-    {
-      id: 'root_cause',
-      label: 'Why It Happened',
-      required: true,
-      descriptorCriteria:
-        'Strong = specific contributing system and human factors (workflow, communication, workload, ' +
-        'knowledge gaps) AND how they combined to cause the event, without individual blame. Adequate = ' +
-        'a genuine contributing factor identified with some analysis. Shallow = a single surface cause ' +
-        'or individual blame ("someone forgot") with no system-level analysis.',
-      description:
-        'Root cause analysis — the contributing system and human factors that explain WHY it happened (workflow, communication breakdown, alert design, workload, resource issues, knowledge gaps). Causes only: do NOT include the corrective actions you would take (→ What Could Have Been Done Differently) or changes already implemented (→ Changes Made). Not about blaming individuals.',
-      promptHint:
-        'Analyse only the contributing factors — the "why". Consider system issues, communication, workload, knowledge gaps. Do not list fixes or actions here. Avoid individual blame.',
-      extractionQuestion:
-        'What do you think contributed to this happening? Were there any system or team factors?',
-      weight: 0.2,
-    },
-    {
-      id: 'impact',
-      label: 'Impact',
-      required: true,
-      descriptorCriteria:
-        'Strong = the concrete effect on the patient AND on the trainee, team, or wider system, stated ' +
-        'honestly. Adequate = a genuine consequence identified for at least one party. Shallow = a bare ' +
-        'claim of no harm ("no harm came of it") with no honest consideration of effects.',
-      description: 'Effect on the patient, the trainee, the team, and/or the wider system.',
-      promptHint: 'Describe the consequences honestly — for the patient, yourself, and the team.',
-      extractionQuestion: 'What was the impact on the patient and/or your team?',
-      weight: 0.1,
-    },
-    {
-      id: 'changes_made',
-      label: 'Changes Made',
-      required: true,
-      descriptorCriteria:
-        'Strong = concrete actions actually taken or formally proposed since the event AND who is ' +
-        'responsible with timelines. Adequate = a specific change described with some detail. Shallow = ' +
-        'a vague or hypothetical "should" with no concrete action, owner, or timeline.',
-      description:
-        'Concrete actions actually taken or formally proposed SINCE the event — protocols changed, guidelines reviewed, team briefings, new processes — with who is responsible and timelines. Must be specific. Do NOT include hypothetical "should haves" (→ What Could Have Been Done Differently) or personal mindset takeaways (→ Personal Learning).',
-      promptHint:
-        'Detail specific changes already implemented or formally planned, with owner and timeline. Not hypothetical improvements, not personal reflections.',
-      extractionQuestion: 'What has been done or changed as a result of this event?',
-      weight: 0.2,
-    },
-    {
-      id: 'personal_learning',
-      label: 'Personal Learning',
-      required: true,
-      descriptorCriteria:
-        'Strong = a specific personal mindset shift or habit AND how it shapes the trainee\'s own ' +
-        'practice going forward. Adequate = one genuine personal learning point. Shallow = a generic ' +
-        'takeaway ("I\'ll be more careful") with no personal growth, or a restatement of system changes.',
-      description:
-        'What the trainee personally took away — the mindset shift or personal habit that shapes their own practice going forward. Link to professional development. Do NOT restate the concrete system/practice changes (→ Changes Made); keep this to personal growth.',
-      promptHint:
-        'Connect to personal professional development — your own growth, not system changes. Address: What will I maintain, improve, or stop?',
-      extractionQuestion: 'What did you personally take away from this experience?',
-      weight: 0.1,
-    },
-  ]),
-};
+import { ArtefactTemplate, flatSections } from '@acme/shared';
 
 // ---------------------------------------------------------------------------
 // Template 3: LEA (Learning Event Analysis)
@@ -276,9 +14,9 @@ export const LEA_TEMPLATE: ArtefactTemplate = {
       label: 'What Happened',
       required: true,
       descriptorCriteria:
-        'Strong = a clear account of the event or learning opportunity stating what occurred, who was ' +
-        'involved, and the setting. Adequate = the event described with some context. Shallow = a vague ' +
-        'one-liner with no detail about what happened or where.',
+        'Strong = a clear account of the event or learning opportunity stating what occurred, who was involved, and the setting. ' +
+        'Adequate = the event described with some context. ' +
+        'Shallow = a vague one-liner with no detail about what happened or where.',
       description:
         'Description of the event or learning opportunity. What occurred, who was involved, the setting.',
       promptHint:
@@ -291,10 +29,9 @@ export const LEA_TEMPLATE: ArtefactTemplate = {
       label: 'Why This Was a Learning Opportunity',
       required: true,
       descriptorCriteria:
-        'Strong = what specifically made this event notable AND why it matters for professional ' +
-        'development (what could have gone differently). Adequate = a genuine reason the event was ' +
-        'significant. Shallow = a generic statement that it was "interesting" or "useful" with no ' +
-        'specific reason it mattered.',
+        'Strong = what specifically made this event notable AND why it matters for professional development (what could have gone differently). ' +
+        'Adequate = a genuine reason the event was significant. ' +
+        'Shallow = a generic statement that it was "interesting" or "useful" with no specific reason it mattered.',
       description:
         'What made this event notable. What could have gone differently. Why it matters for professional development.',
       promptHint:
@@ -307,9 +44,9 @@ export const LEA_TEMPLATE: ArtefactTemplate = {
       label: 'What Was Learned',
       required: true,
       descriptorCriteria:
-        'Strong = specific knowledge, skills, or attitudes gained AND a link to relevant evidence or ' +
-        'guidelines. Adequate = a concrete learning point stated. Shallow = a vague claim of having ' +
-        'learnt something with no specific knowledge or skill named.',
+        'Strong = specific knowledge, skills, or attitudes gained AND a link to relevant evidence or guidelines. ' +
+        'Adequate = a concrete learning point stated. ' +
+        'Shallow = a vague claim of having learnt something with no specific knowledge or skill named.',
       description:
         'Specific knowledge, skills, or attitudes gained. Link to evidence or guidelines where relevant.',
       promptHint:
@@ -322,10 +59,9 @@ export const LEA_TEMPLATE: ArtefactTemplate = {
       label: 'Application to Practice',
       required: true,
       descriptorCriteria:
-        "Strong = specifically how this learning will change or has changed the trainee's day-to-day " +
-        'practice (what they will do differently). Adequate = a genuine practice change stated with ' +
-        'some substance. Shallow = a generic intention ("I\'ll apply this") with no specific change ' +
-        'to practice.',
+        "Strong = specifically how this learning will change or has changed the trainee's day-to-day practice (what they will do differently). " +
+        'Adequate = a genuine practice change stated with some substance. ' +
+        'Shallow = a generic intention ("I\'ll apply this") with no specific change to practice.',
       description:
         "How this learning will change or has changed the trainee's practice. Specific, not generic.",
       promptHint:
@@ -371,9 +107,9 @@ export const FEEDBACK_TEMPLATE: ArtefactTemplate = {
       label: 'Feedback Source',
       required: true,
       descriptorCriteria:
-        'Strong = the specific type of feedback (MSF, PSQ, exam results, informal) AND when it was ' +
-        'received and the context. Adequate = the feedback source named with some context. Shallow = a ' +
-        'vague mention of "feedback" with no source type or timing.',
+        'Strong = the specific type of feedback (MSF, PSQ, exam results, informal) AND when it was received and the context. ' +
+        'Adequate = the feedback source named with some context. ' +
+        'Shallow = a vague mention of "feedback" with no source type or timing.',
       description:
         'What type of feedback was received (MSF, PSQ, exam results, informal feedback) and when.',
       promptHint: 'Identify the feedback source and context. Include when it was received.',
@@ -386,9 +122,9 @@ export const FEEDBACK_TEMPLATE: ArtefactTemplate = {
       label: 'Key Findings',
       required: true,
       descriptorCriteria:
-        'Strong = the main themes, scores, or comments summarised honestly, covering both strengths AND ' +
-        'areas for development. Adequate = the key points summarised with some balance. Shallow = a ' +
-        'one-sided or vague summary ("mostly positive") with no specific themes or development areas.',
+        'Strong = the main themes, scores, or comments summarised honestly, covering both strengths AND areas for development. ' +
+        'Adequate = the key points summarised with some balance. ' +
+        'Shallow = a one-sided or vague summary ("mostly positive") with no specific themes or development areas.',
       description:
         'Summary of the main themes, scores, or comments. Both positive and areas for development.',
       promptHint:
@@ -411,10 +147,9 @@ export const FEEDBACK_TEMPLATE: ArtefactTemplate = {
       label: 'Analysis & Interpretation',
       required: true,
       descriptorCriteria:
-        "Strong = what the feedback means for the trainee's development AND a reasoned position on " +
-        'where they agree or disagree and why. Adequate = some interpretation of what the feedback ' +
-        'tells them. Shallow = bare acceptance or rejection ("the feedback was fair") with no analysis ' +
-        'of what it means.',
+        "Strong = what the feedback means for the trainee's development AND a reasoned position on where they agree or disagree and why. " +
+        'Adequate = some interpretation of what the feedback tells them. ' +
+        'Shallow = bare acceptance or rejection ("the feedback was fair") with no analysis of what it means.',
       description:
         "What the feedback means in the context of the trainee's development. Areas of agreement/disagreement.",
       promptHint:
@@ -428,8 +163,8 @@ export const FEEDBACK_TEMPLATE: ArtefactTemplate = {
       label: 'Actions Taken or Planned',
       required: true,
       descriptorCriteria:
-        'Strong = specific, concrete steps taken or planned in response AND time-bound, SMART detail ' +
-        'linking each step to the feedback. Adequate = a concrete action stated with some substance. ' +
+        'Strong = specific, concrete steps taken or planned in response AND time-bound, SMART detail linking each step to the feedback. ' +
+        'Adequate = a concrete action stated with some substance. ' +
         'Shallow = a vague intention ("I\'ll work on it") with no specific or time-bound step.',
       description:
         'Specific, concrete steps taken or planned in response to the feedback. Should be SMART where possible.',
@@ -466,9 +201,9 @@ export const LEADERSHIP_TEMPLATE: ArtefactTemplate = {
       label: 'Activity Description',
       required: true,
       descriptorCriteria:
-        "Strong = what the leadership activity was, its context, AND the trainee's specific role within " +
-        'it. Adequate = the activity and role described with some context. Shallow = a vague mention of ' +
-        'an activity with no clear role or setting.',
+        "Strong = what the leadership activity was, its context, AND the trainee's specific role within it. " +
+        'Adequate = the activity and role described with some context. ' +
+        'Shallow = a vague mention of an activity with no clear role or setting.',
       description: "What the leadership activity was, the context, the trainee's specific role.",
       promptHint:
         'Describe the activity and your specific role within it. Include context and setting.',
@@ -481,8 +216,8 @@ export const LEADERSHIP_TEMPLATE: ArtefactTemplate = {
       required: true,
       descriptorCriteria:
         'Strong = why the activity was undertaken AND the specific problem or opportunity it addressed. ' +
-        'Adequate = a genuine reason for the activity stated. Shallow = a vague justification ("it ' +
-        'seemed useful") with no specific need or opportunity.',
+        'Adequate = a genuine reason for the activity stated. ' +
+        'Shallow = a vague justification ("it seemed useful") with no specific need or opportunity.',
       description:
         'Why this activity was chosen or undertaken. What problem or opportunity it addressed.',
       promptHint: 'Explain why this activity was needed and why you took it on.',
@@ -495,9 +230,9 @@ export const LEADERSHIP_TEMPLATE: ArtefactTemplate = {
       label: 'Approach & Process',
       required: true,
       descriptorCriteria:
-        'Strong = the specific steps taken AND how others were engaged and what challenges arose along ' +
-        'the way. Adequate = the approach described with some sequence and detail. Shallow = a vague ' +
-        'account ("I organised it") with no steps, people, or challenges.',
+        'Strong = the specific steps taken AND how others were engaged and what challenges arose along the way. ' +
+        'Adequate = the approach described with some sequence and detail. ' +
+        'Shallow = a vague account ("I organised it") with no steps, people, or challenges.',
       description:
         'How the trainee approached the activity. Steps taken, people involved, challenges encountered.',
       promptHint:
@@ -511,8 +246,8 @@ export const LEADERSHIP_TEMPLATE: ArtefactTemplate = {
       label: 'Outcomes',
       required: true,
       descriptorCriteria:
-        'Strong = what was specifically achieved and its impact on the team, patients, or system, AND ' +
-        'an honest account of limitations. Adequate = a genuine outcome stated with some impact. ' +
+        'Strong = what was specifically achieved and its impact on the team, patients, or system, AND an honest account of limitations. ' +
+        'Adequate = a genuine outcome stated with some impact. ' +
         'Shallow = a vague claim of success ("it went well") with no measurable impact or limitations.',
       description:
         'What was achieved. Impact on the team, patients, or system. Include both successes and limitations.',
@@ -526,10 +261,9 @@ export const LEADERSHIP_TEMPLATE: ArtefactTemplate = {
       label: 'Leadership Skills Demonstrated',
       required: true,
       descriptorCriteria:
-        'Strong = specific leadership competencies (communication, delegation, decision-making, conflict ' +
-        'resolution, change management) named AND tied to concrete examples from the activity. Adequate ' +
-        '= a genuine leadership skill identified with some example. Shallow = a bare list of skill ' +
-        'labels with no example of how they were used.',
+        'Strong = specific leadership competencies (communication, delegation, decision-making, conflict resolution, change management) named AND tied to concrete examples from the activity. ' +
+        'Adequate = a genuine leadership skill identified with some example. ' +
+        'Shallow = a bare list of skill labels with no example of how they were used.',
       description:
         'Specific leadership competencies demonstrated: communication, delegation, decision-making, conflict resolution, change management, teamwork.',
       promptHint:
@@ -542,9 +276,9 @@ export const LEADERSHIP_TEMPLATE: ArtefactTemplate = {
       label: 'Reflection & Learning',
       required: true,
       descriptorCriteria:
-        'Strong = a specific insight about themselves as a leader AND how it will change their ' +
-        'future leadership practice. Adequate = a genuine reflection on their leadership with one ' +
-        'clear takeaway. Shallow = a bare verdict on how it went, with no personal leadership learning.',
+        'Strong = a specific insight about themselves as a leader AND how it will change their future leadership practice. ' +
+        'Adequate = a genuine reflection on their leadership with one clear takeaway. ' +
+        'Shallow = a bare verdict on how it went, with no personal leadership learning.',
       description:
         "What worked, what didn't, what the trainee learned about themselves as a leader.",
       promptHint:
@@ -578,8 +312,8 @@ export const QIP_TEMPLATE: ArtefactTemplate = {
       label: 'Rationale & Problem Statement',
       required: true,
       descriptorCriteria:
-        'Strong = a clearly defined problem AND why it matters locally, grounded in evidence or ' +
-        'guidance. Adequate = an identified problem with some justification of its importance. ' +
+        'Strong = a clearly defined problem AND why it matters locally, grounded in evidence or guidance. ' +
+        'Adequate = an identified problem with some justification of its importance. ' +
         'Shallow = a vague topic with no stated need or rationale.',
       description:
         'Why this topic was chosen. Identified need in the training practice. Brief summary of current evidence/guidance.',
@@ -594,8 +328,8 @@ export const QIP_TEMPLATE: ArtefactTemplate = {
       required: true,
       descriptorCriteria:
         'Strong = a specific, measurable aim with a clear target AND how success would be measured. ' +
-        'Adequate = a stated aim with some sense of the improvement sought. Shallow = a vague ' +
-        'intention with no measurable target.',
+        'Adequate = a stated aim with some sense of the improvement sought. ' +
+        'Shallow = a vague intention with no measurable target.',
       description:
         'SMART aims for the project. What improvement was targeted and how it would be measured.',
       promptHint:
@@ -609,8 +343,8 @@ export const QIP_TEMPLATE: ArtefactTemplate = {
       required: true,
       descriptorCriteria:
         'Strong = a clear method with the data collection approach AND PDSA cycles described. ' +
-        'Adequate = a described approach with some method detail. Shallow = a bare mention of ' +
-        '"doing an audit" with no method.',
+        'Adequate = a described approach with some method detail. ' +
+        'Shallow = a bare mention of "doing an audit" with no method.',
       description:
         'How the project was conducted. Data collection method, sample size, PDSA cycles used. At least two PDSA cycles expected.',
       promptHint: 'Describe your methodology including data collection approach and PDSA cycles.',
@@ -622,9 +356,9 @@ export const QIP_TEMPLATE: ArtefactTemplate = {
       label: 'Team & Stakeholder Engagement',
       required: true,
       descriptorCriteria:
-        'Strong = who was involved AND how they were engaged, distinguishing personal contribution ' +
-        'from collaborative work. Adequate = the people involved named with some sense of how they ' +
-        'were engaged. Shallow = a bare mention that others were involved, with no detail.',
+        'Strong = who was involved AND how they were engaged, distinguishing personal contribution from collaborative work. ' +
+        'Adequate = the people involved named with some sense of how they were engaged. ' +
+        'Shallow = a bare mention that others were involved, with no detail.',
       description:
         'Who was involved and how they were engaged. Collaborative elements vs personal contribution.',
       promptHint:
@@ -637,9 +371,9 @@ export const QIP_TEMPLATE: ArtefactTemplate = {
       label: 'Results & Data',
       required: true,
       descriptorCriteria:
-        'Strong = specific findings with key data points or trends, including what did and did not ' +
-        'change. Adequate = results stated with some concrete data. Shallow = a vague claim of ' +
-        'improvement with no data.',
+        'Strong = specific findings with key data points or trends, including what did and did not change. ' +
+        'Adequate = results stated with some concrete data. ' +
+        'Shallow = a vague claim of improvement with no data.',
       description: 'What the data showed. Both quantitative and qualitative findings.',
       promptHint:
         "Present the results clearly. Include key data points and trends. Note both improvements and areas that didn't change.",
@@ -652,8 +386,8 @@ export const QIP_TEMPLATE: ArtefactTemplate = {
       required: true,
       descriptorCriteria:
         'Strong = specific changes made from the data AND how they were embedded in practice. ' +
-        'Adequate = a described change linked to the findings. Shallow = a bare statement that ' +
-        '"things changed" with no specifics.',
+        'Adequate = a described change linked to the findings. ' +
+        'Shallow = a bare statement that "things changed" with no specifics.',
       description: 'What changes were made based on the data. How they were embedded in practice.',
       promptHint: 'Describe specific changes made and how they were embedded in ongoing practice.',
       extractionQuestion: 'What changes were made as a result of your findings?',
@@ -664,9 +398,9 @@ export const QIP_TEMPLATE: ArtefactTemplate = {
       label: 'Sustainability',
       required: true,
       descriptorCriteria:
-        'Strong = a concrete plan for maintaining the change AND who is responsible. Adequate = ' +
-        'some plan for how the improvement will continue. Shallow = a bare assertion it will be ' +
-        'sustained, with no mechanism or owner.',
+        'Strong = a concrete plan for maintaining the change AND who is responsible. ' +
+        'Adequate = some plan for how the improvement will continue. ' +
+        'Shallow = a bare assertion it will be sustained, with no mechanism or owner.',
       description: 'How changes will be maintained after the project ends. Who is responsible.',
       promptHint: 'Describe how the improvements will be sustained. Who will maintain oversight?',
       extractionQuestion: 'How will these changes be maintained going forward?',
@@ -677,9 +411,9 @@ export const QIP_TEMPLATE: ArtefactTemplate = {
       label: 'Reflection & Learning',
       required: true,
       descriptorCriteria:
-        'Strong = a specific learning point about the improvement process or working with teams ' +
-        'AND how it changes future practice. Adequate = one genuine learning point about the QI ' +
-        'experience. Shallow = a bare verdict on the project with no learning.',
+        'Strong = a specific learning point about the improvement process or working with teams AND how it changes future practice. ' +
+        'Adequate = one genuine learning point about the QI experience. ' +
+        'Shallow = a bare verdict on the project with no learning.',
       description:
         'What the trainee learned about improvement methodology, working with teams, and their own development.',
       promptHint:
@@ -706,8 +440,8 @@ export const QIA_TEMPLATE: ArtefactTemplate = {
       required: true,
       descriptorCriteria:
         'Strong = the activity, the setting, AND the quality issue that prompted it, clearly stated. ' +
-        'Adequate = the activity described with some context for why it was chosen. Shallow = a bare ' +
-        'title with no context or trigger.',
+        'Adequate = the activity described with some context for why it was chosen. ' +
+        'Shallow = a bare title with no context or trigger.',
       description:
         'What the activity was, the setting, and why it was identified as an improvement opportunity.',
       promptHint: 'Describe the activity and the context that prompted it.',
@@ -719,8 +453,9 @@ export const QIA_TEMPLATE: ArtefactTemplate = {
       label: 'What Were You Trying to Accomplish',
       required: true,
       descriptorCriteria:
-        'Strong = a specific goal AND the improvement targeted, clearly stated. Adequate = a stated ' +
-        'aim with some sense of the intended improvement. Shallow = a vague intention with no clear goal.',
+        'Strong = a specific goal AND the improvement targeted, clearly stated. ' +
+        'Adequate = a stated aim with some sense of the intended improvement. ' +
+        'Shallow = a vague intention with no clear goal.',
       description: 'The specific goal of the activity. What improvement was targeted.',
       promptHint: 'State clearly what you were trying to improve and why.',
       extractionQuestion: 'What were you trying to achieve?',
@@ -731,9 +466,9 @@ export const QIA_TEMPLATE: ArtefactTemplate = {
       label: 'How Did You Engage With Others',
       required: true,
       descriptorCriteria:
-        'Strong = who was involved AND how the trainee collaborated with them in planning and ' +
-        'delivery. Adequate = others named with some sense of how they worked together. Shallow = ' +
-        'a bare mention that others were involved.',
+        'Strong = who was involved AND how the trainee collaborated with them in planning and delivery. ' +
+        'Adequate = others named with some sense of how they worked together. ' +
+        'Shallow = a bare mention that others were involved.',
       description:
         'Who was involved in planning and delivery. How the trainee collaborated with the team.',
       promptHint: 'Describe how you involved others in planning and carrying out the activity.',
@@ -746,8 +481,8 @@ export const QIA_TEMPLATE: ArtefactTemplate = {
       required: true,
       descriptorCriteria:
         'Strong = the changes actually made AND the resulting improvement, with evidence of impact. ' +
-        'Adequate = a described change with some sense of its effect. Shallow = a bare claim that ' +
-        'something changed, with no result.',
+        'Adequate = a described change with some sense of its effect. ' +
+        'Shallow = a bare claim that something changed, with no result.',
       description:
         'What was actually done. What improvements resulted. Include evidence of impact where possible.',
       promptHint:
@@ -787,8 +522,8 @@ export const PRESCRIBING_TEMPLATE: ArtefactTemplate = {
       required: true,
       descriptorCriteria:
         'Strong = the scope of the review with number of prescriptions, setting, AND period covered. ' +
-        'Adequate = the review context with some of these details. Shallow = a bare mention of ' +
-        'reviewing prescriptions with no scope.',
+        'Adequate = the review context with some of these details. ' +
+        'Shallow = a bare mention of reviewing prescriptions with no scope.',
       description:
         'The scope of the review: how many prescriptions, which clinical setting, what period.',
       promptHint:
@@ -801,9 +536,9 @@ export const PRESCRIBING_TEMPLATE: ArtefactTemplate = {
       label: 'Patterns Identified',
       required: true,
       descriptorCriteria:
-        'Strong = specific prescribing patterns named — drug classes or clinical scenarios — AND any ' +
-        'habits noticed. Adequate = some patterns identified with a little detail. Shallow = a vague ' +
-        'statement that patterns existed, with no specifics.',
+        'Strong = specific prescribing patterns named — drug classes or clinical scenarios — AND any habits noticed. ' +
+        'Adequate = some patterns identified with a little detail. ' +
+        'Shallow = a vague statement that patterns existed, with no specifics.',
       description:
         'Key patterns in prescribing: common drug classes, frequent clinical scenarios, any habits noticed.',
       promptHint:
@@ -816,9 +551,9 @@ export const PRESCRIBING_TEMPLATE: ArtefactTemplate = {
       label: 'Errors & Near-Misses',
       required: true,
       descriptorCriteria:
-        'Strong = specific errors or near-misses identified AND what happened and why (or an honest, ' +
-        'reasoned statement that none were found). Adequate = an error or near-miss noted with some ' +
-        'detail. Shallow = a bare "no errors" with no evidence of having looked.',
+        'Strong = specific errors or near-misses identified AND what happened and why (or an honest, reasoned statement that none were found). ' +
+        'Adequate = an error or near-miss noted with some detail. ' +
+        'Shallow = a bare "no errors" with no evidence of having looked.',
       description:
         'Any prescribing errors or near-misses identified in the review. Honest self-assessment.',
       promptHint:
@@ -831,9 +566,9 @@ export const PRESCRIBING_TEMPLATE: ArtefactTemplate = {
       label: 'Proficiencies Self-Assessment',
       required: true,
       descriptorCriteria:
-        'Strong = a self-assessment against specific prescribing proficiencies, naming both strengths ' +
-        'AND development needs. Adequate = some honest assessment against the proficiencies. Shallow = ' +
-        'a bare claim of competence with no reference to the proficiencies.',
+        'Strong = a self-assessment against specific prescribing proficiencies, naming both strengths AND development needs. ' +
+        'Adequate = some honest assessment against the proficiencies. ' +
+        'Shallow = a bare claim of competence with no reference to the proficiencies.',
       description:
         'Assessment against GP prescribing proficiencies: assessing risks/benefits, guideline adherence, antimicrobial stewardship, patient counselling, monitoring.',
       promptHint:
@@ -857,9 +592,9 @@ export const PRESCRIBING_TEMPLATE: ArtefactTemplate = {
       label: 'Reflection & Learning',
       required: true,
       descriptorCriteria:
-        'Strong = a specific learning point about their prescribing practice AND how it changes ' +
-        'future practice. Adequate = one genuine learning point about their prescribing. Shallow = ' +
-        'a bare verdict with no learning.',
+        'Strong = a specific learning point about their prescribing practice AND how it changes future practice. ' +
+        'Adequate = one genuine learning point about their prescribing. ' +
+        'Shallow = a bare verdict with no learning.',
       description:
         'What the trainee learned about their prescribing practice. Strengths and areas for development.',
       promptHint:
@@ -873,8 +608,8 @@ export const PRESCRIBING_TEMPLATE: ArtefactTemplate = {
       required: true,
       descriptorCriteria:
         'Strong = specific, concrete actions to improve prescribing, time-bound where possible. ' +
-        'Adequate = at least one concrete development action stated. Shallow = a vague intention to ' +
-        '"do better" with no specific action.',
+        'Adequate = at least one concrete development action stated. ' +
+        'Shallow = a vague intention to "do better" with no specific action.',
       description:
         'Specific actions to improve prescribing. May include a Prescribing PDP if needed.',
       promptHint:
@@ -883,18 +618,4 @@ export const PRESCRIBING_TEMPLATE: ArtefactTemplate = {
       weight: 0.1,
     },
   ]),
-};
-
-// ---------------------------------------------------------------------------
-// All templates and mapping
-// ---------------------------------------------------------------------------
-export const GP_TEMPLATES: Record<string, ArtefactTemplate> = {
-  CCR_TEMPLATE,
-  SEA_TEMPLATE,
-  LEA_TEMPLATE,
-  FEEDBACK_TEMPLATE,
-  LEADERSHIP_TEMPLATE,
-  QIP_TEMPLATE,
-  QIA_TEMPLATE,
-  PRESCRIBING_TEMPLATE,
 };

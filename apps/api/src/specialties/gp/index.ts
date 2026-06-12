@@ -1,7 +1,7 @@
 import { Specialty, SpecialtyConfig } from '@acme/shared';
 import { GP_ENTRY_TYPES } from './gp.entry-types';
 import { GP_CAPABILITIES } from './gp.capabilities';
-import { GP_TEMPLATES } from './gp.templates';
+import { GP_TEMPLATES } from './templates';
 import { GP_TRAINING_STAGES } from './gp.training-stages';
 
 export { GpEntryType } from './gp.entry-types';

@@ -3,6 +3,7 @@ import { interrupt } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PortfolioStateType } from '../portfolio-graph.state';
+import { tierToConfidence } from './capability-grading.util';
 
 const logger = new Logger('PresentCapabilitiesNode');
 
@@ -30,7 +31,10 @@ export function createPresentCapabilitiesNode(deps: GraphDeps) {
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
     const cid = state.conversationId;
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: cid, step: 'present_capabilities' });
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
+      conversationId: cid,
+      step: 'present_capabilities',
+    });
     logger.log(`[${cid}] Presenting capabilities`);
 
     // ── Guard: no entry type (irrelevant content path) — skip entirely ──
@@ -47,44 +51,46 @@ export function createPresentCapabilitiesNode(deps: GraphDeps) {
       return { entryType: null };
     }
 
-  // Build options from the LLM-tagged capabilities (already sorted by confidence)
-  const options: CapabilityOption[] = state.capabilities.map((cap) => ({
-    code: cap.code,
-    name: cap.name,
-    confidence: cap.confidence,
-    reasoning: cap.reasoning,
-  }));
+    // Build options from the tagged capabilities (already sorted by tier). The
+    // tier is projected onto the option's `confidence` for the percentage UI.
+    const options: CapabilityOption[] = state.capabilities.map((cap) => ({
+      code: cap.code,
+      name: cap.name,
+      confidence: tierToConfidence(cap.tier),
+      reasoning: cap.reasoning,
+    }));
 
-  // Pause the graph — the interrupt payload is read by PortfolioGraphService
-  // to write the ASSISTANT message. Returns the resume value on second execution.
-  const resumeValue = interrupt({
-    type: 'capabilities',
-    options,
-    entryType: state.entryType,
-  }) as CapabilitiesResumeValue;
+    // Pause the graph — the interrupt payload is read by PortfolioGraphService
+    // to write the ASSISTANT message. Returns the resume value on second execution.
+    const resumeValue = interrupt({
+      type: 'capabilities',
+      options,
+      entryType: state.entryType,
+    }) as CapabilitiesResumeValue;
 
-  // ── Validate resume value ──
-  const presentedCodes = new Set(options.map((o) => o.code));
-  const selectedCodes = resumeValue?.selectedCodes?.filter((code) => presentedCodes.has(code)) ?? [];
+    // ── Validate resume value ──
+    const presentedCodes = new Set(options.map((o) => o.code));
+    const selectedCodes =
+      resumeValue?.selectedCodes?.filter((code) => presentedCodes.has(code)) ?? [];
 
-  if (selectedCodes.length > 0) {
-    const selectedSet = new Set(selectedCodes);
-    // Keep the confidence-ranked order from state.capabilities and cap at the
-    // RCGP maximum of 3 — if the user selected more, keep the strongest.
-    const filteredCapabilities = state.capabilities
-      .filter((cap) => selectedSet.has(cap.code))
-      .slice(0, MAX_CONFIRMED_CAPABILITIES);
+    if (selectedCodes.length > 0) {
+      const selectedSet = new Set(selectedCodes);
+      // Keep the tier-ranked order from state.capabilities and cap at the
+      // RCGP maximum of 3 — if the user selected more, keep the strongest.
+      const filteredCapabilities = state.capabilities
+        .filter((cap) => selectedSet.has(cap.code))
+        .slice(0, MAX_CONFIRMED_CAPABILITIES);
 
-    logger.log(
-      `[${cid}] User confirmed ${filteredCapabilities.length} capabilities ` +
-        `(of ${selectedCodes.length} selected): ${filteredCapabilities.map((c) => c.code).join(', ')}`
-    );
+      logger.log(
+        `[${cid}] User confirmed ${filteredCapabilities.length} capabilities ` +
+          `(of ${selectedCodes.length} selected): ${filteredCapabilities.map((c) => c.code).join(', ')}`
+      );
 
-    return { capabilities: filteredCapabilities };
-  }
+      return { capabilities: filteredCapabilities };
+    }
 
-  // No valid selections — keep all LLM suggestions
-  logger.warn(`[${cid}] No valid capability selections — keeping all LLM suggestions`);
-  return {};
+    // No valid selections — keep all LLM suggestions
+    logger.warn(`[${cid}] No valid capability selections — keeping all LLM suggestions`);
+    return {};
   };
 }

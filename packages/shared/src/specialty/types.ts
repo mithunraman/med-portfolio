@@ -110,6 +110,14 @@ export interface CapabilityDefinition {
    * the trainee's justification (Phase 2). Optional during migration.
    */
   descriptorCriteria?: string;
+  /**
+   * Optional per-capability calibration examples injected into the tagging /
+   * justification prompts. Leave unset for most capabilities — the generic
+   * boundary exemplars in the node prompts handle the common failure modes.
+   * Add entries here (driven by eval) only for a capability the generic
+   * examples miscalibrate.
+   */
+  exemplars?: string[];
   /** Parent domain or category code, if applicable */
   domainCode: string | null;
   /** Parent domain or category name, if applicable */

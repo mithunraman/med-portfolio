@@ -96,6 +96,17 @@ export class LLMService {
       `invokeStructured [${model}] messages:\n${messages.map((m) => `[${m.type}] ${m.content}`).join('\n')}`
     );
 
+    // TEMP (local prompt debugging): when LOG_PROMPTS is set, dump the fully
+    // rendered prompt straight to stdout, bypassing Pino's level filter so it
+    // survives LOG_LEVEL=error (mute everything else, see only prompts).
+    // Local-only: prompts embed the unredacted transcript — remove before commit.
+    console.error('LOG_PROMPTS', process.env.LOG_PROMPTS);
+    if (process.env.LOG_PROMPTS) {
+      const rendered = messages.map((m) => `[${m.type}] ${m.content}`).join('\n');
+      // eslint-disable-next-line no-console
+      console.error(`\n===== PROMPT [${model}] =====\n${rendered}\n===== END PROMPT =====\n`);
+    }
+
     const startTime = Date.now();
     try {
       return await backOff(

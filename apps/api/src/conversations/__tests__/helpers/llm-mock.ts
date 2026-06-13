@@ -127,7 +127,12 @@ export function classifyResponse(
  * sections get neither (the node's structural floor then marks them missing).
  */
 export function completenessResponse(
-  sections: Array<{ sectionId: string; covered: boolean; depth?: 'rich' | 'adequate' | 'shallow'; idea?: string }>
+  sections: Array<{
+    sectionId: string;
+    covered: boolean;
+    depth?: 'rich' | 'adequate' | 'shallow';
+    idea?: string;
+  }>
 ) {
   const TIER_BY_DEPTH = { rich: 'strong', adequate: 'adequate', shallow: 'shallow' } as const;
   const assignments: Array<{ idea: string; sectionId: string }> = [];
@@ -197,26 +202,39 @@ export function allCoveredResponse() {
 }
 
 /**
- * Build a canned elicit-justification response (Phase 2).
- * One entry per confirmed capability: the trainee's descriptor-linked actions
- * plus whether that justification is strong.
+ * Build a canned elicit-justification response.
+ * One entry per confirmed capability: a verbatim `sourceQuote` anchor, the
+ * tidied `justification`, and the graded `justificationTier`. `sourceQuote`
+ * defaults to the justification text — pass a real transcript substring when a
+ * test needs the verbatim gate to pass (and thus `justified` to stay true).
  */
 export function elicitJustificationResponse(
-  justifications: Array<{ code: string; justification: string; isStrong: boolean }>
+  justifications: Array<{
+    code: string;
+    justification: string;
+    justificationTier: 'missing' | 'shallow' | 'adequate' | 'strong';
+    sourceQuote?: string;
+  }>
 ) {
-  return { justifications };
+  return {
+    justifications: justifications.map((j) => ({
+      code: j.code,
+      sourceQuote: j.sourceQuote ?? j.justification,
+      justification: j.justification,
+      justificationTier: j.justificationTier,
+    })),
+  };
 }
 
 /**
  * Build a canned tag-capabilities response (recognition-based).
- * Default: assessments for all 13 GP capabilities, with 2 demonstrated.
+ * Default: grades for all 13 GP capabilities, with 2 at 'strong'/'adequate'.
  */
 export function tagCapabilitiesResponse(
   overrides?: Partial<{
     assessments: Array<{
       code: string;
-      demonstrated: boolean;
-      confidence: number;
+      tier: 'missing' | 'shallow' | 'adequate' | 'strong';
       reasoning: string;
       quote: string;
     }>;
@@ -226,30 +244,30 @@ export function tagCapabilitiesResponse(
     assessments: overrides?.assessments ?? [
       {
         code: 'C-06',
-        demonstrated: true,
-        confidence: 0.88,
-        reasoning: 'Managed the patient with type 2 diabetes, demonstrating ability to handle complex medical cases.',
+        tier: 'strong',
+        reasoning:
+          'Managed the patient with type 2 diabetes, demonstrating ability to handle complex medical cases.',
         // Verbatim substring of the seeded transcript — must survive the tag node's quote gate.
         quote: 'I saw a 55-year-old patient with poorly controlled type 2 diabetes',
       },
       {
         code: 'C-08',
-        demonstrated: true,
-        confidence: 0.75,
-        reasoning: 'Independently decided to start metformin, showing autonomous clinical decision-making.',
+        tier: 'adequate',
+        reasoning:
+          'Independently decided to start metformin, showing autonomous clinical decision-making.',
         quote: 'I started metformin and discussed lifestyle changes',
       },
-      { code: 'C-01', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
-      { code: 'C-02', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
-      { code: 'C-03', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
-      { code: 'C-04', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
-      { code: 'C-05', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
-      { code: 'C-07', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
-      { code: 'C-09', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
-      { code: 'C-10', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
-      { code: 'C-11', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
-      { code: 'C-12', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
-      { code: 'C-13', demonstrated: false, confidence: 0, reasoning: '', quote: '' },
+      { code: 'C-01', tier: 'missing', reasoning: '', quote: '' },
+      { code: 'C-02', tier: 'missing', reasoning: '', quote: '' },
+      { code: 'C-03', tier: 'missing', reasoning: '', quote: '' },
+      { code: 'C-04', tier: 'missing', reasoning: '', quote: '' },
+      { code: 'C-05', tier: 'missing', reasoning: '', quote: '' },
+      { code: 'C-07', tier: 'missing', reasoning: '', quote: '' },
+      { code: 'C-09', tier: 'missing', reasoning: '', quote: '' },
+      { code: 'C-10', tier: 'missing', reasoning: '', quote: '' },
+      { code: 'C-11', tier: 'missing', reasoning: '', quote: '' },
+      { code: 'C-12', tier: 'missing', reasoning: '', quote: '' },
+      { code: 'C-13', tier: 'missing', reasoning: '', quote: '' },
     ],
   };
 }

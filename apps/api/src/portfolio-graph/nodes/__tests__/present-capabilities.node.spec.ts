@@ -76,8 +76,8 @@ describe('PresentCapabilitiesNode', () => {
 
   it('should interrupt with populated options when capabilities exist', async () => {
     const capabilities = [
-      { code: 'CAP1', name: 'Data Gathering', confidence: 0.85, reasoning: 'Took a history', quote: 'I took a history' },
-      { code: 'CAP2', name: 'Clinical Reasoning', confidence: 0.7, reasoning: 'Discussed DDx', quote: 'I weighed the differentials' },
+      { code: 'CAP1', name: 'Data Gathering', tier: 'strong' as const, reasoning: 'Took a history', quote: 'I took a history' },
+      { code: 'CAP2', name: 'Clinical Reasoning', tier: 'adequate' as const, reasoning: 'Discussed DDx', quote: 'I weighed the differentials' },
     ];
 
     const node = createPresentCapabilitiesNode(makeDeps());
@@ -86,7 +86,8 @@ describe('PresentCapabilitiesNode', () => {
     expect(interrupt).toHaveBeenCalledWith({
       type: 'capabilities',
       options: [
-        { code: 'CAP1', name: 'Data Gathering', confidence: 0.85, reasoning: 'Took a history' },
+        // tier is projected onto `confidence` for the percentage UI (strong → 0.9, adequate → 0.7)
+        { code: 'CAP1', name: 'Data Gathering', confidence: 0.9, reasoning: 'Took a history' },
         { code: 'CAP2', name: 'Clinical Reasoning', confidence: 0.7, reasoning: 'Discussed DDx' },
       ],
       entryType: 'CLINICAL_CASE_REVIEW',
@@ -95,8 +96,8 @@ describe('PresentCapabilitiesNode', () => {
 
   it('should filter capabilities to user-selected codes on resume', async () => {
     const capabilities = [
-      { code: 'CAP1', name: 'Data Gathering', confidence: 0.85, reasoning: 'Took a history', quote: 'I took a history' },
-      { code: 'CAP2', name: 'Clinical Reasoning', confidence: 0.7, reasoning: 'Discussed DDx', quote: 'I weighed the differentials' },
+      { code: 'CAP1', name: 'Data Gathering', tier: 'strong' as const, reasoning: 'Took a history', quote: 'I took a history' },
+      { code: 'CAP2', name: 'Clinical Reasoning', tier: 'adequate' as const, reasoning: 'Discussed DDx', quote: 'I weighed the differentials' },
     ];
 
     (interrupt as jest.Mock).mockReturnValue({ selectedCodes: ['CAP1'] });
@@ -109,7 +110,7 @@ describe('PresentCapabilitiesNode', () => {
 
   it('should keep all capabilities when no valid selections on resume', async () => {
     const capabilities = [
-      { code: 'CAP1', name: 'Data Gathering', confidence: 0.85, reasoning: 'Took a history', quote: 'I took a history' },
+      { code: 'CAP1', name: 'Data Gathering', tier: 'strong' as const, reasoning: 'Took a history', quote: 'I took a history' },
     ];
 
     (interrupt as jest.Mock).mockReturnValue({ selectedCodes: ['INVALID'] });

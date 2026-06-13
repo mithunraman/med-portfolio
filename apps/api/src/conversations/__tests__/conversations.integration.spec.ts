@@ -210,7 +210,12 @@ describe('Conversations Integration Tests', () => {
       llmMock.enqueue(
         // 5: elicit_justification (for selected C-06)
         elicitJustificationResponse([
-          { code: 'C-06', justification: 'I initiated metformin after reviewing the HbA1c.', isStrong: true },
+          {
+            code: 'C-06',
+            justification: 'I initiated metformin after reviewing the HbA1c.',
+            justificationTier: 'strong',
+            sourceQuote: 'HbA1c was 72',
+          },
         ])
       );
       llmMock.enqueue(reflectResponse()); // 6: reflect

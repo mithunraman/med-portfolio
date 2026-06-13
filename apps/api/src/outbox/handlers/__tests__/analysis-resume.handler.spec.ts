@@ -61,7 +61,7 @@ function makeFinalState() {
     title: 'Test Entry',
     reflection: [{ sectionId: 'reflection', title: 'Reflection', text: 'Some text', covered: true }],
     capabilities: [
-      { code: 'CAP1', name: 'Cap 1', confidence: 0.9, reasoning: 'good', quote: 'a verbatim span' },
+      { code: 'CAP1', name: 'Cap 1', tier: 'strong', reasoning: 'good', quote: 'a verbatim span' },
     ],
     pdpGoals: [],
     // Completeness fields a completed run always carries (set by check_completeness).

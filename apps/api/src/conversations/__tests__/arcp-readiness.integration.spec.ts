@@ -149,7 +149,8 @@ describe('ARCP Readiness Engine — Integration', () => {
         {
           code: 'C-06',
           justification: 'I reviewed the HbA1c of 72 and initiated metformin after discussing options.',
-          isStrong: true,
+          justificationTier: 'strong',
+          sourceQuote: 'I started metformin and discussed lifestyle changes',
         },
       ])
     );
@@ -275,7 +276,14 @@ describe('ARCP Readiness Engine — Integration', () => {
     llmMock.enqueue(allCoveredResponse());
     llmMock.enqueue(tagCapabilitiesResponse());
     llmMock.enqueue(
-      elicitJustificationResponse([{ code: 'C-06', justification: 'Initiated metformin.', isStrong: true }])
+      elicitJustificationResponse([
+        {
+          code: 'C-06',
+          justification: 'Initiated metformin.',
+          justificationTier: 'strong',
+          sourceQuote: 'I started metformin and discussed lifestyle changes',
+        },
+      ])
     );
     llmMock.enqueue(reflectResponse());
     llmMock.enqueue(generatePdpResponse());

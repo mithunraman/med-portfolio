@@ -1,5 +1,6 @@
 import { ReadinessSnapshot, Specialty } from '@acme/shared';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../specialties/specialty.registry';
+import { tierAtLeast } from './nodes/capability-grading.util';
 import { PortfolioStateType } from './portfolio-graph.state';
 
 /**
@@ -28,7 +29,8 @@ export function buildReadinessSnapshot(state: PortfolioStateType): ReadinessSnap
   const capabilities = (state.capabilities ?? []).map((c) => ({
     code: c.code,
     name: c.name,
-    justified: Boolean(c.justificationStrong),
+    // Card flag is derived: a justification graded adequate or stronger counts.
+    justified: tierAtLeast(c.justificationTier, 'adequate'),
   }));
 
   return {

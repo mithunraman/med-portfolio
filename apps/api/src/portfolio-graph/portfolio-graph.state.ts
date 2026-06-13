@@ -24,15 +24,24 @@ export interface CapabilityTag {
    * cannot be found. Persisted as the artefact's capability `evidence`.
    */
   quote: string;
-  confidence: number;
+  /**
+   * How strongly the capability is demonstrated, graded against its descriptor
+   * criteria on the shared ReadinessTier ladder. The tag node only keeps
+   * capabilities at `adequate` or above, so a kept tag is never `missing`.
+   */
+  tier: ReadinessTier;
   /**
    * The trainee's own prose linking their actions to the capability's word
-   * descriptor (Phase 2). Distinct from `reasoning` (AI-generated) and `quote`
+   * descriptor. Distinct from `reasoning` (AI-generated) and `quote`
    * (verbatim evidence). Empty until elicited from the transcript.
    */
   justification?: string;
-  /** Whether the justification meets the descriptor criteria. Drives the Phase 3 planner. */
-  justificationStrong?: boolean;
+  /**
+   * How well the justification meets the descriptor criteria, on the same
+   * ReadinessTier ladder. Drives the readiness card's `justified` flag
+   * (`adequate`+ = justified). Undefined until elicited.
+   */
+  justificationTier?: ReadinessTier;
 }
 
 /** Readiness tier for a probe or section against the RCGP descriptors. */
@@ -206,11 +215,13 @@ export const PortfolioState = Annotation.Root({
    * Derived deterministically from `reflection` by `composeDocument`; this is
    * the shape the trainee submits (e.g. the FourteenFish "Brief description").
    */
-  composedDocument: Annotation<Array<{
-    sectionId: string;
-    label: string;
-    text: string;
-  }>>({
+  composedDocument: Annotation<
+    Array<{
+      sectionId: string;
+      label: string;
+      text: string;
+    }>
+  >({
     reducer: (_, next) => next,
     default: () => [],
   }),
@@ -220,7 +231,6 @@ export const PortfolioState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => [],
   }),
-
 });
 
 /** Inferred type of the graph state */

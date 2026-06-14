@@ -214,12 +214,14 @@ export function elicitJustificationResponse(
     justification: string;
     justificationTier: 'missing' | 'shallow' | 'adequate' | 'strong';
     sourceQuote?: string;
+    descriptorClause?: string;
   }>
 ) {
   return {
     justifications: justifications.map((j) => ({
       code: j.code,
       sourceQuote: j.sourceQuote ?? j.justification,
+      descriptorClause: j.descriptorClause ?? '',
       justification: j.justification,
       justificationTier: j.justificationTier,
     })),

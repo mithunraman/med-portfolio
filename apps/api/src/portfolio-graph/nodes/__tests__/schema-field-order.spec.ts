@@ -1,4 +1,5 @@
 import { capabilityAssessmentSchema } from '../tag-capabilities.node';
+import { justificationAssessmentSchema } from '../elicit-justification.node';
 import { completenessResponseSchema } from '../check-completeness.node';
 import { classificationAlternativeSchema, classifyResponseSchema } from '../classify.node';
 import { reflectResponseSchema } from '../reflect.node';
@@ -42,6 +43,16 @@ describe('structured-output schema field order', () => {
       'quote',
       'reasoning',
       'tier',
+    ]);
+  });
+
+  it('justificationAssessmentSchema emits evidence → clause → link before the tier verdict', () => {
+    expect(Object.keys(justificationAssessmentSchema.shape)).toEqual([
+      'code',
+      'sourceQuote',
+      'descriptorClause',
+      'justification',
+      'justificationTier',
     ]);
   });
 

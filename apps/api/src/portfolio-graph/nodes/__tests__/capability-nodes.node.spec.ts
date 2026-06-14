@@ -169,4 +169,25 @@ describe('elicitJustificationNode gate + contradiction guard', () => {
 
     expect(result.capabilities![0].justificationTier).toBe('missing');
   });
+
+  it('rewrites a third-person justification to first person (portfolio paste-ready voice)', async () => {
+    const deps = makeDeps({
+      justifications: [
+        {
+          code: 'C-06',
+          sourceQuote: 'I started metformin and discussed lifestyle changes',
+          justification: 'The trainee started metformin and discussed lifestyle changes.',
+          justificationTier: 'strong',
+        },
+      ],
+    });
+
+    const result = await createElicitJustificationNode(deps)(
+      makeState({ capabilities: [taggedC06] })
+    );
+
+    const c06 = result.capabilities!.find((c) => c.code === 'C-06')!;
+    expect(c06.justification).toBe('I started metformin and discussed lifestyle changes.');
+    expect(c06.justification).not.toMatch(/the trainee/i);
+  });
 });

@@ -356,6 +356,7 @@ export function generatePdpResponse() {
   return {
     goals: [
       {
+        learningNeed: 'I need to read up on the latest diabetes guidelines.',
         goal: 'Improve confidence managing type 2 diabetes in primary care',
         actions: [
           {

@@ -3,6 +3,7 @@ import { justificationAssessmentSchema } from '../elicit-justification.node';
 import { completenessResponseSchema } from '../check-completeness.node';
 import { classificationAlternativeSchema, classifyResponseSchema } from '../classify.node';
 import { reflectResponseSchema } from '../reflect.node';
+import { generatePdpResponseSchema } from '../generate-pdp.node';
 
 /**
  * These schemas drive OpenAI structured outputs via LangChain's
@@ -72,6 +73,14 @@ describe('structured-output schema field order', () => {
     expect(
       Object.keys(reflectResponseSchema.shape.sections.element.shape.probes.element.shape)
     ).toEqual(['probeId', 'title', 'text', 'covered']);
+  });
+
+  it('pdp goal emits learningNeed (CoT) before the goal it justifies', () => {
+    expect(Object.keys(generatePdpResponseSchema.shape.goals.element.shape)).toEqual([
+      'learningNeed',
+      'goal',
+      'actions',
+    ]);
   });
 
   it('completenessResponseSchema emits the partition (assignments) before grades', () => {

@@ -181,6 +181,7 @@ export const CCR_ASSESSABLE_SECTIONS = [
   'management',
   'outcome',
   'reflection',
+  'learning_needs',
 ] as const;
 
 /**
@@ -275,39 +276,77 @@ export function tagCapabilitiesResponse(
 }
 
 /**
- * Build a canned reflect response.
- * Default: a short structured reflection with section headings.
+ * Build a canned reflect response (nested: each section carries its probes and,
+ * for sections with compose guidance, a narrative). Default models a CCR entry;
+ * narratives are left empty so the assemble step falls back to a deterministic
+ * concat of the probe text. Field order matches reflectResponseSchema.
  */
 export function reflectResponse(
   overrides?: Partial<{
     title: string;
-    sections: Array<{ sectionId: string; title: string; text: string; covered: boolean }>;
+    sections: Array<{
+      sectionId: string;
+      probes: Array<{ probeId: string; title: string; text: string; covered: boolean }>;
+      narrative: string;
+    }>;
     capabilityAnnotations: Array<{ sectionId: string; capabilityCode: string; evidence: string }>;
   }>
 ) {
   return {
-    title: overrides?.title ?? 'T2DM Management in Elderly Patient',
     sections: overrides?.sections ?? [
       {
-        sectionId: 'presentation',
-        title: 'Presentation',
-        text: 'I saw a 55-year-old patient with poorly controlled type 2 diabetes.',
-        covered: true,
-      },
-      {
-        sectionId: 'clinical_reasoning',
-        title: 'Clinical Reasoning',
-        text: 'I considered the HbA1c of 72 and decided to initiate metformin.',
-        covered: true,
+        sectionId: 'brief_description',
+        probes: [
+          {
+            probeId: 'presentation',
+            title: 'Clinical Presentation',
+            text: 'I saw a 55-year-old patient with poorly controlled type 2 diabetes.',
+            covered: true,
+          },
+          { probeId: 'clinical_findings', title: 'Clinical Findings', text: '', covered: false },
+          {
+            probeId: 'clinical_reasoning',
+            title: 'Clinical Reasoning',
+            text: 'I considered the HbA1c of 72 and decided to initiate metformin.',
+            covered: true,
+          },
+          {
+            probeId: 'management',
+            title: 'Management & Actions',
+            text: 'I started metformin and discussed lifestyle changes.',
+            covered: true,
+          },
+          { probeId: 'outcome', title: 'Patient Outcome', text: '', covered: false },
+        ],
+        narrative: '',
       },
       {
         sectionId: 'reflection',
-        title: 'Reflection',
-        text: 'This case reinforced the importance of shared decision making in chronic disease management.',
-        covered: true,
+        probes: [
+          {
+            probeId: 'reflection',
+            title: 'Reflection',
+            text: 'This case reinforced the importance of shared decision making in chronic disease management.',
+            covered: true,
+          },
+        ],
+        narrative: '',
+      },
+      {
+        sectionId: 'learning',
+        probes: [
+          {
+            probeId: 'learning_needs',
+            title: 'Learning Needs',
+            text: 'I need to read up on the latest diabetes guidelines.',
+            covered: true,
+          },
+        ],
+        narrative: '',
       },
     ],
     capabilityAnnotations: overrides?.capabilityAnnotations ?? [],
+    title: overrides?.title ?? 'T2DM Management in Elderly Patient',
   };
 }
 

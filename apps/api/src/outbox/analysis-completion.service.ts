@@ -53,7 +53,7 @@ export class AnalysisCompletionService {
 
     // If the graph completed without producing an artefact (e.g. irrelevant content),
     // just transition to COMPLETED without saving artefact/PDP data.
-    if (!finalState.entryType || !finalState.reflection) {
+    if (!finalState.entryType || !finalState.composedDocument?.length) {
       this.logger.warn(
         `Graph completed without artefact output (entryType: ${finalState.entryType}) — skipping saves`,
       );
@@ -77,7 +77,6 @@ export class AnalysisCompletionService {
           {
             artefactType: finalState.entryType,
             title: finalState.title,
-            reflection: finalState.reflection,
             capabilities: finalState.capabilities.map((c) => ({
               code: c.code,
               evidence: c.quote,
@@ -113,12 +112,13 @@ export class AnalysisCompletionService {
           if (!pdpResult.ok) throw new Error(pdpResult.error.message);
         }
 
-        // Status transition in same transaction
+        // Status transition in same transaction. The reflect trace is written
+        // here as immutable debug/eval provenance on the run record.
         await this.analysisRunsService.transitionStatus(
           runId,
           AnalysisRunStatus.RUNNING,
           AnalysisRunStatus.COMPLETED,
-          { currentStep: null },
+          { currentStep: null, reflectTrace: finalState.reflectTrace },
           session,
         );
       },

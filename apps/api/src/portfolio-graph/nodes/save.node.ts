@@ -32,7 +32,9 @@ export function createSaveNode(deps: GraphDeps) {
 
     // ── Normal path: validate all required fields are present ──
     if (!state.title) throw new Error(`[${cid}] Cannot save: title is not set`);
-    if (!state.reflection) throw new Error(`[${cid}] Cannot save: reflection is not set`);
+    if (!state.composedDocument || state.composedDocument.length === 0) {
+      throw new Error(`[${cid}] Cannot save: entry body (composedDocument) is not set`);
+    }
     if (state.capabilities.length === 0) throw new Error(`[${cid}] Cannot save: no capabilities`);
 
     // ── Readiness gate (Phase 6): never finalise silently as "complete" ──

@@ -25,20 +25,20 @@ const GOAL_STATUS_CLASS: Record<PdpGoalStatus, string> = {
 };
 
 function buildReflectionHtml(artefact: Artefact): string {
-  const sections = artefact.reflection?.filter((s) => s.text);
-  if (!sections?.length) return '';
+  const fields = artefact.composedDocument?.filter((s) => s.text);
+  if (!fields?.length) return '';
 
-  const html = sections
+  const html = fields
     .map(
       (s) => `
       <div class="section">
-        <h3>${escapeHtml(s.title)}</h3>
+        <h3>${escapeHtml(s.label)}</h3>
         <p>${escapeHtml(s.text)}</p>
       </div>`
     )
     .join('');
 
-  return `<div class="block"><h2>Reflection</h2>${html}</div>`;
+  return `<div class="block"><h2>Entry</h2>${html}</div>`;
 }
 
 function buildCapabilitiesHtml(artefact: Artefact): string {

@@ -40,7 +40,6 @@ export function toArtefactDto(
     artefactType: artefact.artefactType,
     artefactTypeLabel: entryTypeDef?.label ?? artefact.artefactType,
     title: artefact.title,
-    reflection: artefact.reflection,
     pdpGoals: pdpGoals.map((g) => ({
       id: g.xid,
       goal: g.goal,

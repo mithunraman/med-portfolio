@@ -27,7 +27,7 @@ function makeArtefactDoc(overrides: Record<string, unknown> = {}) {
     specialty: Specialty.GP,
     title: 'Test Artefact',
     artefactType: null,
-    reflection: null,
+    composedDocument: null,
     capabilities: null,
     tags: null,
     createdAt: new Date(),
@@ -632,7 +632,7 @@ describe('ArtefactsService', () => {
     it('creates a version snapshot before applying edits', async () => {
       const artefact = makeArtefactDoc({
         title: 'Old Title',
-        reflection: [{ title: 'S1', text: 'T1' }],
+        composedDocument: [{ sectionId: 's1', label: 'S1', text: 'T1' }],
       });
       const updatedArtefact = makeArtefactDoc({ title: 'New Title' });
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
@@ -648,7 +648,7 @@ describe('ArtefactsService', () => {
         'artefact',
         artefact._id,
         expect.any(Types.ObjectId),
-        { title: 'Old Title', reflection: [{ title: 'S1', text: 'T1' }] },
+        { title: 'Old Title', composedDocument: [{ sectionId: 's1', label: 'S1', text: 'T1' }] },
         expect.anything(), // session
       );
 
@@ -677,21 +677,28 @@ describe('ArtefactsService', () => {
       );
     });
 
-    it('can edit reflection without title', async () => {
-      const artefact = makeArtefactDoc();
-      const reflection = [{ title: 'New Section', text: 'New Text' }];
-      const updatedArtefact = makeArtefactDoc({ reflection });
+    it('can edit a section without title (merges text by sectionId)', async () => {
+      const artefact = makeArtefactDoc({
+        composedDocument: [{ sectionId: 'brief_description', label: 'Brief Description', text: 'Old' }],
+      });
+      const updatedArtefact = makeArtefactDoc();
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
       mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
       mockVersionHistoryService.countVersions.mockResolvedValue(1);
       setupBuildArtefactDtoMocks();
 
-      await service.editArtefact(userIdStr, 'art_abc123', { reflection });
+      await service.editArtefact(userIdStr, 'art_abc123', {
+        composedDocument: [{ sectionId: 'brief_description', text: 'New Text' }],
+      });
 
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
-        { reflection },
+        {
+          composedDocument: [
+            { sectionId: 'brief_description', label: 'Brief Description', text: 'New Text' },
+          ],
+        },
         expect.anything(),
       );
     });
@@ -740,11 +747,14 @@ describe('ArtefactsService', () => {
     it('snapshots current state before restoring', async () => {
       const artefact = makeArtefactDoc({
         title: 'Current Title',
-        reflection: [{ title: 'Current', text: 'Content' }],
+        composedDocument: [{ sectionId: 's1', label: 'Current', text: 'Content' }],
       });
       const targetVersion = {
         version: 1,
-        snapshot: { title: 'Old Title', reflection: [{ title: 'Old', text: 'Content' }] },
+        snapshot: {
+          title: 'Old Title',
+          composedDocument: [{ sectionId: 's1', label: 'Old', text: 'Content' }],
+        },
       };
       const updatedArtefact = makeArtefactDoc({ title: 'Old Title' });
 
@@ -762,7 +772,7 @@ describe('ArtefactsService', () => {
         'artefact',
         artefact._id,
         expect.any(Types.ObjectId),
-        { title: 'Current Title', reflection: [{ title: 'Current', text: 'Content' }] },
+        { title: 'Current Title', composedDocument: [{ sectionId: 's1', label: 'Current', text: 'Content' }] },
         expect.anything(), // session
       );
     });
@@ -773,7 +783,7 @@ describe('ArtefactsService', () => {
         version: 1,
         snapshot: {
           title: 'Restored Title',
-          reflection: [{ title: 'Restored', text: 'Body' }],
+          composedDocument: [{ sectionId: 's1', label: 'Restored', text: 'Body' }],
         },
       };
       const updatedArtefact = makeArtefactDoc({ title: 'Restored Title' });
@@ -791,7 +801,7 @@ describe('ArtefactsService', () => {
         artefact._id,
         {
           title: 'Restored Title',
-          reflection: [{ title: 'Restored', text: 'Body' }],
+          composedDocument: [{ sectionId: 's1', label: 'Restored', text: 'Body' }],
         },
         expect.anything(), // session
       );

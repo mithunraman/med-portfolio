@@ -29,7 +29,6 @@ export interface ListArtefactsResult {
 export interface UpdateArtefactData {
   artefactType?: string | null;
   title?: string | null;
-  reflection?: Array<{ title: string; text: string }> | null;
   capabilities?: Array<{ code: string; evidence: string; justification?: string }> | null;
   completeness?: Completeness | null;
   draftStatus?: DraftStatus | null;

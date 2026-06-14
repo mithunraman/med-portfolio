@@ -303,8 +303,9 @@ describe('Conversations Integration Tests', () => {
       const capMeta = capabilityMsg.question as MultiSelectQuestion;
       const capOptions = capMeta.options;
       expect(capOptions).toHaveLength(2);
-      expect(capOptions[0]).toMatchObject({ key: 'C-06', confidence: 0.88 });
-      expect(capOptions[1]).toMatchObject({ key: 'C-08', confidence: 0.75 });
+      // Confidence is the tier→confidence projection (strong→0.9, adequate→0.7).
+      expect(capOptions[0]).toMatchObject({ key: 'C-06', confidence: 0.9 });
+      expect(capOptions[1]).toMatchObject({ key: 'C-08', confidence: 0.7 });
 
       // tag_capabilities prompt (call index 4) includes transcript and capability codes
       const tagCall = llmMock.calls[4];
@@ -370,12 +371,13 @@ describe('Conversations Integration Tests', () => {
       const reflectSystem = reflectSystemMsg.content as string;
       expect(reflectSystem).toContain('C-06');
 
-      // generate_pdp prompt (call index 7) receives the reflection
+      // generate_pdp prompt (call index 7) receives the rendered entry sections
+      // (section labels, e.g. "Brief Description"/"Reflection", not probe titles).
       const pdpCall = llmMock.calls[7];
       const pdpHumanMsg = pdpCall.messages.find((m) => m._getType() === 'human');
       assertDefined(pdpHumanMsg);
       const pdpHuman = pdpHumanMsg.content as string;
-      expect(pdpHuman).toContain('Presentation');
+      expect(pdpHuman).toContain('Brief Description');
       expect(pdpHuman).toContain('Reflection');
 
       // ── Final assertions: artefact persisted to DB ──
@@ -384,10 +386,10 @@ describe('Conversations Integration Tests', () => {
 
       expect(artefact.status).toBe(ArtefactStatus.IN_REVIEW);
       expect(artefact.artefactType).toBe('CLINICAL_CASE_REVIEW');
-      // Reflection persisted as structured sections
-      expect(artefact.reflection).toBeDefined();
-      expect(artefact.reflection).toHaveLength(3);
-      expect(artefact.reflection![0].title).toBe('Presentation');
+      // Entry body persisted as rendered document fields (one per CCR section)
+      expect(artefact.composedDocument).toBeDefined();
+      expect(artefact.composedDocument).toHaveLength(3);
+      expect(artefact.composedDocument![0].label).toBe('Brief Description');
 
       // Capabilities — only the user-selected C-06
       expect(artefact.capabilities).toHaveLength(1);

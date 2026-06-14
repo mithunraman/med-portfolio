@@ -155,7 +155,7 @@ export const duplicateToReview = createAsyncThunk(
 );
 
 /**
- * Edit an artefact's editable fields (title, reflection).
+ * Edit an artefact's editable fields (title, entry document sections).
  */
 export const editArtefact = createAsyncThunk(
   'artefacts/editArtefact',

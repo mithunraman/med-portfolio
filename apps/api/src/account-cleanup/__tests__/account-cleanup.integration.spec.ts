@@ -313,7 +313,7 @@ describe('AccountCleanupService (integration)', () => {
 
     const artefactA = await artefactModel.findOne({ userId: userAId }).lean();
     expect(artefactA!.title).toBe('[deleted]');
-    expect(artefactA!.reflection).toEqual([]);
+    expect(artefactA!.composedDocument).toEqual([]);
     expect(artefactA!.capabilities).toEqual([]);
     expect(artefactA!.status).toBe(ArtefactStatus.DELETED);
 

@@ -201,19 +201,12 @@ export const PortfolioState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => null,
   }),
-  reflection: Annotation<Array<{
-    sectionId: string;
-    title: string;
-    text: string;
-    covered: boolean;
-  }> | null>({
-    reducer: (_, next) => next,
-    default: () => null,
-  }),
   /**
-   * The reflection projected into the output document fields (Phase 4).
-   * Derived deterministically from `reflection` by `composeDocument`; this is
-   * the shape the trainee submits (e.g. the FourteenFish "Brief description").
+   * The rendered document fields the trainee submits (e.g. the FourteenFish
+   * "Brief description"), produced directly by the reflect node — one entry per
+   * template section. This is the single source of truth for the entry body:
+   * it is shown, edited, versioned, and exported. The granular probes are an
+   * in-node intermediate and are not persisted.
    */
   composedDocument: Annotation<
     Array<{
@@ -231,7 +224,28 @@ export const PortfolioState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => [],
   }),
+
+  /**
+   * Debug/eval trace of the reflect step (per-section probe extraction, the
+   * synthesised narrative, the verification verdict, and what shipped). Written
+   * to the analysis-run record as immutable provenance — never persisted on the
+   * artefact, never shown to the trainee.
+   */
+  reflectTrace: Annotation<ReflectTrace | null>({
+    reducer: (_, next) => next,
+    default: () => null,
+  }),
 });
+
+/** Per-section trace emitted by the reflect node for debug/eval (see analysis-runs). */
+export type ReflectTrace = Array<{
+  sectionId: string;
+  probes: Array<{ probeId: string; title: string; text: string; covered: boolean }>;
+  narrative: string;
+  verification: { ok: boolean; reason: string } | null;
+  finalText: string;
+  source: 'composed' | 'concat';
+}>;
 
 /** Inferred type of the graph state */
 export type PortfolioStateType = typeof PortfolioState.State;

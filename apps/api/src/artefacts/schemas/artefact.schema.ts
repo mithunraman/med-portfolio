@@ -22,16 +22,7 @@ export class Capability {
   justification!: string;
 }
 
-export class ReflectionSection {
-  @Prop({ required: true })
-  title!: string;
-
-  @Prop({ required: true })
-  text!: string;
-}
-
-// A rendered output document field — the granular probes projected into the
-// document fields the trainee submits (e.g. "Brief Description").
+// A rendered output document field the trainee submits (e.g. "Brief Description").
 export class ComposedSection {
   @Prop({ required: true })
   sectionId!: string;
@@ -109,9 +100,6 @@ export class Artefact {
   @Prop({ type: String, maxlength: 200, default: null })
   title!: string | null;
 
-  @Prop({ type: [ReflectionSection], default: null })
-  reflection!: ReflectionSection[] | null;
-
   @Prop({ type: [Capability], default: null })
   capabilities!: Capability[] | null;
 
@@ -127,7 +115,8 @@ export class Artefact {
   @Prop({ type: Number, default: null })
   readinessScore!: number | null;
 
-  // The reflection projected into the output document fields the trainee submits.
+  // The rendered document fields the trainee submits (e.g. "Brief Description").
+  // The single source of truth for the entry body — shown, edited, versioned.
   @Prop({ type: [ComposedSection], default: null, _id: false })
   composedDocument!: ComposedSection[] | null;
 

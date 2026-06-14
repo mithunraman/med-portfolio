@@ -91,6 +91,16 @@ export const CCR_TEMPLATE: ArtefactTemplate = {
       label: 'Brief Description',
       order: 0,
       required: true,
+      // Synthesise the five factual probes into one flowing vignette. The Brief
+      // Description exists to set up the reflection (RCGP: 3–5 sentences, context
+      // not a full case presentation), so a single call that sees the whole is
+      // what keeps it tight — concatenating the probes independently cannot.
+      composePrompt:
+        'Combine the probes into one flowing case vignette of 3–5 sentences, in this ' +
+        'order: presentation → clinical findings → clinical reasoning → management → ' +
+        'outcome. It exists only to give enough context for the reflection that follows, ' +
+        'so keep it tight and factual — context, not a full case presentation. Omit any ' +
+        'probe with no content. Add nothing that is not already in the probes.',
       probes: CCR_BRIEF_DESCRIPTION_PROBES,
     },
     {

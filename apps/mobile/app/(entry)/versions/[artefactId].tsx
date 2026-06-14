@@ -190,18 +190,16 @@ export default function VersionHistoryScreen() {
                 </View>
               )}
 
-              {selectedVersion?.reflection && selectedVersion.reflection.length > 0 && (
+              {selectedVersion?.composedDocument && selectedVersion.composedDocument.length > 0 && (
                 <View style={styles.previewSection}>
-                  <Text style={[styles.previewLabel, { color: colors.textSecondary }]}>
-                    Reflection
-                  </Text>
-                  {selectedVersion.reflection.map((section, index) => (
+                  <Text style={[styles.previewLabel, { color: colors.textSecondary }]}>Entry</Text>
+                  {selectedVersion.composedDocument.map((field, index) => (
                     <View key={index} style={[styles.previewCard, { backgroundColor: colors.surface }]}>
                       <Text style={[styles.previewCardTitle, { color: colors.text }]}>
-                        {section.title}
+                        {field.label}
                       </Text>
                       <Text style={[styles.previewCardBody, { color: colors.textSecondary }]}>
-                        {section.text}
+                        {field.text}
                       </Text>
                     </View>
                   ))}

@@ -1,21 +1,21 @@
-import { ArtefactTemplate, OutputSection, Probe, ReadinessTier } from './types';
+import { ArtefactTemplate, Probe, ReadinessTier, Section } from './types';
 
 /**
- * Flatten a template's output sections into the ordered list of leaf probes.
+ * Flatten a template's sections into the ordered list of leaf probes.
  *
  * Nodes that elicit, score, or organise content operate on probes (the granular
- * units), not on output sections (the document shape). This is the single place
- * that knows how to descend the hierarchy.
+ * units), not on sections (the document shape). This is the single place that
+ * knows how to descend the hierarchy.
  */
 export function leafProbes(template: ArtefactTemplate): Probe[] {
   return template.sections.flatMap((s) => s.probes);
 }
 
-/** Find the output section that owns a given probe id, or undefined. */
-export function outputSectionForProbe(
+/** Find the section that owns a given probe id, or undefined. */
+export function sectionForProbe(
   template: ArtefactTemplate,
   probeId: string
-): OutputSection | undefined {
+): Section | undefined {
   return template.sections.find((s) => s.probes.some((p) => p.id === probeId));
 }
 
@@ -25,13 +25,13 @@ export function probeThreshold(probe: Probe): ReadinessTier {
 }
 
 /**
- * Wrap a flat list of probes into output sections — one section per probe.
+ * Wrap a flat list of probes into sections — one section per probe.
  *
  * Migration helper for templates that have not yet been designed with a true
  * many-probes-to-one-field hierarchy. Each probe becomes its own document
  * field, preserving the pre-hierarchy behaviour exactly.
  */
-export function flatSections(probes: Probe[]): OutputSection[] {
+export function flatSections(probes: Probe[]): Section[] {
   return probes.map((probe, order) => ({
     id: probe.id,
     label: probe.label,

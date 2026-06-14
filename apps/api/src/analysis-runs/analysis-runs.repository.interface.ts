@@ -17,6 +17,8 @@ export interface CreateAnalysisRunData {
   };
 }
 
+type ReflectTrace = import('../portfolio-graph/portfolio-graph.state').ReflectTrace;
+
 export interface UpdateAnalysisRunData {
   status?: AnalysisRunStatus;
   snapshotRange?: {
@@ -27,6 +29,7 @@ export interface UpdateAnalysisRunData {
   artefactId?: Types.ObjectId | null;
   currentStep?: string | null;
   error?: { code: string; message: string } | null;
+  reflectTrace?: ReflectTrace | null;
 }
 
 export interface IAnalysisRunsRepository {

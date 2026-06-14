@@ -1,6 +1,5 @@
 export { ArtefactAdvisoryBanner } from './ArtefactAdvisoryBanner';
 export { Button } from './Button';
-export { CompositeDocument } from './artefact/CompositeDocument';
 export { ReviewSheet } from './artefact/ReviewSheet';
 export { MessageList } from './chat';
 export { StarRating } from './common/StarRating';

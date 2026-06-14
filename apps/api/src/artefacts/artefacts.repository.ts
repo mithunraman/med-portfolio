@@ -22,7 +22,7 @@ export function artefactTombstoneUpdate() {
   return {
     $set: {
       title: '[deleted]',
-      reflection: [],
+      composedDocument: [],
       capabilities: [],
       tags: {},
       review: null,

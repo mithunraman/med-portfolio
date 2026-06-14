@@ -178,19 +178,19 @@ export function createGeneratePdpNode(deps: GraphDeps) {
     const cid = state.conversationId;
     logger.log(`[${cid}] Generating PDP`);
 
-    // ── Guard: no reflection ──
-    if (!state.reflection || state.reflection.length === 0) {
-      logger.warn(`[${cid}] No reflection available — skipping PDP generation`);
+    // ── Guard: no entry body ──
+    if (!state.composedDocument || state.composedDocument.length === 0) {
+      logger.warn(`[${cid}] No entry body available — skipping PDP generation`);
       return { pdpGoals: [] };
     }
 
     const specialty = Number(state.specialty) as Specialty;
     const config = getSpecialtyConfig(specialty);
 
-    // ── Format covered reflection sections into text for the prompt ──
-    const reflectionText = state.reflection
-      .filter((s) => s.covered && s.text.trim().length > 0)
-      .map((s) => `## ${s.title}\n${s.text}`)
+    // ── Format the rendered entry sections into text for the prompt ──
+    const reflectionText = state.composedDocument
+      .filter((s) => s.text.trim().length > 0)
+      .map((s) => `## ${s.label}\n${s.text}`)
       .join('\n\n');
 
     // ── Build and send prompt ──

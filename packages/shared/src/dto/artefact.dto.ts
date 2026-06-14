@@ -40,14 +40,6 @@ export const CapabilitySchema = z.object({
 
 export type Capability = z.infer<typeof CapabilitySchema>;
 
-// Reflection section schema
-export const ReflectionSectionSchema = z.object({
-  title: z.string(),
-  text: z.string(),
-});
-
-export type ReflectionSection = z.infer<typeof ReflectionSectionSchema>;
-
 // Completeness signal — which required sections were left unmet when the analysis
 // graph finished (loop exhausted or trainee disengaged). Drives a soft "needs your
 // input" nudge and lets the UI highlight the specific sections. null until analysis
@@ -122,7 +114,6 @@ export const ArtefactSchema = z.object({
   artefactType: z.string().nullable(),
   artefactTypeLabel: z.string().nullable(),
   title: z.string().nullable(),
-  reflection: z.array(ReflectionSectionSchema).nullable(),
   pdpGoals: z.array(PdpGoalSchema).nullable(),
   capabilities: z.array(CapabilitySchema).nullable(),
   completeness: CompletenessSchema.nullable(),
@@ -180,10 +171,18 @@ export const FinaliseArtefactRequestSchema = z.object({
 
 export type FinaliseArtefactRequest = z.infer<typeof FinaliseArtefactRequestSchema>;
 
-// Edit request schemas
+// Edit request schemas — the trainee edits the rendered entry fields. Each edit
+// targets a section by id and overwrites its text; the label is server-owned.
+export const EditArtefactSectionSchema = z.object({
+  sectionId: z.string(),
+  text: z.string(),
+});
+
+export type EditArtefactSection = z.infer<typeof EditArtefactSectionSchema>;
+
 export const EditArtefactRequestSchema = z.object({
   title: z.string().max(200).optional(),
-  reflection: z.array(ReflectionSectionSchema).optional(),
+  composedDocument: z.array(EditArtefactSectionSchema).optional(),
 });
 
 export type EditArtefactRequest = z.infer<typeof EditArtefactRequestSchema>;
@@ -201,7 +200,7 @@ export const ArtefactVersionSchema = z.object({
   version: z.number(),
   timestamp: z.string().datetime(),
   title: z.string().nullable(),
-  reflection: z.array(ReflectionSectionSchema).nullable(),
+  composedDocument: z.array(ComposedDocumentFieldSchema).nullable(),
 });
 
 export type ArtefactVersion = z.infer<typeof ArtefactVersionSchema>;

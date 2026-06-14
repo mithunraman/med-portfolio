@@ -30,6 +30,7 @@ export function analysisRunTombstoneUpdate() {
       currentStep: null,
       currentQuestion: null,
       error: null,
+      reflectTrace: null,
     },
   };
 }

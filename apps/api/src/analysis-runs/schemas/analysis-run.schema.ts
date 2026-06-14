@@ -3,6 +3,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
 import { Conversation } from '../../conversations/schemas/conversation.schema';
+import type { ReflectTrace } from '../../portfolio-graph/portfolio-graph.state';
 
 export class SnapshotRange {
   @Prop({ type: Types.ObjectId, default: null })
@@ -70,6 +71,14 @@ export class AnalysisRun {
 
   @Prop({ type: AnalysisRunError, default: null })
   error!: AnalysisRunError | null;
+
+  // Immutable debug/eval trace of the reflect step (per-section probe extraction,
+  // synthesised narrative, verification verdict, shipped text). Server-only —
+  // never projected to a client DTO. Cleared by the tombstone payload on delete
+  // since it embeds trainee clinical content. Stored as Mixed: it is read by
+  // developers, never queried by shape.
+  @Prop({ type: [Object], default: null })
+  reflectTrace!: ReflectTrace | null;
 
   createdAt!: Date;
   updatedAt!: Date;

@@ -4,13 +4,18 @@ import { PortfolioStateType, ReadinessEntry, ReadinessTier } from '../portfolio-
 /** Terse ReadinessEntry — deriveCompleteness only reads `.tier`. */
 const entry = (tier: ReadinessTier): ReadinessEntry => ({ score: 0, tier, meetsThreshold: false });
 
-/** Build a minimal state — deriveCompleteness only reads four fields. */
+/**
+ * Build a minimal state — deriveCompleteness reads missingSections, probeReadiness,
+ * hasEnoughInfo, and resolves labels from the template (specialty + entryType).
+ * Specialty '100' is GP; entry type CLINICAL_CASE_REVIEW uses the CCR template.
+ */
 function makeState(overrides: Partial<PortfolioStateType>): PortfolioStateType {
   return {
+    specialty: '100',
+    entryType: 'CLINICAL_CASE_REVIEW',
     missingSections: [],
     probeReadiness: {},
     hasEnoughInfo: true,
-    reflection: null,
     ...overrides,
   } as PortfolioStateType;
 }
@@ -21,20 +26,17 @@ describe('deriveCompleteness', () => {
     expect(result).toEqual({ complete: true, unmetSections: [] });
   });
 
-  it('marks an uncovered (missing-tier) section as missing', () => {
+  it('marks an uncovered (missing-tier) section as missing, labelled from the template', () => {
     const result = deriveCompleteness(
       makeState({
         hasEnoughInfo: false,
         missingSections: ['reflection'],
         probeReadiness: { reflection: entry('missing') },
-        reflection: [
-          { sectionId: 'reflection', title: 'Reflection & Learning', text: '', covered: false },
-        ],
       })
     );
     expect(result.complete).toBe(false);
     expect(result.unmetSections).toEqual([
-      { sectionId: 'reflection', label: 'Reflection & Learning', status: 'missing' },
+      { sectionId: 'reflection', label: 'Reflection', status: 'missing' },
     ]);
   });
 
@@ -44,9 +46,6 @@ describe('deriveCompleteness', () => {
         hasEnoughInfo: false,
         missingSections: ['reflection'],
         probeReadiness: { reflection: entry('shallow') },
-        reflection: [
-          { sectionId: 'reflection', title: 'Reflection & Learning', text: 'it went ok', covered: true },
-        ],
       })
     );
     expect(result.unmetSections[0].status).toBe('shallow');
@@ -58,24 +57,21 @@ describe('deriveCompleteness', () => {
         hasEnoughInfo: false,
         missingSections: ['outcome', 'reflection'],
         probeReadiness: { outcome: entry('missing'), reflection: entry('shallow') },
-        reflection: [
-          { sectionId: 'outcome', title: 'Patient Outcome', text: '', covered: false },
-          { sectionId: 'reflection', title: 'Reflection & Learning', text: 'fine', covered: true },
-        ],
       })
     );
     expect(result.unmetSections).toHaveLength(2);
     expect(result.unmetSections.map((s) => s.sectionId)).toEqual(['outcome', 'reflection']);
+    expect(result.unmetSections.map((s) => s.label)).toEqual(['Patient Outcome', 'Reflection']);
     expect(result.unmetSections.map((s) => s.status)).toEqual(['missing', 'shallow']);
   });
 
-  it('falls back to the section id when no reflection title is present', () => {
+  it('falls back to the section id when no template is resolvable (no entry type yet)', () => {
     const result = deriveCompleteness(
       makeState({
+        entryType: undefined,
         hasEnoughInfo: false,
         missingSections: ['management'],
         probeReadiness: { management: entry('missing') },
-        reflection: null,
       })
     );
     expect(result.unmetSections[0].label).toBe('management');

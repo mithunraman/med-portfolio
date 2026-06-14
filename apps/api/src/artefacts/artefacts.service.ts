@@ -51,7 +51,11 @@ import {
 } from '../pdp-goals/pdp-goals.repository.interface';
 import { PdpGoalsService } from '../pdp-goals/pdp-goals.service';
 import { VersionHistoryService } from '../version-history';
-import { ARTEFACTS_REPOSITORY, IArtefactsRepository } from './artefacts.repository.interface';
+import {
+  ARTEFACTS_REPOSITORY,
+  IArtefactsRepository,
+  UpdateArtefactData,
+} from './artefacts.repository.interface';
 import { CreateArtefactDto, ListArtefactsDto } from './dto';
 import { toArtefactDto } from './mappers/artefact.mapper';
 import type { Artefact as ArtefactSchema } from './schemas/artefact.schema';
@@ -427,11 +431,7 @@ export class ArtefactsService {
   }
 
   async editArtefact(userId: string, xid: string, dto: EditArtefactRequest): Promise<Artefact> {
-    const editData: { title?: string; reflection?: Array<{ title: string; text: string }> } = {};
-    if (dto.title !== undefined) editData.title = dto.title;
-    if (dto.reflection !== undefined) editData.reflection = dto.reflection;
-
-    if (Object.keys(editData).length === 0) {
+    if (dto.title === undefined && dto.composedDocument === undefined) {
       throw new BadRequestException('No editable fields provided');
     }
 
@@ -443,7 +443,18 @@ export class ArtefactsService {
           throw new BadRequestException('Artefact can only be edited in IN_REVIEW status');
         }
 
-        // Snapshots are { title, reflection } only — the embedded review is
+        const editData: UpdateArtefactData = {};
+        if (dto.title !== undefined) editData.title = dto.title;
+        if (dto.composedDocument !== undefined) {
+          // Each edit targets a section by id and overwrites its text; label and
+          // order stay server-owned. Edits to unknown section ids are ignored.
+          const edits = new Map(dto.composedDocument.map((e) => [e.sectionId, e.text]));
+          editData.composedDocument = (artefactDoc.composedDocument ?? []).map((s) =>
+            edits.has(s.sectionId) ? { ...s, text: edits.get(s.sectionId)! } : s
+          );
+        }
+
+        // Snapshots are { title, composedDocument } only — the embedded review is
         // intentionally not versioned, so editing/restoring never touches it.
         await this.versionHistoryService.createVersion(
           VersionHistoryEntity.ARTEFACT,
@@ -451,7 +462,7 @@ export class ArtefactsService {
           new Types.ObjectId(userId),
           {
             title: artefactDoc.title,
-            reflection: artefactDoc.reflection,
+            composedDocument: artefactDoc.composedDocument,
           },
           session
         );
@@ -511,7 +522,12 @@ export class ArtefactsService {
         version: v.version,
         timestamp: v.timestamp.toISOString(),
         title: (v.snapshot.title as string) ?? null,
-        reflection: (v.snapshot.reflection as Array<{ title: string; text: string }>) ?? null,
+        composedDocument:
+          (v.snapshot.composedDocument as Array<{
+            sectionId: string;
+            label: string;
+            text: string;
+          }>) ?? null,
       })),
     };
   }
@@ -547,19 +563,19 @@ export class ArtefactsService {
           new Types.ObjectId(userId),
           {
             title: artefactDoc.title,
-            reflection: artefactDoc.reflection,
+            composedDocument: artefactDoc.composedDocument,
           },
           session
         );
 
-        const editData: { title?: string; reflection?: Array<{ title: string; text: string }> } =
-          {};
+        const editData: UpdateArtefactData = {};
         if (targetVersion.snapshot.title !== undefined) {
           editData.title = targetVersion.snapshot.title as string;
         }
-        if (targetVersion.snapshot.reflection !== undefined) {
-          editData.reflection = targetVersion.snapshot.reflection as Array<{
-            title: string;
+        if (targetVersion.snapshot.composedDocument !== undefined) {
+          editData.composedDocument = targetVersion.snapshot.composedDocument as Array<{
+            sectionId: string;
+            label: string;
             text: string;
           }>;
         }
@@ -670,7 +686,7 @@ export class ArtefactsService {
           {
             status: ArtefactStatus.IN_REVIEW,
             artefactType: sourceArtefact.artefactType ?? null,
-            reflection: sourceArtefact.reflection ?? null,
+            composedDocument: sourceArtefact.composedDocument ?? null,
             capabilities: sourceArtefact.capabilities ?? null,
             tags: sourceArtefact.tags ?? null,
           },

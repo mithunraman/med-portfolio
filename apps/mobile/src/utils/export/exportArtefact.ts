@@ -26,7 +26,7 @@ function buildFileName(artefact: Artefact): string {
 
 function exportContentSummary(artefact: Artefact) {
   return {
-    hasReflection: !!artefact.reflection?.some((s) => s.text),
+    hasReflection: !!artefact.composedDocument?.some((s) => s.text),
     hasCapabilities: !!artefact.capabilities?.some((c) => c.name || c.evidence),
     hasPdpGoals: !!artefact.pdpGoals?.some(
       (g) => g.status !== PdpGoalStatus.ARCHIVED && g.status !== PdpGoalStatus.DELETED && g.goal
@@ -46,12 +46,12 @@ function buildPlainText(artefact: Artefact): string {
   lines.push(`Date: ${formatDate(artefact.createdAt)}`);
   lines.push('');
 
-  const reflections = artefact.reflection?.filter((s) => s.text);
-  if (reflections?.length) {
-    lines.push('REFLECTION');
+  const fields = artefact.composedDocument?.filter((s) => s.text);
+  if (fields?.length) {
+    lines.push('ENTRY');
     lines.push('-'.repeat(20));
-    for (const s of reflections) {
-      lines.push(`\n${s.title}`);
+    for (const s of fields) {
+      lines.push(`\n${s.label}`);
       lines.push(s.text);
     }
     lines.push('');

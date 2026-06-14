@@ -59,7 +59,7 @@ function makeFinalState() {
     userId: oid().toString(),
     entryType: 'CLINICAL_ENCOUNTER',
     title: 'Test Entry',
-    reflection: [{ sectionId: 'reflection', title: 'Reflection', text: 'Some text', covered: true }],
+    composedDocument: [{ sectionId: 'brief_description', label: 'Brief Description', text: 'Some text' }],
     capabilities: [
       { code: 'CAP1', name: 'Cap 1', tier: 'strong', reasoning: 'good', quote: 'a verbatim span' },
     ],

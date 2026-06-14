@@ -2,7 +2,6 @@ import type { GoalSelectionState, StatusVariant } from '@/components';
 import {
   ArtefactAdvisoryBanner,
   Button,
-  CompositeDocument,
   DraftStatusPill,
   EditableReflectionSection,
   EditableTitle,
@@ -26,7 +25,7 @@ import {
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
 import { formatTimeAgo } from '@/utils/formatTimeAgo';
-import type { PdpGoalSelection, ReflectionSection } from '@acme/shared';
+import type { ComposedDocumentField, PdpGoalSelection } from '@acme/shared';
 import { ArtefactStatus, PdpGoalStatus } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -98,7 +97,7 @@ export default function EntryDetailScreen() {
   // ── Edit State ──
 
   const [editedTitle, setEditedTitle] = useState<string | null>(null);
-  const [editedReflection, setEditedReflection] = useState<ReflectionSection[] | null>(null);
+  const [editedDocument, setEditedDocument] = useState<ComposedDocumentField[] | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0]));
   const [selectedCapability, setSelectedCapability] = useState<{
     name: string;
@@ -116,15 +115,12 @@ export default function EntryDetailScreen() {
   const canExport =
     artefact?.status === ArtefactStatus.IN_REVIEW || artefact?.status === ArtefactStatus.COMPLETED;
 
-  const hasChanges = editedTitle !== null || editedReflection !== null;
+  const hasChanges = editedTitle !== null || editedDocument !== null;
 
-  // Current displayed values (edited or server)
+  // Current displayed values (edited or server). The composed document is the
+  // single source of truth for the entry body — shown and edited in place.
   const displayTitle = editedTitle ?? artefact?.title ?? '';
-  const displayReflection = editedReflection ?? artefact?.reflection ?? [];
-  // Composed document — the canonical FourteenFish-shaped entry. When present it
-  // leads the screen; the editable Reflection section is then shown only while in
-  // review (for refinement) or as a fallback for legacy entries that lack it.
-  const composedDocument = artefact?.composedDocument ?? [];
+  const displayDocument = editedDocument ?? artefact?.composedDocument ?? [];
 
   // ── Edit Handlers ──
 
@@ -133,15 +129,16 @@ export default function EntryDetailScreen() {
   }, []);
 
   const handleSectionSave = useCallback(
-    (title: string, text: string) => {
+    (_title: string, text: string) => {
       if (editingSectionIndex === null) return;
-      setEditedReflection((prev) => {
-        const sections = [...(prev ?? artefact?.reflection ?? [])];
-        sections[editingSectionIndex] = { title, text };
+      setEditedDocument((prev) => {
+        const sections = [...(prev ?? artefact?.composedDocument ?? [])];
+        const current = sections[editingSectionIndex];
+        if (current) sections[editingSectionIndex] = { ...current, text };
         return sections;
       });
     },
-    [editingSectionIndex, artefact?.reflection]
+    [editingSectionIndex, artefact?.composedDocument]
   );
 
   // ── Save Changes ──
@@ -149,21 +146,27 @@ export default function EntryDetailScreen() {
   const handleSaveChanges = useCallback(async () => {
     if (!artefactId || !hasChanges) return;
 
-    const payload: { artefactId: string; title?: string; reflection?: ReflectionSection[] } = {
+    const payload: {
+      artefactId: string;
+      title?: string;
+      composedDocument?: Array<{ sectionId: string; text: string }>;
+    } = {
       artefactId,
     };
     if (editedTitle !== null) payload.title = editedTitle;
-    if (editedReflection !== null) payload.reflection = editedReflection;
+    if (editedDocument !== null) {
+      payload.composedDocument = editedDocument.map((s) => ({ sectionId: s.sectionId, text: s.text }));
+    }
 
     const result = await dispatch(editArtefact(payload));
     if (editArtefact.fulfilled.match(result)) {
       setEditedTitle(null);
-      setEditedReflection(null);
+      setEditedDocument(null);
       Alert.alert('Saved', 'Your changes have been saved.');
     } else {
       Alert.alert('Error', 'Failed to save changes. Please try again.');
     }
-  }, [artefactId, hasChanges, editedTitle, editedReflection, dispatch]);
+  }, [artefactId, hasChanges, editedTitle, editedDocument, dispatch]);
 
   const handleDiscardChanges = useCallback(() => {
     Alert.alert('Discard changes?', 'All unsaved edits will be lost.', [
@@ -173,7 +176,7 @@ export default function EntryDetailScreen() {
         style: 'destructive',
         onPress: () => {
           setEditedTitle(null);
-          setEditedReflection(null);
+          setEditedDocument(null);
         },
       },
     ]);
@@ -193,7 +196,7 @@ export default function EntryDetailScreen() {
           style: 'destructive',
           onPress: () => {
             setEditedTitle(null);
-            setEditedReflection(null);
+            setEditedDocument(null);
             navigation.dispatch(e.data.action);
           },
         },
@@ -552,23 +555,15 @@ export default function EntryDetailScreen() {
         {/* Soft "needs your input" advisory — shows only in review with unmet sections */}
         <ArtefactAdvisoryBanner artefactId={artefactId} />
 
-        {/* Composed entry document — the canonical FourteenFish-shaped output */}
-        {composedDocument.length > 0 && (
+        {/* Entry document — the canonical FourteenFish-shaped output, editable in
+            place while in review. Single source of truth for the entry body. */}
+        {displayDocument.length > 0 && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Entry</Text>
-            <CompositeDocument fields={composedDocument} />
-          </View>
-        )}
-
-        {/* Reflection Sections — primary when there's no composed document, otherwise
-            kept only while editable so reviewers can still refine the text. */}
-        {displayReflection.length > 0 && (composedDocument.length === 0 || isEditable) && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Reflection</Text>
-            {displayReflection.map((section, index) => (
+            {displayDocument.map((field, index) => (
               <EditableReflectionSection
-                key={index}
-                section={section}
+                key={field.sectionId}
+                section={{ title: field.label, text: field.text }}
                 editable={isEditable}
                 expanded={expandedSections.has(index)}
                 onToggleExpand={() => toggleSection(index)}
@@ -652,11 +647,11 @@ export default function EntryDetailScreen() {
           visible={editingSectionIndex !== null}
           sectionTitle={
             editingSectionIndex !== null
-              ? (displayReflection[editingSectionIndex]?.title ?? '')
+              ? (displayDocument[editingSectionIndex]?.label ?? '')
               : ''
           }
           sectionText={
-            editingSectionIndex !== null ? (displayReflection[editingSectionIndex]?.text ?? '') : ''
+            editingSectionIndex !== null ? (displayDocument[editingSectionIndex]?.text ?? '') : ''
           }
           onSave={handleSectionSave}
           onClose={() => setEditingSectionIndex(null)}

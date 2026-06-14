@@ -7,12 +7,12 @@ export type ReadinessTier = 'adequate' | 'strong';
  * A probe is the leaf elicitation/scoring unit of a template.
  *
  * Probes drive targeted questions and per-dimension gap detection. Several
- * probes are composed into one OutputSection at render time (e.g. presentation,
+ * probes are composed into one Section at render time (e.g. presentation,
  * reasoning, management and outcome all compose into "Brief description").
  *
  * Probes carry what TemplateSection historically carried; the only additions
  * are `descriptorCriteria` (graded-rubric depth cues, Phase 1) and the implicit
- * parent OutputSection that owns them.
+ * parent Section that owns them.
  */
 export interface Probe {
   /** Unique identifier for this probe (e.g., "clinical_reasoning") */
@@ -43,11 +43,11 @@ export interface Probe {
 }
 
 /**
- * An output section is a field of the final document (e.g. the FourteenFish
- * "Brief description"). It owns one or more elicitation probes. The document
- * the trainee submits is the projection of probe content grouped by section.
+ * A section is a field of the final document (e.g. the FourteenFish "Brief
+ * description"). It owns one or more elicitation probes; the rendered field is
+ * the combination of its probe content.
  */
-export interface OutputSection {
+export interface Section {
   /** Unique identifier for this document field (e.g., "brief_description") */
   id: string;
   /** Human-readable heading shown in the rendered entry */
@@ -56,8 +56,17 @@ export interface OutputSection {
   order: number;
   /** Whether this field must be present for ARCP */
   required: boolean;
-  /** Elicitation/scoring probes composed into this field */
+  /** Elicitation/scoring probes combined into this field */
   probes: Probe[];
+  /**
+   * How to combine this section's probes into the displayed field text. When
+   * set, the reflect node synthesises the probes into one narrative following
+   * this guidance (verified against the probes, with a deterministic concat as
+   * the floor). When absent, the field is a deterministic concat/passthrough of
+   * the probe content. Shape guidance only — it never overrides the node's
+   * faithfulness contract (no facts/reasoning beyond what the probes contain).
+   */
+  composePrompt?: string;
 }
 
 /**
@@ -72,8 +81,8 @@ export interface ArtefactTemplate {
   id: string;
   /** Human-readable template name */
   name: string;
-  /** Ordered list of output sections (document fields) that make up the entry */
-  sections: OutputSection[];
+  /** Ordered list of sections (document fields) that make up the entry */
+  sections: Section[];
   /** Target word count range for the generated reflection */
   wordCountRange: { min: number; max: number };
 }

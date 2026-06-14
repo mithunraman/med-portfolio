@@ -64,6 +64,20 @@ describe('structured-output schema field order', () => {
     ]);
   });
 
+  it('reflect section emits probes (CoT scaffold) before the composed narrative', () => {
+    expect(Object.keys(reflectResponseSchema.shape.sections.element.shape)).toEqual([
+      'sectionId',
+      'probes',
+      'narrative',
+    ]);
+  });
+
+  it('reflect probe emits text then covered', () => {
+    expect(
+      Object.keys(reflectResponseSchema.shape.sections.element.shape.probes.element.shape)
+    ).toEqual(['probeId', 'title', 'text', 'covered']);
+  });
+
   it('completenessResponseSchema emits the partition (assignments) before grades', () => {
     expect(Object.keys(completenessResponseSchema.shape)).toEqual(['assignments', 'sectionGrades']);
   });

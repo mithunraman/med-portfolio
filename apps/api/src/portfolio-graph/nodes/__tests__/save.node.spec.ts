@@ -40,7 +40,9 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
       { code: 'CAP1', name: 'Cap 1', tier: 'strong', reasoning: 'test', quote: 'a verbatim span' },
     ],
     title: 'Test Entry',
-    reflection: [{ sectionId: 'reflection', title: 'Reflection', text: 'Some reflection', covered: true }],
+    composedDocument: [
+      { sectionId: 'reflection', label: 'Reflection', text: 'Some reflection' },
+    ],
 
     pdpGoals: [],
 
@@ -95,11 +97,11 @@ describe('SaveNode (validation-only)', () => {
     );
   });
 
-  it('should throw when reflection is missing', async () => {
+  it('should throw when the entry body is missing', async () => {
     const node = createSaveNode(makeDeps());
 
-    await expect(node(makeState({ reflection: null }))).rejects.toThrow(
-      'Cannot save: reflection is not set',
+    await expect(node(makeState({ composedDocument: [] }))).rejects.toThrow(
+      'Cannot save: entry body (composedDocument) is not set',
     );
   });
 

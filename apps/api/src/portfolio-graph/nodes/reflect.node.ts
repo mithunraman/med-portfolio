@@ -57,15 +57,6 @@ export const reflectResponseSchema = z.object({
       })
     )
     .describe('All template sections in order'),
-  capabilityAnnotations: z
-    .array(
-      z.object({
-        sectionId: z.string().describe('Which probe/section demonstrates this capability'),
-        capabilityCode: z.string().describe('Capability code, e.g., "C-06"'),
-        evidence: z.string().describe('Direct quote from the transcript as evidence'),
-      })
-    )
-    .describe('Capabilities mapped to sections as metadata — NOT embedded in section text'),
   title: z
     .string()
     .max(100)
@@ -148,11 +139,9 @@ type — that metadata is stored separately and is noise in list views.
 - Good: "72-year-old woman with a 6-week dry cough"
 - Bad: "ST2 GP trainee managing a 72-year-old lady with a dry cough"
 
-## Capability Annotations
+## Capabilities (context only)
 
-The following capabilities were confirmed by the trainee. For each, identify which section demonstrates it and provide a brief evidence quote from the transcript.
-
-Do NOT mention capabilities in the section text. Return them as capabilityAnnotations only.
+The following capabilities were confirmed by the trainee. They are organised separately — do NOT mention, name, or reference them in the section text. Use them only as background on what the entry already evidences.
 
 {capabilityBlock}
 
@@ -326,8 +315,7 @@ export function createReflectNode(deps: GraphDeps) {
     const composedCount = reflectTrace.filter((t) => t.source === 'composed').length;
     logger.log(
       `[${cid}] Reflection organised: ${composedDocument.length} fields, ${wordCount} words, ` +
-        `${composedCount} synthesised, ${response.capabilityAnnotations.length} capability annotations, ` +
-        `maxTokens=${maxTokens}, transcriptWords=${transcriptWordCount}`
+        `${composedCount} synthesised, maxTokens=${maxTokens}, transcriptWords=${transcriptWordCount}`
     );
 
     return {

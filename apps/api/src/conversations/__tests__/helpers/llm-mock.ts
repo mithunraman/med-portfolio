@@ -289,7 +289,6 @@ export function reflectResponse(
       probes: Array<{ probeId: string; title: string; text: string; covered: boolean }>;
       narrative: string;
     }>;
-    capabilityAnnotations: Array<{ sectionId: string; capabilityCode: string; evidence: string }>;
   }>
 ) {
   return {
@@ -345,7 +344,6 @@ export function reflectResponse(
         narrative: '',
       },
     ],
-    capabilityAnnotations: overrides?.capabilityAnnotations ?? [],
     title: overrides?.title ?? 'T2DM Management in Elderly Patient',
   };
 }

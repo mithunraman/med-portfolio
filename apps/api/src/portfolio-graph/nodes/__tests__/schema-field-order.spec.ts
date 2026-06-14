@@ -57,11 +57,7 @@ describe('structured-output schema field order', () => {
   });
 
   it('reflectResponseSchema emits title last', () => {
-    expect(Object.keys(reflectResponseSchema.shape)).toEqual([
-      'sections',
-      'capabilityAnnotations',
-      'title',
-    ]);
+    expect(Object.keys(reflectResponseSchema.shape)).toEqual(['sections', 'title']);
   });
 
   it('reflect section emits probes (CoT scaffold) before the composed narrative', () => {

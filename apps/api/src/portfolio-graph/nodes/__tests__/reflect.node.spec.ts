@@ -96,7 +96,6 @@ function makeResponse(briefNarrative: string) {
         narrative: '',
       },
     ],
-    capabilityAnnotations: [],
     title: '72-year-old woman with a 6-week dry cough',
   };
 }

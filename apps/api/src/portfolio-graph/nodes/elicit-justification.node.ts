@@ -165,7 +165,7 @@ export function createElicitJustificationNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       elicitJustificationResponseSchema,
-      { model: OpenAIModels.GPT_4_1, temperature: 0.1, maxTokens: 1500 }
+      { model: OpenAIModels.GPT_4_1, temperature: 0.3, maxTokens: 1500 }
     );
 
     const byCode = new Map(response.justifications.map((j) => [j.code, j]));

@@ -7,8 +7,13 @@ import { tierToConfidence } from './capability-grading.util';
 
 const logger = new Logger('PresentCapabilitiesNode');
 
-/** RCGP allows at most 3 capabilities per entry. */
-const MAX_CONFIRMED_CAPABILITIES = 3;
+/**
+ * Cap on confirmed capabilities, matching the tagger's MAX_CAPABILITIES (5) so
+ * every option the user is offered can actually be saved. RCGP entries are
+ * typically mapped to ≤3 capabilities, but the user makes that final selection
+ * later when uploading to their portfolio website — we don't truncate here.
+ */
+const MAX_CONFIRMED_CAPABILITIES = 5;
 
 interface CapabilitiesResumeValue {
   selectedCodes: string[];
@@ -75,8 +80,8 @@ export function createPresentCapabilitiesNode(deps: GraphDeps) {
 
     if (selectedCodes.length > 0) {
       const selectedSet = new Set(selectedCodes);
-      // Keep the tier-ranked order from state.capabilities and cap at the
-      // RCGP maximum of 3 — if the user selected more, keep the strongest.
+      // Keep the tier-ranked order from state.capabilities; the cap (5) matches
+      // the number of options offered, so all valid selections are retained.
       const filteredCapabilities = state.capabilities
         .filter((cap) => selectedSet.has(cap.code))
         .slice(0, MAX_CONFIRMED_CAPABILITIES);

@@ -108,6 +108,25 @@ describe('PresentCapabilitiesNode', () => {
     expect(result.capabilities).toEqual([capabilities[0]]);
   });
 
+  it('should retain all five selected capabilities (no truncation to 3)', async () => {
+    const capabilities = [
+      { code: 'CAP1', name: 'Fitness to Practise', tier: 'strong' as const, reasoning: 'r1', quote: 'q1' },
+      { code: 'CAP2', name: 'Ethical Approach', tier: 'strong' as const, reasoning: 'r2', quote: 'q2' },
+      { code: 'CAP3', name: 'Communication', tier: 'adequate' as const, reasoning: 'r3', quote: 'q3' },
+      { code: 'CAP4', name: 'Data Gathering', tier: 'adequate' as const, reasoning: 'r4', quote: 'q4' },
+      { code: 'CAP5', name: 'Clinical Examination', tier: 'adequate' as const, reasoning: 'r5', quote: 'q5' },
+    ];
+
+    (interrupt as jest.Mock).mockReturnValue({
+      selectedCodes: ['CAP1', 'CAP2', 'CAP3', 'CAP4', 'CAP5'],
+    });
+
+    const node = createPresentCapabilitiesNode(makeDeps());
+    const result = await node(makeState({ capabilities }));
+
+    expect(result.capabilities).toEqual(capabilities);
+  });
+
   it('should keep all capabilities when no valid selections on resume', async () => {
     const capabilities = [
       { code: 'CAP1', name: 'Data Gathering', tier: 'strong' as const, reasoning: 'Took a history', quote: 'I took a history' },

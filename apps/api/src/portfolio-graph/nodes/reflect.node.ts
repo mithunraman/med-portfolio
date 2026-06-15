@@ -261,7 +261,8 @@ function assembleSections(
  * present (verified against the probes), else concatenating. The AI formats and
  * sorts; it does not generate reflective content.
  *
- * Low temperature (0.1): this is extraction/formatting, not creative writing.
+ * Low temperature (0.3): this is extraction/formatting, not creative writing,
+ * with a little headroom for fluent section prose.
  * Token budget is proportional to transcript length.
  */
 export function createReflectNode(deps: GraphDeps) {
@@ -303,7 +304,7 @@ export function createReflectNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       reflectResponseSchema,
-      { model: OpenAIModels.GPT_4_1, temperature: 0.1, maxTokens }
+      { model: OpenAIModels.GPT_4_1, temperature: 0.3, maxTokens }
     );
 
     const { composedDocument, reflectTrace } = assembleSections(template, response.sections, cid);

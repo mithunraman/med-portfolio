@@ -183,7 +183,7 @@ function validateGoals(goals: GeneratedGoal[]): PdpGoal[] {
  * Factory that creates the generate-pdp node with injected dependencies.
  *
  * Generates SMART PDP goals from the organised reflection and tagged
- * capabilities. Uses gpt-4.1 at low temperature (0.2) — PDP actions
+ * capabilities. Uses gpt-4.1 at low temperature (0.3) — PDP actions
  * should be grounded and deterministic, not creative. Goals are based
  * on learning needs the trainee explicitly identified, not AI-inferred gaps.
  */
@@ -222,7 +222,7 @@ export function createGeneratePdpNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       generatePdpResponseSchema,
-      { model: OpenAIModels.GPT_4_1, temperature: 0.2, maxTokens: 1000 }
+      { model: OpenAIModels.GPT_4_1, temperature: 0.3, maxTokens: 1000 }
     );
 
     const pdpGoals = validateGoals(response.goals);

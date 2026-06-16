@@ -21,8 +21,3 @@ In your response:
 Be pragmatic and specific. Do not assume the reviewer is correct. Separate facts from assumptions, and avoid over-engineering the answer.
 
 Code review comment:
-
-A9. Capture audit metadata (IP, UA) via a shared helper or @RequestAudit() decorator [LOW]
-File: acknowledgements.controller.ts:18-19
-
-Inline (req.ip ?? null, typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : null) is the first audit-trail extraction in the codebase. Will recur for every consent endpoint. Pre-extract into common/utils/audit-meta.ts or a Nest param decorator now while there's one call site.

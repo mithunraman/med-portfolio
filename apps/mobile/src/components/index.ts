@@ -1,10 +1,10 @@
+export { ReviewSheet } from './artefact/ReviewSheet';
 export { ArtefactAdvisoryBanner } from './ArtefactAdvisoryBanner';
 export { Button } from './Button';
-export { ReviewSheet } from './artefact/ReviewSheet';
 export { MessageList } from './chat';
-export { StarRating } from './common/StarRating';
 export { ChatComposer } from './ChatComposer';
 export { ChatEmptyState } from './ChatEmptyState';
+export { StarRating } from './common/StarRating';
 export { CoverageRing } from './CoverageRing';
 export { EditableReflectionSection } from './EditableReflectionSection';
 export { EditableTitle } from './EditableTitle';
@@ -25,18 +25,20 @@ export {
   DraftStatusPill,
   ReadinessBar,
   ReadinessHeader,
-  TierChip,
   TIER_VISUALS,
+  TierChip,
   type ReadinessTier,
 } from './readiness';
 export { SectionHeader } from './SectionHeader';
 export { SettingsItem, type SettingsItemProps } from './SettingsItem';
 export { SettingsSection } from './SettingsSection';
+export { ShowMoreRow } from './ShowMoreRow';
 export { SingleSelect, type SingleSelectOption } from './SingleSelect';
 export { SkeletonBone } from './SkeletonBone';
 export { SkeletonList } from './SkeletonList';
 export { SkeletonProvider } from './SkeletonProvider';
 export { StatusPill, type StatusVariant } from './StatusPill';
 export { StepIndicator } from './StepIndicator';
+export { useCollapsibleOptions } from './useCollapsibleOptions';
 export { WaveDots } from './WaveDots';
 export { WelcomeModule } from './WelcomeModule';

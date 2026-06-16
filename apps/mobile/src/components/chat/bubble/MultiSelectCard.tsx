@@ -49,6 +49,12 @@ export const MultiSelectCard = memo(function MultiSelectCard({
     [question.options]
   );
 
+  // Active: full list in server order. Answered: collapse to a selected-only summary.
+  const displayOptions = useMemo(
+    () => (isAnswered ? options.filter((o) => displayKeys.includes(o.key)) : options),
+    [isAnswered, options, displayKeys]
+  );
+
   return (
     <SelectionCardShell
       heading="Select all that apply"
@@ -59,10 +65,13 @@ export const MultiSelectCard = memo(function MultiSelectCard({
       onConfirm={handleConfirm}
     >
       <MultiSelect
-        options={options}
+        options={displayOptions}
         selectedKeys={displayKeys}
         onToggle={handleToggle}
         disabled={isAnswered || !isActive}
+        // Locked summaries never fold: a user may have selected enough options
+        // to trip the collapse threshold, which would otherwise hide their own choices.
+        collapsible={!isAnswered}
       />
     </SelectionCardShell>
   );

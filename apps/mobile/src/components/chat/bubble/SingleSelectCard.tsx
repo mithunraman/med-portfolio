@@ -48,6 +48,12 @@ export const SingleSelectCard = memo(function SingleSelectCard({
     [question.options]
   );
 
+  // Active: full list in server order. Answered: collapse to the selected option only.
+  const displayOptions = useMemo(
+    () => (isAnswered ? options.filter((o) => o.key === selectedKey) : options),
+    [isAnswered, options, selectedKey]
+  );
+
   return (
     <SelectionCardShell
       heading="Select one"
@@ -58,11 +64,14 @@ export const SingleSelectCard = memo(function SingleSelectCard({
       onConfirm={handleConfirm}
     >
       <SingleSelect
-        options={options}
+        options={displayOptions}
         selectedKey={selectedKey}
         onSelect={handleSelect}
         disabled={isAnswered || !isActive}
         suggestedKey={question.suggestedKey}
+        // Mirrors MultiSelectCard: a locked summary never folds. Redundant for
+        // single-select (answered = one option) but kept for symmetry.
+        collapsible={!isAnswered}
       />
     </SelectionCardShell>
   );

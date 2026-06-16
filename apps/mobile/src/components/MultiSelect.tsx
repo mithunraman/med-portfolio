@@ -2,6 +2,8 @@ import { Feather } from '@expo/vector-icons';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme';
+import { ShowMoreRow } from './ShowMoreRow';
+import { useCollapsibleOptions } from './useCollapsibleOptions';
 
 const ANIMATION_DURATION = 250;
 
@@ -17,6 +19,8 @@ interface MultiSelectProps {
   selectedKeys: string[];
   onToggle: (key: string) => void;
   disabled?: boolean;
+  /** Fold long lists behind a one-way "Show more" affordance. */
+  collapsible?: boolean;
 }
 
 export const MultiSelect = memo(function MultiSelect({
@@ -24,9 +28,13 @@ export const MultiSelect = memo(function MultiSelect({
   selectedKeys,
   onToggle,
   disabled = false,
+  collapsible = false,
 }: MultiSelectProps) {
   const { colors, isDark } = useTheme();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const { visible, hiddenCount, collapsed, expand } = useCollapsibleOptions(options, {
+    enabled: collapsible,
+  });
 
   const handleToggleExpand = useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key));
@@ -34,7 +42,7 @@ export const MultiSelect = memo(function MultiSelect({
 
   return (
     <View style={styles.container}>
-      {options.map((option) => {
+      {visible.map((option) => {
         const isSelected = selectedKeys.includes(option.key);
 
         return (
@@ -51,6 +59,7 @@ export const MultiSelect = memo(function MultiSelect({
           />
         );
       })}
+      {collapsed && <ShowMoreRow hiddenCount={hiddenCount} onPress={expand} />}
     </View>
   );
 });

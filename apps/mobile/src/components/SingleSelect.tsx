@@ -2,6 +2,8 @@ import { Feather } from '@expo/vector-icons';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme';
+import { ShowMoreRow } from './ShowMoreRow';
+import { useCollapsibleOptions } from './useCollapsibleOptions';
 
 const ANIMATION_DURATION = 250;
 
@@ -18,6 +20,8 @@ interface SingleSelectProps {
   onSelect: (key: string) => void;
   disabled?: boolean;
   suggestedKey?: string;
+  /** Fold long lists behind a one-way "Show more" affordance. */
+  collapsible?: boolean;
 }
 
 export const SingleSelect = memo(function SingleSelect({
@@ -26,9 +30,13 @@ export const SingleSelect = memo(function SingleSelect({
   onSelect,
   disabled = false,
   suggestedKey,
+  collapsible = false,
 }: SingleSelectProps) {
   const { colors, isDark } = useTheme();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const { visible, hiddenCount, collapsed, expand } = useCollapsibleOptions(options, {
+    enabled: collapsible,
+  });
 
   const handleToggleExpand = useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key));
@@ -36,7 +44,7 @@ export const SingleSelect = memo(function SingleSelect({
 
   return (
     <View style={styles.container}>
-      {options.map((option) => {
+      {visible.map((option) => {
         const isSelected = option.key === selectedKey;
         const isSuggested = option.key === suggestedKey && !selectedKey;
 
@@ -55,6 +63,7 @@ export const SingleSelect = memo(function SingleSelect({
           />
         );
       })}
+      {collapsed && <ShowMoreRow hiddenCount={hiddenCount} onPress={expand} />}
     </View>
   );
 });

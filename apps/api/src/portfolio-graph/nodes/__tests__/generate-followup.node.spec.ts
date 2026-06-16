@@ -99,23 +99,38 @@ describe('GenerateFollowupNode', () => {
     });
   });
 
-  describe('rubric-aware prompt (Option A)', () => {
-    it("injects each missing section's descriptorCriteria so questions target the grading bar", async () => {
+  describe('rubric-calibrated prompt', () => {
+    it("injects each missing section's full Depth rubric and the current→target depth delta", async () => {
       const deps = makeDeps();
       const mock = deps.llmService.invokeStructured as jest.Mock;
       mock.mockResolvedValue({
         data: { questions: [{ sectionId: 'reflection', question: 'q', hints: { examples: ['e'] } }] },
       });
 
-      await createGenerateFollowupNode(deps)(makeState({ followUpRound: 0 }));
+      // reflection is missing and its threshold is 'strong' (CCR template).
+      await createGenerateFollowupNode(deps)(
+        makeState({
+          followUpRound: 0,
+          missingSections: ['reflection'],
+          probeReadiness: {
+            reflection: { score: 0.4, tier: 'shallow', meetsThreshold: false },
+          },
+        })
+      );
 
       const prompt = (mock.mock.calls[0][0] as Array<{ content: unknown }>)
         .map((m) => String(m.content))
         .join('\n');
-      expect(prompt).toContain('What strong looks like:');
+      // Rubric reaches the prompt under its calibrated label.
+      expect(prompt).toContain('Depth rubric (the grading bar):');
       // The CCR reflection rubric phrase must reach the prompt, so the question
       // is steered to elicit maintain/improve/stop evaluation (not uncertainty).
       expect(prompt).toContain('maintain, improve, or stop in future practice');
+      // All three tiers reach the model, not just the top one — this is the delta.
+      expect(prompt).toContain('Adequate =');
+      expect(prompt).toContain('Shallow =');
+      // The current→target depth gap is made explicit for hint calibration.
+      expect(prompt).toContain('Current depth: shallow → Target depth: strong');
     });
   });
 

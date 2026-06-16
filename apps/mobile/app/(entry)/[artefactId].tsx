@@ -2,7 +2,6 @@ import type { GoalSelectionState, StatusVariant } from '@/components';
 import {
   ArtefactAdvisoryBanner,
   Button,
-  DraftStatusPill,
   EditableReflectionSection,
   EditableTitle,
   ExportSheet,
@@ -579,12 +578,6 @@ export default function EntryDetailScreen() {
               </View>
             )}
             <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />
-            {artefact.draftStatus && <DraftStatusPill status={artefact.draftStatus} />}
-            {artefact.readinessScore != null && (
-              <Text style={[styles.readinessScore, { color: colors.textSecondary }]}>
-                {Math.round(artefact.readinessScore)}/10
-              </Text>
-            )}
           </View>
         </View>
 
@@ -969,10 +962,6 @@ const styles = StyleSheet.create({
   typeBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-  },
-  readinessScore: {
-    fontSize: 13,
-    fontWeight: '700',
   },
   sectionTitle: {
     fontSize: 17,

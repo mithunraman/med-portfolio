@@ -12,7 +12,6 @@ import {
   createGeneratePdpNode,
   createPresentCapabilitiesNode,
   createPresentClassificationNode,
-  createPresentDraftNode,
   createReflectNode,
   createSaveNode,
   createTagCapabilitiesNode,
@@ -65,13 +64,9 @@ export function classifyRouter(
  * After check_completeness: proceed to tag capabilities or generate follow-up questions.
  */
 function completenessRouter(state: PortfolioStateType): 'generate_followup' | 'tag_capabilities' {
-  // Exit the elicitation loop when the rubric clears (hasEnoughInfo), when the
-  // trainee chooses to stop, or — as a backstop — when the round cap is hit.
-  if (
-    !state.hasEnoughInfo &&
-    !state.userStopped &&
-    state.followUpRound < MAX_FOLLOWUP_ROUNDS
-  ) {
+  // Exit the elicitation loop when the rubric clears (hasEnoughInfo) or — as a
+  // backstop — when the round cap is hit.
+  if (!state.hasEnoughInfo && state.followUpRound < MAX_FOLLOWUP_ROUNDS) {
     return 'generate_followup';
   }
   return 'tag_capabilities';
@@ -114,7 +109,6 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
     .addNode('elicit_justification', createElicitJustificationNode(deps))
     .addNode('reflect', createReflectNode(deps))
     .addNode('generate_pdp', createGeneratePdpNode(deps))
-    .addNode('present_draft', createPresentDraftNode(deps))
     .addNode('save', createSaveNode(deps))
 
     // ── Edges ──
@@ -149,8 +143,7 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
     .addEdge('present_capabilities', 'elicit_justification')
     .addEdge('elicit_justification', 'reflect')
     .addEdge('reflect', 'generate_pdp')
-    .addEdge('generate_pdp', 'present_draft')
-    .addEdge('present_draft', 'save')
+    .addEdge('generate_pdp', 'save')
     .addEdge('save', END);
 
   return graph.compile({ checkpointer });

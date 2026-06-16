@@ -126,8 +126,10 @@ describe('ARCP Readiness Engine — Integration', () => {
    *     → (resume) → check_completeness(all rich/adequate → cleared)
    *     → tag_capabilities → present_capabilities ⏸️
    *     → (resume, select C-06) → elicit_justification → reflect → generate_pdp
-   *     → present_draft ⏸️
-   *     → (resume, submit) → save → END
+   *     → save → END
+   *
+   * present_capabilities is the final interrupt — once resumed, the graph runs
+   * straight to completion (no sign-off gate).
    *
    * LLM call sequence (6): classify, completeness, tag, justification, reflect, pdp.
    */
@@ -196,41 +198,15 @@ describe('ARCP Readiness Engine — Integration', () => {
     expect(capQuestion.readiness.draftStatus).toBe('in_progress');
     expect(capQuestion.readiness.sections.length).toBeGreaterThan(0);
 
-    // ── Step 3: Resume capabilities (select C-06) → justify → reflect → pdp → present_draft ──
+    // ── Step 3: Resume capabilities (select C-06) → justify → reflect → pdp → save → COMPLETED ──
     await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
       type: 'resume',
       messageId: capabilityMsg.xid,
       value: { selectedKeys: ['C-06'] },
     });
-    const status3 = await waitForRunStable(harness, conv._id, true);
-    expect(status3).toEqual({ status: 'awaiting_input', node: 'present_draft' });
-    expect(llmMock.callCount).toBe(6); // + justification + reflect + pdp
-
-    const msgs3 = await getMessagesForConversation(conv._id);
-    const draftMsg = msgs3.find(
-      (m) =>
-        m.role === MessageRole.ASSISTANT &&
-        (m.question as any)?.questionType === 'single_select' &&
-        (m.question as SingleSelectQuestion).options.some((o) => o.key === 'submit')
-    );
-    assertDefined(draftMsg);
-    const draftQuestion = draftMsg.question as SingleSelectQuestion;
-    expect(draftQuestion.options.map((o) => o.key)).toEqual(['submit', 'draft']);
-    // Sign-off carries the composed document in its readiness snapshot (Phase 4 + 5).
-    assertDefined(draftQuestion.readiness);
-    expect(draftQuestion.readiness.draftStatus).toBe('ready');
-    const briefField = draftQuestion.readiness.document.find((d) => d.sectionId === 'brief_description');
-    assertDefined(briefField);
-    expect(briefField.text).toContain('55-year-old');
-
-    // ── Step 4: Resume present_draft (submit) → save → COMPLETED ──
-    await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-      type: 'resume',
-      messageId: draftMsg.xid,
-      value: { selectedKey: 'submit' },
-    });
     const finalStatus = await waitForRunStable(harness, conv._id, true);
     expect(finalStatus).toEqual({ status: 'completed' });
+    expect(llmMock.callCount).toBe(6); // + justification + reflect + pdp
     llmMock.assertAllConsumed();
 
     // ── Final assertions: the persisted artefact carries the new fields ──
@@ -258,80 +234,5 @@ describe('ARCP Readiness Engine — Integration', () => {
     // PDP still generated
     const pdpGoals = await getPdpGoalsForArtefact();
     expect(pdpGoals).toHaveLength(1);
-  });
-
-  /**
-   * "Save as draft" at the sign-off forces needs_attention even when the rubric
-   * cleared — nothing finalises silently as complete.
-   */
-  it('saves as needs_attention when the trainee chooses "save as draft" at sign-off', async () => {
-    const conv = await createTestConversation();
-    await createCompleteUserMessage(
-      conv._id,
-      'I saw a 55-year-old patient with poorly controlled type 2 diabetes. HbA1c was 72. ' +
-        'I started metformin and discussed lifestyle changes.'
-    );
-
-    llmMock.enqueue(classifyResponse());
-    llmMock.enqueue(allCoveredResponse());
-    llmMock.enqueue(tagCapabilitiesResponse());
-    llmMock.enqueue(
-      elicitJustificationResponse([
-        {
-          code: 'C-06',
-          justification: 'Initiated metformin.',
-          justificationTier: 'strong',
-          sourceQuote: 'I started metformin and discussed lifestyle changes',
-        },
-      ])
-    );
-    llmMock.enqueue(reflectResponse());
-    llmMock.enqueue(generatePdpResponse());
-
-    await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-    await waitForRunStable(harness, conv._id);
-    const m1 = await getMessagesForConversation(conv._id);
-    const classMsg = m1.find(
-      (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
-    );
-    assertDefined(classMsg);
-
-    await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-      type: 'resume',
-      messageId: classMsg.xid,
-      value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
-    });
-    await waitForRunStable(harness, conv._id, true);
-    const m2 = await getMessagesForConversation(conv._id);
-    const capMsg = m2.find(
-      (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'multi_select'
-    );
-    assertDefined(capMsg);
-
-    await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-      type: 'resume',
-      messageId: capMsg.xid,
-      value: { selectedKeys: ['C-06'] },
-    });
-    await waitForRunStable(harness, conv._id, true);
-    const m3 = await getMessagesForConversation(conv._id);
-    const draftMsg = m3.find(
-      (m) =>
-        m.role === MessageRole.ASSISTANT &&
-        (m.question as SingleSelectQuestion | undefined)?.options?.some((o) => o.key === 'draft')
-    );
-    assertDefined(draftMsg);
-
-    // Choose "save as draft"
-    await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-      type: 'resume',
-      messageId: draftMsg.xid,
-      value: { selectedKey: 'draft' },
-    });
-    expect(await waitForRunStable(harness, conv._id, true)).toEqual({ status: 'completed' });
-
-    const artefact = await getTestArtefact();
-    assertDefined(artefact);
-    expect(artefact.draftStatus).toBe('needs_attention');
   });
 });

@@ -320,35 +320,19 @@ describe('Conversations Integration Tests', () => {
       const tagHumanContent = tagHumanMsg.content as string;
       expect(tagHumanContent).toContain('type 2 diabetes');
 
-      // ── Step 4: Resume capabilities (select only C-06) → justify → reflect → pdp → present_draft ──
+      // ── Step 4: Resume capabilities (select only C-06) → justify → reflect → pdp → save → END ──
+      // present_capabilities is the final interrupt — the graph runs straight to
+      // completion once resumed (no sign-off gate).
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
         type: 'resume',
         messageId: capabilityMsg.xid,
         value: { selectedKeys: ['C-06'] },
       });
-      const draftStatus = await waitForRunStable(harness, conv._id, true);
-
-      expect(draftStatus).toEqual({ status: 'awaiting_input', node: 'present_draft' });
-      expect(llmMock.callCount).toBe(8); // +elicit_justification + reflect + generate_pdp
-      llmMock.assertAllConsumed();
-
-      // ── Step 5: Resume present_draft (submit) → save → END ──
-      const draftMsgs = await getMessagesForConversation(conv._id);
-      const draftMsg = draftMsgs.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT &&
-          (m.question as SingleSelectQuestion | undefined)?.options?.some((o) => o.key === 'submit')
-      );
-      assertDefined(draftMsg);
-
-      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-        type: 'resume',
-        messageId: draftMsg.xid,
-        value: { selectedKey: 'submit' },
-      });
       const finalStatus = await waitForRunStable(harness, conv._id, true);
 
       expect(finalStatus).toEqual({ status: 'completed' });
+      expect(llmMock.callCount).toBe(8); // +elicit_justification + reflect + generate_pdp
+      llmMock.assertAllConsumed();
 
       // ── Final assertions: messages ──
       const allMsgs = await getMessagesForConversation(conv._id);

@@ -9,7 +9,6 @@ import type {
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../../theme';
-import { DraftSignOffCard, isSignOffQuestion } from './DraftSignOffCard';
 import { FreeTextPrompts } from './FreeTextPrompts';
 import { MultiSelectCard } from './MultiSelectCard';
 import { SingleSelectCard } from './SingleSelectCard';
@@ -39,16 +38,7 @@ export const QuestionContent = memo(function QuestionContent({
         <Text style={[styles.text, { color: colors.text }]}>{message.content}</Text>
       )}
 
-      {question.questionType === 'single_select' && isSignOffQuestion(question) && (
-        <DraftSignOffCard
-          question={question as SingleSelectQuestion}
-          answer={(message.answer as SingleSelectAnswer) ?? null}
-          isActive={isActiveQuestion}
-          onAnswer={handleAnswer}
-        />
-      )}
-
-      {question.questionType === 'single_select' && !isSignOffQuestion(question) && (
+      {question.questionType === 'single_select' && (
         <SingleSelectCard
           question={question as SingleSelectQuestion}
           answer={(message.answer as SingleSelectAnswer) ?? null}

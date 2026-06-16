@@ -10,11 +10,11 @@ For each phase, include:
 
 1. Objective — what this phase is meant to achieve
 2. Scope — what is included and excluded
-3. Implementation plan — the concrete steps to execute
-4. Deliverables — expected outputs for the phase
-5. Best industry patterns — the relevant architectural, engineering, or delivery patterns being applied, and why they fit
-6. Code guidance — how the implementation should remain clean, reusable, modular, and minimal
-7. Risks or tradeoffs — any important considerations, dependencies, or constraints
+3. Best industry patterns — the relevant architectural, engineering, or delivery patterns being applied, and why they fit
+4. Risks or tradeoffs — any important considerations, dependencies, or constraints
+5. Code guidance — how the implementation should remain clean, reusable, modular, and minimal
+6. Implementation plan — the concrete steps to execute
+7. Deliverables — expected outputs for the phase
 
 Implementation requirements:
 

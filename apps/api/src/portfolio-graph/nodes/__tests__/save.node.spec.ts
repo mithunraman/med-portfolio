@@ -55,18 +55,15 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
 describe('SaveNode (validation-only)', () => {
   it("returns draftStatus 'ready' when the rubric has cleared", async () => {
     const node = createSaveNode(makeDeps());
-    const result = await node(makeState({ hasEnoughInfo: true, userStopped: false }));
+    const result = await node(makeState({ hasEnoughInfo: true }));
 
     expect(result).toEqual({ draftStatus: 'ready' });
   });
 
-  it("returns draftStatus 'needs_attention' when gaps remain or the trainee stopped", async () => {
+  it("returns draftStatus 'needs_attention' when gaps remain", async () => {
     const node = createSaveNode(makeDeps());
 
     expect(await node(makeState({ hasEnoughInfo: false }))).toEqual({
-      draftStatus: 'needs_attention',
-    });
-    expect(await node(makeState({ hasEnoughInfo: true, userStopped: true }))).toEqual({
       draftStatus: 'needs_attention',
     });
   });

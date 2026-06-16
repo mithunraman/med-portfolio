@@ -92,13 +92,6 @@ export class AnalysisResumeHandler implements OutboxHandler {
             data.resumeValue as { selectedCodes: string[] }
           );
           break;
-        case 'present_draft':
-          pausedNode = await this.portfolioGraphService.resumeGraph(
-            threadId,
-            'present_draft',
-            data.resumeValue as { confirmed: boolean }
-          );
-          break;
       }
 
       if (pausedNode) {

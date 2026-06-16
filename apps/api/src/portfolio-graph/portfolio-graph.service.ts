@@ -42,7 +42,6 @@ export interface GraphResumeMap {
   ask_followup: true;
   ask_clarification: true;
   present_capabilities: { selectedCodes: string[] };
-  present_draft: { confirmed: boolean };
 }
 
 export type InterruptNode = keyof GraphResumeMap;
@@ -279,7 +278,6 @@ export class PortfolioGraphService implements OnModuleInit {
       'ask_followup',
       'ask_clarification',
       'present_capabilities',
-      'present_draft',
     ]);
 
     if (interruptNodes.has(nextNode)) {
@@ -545,42 +543,6 @@ export class PortfolioGraphService implements OnModuleInit {
         };
       }
 
-      case 'draft': {
-        const draftStatus = interruptValue.draftStatus as 'ready' | 'needs_attention';
-        const draftContent =
-          draftStatus === 'ready'
-            ? "Your entry is ARCP-ready. Here's the assembled draft in your own words - submit it, or save as a draft to keep editing."
-            : "Here's your assembled draft. Some sections could still be stronger - submit as-is, or save as a draft to keep working on it.";
-
-        // The sign-off verdict lives in the interrupt payload (save hasn't run yet,
-        // so state.draftStatus is still 'in_progress') - reflect it on the card.
-        const question: SingleSelectQuestion = {
-          questionType: 'single_select',
-          options: [
-            { key: 'submit', label: 'Submit' },
-            { key: 'draft', label: 'Save as draft' },
-          ],
-          suggestedKey: draftStatus === 'ready' ? 'submit' : 'draft',
-          readiness: readiness ? { ...readiness, draftStatus } : undefined,
-        };
-
-        return {
-          idempotencyKey,
-          pausedNode,
-          questionType: 'single_select',
-          messageData: {
-            conversation: conversationOid,
-            userId: userOid,
-            role: MessageRole.ASSISTANT,
-            messageType: MessageType.TEXT,
-            rawContent: draftContent,
-            content: draftContent,
-            status: MessageStatus.COMPLETE,
-            question,
-            idempotencyKey,
-          },
-        };
-      }
     }
 
     return null;

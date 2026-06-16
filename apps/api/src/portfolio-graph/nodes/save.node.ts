@@ -38,11 +38,10 @@ export function createSaveNode(deps: GraphDeps) {
     if (state.capabilities.length === 0) throw new Error(`[${cid}] Cannot save: no capabilities`);
 
     // ── Readiness gate (Phase 6): never finalise silently as "complete" ──
-    // An entry is 'ready' only when the rubric cleared; if the trainee stopped
-    // early or gaps remain, it is saved as 'needs_attention' so the residual
-    // gaps stay visible rather than implying the entry is done.
-    const draftStatus: DraftStatus =
-      state.hasEnoughInfo && !state.userStopped ? 'ready' : 'needs_attention';
+    // An entry is 'ready' only when the rubric cleared; if gaps remain it is
+    // saved as 'needs_attention' so the residual gaps stay visible rather than
+    // implying the entry is done.
+    const draftStatus: DraftStatus = state.hasEnoughInfo ? 'ready' : 'needs_attention';
 
     logger.log(
       `[${cid}] Validation passed for artefact ${state.artefactId} ` +

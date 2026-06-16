@@ -8,6 +8,9 @@ interface EditableReflectionSectionProps {
   expanded: boolean;
   onToggleExpand: () => void;
   onEdit: () => void;
+  // Hint shown in the empty state when editable. Defaults to the section-oriented
+  // copy; callers reusing this card for other content (e.g. capabilities) override it.
+  emptyHint?: string;
 }
 
 export function EditableReflectionSection({
@@ -16,6 +19,7 @@ export function EditableReflectionSection({
   expanded,
   onToggleExpand,
   onEdit,
+  emptyHint,
 }: EditableReflectionSectionProps) {
   const { colors } = useTheme();
   const isEmpty = section.covered === false || section.text.trim().length === 0;
@@ -45,7 +49,7 @@ export function EditableReflectionSection({
           <Pressable onPress={editable ? onEdit : undefined} style={styles.emptyState}>
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
               {editable
-                ? `Tap to add your thoughts on ${section.title}`
+                ? (emptyHint ?? `Tap to add your thoughts on ${section.title}`)
                 : 'No content for this section'}
             </Text>
           </Pressable>

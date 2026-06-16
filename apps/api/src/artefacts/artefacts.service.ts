@@ -56,6 +56,7 @@ import {
   IArtefactsRepository,
   UpdateArtefactData,
 } from './artefacts.repository.interface';
+import { getSpecialtyConfig } from '../specialties/specialty.registry';
 import { CreateArtefactDto, ListArtefactsDto } from './dto';
 import { toArtefactDto } from './mappers/artefact.mapper';
 import type { Artefact as ArtefactSchema } from './schemas/artefact.schema';
@@ -431,7 +432,11 @@ export class ArtefactsService {
   }
 
   async editArtefact(userId: string, xid: string, dto: EditArtefactRequest): Promise<Artefact> {
-    if (dto.title === undefined && dto.composedDocument === undefined) {
+    if (
+      dto.title === undefined &&
+      dto.composedDocument === undefined &&
+      dto.capabilities === undefined
+    ) {
       throw new BadRequestException('No editable fields provided');
     }
 
@@ -453,9 +458,18 @@ export class ArtefactsService {
             edits.has(s.sectionId) ? { ...s, text: edits.get(s.sectionId)! } : s
           );
         }
+        if (dto.capabilities !== undefined) {
+          // Each edit targets a capability by code and overwrites only its
+          // justification; code and evidence stay server-owned. Edits to unknown
+          // codes are ignored. The name is never persisted (derived in the mapper).
+          const edits = new Map(dto.capabilities.map((e) => [e.code, e.justification]));
+          editData.capabilities = (artefactDoc.capabilities ?? []).map((c) =>
+            edits.has(c.code) ? { ...c, justification: edits.get(c.code)! } : c
+          );
+        }
 
-        // Snapshots are { title, composedDocument } only — the embedded review is
-        // intentionally not versioned, so editing/restoring never touches it.
+        // Snapshots are { title, composedDocument, capabilities } — the embedded
+        // review is intentionally not versioned, so editing/restoring never touches it.
         await this.versionHistoryService.createVersion(
           VersionHistoryEntity.ARTEFACT,
           artefactDoc._id,
@@ -463,6 +477,7 @@ export class ArtefactsService {
           {
             title: artefactDoc.title,
             composedDocument: artefactDoc.composedDocument,
+            capabilities: artefactDoc.capabilities,
           },
           session
         );
@@ -517,6 +532,13 @@ export class ArtefactsService {
       artefact._id
     );
 
+    // Capabilities are snapshotted in their persisted shape ({ code, evidence,
+    // justification }); project to the preview shape — enrich the name from the
+    // registry (as the mapper does) and drop the evidence quote (provenance).
+    const capabilityNameMap = new Map(
+      getSpecialtyConfig(artefact.specialty).capabilities.map((c) => [c.code, c.name])
+    );
+
     return {
       versions: versions.map((v) => ({
         version: v.version,
@@ -528,6 +550,14 @@ export class ArtefactsService {
             label: string;
             text: string;
           }>) ?? null,
+        capabilities:
+          (v.snapshot.capabilities as Array<{ code: string; justification?: string }>)?.map(
+            (c) => ({
+              code: c.code,
+              name: capabilityNameMap.get(c.code) ?? c.code,
+              justification: c.justification ?? '',
+            })
+          ) ?? null,
       })),
     };
   }
@@ -564,6 +594,7 @@ export class ArtefactsService {
           {
             title: artefactDoc.title,
             composedDocument: artefactDoc.composedDocument,
+            capabilities: artefactDoc.capabilities,
           },
           session
         );
@@ -572,12 +603,17 @@ export class ArtefactsService {
         if (targetVersion.snapshot.title !== undefined) {
           editData.title = targetVersion.snapshot.title as string;
         }
+        // Snapshots are untyped (Record<string, unknown>); assert back to the repo
+        // field types rather than re-declaring their shapes inline.
         if (targetVersion.snapshot.composedDocument !== undefined) {
-          editData.composedDocument = targetVersion.snapshot.composedDocument as Array<{
-            sectionId: string;
-            label: string;
-            text: string;
-          }>;
+          editData.composedDocument =
+            targetVersion.snapshot.composedDocument as UpdateArtefactData['composedDocument'];
+        }
+        // Versions created before capability editing won't carry this key; the
+        // guard leaves today's capabilities untouched in that case (no backfill).
+        if (targetVersion.snapshot.capabilities !== undefined) {
+          editData.capabilities =
+            targetVersion.snapshot.capabilities as UpdateArtefactData['capabilities'];
         }
 
         const updateResult = await this.artefactsRepository.updateArtefactById(

@@ -205,6 +205,24 @@ export default function VersionHistoryScreen() {
                   ))}
                 </View>
               )}
+
+              {selectedVersion?.capabilities && selectedVersion.capabilities.length > 0 && (
+                <View style={styles.previewSection}>
+                  <Text style={[styles.previewLabel, { color: colors.textSecondary }]}>
+                    Capabilities
+                  </Text>
+                  {selectedVersion.capabilities.map((cap, index) => (
+                    <View key={index} style={[styles.previewCard, { backgroundColor: colors.surface }]}>
+                      <Text style={[styles.previewCardTitle, { color: colors.text }]}>
+                        {cap.name}
+                      </Text>
+                      <Text style={[styles.previewCardBody, { color: colors.textSecondary }]}>
+                        {cap.justification || 'No justification'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </ScrollView>
 
             {/* Restore Button */}

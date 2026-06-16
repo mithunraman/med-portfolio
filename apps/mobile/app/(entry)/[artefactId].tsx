@@ -25,7 +25,12 @@ import {
 import { useTheme } from '@/theme';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
 import { formatTimeAgo } from '@/utils/formatTimeAgo';
-import type { ComposedDocumentField, PdpGoalSelection } from '@acme/shared';
+import type {
+  Capability,
+  ComposedDocumentField,
+  EditArtefactRequest,
+  PdpGoalSelection,
+} from '@acme/shared';
 import { ArtefactStatus, PdpGoalStatus } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -35,7 +40,6 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -50,6 +54,18 @@ const AI_REASONING_COLOR = '#8B5CF6';
 const COMPLETED_ACCENT = '#28a745';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Toggle a value's membership in a Set immutably (returns a new Set). Shared by
+// the section (keyed by index) and capability (keyed by code) expand toggles.
+function toggleInSet<T>(set: Set<T>, value: T): Set<T> {
+  const next = new Set(set);
+  if (next.has(value)) {
+    next.delete(value);
+  } else {
+    next.add(value);
+  }
+  return next;
+}
 
 function formatGoalDate(isoDate: string): string {
   const date = new Date(isoDate);
@@ -98,14 +114,15 @@ export default function EntryDetailScreen() {
 
   const [editedTitle, setEditedTitle] = useState<string | null>(null);
   const [editedDocument, setEditedDocument] = useState<ComposedDocumentField[] | null>(null);
+  const [editedCapabilities, setEditedCapabilities] = useState<Capability[] | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0]));
-  const [selectedCapability, setSelectedCapability] = useState<{
-    name: string;
-    evidence: string;
-    justification: string;
-  } | null>(null);
+  // Capability edit/expand state is keyed by capability code (the API's natural
+  // key), not list position — so a future display-time sort/filter can't misalign
+  // an in-flight edit onto the wrong capability.
+  const [expandedCapabilities, setExpandedCapabilities] = useState<Set<string>>(new Set());
   const [goalSelections, setGoalSelections] = useState<Map<string, GoalSelectionState>>(new Map());
   const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
+  const [editingCapabilityCode, setEditingCapabilityCode] = useState<string | null>(null);
   const [exportSheetVisible, setExportSheetVisible] = useState(false);
   const [reviewSheetVisible, setReviewSheetVisible] = useState(false);
   // Seeds a first-time (create) review from the inline star tap. Ignored on the edit
@@ -115,12 +132,18 @@ export default function EntryDetailScreen() {
   const canExport =
     artefact?.status === ArtefactStatus.IN_REVIEW || artefact?.status === ArtefactStatus.COMPLETED;
 
-  const hasChanges = editedTitle !== null || editedDocument !== null;
+  const hasChanges =
+    editedTitle !== null || editedDocument !== null || editedCapabilities !== null;
 
   // Current displayed values (edited or server). The composed document is the
   // single source of truth for the entry body — shown and edited in place.
   const displayTitle = editedTitle ?? artefact?.title ?? '';
   const displayDocument = editedDocument ?? artefact?.composedDocument ?? [];
+  const displayCapabilities = editedCapabilities ?? artefact?.capabilities ?? [];
+  const editingCapability =
+    editingCapabilityCode !== null
+      ? displayCapabilities.find((c) => c.code === editingCapabilityCode)
+      : undefined;
 
   // ── Edit Handlers ──
 
@@ -141,32 +164,47 @@ export default function EntryDetailScreen() {
     [editingSectionIndex, artefact?.composedDocument]
   );
 
+  // Mirrors handleSectionSave: overwrite only the edited capability's justification,
+  // matched by code; name and evidence stay untouched.
+  const handleCapabilitySave = useCallback(
+    (_title: string, text: string) => {
+      if (editingCapabilityCode === null) return;
+      setEditedCapabilities((prev) =>
+        (prev ?? artefact?.capabilities ?? []).map((c) =>
+          c.code === editingCapabilityCode ? { ...c, justification: text } : c
+        )
+      );
+    },
+    [editingCapabilityCode, artefact?.capabilities]
+  );
+
   // ── Save Changes ──
 
   const handleSaveChanges = useCallback(async () => {
     if (!artefactId || !hasChanges) return;
 
-    const payload: {
-      artefactId: string;
-      title?: string;
-      composedDocument?: Array<{ sectionId: string; text: string }>;
-    } = {
-      artefactId,
-    };
+    const payload: { artefactId: string } & EditArtefactRequest = { artefactId };
     if (editedTitle !== null) payload.title = editedTitle;
     if (editedDocument !== null) {
       payload.composedDocument = editedDocument.map((s) => ({ sectionId: s.sectionId, text: s.text }));
+    }
+    if (editedCapabilities !== null) {
+      payload.capabilities = editedCapabilities.map((c) => ({
+        code: c.code,
+        justification: c.justification ?? '',
+      }));
     }
 
     const result = await dispatch(editArtefact(payload));
     if (editArtefact.fulfilled.match(result)) {
       setEditedTitle(null);
       setEditedDocument(null);
+      setEditedCapabilities(null);
       Alert.alert('Saved', 'Your changes have been saved.');
     } else {
       Alert.alert('Error', 'Failed to save changes. Please try again.');
     }
-  }, [artefactId, hasChanges, editedTitle, editedDocument, dispatch]);
+  }, [artefactId, hasChanges, editedTitle, editedDocument, editedCapabilities, dispatch]);
 
   const handleDiscardChanges = useCallback(() => {
     Alert.alert('Discard changes?', 'All unsaved edits will be lost.', [
@@ -177,6 +215,7 @@ export default function EntryDetailScreen() {
         onPress: () => {
           setEditedTitle(null);
           setEditedDocument(null);
+          setEditedCapabilities(null);
         },
       },
     ]);
@@ -197,6 +236,7 @@ export default function EntryDetailScreen() {
           onPress: () => {
             setEditedTitle(null);
             setEditedDocument(null);
+            setEditedCapabilities(null);
             navigation.dispatch(e.data.action);
           },
         },
@@ -208,16 +248,12 @@ export default function EntryDetailScreen() {
 
   // ── Existing handlers ──
 
+  const toggleCapability = useCallback((code: string) => {
+    setExpandedCapabilities((prev) => toggleInSet(prev, code));
+  }, []);
+
   const toggleSection = useCallback((index: number) => {
-    setExpandedSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) {
-        next.delete(index);
-      } else {
-        next.add(index);
-      }
-      return next;
-    });
+    setExpandedSections((prev) => toggleInSet(prev, index));
   }, []);
 
   // Initialise goal selections when artefact loads in IN_REVIEW status
@@ -573,76 +609,27 @@ export default function EntryDetailScreen() {
           </View>
         )}
 
-        {/* Capabilities */}
-        {artefact.capabilities && artefact.capabilities.length > 0 && (
+        {/* Capabilities — only the trainee's justification is shown (the evidence
+            quote is internal provenance). Editable in place, mirroring the entry
+            sections: justification text is the trainee's paste-ready own words. */}
+        {displayCapabilities.length > 0 && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Capabilities</Text>
-            {artefact.capabilities.map((cap, index) => (
-              <Pressable
-                key={index}
-                onPress={() =>
-                  setSelectedCapability({
-                    name: cap.name,
-                    evidence: cap.evidence,
-                    justification: cap.justification ?? '',
-                  })
-                }
-                style={[styles.capabilityRow, { backgroundColor: colors.surface }]}
-              >
-                <Text style={[styles.capabilityCode, { color: colors.primary }]}>{cap.name}</Text>
-                <Ionicons name="information-circle-outline" size={20} color={AI_REASONING_COLOR} />
-              </Pressable>
+            {displayCapabilities.map((cap) => (
+              <EditableReflectionSection
+                key={cap.code}
+                section={{ title: cap.name, text: cap.justification ?? '' }}
+                editable={isEditable}
+                expanded={expandedCapabilities.has(cap.code)}
+                onToggleExpand={() => toggleCapability(cap.code)}
+                onEdit={() => setEditingCapabilityCode(cap.code)}
+                emptyHint={`Tap to add your justification for ${cap.name}`}
+              />
             ))}
           </View>
         )}
 
-        {/* Capability Evidence Modal */}
-        <Modal
-          visible={selectedCapability !== null}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setSelectedCapability(null)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: colors.primary }]}>
-                  {selectedCapability?.name}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setSelectedCapability(null)}
-                  style={styles.modalCloseButton}
-                >
-                  <Ionicons name="close" size={24} color={colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={styles.modalBody}>
-                <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Evidence</Text>
-                <Text style={[styles.modalText, { color: colors.text }]}>
-                  {selectedCapability?.evidence}
-                </Text>
-                {!!selectedCapability?.justification && (
-                  <>
-                    <Text
-                      style={[
-                        styles.modalLabel,
-                        styles.modalLabelSpaced,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      Justification
-                    </Text>
-                    <Text style={[styles.modalText, { color: colors.text }]}>
-                      {selectedCapability.justification}
-                    </Text>
-                  </>
-                )}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Full Screen Section Editor */}
+        {/* Full Screen Section Editor — entry sections */}
         <FullScreenSectionEditor
           visible={editingSectionIndex !== null}
           sectionTitle={
@@ -655,6 +642,15 @@ export default function EntryDetailScreen() {
           }
           onSave={handleSectionSave}
           onClose={() => setEditingSectionIndex(null)}
+        />
+
+        {/* Full Screen Section Editor — capability justifications */}
+        <FullScreenSectionEditor
+          visible={editingCapabilityCode !== null}
+          sectionTitle={editingCapability?.name ?? ''}
+          sectionText={editingCapability?.justification ?? ''}
+          onSave={handleCapabilitySave}
+          onClose={() => setEditingCapabilityCode(null)}
         />
 
         {/* PDP Goals */}
@@ -988,64 +984,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
     marginRight: 8,
-  },
-  capabilityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  capabilityCode: {
-    fontSize: 14,
-    fontWeight: '700',
-    flex: 1,
-    marginRight: 8,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContainer: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-    maxHeight: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    flex: 1,
-    marginRight: 8,
-  },
-  modalCloseButton: {
-    padding: 4,
-  },
-  modalBody: {
-    flexGrow: 0,
-  },
-  modalLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  modalLabelSpaced: {
-    marginTop: 20,
-  },
-  modalText: {
-    fontSize: 15,
-    lineHeight: 22,
   },
   pdpGoalCard: {
     borderRadius: 12,

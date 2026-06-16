@@ -180,9 +180,19 @@ export const EditArtefactSectionSchema = z.object({
 
 export type EditArtefactSection = z.infer<typeof EditArtefactSectionSchema>;
 
+// Each edit targets a capability by code and overwrites its justification; the
+// code, name and evidence are server-owned. Mirrors the section edit contract.
+export const EditArtefactCapabilitySchema = z.object({
+  code: z.string(),
+  justification: z.string().max(5000),
+});
+
+export type EditArtefactCapability = z.infer<typeof EditArtefactCapabilitySchema>;
+
 export const EditArtefactRequestSchema = z.object({
   title: z.string().max(200).optional(),
   composedDocument: z.array(EditArtefactSectionSchema).optional(),
+  capabilities: z.array(EditArtefactCapabilitySchema).optional(),
 });
 
 export type EditArtefactRequest = z.infer<typeof EditArtefactRequestSchema>;
@@ -196,11 +206,23 @@ export const UpsertArtefactReviewRequestSchema = z.object({
 export type UpsertArtefactReviewRequest = z.infer<typeof UpsertArtefactReviewRequestSchema>;
 
 // Version schemas
+// A version's capability snapshot, projected for preview: justification only
+// (the evidence quote is internal provenance and stays hidden), with the name
+// enriched from the registry so the preview can label it.
+export const ArtefactVersionCapabilitySchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  justification: z.string(),
+});
+
+export type ArtefactVersionCapability = z.infer<typeof ArtefactVersionCapabilitySchema>;
+
 export const ArtefactVersionSchema = z.object({
   version: z.number(),
   timestamp: z.string().datetime(),
   title: z.string().nullable(),
   composedDocument: z.array(ComposedDocumentFieldSchema).nullable(),
+  capabilities: z.array(ArtefactVersionCapabilitySchema).nullable(),
 });
 
 export type ArtefactVersion = z.infer<typeof ArtefactVersionSchema>;

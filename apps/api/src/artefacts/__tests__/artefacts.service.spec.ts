@@ -8,6 +8,7 @@ import {
 import { Types } from 'mongoose';
 import { err, ok } from '../../common/utils/result.util';
 import { GUEST_ARTEFACT_LIMIT } from '../../config/quota.config';
+import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import { ArtefactsService } from '../artefacts.service';
 
 // ── Helpers ──
@@ -648,7 +649,11 @@ describe('ArtefactsService', () => {
         'artefact',
         artefact._id,
         expect.any(Types.ObjectId),
-        { title: 'Old Title', composedDocument: [{ sectionId: 's1', label: 'S1', text: 'T1' }] },
+        {
+          title: 'Old Title',
+          composedDocument: [{ sectionId: 's1', label: 'S1', text: 'T1' }],
+          capabilities: null,
+        },
         expect.anything(), // session
       );
 
@@ -698,6 +703,87 @@ describe('ArtefactsService', () => {
           composedDocument: [
             { sectionId: 'brief_description', label: 'Brief Description', text: 'New Text' },
           ],
+        },
+        expect.anything(),
+      );
+    });
+
+    it('edits a capability justification by code, keeping code and evidence server-owned', async () => {
+      const artefact = makeArtefactDoc({
+        capabilities: [
+          { code: 'C-01', evidence: 'I reflected on my limits', justification: 'old just' },
+          { code: 'C-04', evidence: 'I calculated CRB-65', justification: 'old data just' },
+        ],
+      });
+      const updatedArtefact = makeArtefactDoc();
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
+      mockVersionHistoryService.countVersions.mockResolvedValue(1);
+      setupBuildArtefactDtoMocks();
+
+      await service.editArtefact(userIdStr, 'art_abc123', {
+        capabilities: [{ code: 'C-04', justification: 'my new justification' }],
+      });
+
+      expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
+        artefact._id,
+        {
+          capabilities: [
+            { code: 'C-01', evidence: 'I reflected on my limits', justification: 'old just' },
+            { code: 'C-04', evidence: 'I calculated CRB-65', justification: 'my new justification' },
+          ],
+        },
+        expect.anything(),
+      );
+    });
+
+    it('ignores capability edits targeting an unknown code', async () => {
+      const artefact = makeArtefactDoc({
+        capabilities: [{ code: 'C-01', evidence: 'e1', justification: 'j1' }],
+      });
+      const updatedArtefact = makeArtefactDoc();
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
+      mockVersionHistoryService.countVersions.mockResolvedValue(1);
+      setupBuildArtefactDtoMocks();
+
+      await service.editArtefact(userIdStr, 'art_abc123', {
+        capabilities: [{ code: 'C-99', justification: 'should be ignored' }],
+      });
+
+      expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
+        artefact._id,
+        { capabilities: [{ code: 'C-01', evidence: 'e1', justification: 'j1' }] },
+        expect.anything(),
+      );
+    });
+
+    it('snapshots capabilities before applying a capability edit', async () => {
+      const artefact = makeArtefactDoc({
+        title: 'T',
+        capabilities: [{ code: 'C-01', evidence: 'e1', justification: 'j1' }],
+      });
+      const updatedArtefact = makeArtefactDoc();
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
+      mockVersionHistoryService.countVersions.mockResolvedValue(1);
+      setupBuildArtefactDtoMocks();
+
+      await service.editArtefact(userIdStr, 'art_abc123', {
+        capabilities: [{ code: 'C-01', justification: 'new' }],
+      });
+
+      expect(mockVersionHistoryService.createVersion).toHaveBeenCalledWith(
+        'artefact',
+        artefact._id,
+        expect.any(Types.ObjectId),
+        {
+          title: 'T',
+          composedDocument: null,
+          capabilities: [{ code: 'C-01', evidence: 'e1', justification: 'j1' }],
         },
         expect.anything(),
       );
@@ -772,7 +858,11 @@ describe('ArtefactsService', () => {
         'artefact',
         artefact._id,
         expect.any(Types.ObjectId),
-        { title: 'Current Title', composedDocument: [{ sectionId: 's1', label: 'Current', text: 'Content' }] },
+        {
+          title: 'Current Title',
+          composedDocument: [{ sectionId: 's1', label: 'Current', text: 'Content' }],
+          capabilities: null,
+        },
         expect.anything(), // session
       );
     });
@@ -807,6 +897,65 @@ describe('ArtefactsService', () => {
       );
     });
 
+    it('restores capabilities from the target version snapshot', async () => {
+      const artefact = makeArtefactDoc({
+        capabilities: [{ code: 'C-01', evidence: 'e1', justification: 'edited' }],
+      });
+      const targetVersion = {
+        version: 1,
+        snapshot: {
+          title: 'Restored Title',
+          capabilities: [{ code: 'C-01', evidence: 'e1', justification: 'original' }],
+        },
+      };
+      const updatedArtefact = makeArtefactDoc({ title: 'Restored Title' });
+
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockVersionHistoryService.getVersion.mockResolvedValue(targetVersion);
+      mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
+      mockVersionHistoryService.countVersions.mockResolvedValue(2);
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      setupBuildArtefactDtoMocks();
+
+      await service.restoreVersion(userIdStr, 'art_abc123', { version: 1 });
+
+      expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
+        artefact._id,
+        {
+          title: 'Restored Title',
+          capabilities: [{ code: 'C-01', evidence: 'e1', justification: 'original' }],
+        },
+        expect.anything(),
+      );
+    });
+
+    it('leaves capabilities untouched when restoring a pre-capability-versioning snapshot', async () => {
+      const artefact = makeArtefactDoc({
+        capabilities: [{ code: 'C-01', evidence: 'e1', justification: 'current' }],
+      });
+      // Old snapshot has no `capabilities` key — restore must not wipe them.
+      const targetVersion = {
+        version: 1,
+        snapshot: { title: 'Old Title', composedDocument: null },
+      };
+      const updatedArtefact = makeArtefactDoc({ title: 'Old Title' });
+
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockVersionHistoryService.getVersion.mockResolvedValue(targetVersion);
+      mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
+      mockVersionHistoryService.countVersions.mockResolvedValue(2);
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      setupBuildArtefactDtoMocks();
+
+      await service.restoreVersion(userIdStr, 'art_abc123', { version: 1 });
+
+      expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
+        artefact._id,
+        { title: 'Old Title', composedDocument: null },
+        expect.anything(),
+      );
+    });
+
     it('creates snapshot before applying restore (non-destructive)', async () => {
       const artefact = makeArtefactDoc();
       const targetVersion = {
@@ -828,6 +977,86 @@ describe('ArtefactsService', () => {
       const snapshotOrder = mockVersionHistoryService.createVersion.mock.invocationCallOrder[0];
       const updateOrder = mockArtefactsRepo.updateArtefactById.mock.invocationCallOrder[0];
       expect(snapshotOrder).toBeLessThan(updateOrder);
+    });
+  });
+
+  // ─── getVersionHistory ───
+
+  describe('getVersionHistory', () => {
+    // Derive expected names from the registry so the assertion tracks the config,
+    // not a hardcoded descriptor string.
+    const gpCapabilities = getSpecialtyConfig(Specialty.GP).capabilities;
+    const knownCap = gpCapabilities[0];
+
+    it('projects snapshot capabilities to { code, name, justification } with name enriched and evidence dropped', async () => {
+      const artefact = makeArtefactDoc({ specialty: Specialty.GP });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockVersionHistoryService.getVersions.mockResolvedValue([
+        {
+          version: 2,
+          timestamp: new Date('2026-06-16T10:00:00.000Z'),
+          snapshot: {
+            title: 'T',
+            composedDocument: null,
+            capabilities: [
+              {
+                code: knownCap.code,
+                evidence: 'verbatim quote that must never surface',
+                justification: 'my justification',
+              },
+            ],
+          },
+        },
+      ]);
+
+      const result = await service.getVersionHistory(userIdStr, 'art_abc123');
+
+      const cap = result.versions[0].capabilities![0];
+      expect(cap).toEqual({
+        code: knownCap.code,
+        name: knownCap.name,
+        justification: 'my justification',
+      });
+      // The evidence quote is intentionally hidden provenance — it must not leak.
+      expect(cap).not.toHaveProperty('evidence');
+    });
+
+    it('falls back to the code when it is not in the registry, and to empty string for missing justification', async () => {
+      const artefact = makeArtefactDoc({ specialty: Specialty.GP });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockVersionHistoryService.getVersions.mockResolvedValue([
+        {
+          version: 1,
+          timestamp: new Date('2026-06-16T10:00:00.000Z'),
+          snapshot: {
+            capabilities: [{ code: 'Z-99', evidence: 'e' }],
+          },
+        },
+      ]);
+
+      const result = await service.getVersionHistory(userIdStr, 'art_abc123');
+
+      expect(result.versions[0].capabilities![0]).toEqual({
+        code: 'Z-99',
+        name: 'Z-99',
+        justification: '',
+      });
+    });
+
+    it('projects capabilities to null when the snapshot has none (pre-feature versions)', async () => {
+      const artefact = makeArtefactDoc({ specialty: Specialty.GP });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockVersionHistoryService.getVersions.mockResolvedValue([
+        {
+          version: 1,
+          timestamp: new Date('2026-06-16T10:00:00.000Z'),
+          snapshot: { title: 'Old', composedDocument: null },
+        },
+      ]);
+
+      const result = await service.getVersionHistory(userIdStr, 'art_abc123');
+
+      expect(result.versions[0].capabilities).toBeNull();
     });
   });
 

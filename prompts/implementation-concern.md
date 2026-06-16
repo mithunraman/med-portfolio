@@ -4,12 +4,12 @@ Assess the reviewer’s concern as a senior engineer.
 
 In your response:
 
-1. State a clear verdict: valid, partially valid, not valid, or needs more context.
-2. Explain the reviewer’s concern in plain language.
-3. Identify the technical principle involved, such as correctness, API design, security, performance, maintainability, testability, type safety, or framework conventions.
+1. Explain the reviewer’s concern in plain language.
+2. Identify the technical principle involved, such as correctness, API design, security, performance, maintainability, testability, type safety, or framework conventions.
+3. Point out any assumptions the reviewer is making.
 4. Evaluate whether the concern applies based only on the information provided.
-5. Point out any assumptions the reviewer is making.
-6. Explain possible trade-offs or edge cases.
+5. Explain possible trade-offs or edge cases.
+6. State a clear verdict: valid, partially valid, not valid, or needs more context. Work through steps 1–5 before committing to this verdict; do not state or imply the verdict earlier.
 7. Recommend a concrete resolution:
    - accept the suggestion,
    - reject it with rationale,

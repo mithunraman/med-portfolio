@@ -12,6 +12,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -87,6 +88,8 @@ export function ReviewSheet({ visible, onClose, artefact, initialRating }: Revie
   const showCounter = comment.length >= COUNTER_VISIBLE_THRESHOLD;
 
   return (
+    // This sheet is the review editor (create or edit are both upserts), so we
+    // open straight into typing via the TextInput's `autoFocus` prop.
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.flex}
@@ -101,71 +104,87 @@ export function ReviewSheet({ visible, onClose, artefact, initialRating }: Revie
           >
             <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
+            {/* Pinned header — stays in view no matter how long the comment grows */}
             <View style={styles.header}>
               <Text style={[styles.title, { color: colors.text }]}>
-                {isEditing
-                  ? 'Edit your rating of the AI'
-                  : 'How well did the AI capture this entry?'}
+                {isEditing ? 'Edit your rating of the AI' : 'How well did the AI do?'}
               </Text>
               <Pressable onPress={onClose} disabled={saving} style={styles.closeButton} hitSlop={8}>
                 <Feather name="x" size={22} color={colors.textSecondary} />
               </Pressable>
             </View>
 
-            <Text style={[styles.helper, { color: colors.textSecondary }]}>
-              Your feedback on the AI&rsquo;s response. Private to you - it helps us improve.
-            </Text>
-
-            <View style={styles.stars}>
-              <StarRating
-                value={rating}
-                onChange={setRating}
-                size={40}
-                gap={12}
-                readOnly={saving}
-              />
-            </View>
-
-            <TextInput
-              style={[
-                styles.input,
-                { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
-              ]}
-              value={comment}
-              onChangeText={setComment}
-              editable={!saving}
-              placeholder="What did the AI get right or miss? (optional)"
-              placeholderTextColor={colors.textSecondary}
-              multiline
-              maxLength={ARTEFACT_REVIEW_COMMENT_MAX_LENGTH}
-              textAlignVertical="top"
-              accessibilityLabel="Optional review"
-            />
-
-            {showCounter && (
-              <Text style={[styles.counter, { color: colors.textSecondary }]}>
-                {comment.length} / {ARTEFACT_REVIEW_COMMENT_MAX_LENGTH}
-              </Text>
-            )}
-
-            {error && <Text style={[styles.error, { color: colors.error }]}>{error}</Text>}
-
-            <Pressable
-              style={[
-                styles.submit,
-                { backgroundColor: colors.primary, opacity: rating < 1 || saving ? 0.5 : 1 },
-              ]}
-              onPress={handleSubmit}
-              disabled={rating < 1 || saving}
-              accessibilityRole="button"
-              accessibilityLabel={isEditing ? 'Save rating' : 'Submit rating'}
+            {/* Scrollable body — the comment is the only part that grows; it scrolls
+                here (and internally once capped) instead of pushing the sheet off-screen */}
+            <ScrollView
+              style={styles.body}
+              contentContainerStyle={styles.bodyContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
-              {saving ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <Text style={styles.submitText}>{isEditing ? 'Save' : 'Submit'}</Text>
+              <Text style={[styles.helper, { color: colors.textSecondary }]}>
+                Private to you - it helps us improve.
+              </Text>
+
+              <View style={styles.stars}>
+                <StarRating
+                  value={rating}
+                  onChange={setRating}
+                  size={30}
+                  gap={12}
+                  readOnly={saving}
+                />
+              </View>
+
+              <TextInput
+                autoFocus
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                  },
+                ]}
+                value={comment}
+                onChangeText={setComment}
+                editable={!saving}
+                placeholder="What did the AI get right or miss? (optional)"
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                maxLength={ARTEFACT_REVIEW_COMMENT_MAX_LENGTH}
+                textAlignVertical="top"
+                accessibilityLabel="Optional review"
+              />
+            </ScrollView>
+
+            {/* Pinned footer — counter, error and the primary action stay reachable */}
+            <View style={styles.footer}>
+              {showCounter && (
+                <Text style={[styles.counter, { color: colors.textSecondary }]}>
+                  {comment.length} / {ARTEFACT_REVIEW_COMMENT_MAX_LENGTH}
+                </Text>
               )}
-            </Pressable>
+
+              {error && <Text style={[styles.error, { color: colors.error }]}>{error}</Text>}
+
+              <Pressable
+                style={[
+                  styles.submit,
+                  { backgroundColor: colors.primary, opacity: rating < 1 || saving ? 0.5 : 1 },
+                ]}
+                onPress={handleSubmit}
+                disabled={rating < 1 || saving}
+                accessibilityRole="button"
+                accessibilityLabel={isEditing ? 'Save rating' : 'Submit rating'}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.submitText}>{isEditing ? 'Save' : 'Submit'}</Text>
+                )}
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </KeyboardAvoidingView>
@@ -186,6 +205,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
+    // Never exceed the viewport — the body scrolls instead of the sheet growing
+    // past the top of the screen and hiding the header/close button.
+    maxHeight: '90%',
   },
   handle: {
     width: 36,
@@ -198,7 +220,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 12,
+    flexShrink: 0,
+  },
+  // flexShrink lets the body give up space (and scroll) when the sheet hits its
+  // max height, while the pinned header/footer keep their size.
+  body: {
+    flexShrink: 1,
+  },
+  bodyContent: {
+    paddingBottom: 4,
   },
   title: {
     fontSize: 18,
@@ -225,22 +256,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 21,
     minHeight: 96,
+    // Grow with the comment up to a point, then scroll internally rather than
+    // letting one field dominate the sheet.
+    maxHeight: 180,
+  },
+  footer: {
+    flexShrink: 0,
+    paddingTop: 16,
   },
   counter: {
     fontSize: 12,
     textAlign: 'right',
-    marginTop: 6,
+    marginBottom: 8,
   },
   error: {
     fontSize: 13,
-    marginTop: 12,
+    marginBottom: 12,
   },
   submit: {
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
   },
   submitText: {
     color: '#ffffff',

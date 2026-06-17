@@ -18,6 +18,7 @@ export interface CreateAnalysisRunData {
 }
 
 type ReflectTrace = import('../portfolio-graph/portfolio-graph.state').ReflectTrace;
+type DedupeTrace = import('../portfolio-graph/portfolio-graph.state').DedupeTrace;
 
 export interface UpdateAnalysisRunData {
   status?: AnalysisRunStatus;
@@ -30,6 +31,7 @@ export interface UpdateAnalysisRunData {
   currentStep?: string | null;
   error?: { code: string; message: string } | null;
   reflectTrace?: ReflectTrace | null;
+  dedupeTrace?: DedupeTrace | null;
 }
 
 export interface IAnalysisRunsRepository {

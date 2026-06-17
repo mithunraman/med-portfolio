@@ -20,50 +20,15 @@
  * is the anti-synthesis prompt rules' job, not this function's.
  */
 
+import { contentWords, normalise, numbers } from './text-tokens.util';
+
 /** Novel-content-word ratio above which the narrative is treated as ungrounded. */
 export const NOVEL_WORD_RATIO_THRESHOLD = 0.4;
-
-/** Spelled-out numbers normalised to digits so "six weeks" ≡ "6 weeks". */
-const NUMBER_WORDS: Record<string, string> = {
-  zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6',
-  seven: '7', eight: '8', nine: '9', ten: '10', eleven: '11', twelve: '12',
-  thirteen: '13', fourteen: '14', fifteen: '15', sixteen: '16', seventeen: '17',
-  eighteen: '18', nineteen: '19', twenty: '20', thirty: '30', forty: '40',
-  fifty: '50', sixty: '60', seventy: '70', eighty: '80', ninety: '90',
-};
-
-// Short function words that legitimate prose adds freely; excluded from the
-// content-word novelty check. Length ≥ 4 already filters most stopwords, so this
-// only needs the common long-ish connectives.
-const STOPWORDS = new Set([
-  'this', 'that', 'then', 'than', 'with', 'which', 'when', 'were', 'they',
-  'them', 'their', 'there', 'have', 'from', 'into', 'after', 'before', 'while',
-  'because', 'would', 'could', 'should', 'about', 'also', 'been', 'being',
-]);
 
 export interface ComposeVerdict {
   ok: boolean;
   /** Empty when ok; otherwise a short, log-friendly reason. */
   reason: string;
-}
-
-function normalise(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9.\s]/g, ' ')
-    .split(/\s+/)
-    .map((tok) => NUMBER_WORDS[tok] ?? tok)
-    .join(' ');
-}
-
-/** Numeric tokens (integers/decimals) in normalised text. */
-function numbers(normalised: string): string[] {
-  return normalised.match(/\b\d+(?:\.\d+)?\b/g) ?? [];
-}
-
-/** Content words: alphabetic tokens length ≥ 4, excluding stopwords. */
-function contentWords(normalised: string): string[] {
-  return (normalised.match(/\b[a-z]{4,}\b/g) ?? []).filter((w) => !STOPWORDS.has(w));
 }
 
 /**

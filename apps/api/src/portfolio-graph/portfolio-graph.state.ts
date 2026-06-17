@@ -227,6 +227,17 @@ export const PortfolioState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => null,
   }),
+
+  /**
+   * Debug/eval trace of the dedupe step (per-section before/after text, the
+   * meaning-preservation verdict, and whether the merged or original text
+   * shipped). Same provenance treatment as `reflectTrace`: written to the
+   * analysis-run record, never persisted on the artefact or shown to the trainee.
+   */
+  dedupeTrace: Annotation<DedupeTrace | null>({
+    reducer: (_, next) => next,
+    default: () => null,
+  }),
 });
 
 /** Per-section trace emitted by the reflect node for debug/eval (see analysis-runs). */
@@ -237,6 +248,16 @@ export type ReflectTrace = Array<{
   verification: { ok: boolean; reason: string } | null;
   finalText: string;
   source: 'composed' | 'concat';
+}>;
+
+/** Per-section trace emitted by the dedupe node for debug/eval (see analysis-runs). */
+export type DedupeTrace = Array<{
+  sectionId: string;
+  label: string;
+  before: string;
+  after: string;
+  /** merged = model text used; unchanged = model returned identical; fallback = model omitted/blanked or call failed. */
+  source: 'merged' | 'unchanged' | 'fallback';
 }>;
 
 /** Inferred type of the graph state */

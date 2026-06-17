@@ -25,6 +25,7 @@ import {
 import {
   allCoveredResponse,
   classifyResponse,
+  dedupeResponse,
   elicitJustificationResponse,
   followupQuestionsResponse,
   generatePdpResponse,
@@ -176,9 +177,9 @@ describe('Conversations Integration Tests', () => {
      *       → (resume) → check_completeness(missing) → ask_followup ⏸️
      *       → (user answers + resume) → gather_context → check_completeness(covered)
      *       → tag_capabilities → present_capabilities ⏸️
-     *       → (resume with subset) → reflect → generate_pdp → save → END
+     *       → (resume with subset) → reflect → dedupe → generate_pdp → save → END
      *
-     * LLM call sequence (8 calls):
+     * LLM call sequence (9 calls):
      *   0: classify
      *   1: check_completeness (missing reflection)
      *   2: ask_followup (initial)
@@ -186,7 +187,8 @@ describe('Conversations Integration Tests', () => {
      *   4: check_completeness (all covered)
      *   5: tag_capabilities
      *   6: reflect
-     *   7: generate_pdp
+     *   7: dedupe
+     *   8: generate_pdp
      */
     it('A1. Full pipeline — classify → follow-up loop → capabilities → reflect → PDP → save', async () => {
       const conv = await createTestConversation();
@@ -219,7 +221,8 @@ describe('Conversations Integration Tests', () => {
         ])
       );
       llmMock.enqueue(reflectResponse()); // 6: reflect
-      llmMock.enqueue(generatePdpResponse()); // 7: generate_pdp
+      llmMock.enqueue(dedupeResponse()); // 7: dedupe (no-op → keeps reflect text)
+      llmMock.enqueue(generatePdpResponse()); // 8: generate_pdp
 
       // ── Step 1: Start analysis → classify → pause at present_classification ──
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
@@ -331,7 +334,7 @@ describe('Conversations Integration Tests', () => {
       const finalStatus = await waitForRunStable(harness, conv._id, true);
 
       expect(finalStatus).toEqual({ status: 'completed' });
-      expect(llmMock.callCount).toBe(8); // +elicit_justification + reflect + generate_pdp
+      expect(llmMock.callCount).toBe(9); // +elicit_justification + reflect + dedupe + generate_pdp
       llmMock.assertAllConsumed();
 
       // ── Final assertions: messages ──

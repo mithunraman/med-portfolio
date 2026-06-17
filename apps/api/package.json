@@ -12,7 +12,8 @@
     "clean": "rm -rf dist",
     "test": "jest --config jest.unit.config.ts && jest --config jest.config.ts --runInBand",
     "test:unit": "jest --config jest.unit.config.ts",
-    "test:integration": "jest --config jest.config.ts --runInBand"
+    "test:integration": "jest --config jest.config.ts --runInBand",
+    "db:dump": "node scripts/dump-artefact.js"
   },
   "dependencies": {
     "@acme/shared": "workspace:*",

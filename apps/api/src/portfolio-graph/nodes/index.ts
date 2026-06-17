@@ -9,5 +9,6 @@ export { createTagCapabilitiesNode } from './tag-capabilities.node';
 export { createPresentCapabilitiesNode } from './present-capabilities.node';
 export { createElicitJustificationNode } from './elicit-justification.node';
 export { createReflectNode } from './reflect.node';
+export { createDedupeNode } from './dedupe.node';
 export { createGeneratePdpNode } from './generate-pdp.node';
 export { createSaveNode } from './save.node';

@@ -865,7 +865,7 @@ export default function EntryDetailScreen() {
             {canMarkAsFinal && (
               <View style={styles.section}>
                 <Button
-                  label="Finalise entry"
+                  label="Complete entry"
                   onPress={handleMarkAsFinal}
                   loading={updatingStatus}
                   icon={(color) => <Ionicons name="checkmark-circle" size={20} color={color} />}

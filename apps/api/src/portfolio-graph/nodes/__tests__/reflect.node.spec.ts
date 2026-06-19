@@ -114,16 +114,18 @@ describe('reflectNode assemble routing', () => {
     expect(brief(result).text).toBe(narrative);
   });
 
-  it('falls back to a concat of the probes when the narrative fabricates a number', async () => {
-    // "78" appears in no probe → verification fails → concat used instead.
-    const result = await createReflectNode(
-      makeDeps(makeResponse('I saw a 78-year-old woman; I stopped the ramipril.'))
-    )(makeState());
+  it('ships the narrative even when verification fails, recording the failed verdict (telemetry only)', async () => {
+    // "78" appears in no probe → verification fails, but the narrative is still
+    // used (the trainee edits before save); the verdict is kept on the trace.
+    const narrative = 'I saw a 78-year-old woman; I stopped the ramipril.';
+    const result = await createReflectNode(makeDeps(makeResponse(narrative)))(makeState());
 
-    const text = brief(result).text;
-    expect(text).not.toContain('78');
-    expect(text).toContain('I arranged a chest X-ray.');
-    expect(text).toContain('\n\n'); // concatenated probe paragraphs
+    expect(brief(result).text).toBe(narrative); // shipped despite the fabricated number
+
+    const trace = result.reflectTrace!.find((t) => t.sectionId === 'brief_description')!;
+    expect(trace.source).toBe('composed');
+    expect(trace.verification!.ok).toBe(false);
+    expect(trace.verification!.reason).toMatch(/novel number/);
   });
 
   it('passes a section without compose guidance straight through (concat)', async () => {

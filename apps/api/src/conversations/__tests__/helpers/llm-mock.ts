@@ -370,12 +370,12 @@ export function generatePdpResponse() {
 }
 
 /**
- * Build a canned dedupe response. The dedupe node merges the reflect document
+ * Build a canned refine response. The refine node merges the reflect document
  * per section; an empty `sections` array means "no changes proposed", so every
  * section falls back to the reflect text unchanged — the safe no-op the full
  * pipeline tests want. Pass sections to exercise an actual merge.
  */
-export function dedupeResponse(sections: Array<{ sectionId: string; text: string }> = []) {
+export function refineResponse(sections: Array<{ sectionId: string; text: string }> = []) {
   return { sections };
 }
 

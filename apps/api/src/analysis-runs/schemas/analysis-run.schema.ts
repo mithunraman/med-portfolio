@@ -3,7 +3,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
 import { Conversation } from '../../conversations/schemas/conversation.schema';
-import type { DedupeTrace, ReflectTrace } from '../../portfolio-graph/portfolio-graph.state';
+import type { RefineTrace, ReflectTrace } from '../../portfolio-graph/portfolio-graph.state';
 
 export class SnapshotRange {
   @Prop({ type: Types.ObjectId, default: null })
@@ -80,12 +80,12 @@ export class AnalysisRun {
   @Prop({ type: [Object], default: null })
   reflectTrace!: ReflectTrace | null;
 
-  // Immutable debug/eval trace of the dedupe step (per-section before/after text,
+  // Immutable debug/eval trace of the refine step (per-section before/after text,
   // meaning-preservation verdict, shipped source). Same treatment as
   // `reflectTrace`: server-only, never projected to a client DTO, cleared by the
   // delete tombstone since it embeds trainee clinical content. Stored as Mixed.
   @Prop({ type: [Object], default: null })
-  dedupeTrace!: DedupeTrace | null;
+  refineTrace!: RefineTrace | null;
 
   createdAt!: Date;
   updatedAt!: Date;

@@ -6,7 +6,7 @@ import {
   createAskFollowupNode,
   createCheckCompletenessNode,
   createClassifyNode,
-  createDedupeNode,
+  createRefineNode,
   createElicitJustificationNode,
   createGatherContextNode,
   createGenerateFollowupNode,
@@ -93,7 +93,7 @@ function completenessRouter(state: PortfolioStateType): 'generate_followup' | 't
  *                                                                          ↓
  *                                                               present_capabilities (INTERRUPT)
  *                                                                          ↓
- *                                                                       reflect → dedupe → generate_pdp → save → END
+ *                                                                       reflect → refine → generate_pdp → save → END
  */
 export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: GraphDeps) {
   const graph = new StateGraph(PortfolioState)
@@ -109,7 +109,7 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
     .addNode('present_capabilities', createPresentCapabilitiesNode(deps))
     .addNode('elicit_justification', createElicitJustificationNode(deps))
     .addNode('reflect', createReflectNode(deps))
-    .addNode('dedupe', createDedupeNode(deps))
+    .addNode('refine', createRefineNode(deps))
     .addNode('generate_pdp', createGeneratePdpNode(deps))
     .addNode('save', createSaveNode(deps))
 
@@ -140,12 +140,12 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
     .addEdge('generate_followup', 'ask_followup')
     .addEdge('ask_followup', 'gather_context') // Loop back, re-gather + re-check completeness
 
-    // Linear chain: tag → present → justify → reflect → dedupe → PDP → save → end
+    // Linear chain: tag → present → justify → reflect → refine → PDP → save → end
     .addEdge('tag_capabilities', 'present_capabilities')
     .addEdge('present_capabilities', 'elicit_justification')
     .addEdge('elicit_justification', 'reflect')
-    .addEdge('reflect', 'dedupe')
-    .addEdge('dedupe', 'generate_pdp')
+    .addEdge('reflect', 'refine')
+    .addEdge('refine', 'generate_pdp')
     .addEdge('generate_pdp', 'save')
     .addEdge('save', END);
 

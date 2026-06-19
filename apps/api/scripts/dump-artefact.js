@@ -200,9 +200,9 @@ function printSummary(dump, section) {
       }
     }
 
-    const dedupe = r.dedupeTrace || [];
-    if (dedupe.length) L(`     dedupeTrace: ${dedupe.length} sections`);
-    for (const t of dedupe) {
+    const refine = r.refineTrace || [];
+    if (refine.length) L(`     refineTrace: ${refine.length} sections`);
+    for (const t of refine) {
       L(`       [${t.sectionId}] source=${t.source}`);
       if (t.source === 'merged' || (section && t.sectionId === section)) {
         L(`          before: ${truncate(t.before, 200)}`);
@@ -219,7 +219,7 @@ function printSummary(dump, section) {
   L(`VERSION HISTORY : ${versionHistory.length} snapshots`);
   L(`MEDIA : ${media.length} attachments`);
   L('');
-  L(`(use --section <id> to expand a section's reflect probes + dedupe before/after; --full or --out for raw JSON)`);
+  L(`(use --section <id> to expand a section's reflect probes + refine before/after; --full or --out for raw JSON)`);
 }
 
 /* ------------------------------------------------------------------ */

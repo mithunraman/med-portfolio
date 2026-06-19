@@ -18,7 +18,7 @@ import {
 import {
   allCoveredResponse,
   classifyResponse,
-  dedupeResponse,
+  refineResponse,
   elicitJustificationResponse,
   generatePdpResponse,
   reflectResponse,
@@ -126,13 +126,13 @@ describe('ARCP Readiness Engine — Integration', () => {
    *   start → classify → present_classification ⏸️
    *     → (resume) → check_completeness(all rich/adequate → cleared)
    *     → tag_capabilities → present_capabilities ⏸️
-   *     → (resume, select C-06) → elicit_justification → reflect → dedupe → generate_pdp
+   *     → (resume, select C-06) → elicit_justification → reflect → refine → generate_pdp
    *     → save → END
    *
    * present_capabilities is the final interrupt — once resumed, the graph runs
    * straight to completion (no sign-off gate).
    *
-   * LLM call sequence (7): classify, completeness, tag, justification, reflect, dedupe, pdp.
+   * LLM call sequence (7): classify, completeness, tag, justification, reflect, refine, pdp.
    */
   it('drives the entry to ARCP-ready and persists draftStatus, composedDocument, and justifications', async () => {
     const conv = await createTestConversation();
@@ -158,7 +158,7 @@ describe('ARCP Readiness Engine — Integration', () => {
       ])
     );
     llmMock.enqueue(reflectResponse()); // 4: reflect
-    llmMock.enqueue(dedupeResponse()); // 5: dedupe (no-op → keeps reflect text)
+    llmMock.enqueue(refineResponse()); // 5: refine (no-op → keeps reflect text)
     llmMock.enqueue(generatePdpResponse()); // 6: generate_pdp
 
     // ── Step 1: Start → classify → present_classification ──
@@ -208,7 +208,7 @@ describe('ARCP Readiness Engine — Integration', () => {
     });
     const finalStatus = await waitForRunStable(harness, conv._id, true);
     expect(finalStatus).toEqual({ status: 'completed' });
-    expect(llmMock.callCount).toBe(7); // + justification + reflect + dedupe + pdp
+    expect(llmMock.callCount).toBe(7); // + justification + reflect + refine + pdp
     llmMock.assertAllConsumed();
 
     // ── Final assertions: the persisted artefact carries the new fields ──

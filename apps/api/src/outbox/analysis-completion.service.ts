@@ -112,7 +112,7 @@ export class AnalysisCompletionService {
           if (!pdpResult.ok) throw new Error(pdpResult.error.message);
         }
 
-        // Status transition in same transaction. The reflect and dedupe traces
+        // Status transition in same transaction. The reflect and refine traces
         // are written here as immutable debug/eval provenance on the run record.
         await this.analysisRunsService.transitionStatus(
           runId,
@@ -121,7 +121,7 @@ export class AnalysisCompletionService {
           {
             currentStep: null,
             reflectTrace: finalState.reflectTrace,
-            dedupeTrace: finalState.dedupeTrace,
+            refineTrace: finalState.refineTrace,
           },
           session,
         );

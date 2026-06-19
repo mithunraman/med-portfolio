@@ -25,7 +25,7 @@ import {
 import {
   allCoveredResponse,
   classifyResponse,
-  dedupeResponse,
+  refineResponse,
   elicitJustificationResponse,
   followupQuestionsResponse,
   generatePdpResponse,
@@ -177,7 +177,7 @@ describe('Conversations Integration Tests', () => {
      *       → (resume) → check_completeness(missing) → ask_followup ⏸️
      *       → (user answers + resume) → gather_context → check_completeness(covered)
      *       → tag_capabilities → present_capabilities ⏸️
-     *       → (resume with subset) → reflect → dedupe → generate_pdp → save → END
+     *       → (resume with subset) → reflect → refine → generate_pdp → save → END
      *
      * LLM call sequence (9 calls):
      *   0: classify
@@ -187,7 +187,7 @@ describe('Conversations Integration Tests', () => {
      *   4: check_completeness (all covered)
      *   5: tag_capabilities
      *   6: reflect
-     *   7: dedupe
+     *   7: refine
      *   8: generate_pdp
      */
     it('A1. Full pipeline — classify → follow-up loop → capabilities → reflect → PDP → save', async () => {
@@ -221,7 +221,7 @@ describe('Conversations Integration Tests', () => {
         ])
       );
       llmMock.enqueue(reflectResponse()); // 6: reflect
-      llmMock.enqueue(dedupeResponse()); // 7: dedupe (no-op → keeps reflect text)
+      llmMock.enqueue(refineResponse()); // 7: refine (no-op → keeps reflect text)
       llmMock.enqueue(generatePdpResponse()); // 8: generate_pdp
 
       // ── Step 1: Start analysis → classify → pause at present_classification ──
@@ -334,7 +334,7 @@ describe('Conversations Integration Tests', () => {
       const finalStatus = await waitForRunStable(harness, conv._id, true);
 
       expect(finalStatus).toEqual({ status: 'completed' });
-      expect(llmMock.callCount).toBe(9); // +elicit_justification + reflect + dedupe + generate_pdp
+      expect(llmMock.callCount).toBe(9); // +elicit_justification + reflect + refine + generate_pdp
       llmMock.assertAllConsumed();
 
       // ── Final assertions: messages ──

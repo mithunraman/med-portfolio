@@ -1,9 +1,9 @@
 import type { GraphDeps } from '../../graph-deps';
 import type { PortfolioStateType } from '../../portfolio-graph.state';
-import { createDedupeNode } from '../dedupe.node';
+import { createRefineNode } from '../refine.node';
 
 /**
- * Exercises the dedupe node's assembly: the model's merged text is trusted and
+ * Exercises the refine node's assembly: the model's merged text is trusted and
  * shipped directly (no faithfulness gate — the trainee edits before saving). The
  * only guards are data integrity (a model that omits/blanks a section keeps the
  * original) and graceful degradation (an LLM error keeps the reflect document).
@@ -48,12 +48,12 @@ function section(result: Partial<PortfolioStateType>, id: string) {
   return result.composedDocument!.find((s) => s.sectionId === id)!;
 }
 
-describe('dedupeNode', () => {
+describe('refineNode', () => {
   it('ships the model merge verbatim (model output is trusted)', async () => {
     const merged =
       'My learning need is around targets. I am going to spend some evenings reading the NICE ' +
       'NG28 guidance on HbA1c goals and when to intensify to a second agent.';
-    const result = await createDedupeNode(
+    const result = await createRefineNode(
       makeDeps({
         sections: [
           { sectionId: 'learning', text: merged },
@@ -63,11 +63,11 @@ describe('dedupeNode', () => {
     )(makeState());
 
     expect(section(result, 'learning').text).toBe(merged);
-    expect(result.dedupeTrace!.find((t) => t.sectionId === 'learning')!.source).toBe('merged');
+    expect(result.refineTrace!.find((t) => t.sectionId === 'learning')!.source).toBe('merged');
   });
 
   it('marks a section unchanged when the model returns identical text', async () => {
-    const result = await createDedupeNode(
+    const result = await createRefineNode(
       makeDeps({
         sections: [
           { sectionId: 'learning', text: REFLECT_DOCUMENT[0].text },
@@ -77,11 +77,11 @@ describe('dedupeNode', () => {
     )(makeState());
 
     expect(section(result, 'reflection').text).toBe(REFLECT_DOCUMENT[1].text);
-    expect(result.dedupeTrace!.find((t) => t.sectionId === 'reflection')!.source).toBe('unchanged');
+    expect(result.refineTrace!.find((t) => t.sectionId === 'reflection')!.source).toBe('unchanged');
   });
 
   it('keeps the original when the model omits or blanks a section (never deletes content)', async () => {
-    const result = await createDedupeNode(
+    const result = await createRefineNode(
       makeDeps({
         sections: [
           { sectionId: 'learning', text: '' }, // blanked
@@ -92,19 +92,19 @@ describe('dedupeNode', () => {
 
     expect(section(result, 'learning').text).toBe(REFLECT_DOCUMENT[0].text);
     expect(section(result, 'reflection').text).toBe(REFLECT_DOCUMENT[1].text);
-    expect(result.dedupeTrace!.every((t) => t.source === 'fallback')).toBe(true);
+    expect(result.refineTrace!.every((t) => t.source === 'fallback')).toBe(true);
   });
 
   it('keeps the reflect document unchanged when the LLM call throws', async () => {
-    const result = await createDedupeNode(makeDeps(null, { throws: true }))(makeState());
+    const result = await createRefineNode(makeDeps(null, { throws: true }))(makeState());
 
     expect(result.composedDocument).toEqual(REFLECT_DOCUMENT);
-    expect(result.dedupeTrace!.every((t) => t.source === 'fallback')).toBe(true);
+    expect(result.refineTrace!.every((t) => t.source === 'fallback')).toBe(true);
   });
 
   it('no-ops on an empty document', async () => {
     const deps = makeDeps({ sections: [] });
-    const result = await createDedupeNode(deps)(makeState([]));
+    const result = await createRefineNode(deps)(makeState([]));
 
     expect(result).toEqual({});
     expect(deps.llmService.invokeStructured).not.toHaveBeenCalled();

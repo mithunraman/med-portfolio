@@ -31,7 +31,7 @@ export function analysisRunTombstoneUpdate() {
       currentQuestion: null,
       error: null,
       reflectTrace: null,
-      dedupeTrace: null,
+      refineTrace: null,
     },
   };
 }

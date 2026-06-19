@@ -229,12 +229,12 @@ export const PortfolioState = Annotation.Root({
   }),
 
   /**
-   * Debug/eval trace of the dedupe step (per-section before/after text, the
+   * Debug/eval trace of the refine step (per-section before/after text, the
    * meaning-preservation verdict, and whether the merged or original text
    * shipped). Same provenance treatment as `reflectTrace`: written to the
    * analysis-run record, never persisted on the artefact or shown to the trainee.
    */
-  dedupeTrace: Annotation<DedupeTrace | null>({
+  refineTrace: Annotation<RefineTrace | null>({
     reducer: (_, next) => next,
     default: () => null,
   }),
@@ -250,8 +250,8 @@ export type ReflectTrace = Array<{
   source: 'composed' | 'concat';
 }>;
 
-/** Per-section trace emitted by the dedupe node for debug/eval (see analysis-runs). */
-export type DedupeTrace = Array<{
+/** Per-section trace emitted by the refine node for debug/eval (see analysis-runs). */
+export type RefineTrace = Array<{
   sectionId: string;
   label: string;
   before: string;

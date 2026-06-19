@@ -104,9 +104,7 @@ Each section owns one or more probes. For EVERY section, return all of its probe
 5. You MAY rephrase awkward speech for readability, but you may NOT synthesise — i.e. do not combine statements into a new conclusion or infer anything beyond what was said.
 6. Do NOT expand brief statements into detailed paragraphs.
 7. Write in first person ("I"), matching the trainee's own voice.
-8. Preserve ALL first-person emotional, evaluative, and hedging language verbatim — even when it is informal or colloquial. Do NOT upgrade, soften, or neutralise it into a more professional register, and do NOT swap an emotional word for a cooler cognitive one (e.g. "worried" must not become "concerned" or "considering"). Improve grammar around these phrases, but keep the trainee's exact wording for the feeling itself. This applies to ALL such language, not just these examples: "I was a bit worried", "out of my depth", "I wasn't totally sure", "I was mortified", "I feel a bit sick about it", "we got away with it", "to ask if I was doing the right thing". When in doubt, quote rather than rephrase.
-9. Each distinct fact belongs in exactly ONE probe. Do not repeat the same finding, result, cause, action, or learning point across multiple probes. If a point could plausibly fit two probes, place it ONLY in the one whose "Question this probe answers" it most directly addresses, and mention it there only.
-10. When the trainee restates the same FACTUAL point across multiple utterances (common with voice input where users re-record or add detail), keep ONE version using the most specific phrasing they used. Do not invent details — only choose between phrasings the trainee actually said. If they said "hand" in one message and "right hand" in another about the same event, prefer "right hand". EXCEPTION: do NOT merge, drop, or collapse emotional, evaluative, or hedging expressions, even when they seem to repeat the same sentiment. Distinct emotional expressions — e.g. "I feel a bit sick" (at the time), "I was mortified" (looking back), "it shook me up" (afterwards) — are distinct beats, not duplicates. Keep each one, in the context where it was said.
+8. Preserve ALL first-person emotional, evaluative, and hedging language verbatim — even when it is informal or colloquial. Do NOT upgrade, soften, or neutralise it into a more professional register, and do NOT swap an emotional word for a cooler cognitive one (e.g. "worried" must not become "concerned" or "considering"). Improve grammar around these phrases, but keep the trainee's exact wording for the feeling itself. This applies to ALL such language, not just these examples: "I was a bit worried", "out of my depth", "I wasn't totally sure", "I was mortified", "I feel a bit sick about it", "we got away with it", "to ask if I was doing the right thing". When in doubt, quote rather than rephrase. And keep every distinct emotional beat: distinct emotional, evaluative, or hedging expressions — e.g. "I feel a bit sick" (at the time), "I was mortified" (looking back), "it shook me up" (afterwards) — are separate beats, not duplicates, even when the sentiment seems to repeat. Keep each one, in the context where it was said; never merge or drop them.
 
 ## Composition
 
@@ -118,7 +116,7 @@ Some sections include "Compose guidance". For each such section, after organisin
 
 ## Output length
 
-Output length should reflect the number of DISTINCT IDEAS in the transcript, not the number of input sentences or messages. Three utterances saying the same thing should produce one sentence. Do not pad with restatements to make a section look more substantive.
+Output length should reflect the number of DISTINCT IDEAS in the transcript, not the number of input sentences or messages. Do not pad a section to make it look more substantive. (You do not need to merge repeated phrasings or restatements — a later step handles de-duplication; your job is to sort and clean faithfully.)
 
 ## What "copy-editing for clarity" means — examples
 
@@ -200,10 +198,12 @@ interface ComposedField {
  * Assemble the rendered document fields from the model's per-section output.
  *
  * For a section with compose guidance and a non-empty narrative, the narrative
- * is verified against the union of its probe text and used when it passes;
- * otherwise (no guidance, empty narrative, or failed verification) the field is
- * a deterministic concat of the covered probe text — the safe floor. Empty
- * optional sections are dropped; required sections are always present.
+ * is ALWAYS used (the trainee edits before save). `verifyComposed` still runs,
+ * but as telemetry only: a failed verdict is recorded on the trace and logged
+ * for later investigation, not acted on. Sections without compose guidance (or
+ * with an empty narrative) fall back to a deterministic concat of the covered
+ * probe text. Empty optional sections are dropped; required sections are always
+ * present.
  *
  * Also emits the per-section trace for debug/eval (see analysis-runs).
  */
@@ -228,13 +228,15 @@ function assembleSections(
     let verification: { ok: boolean; reason: string } | null = null;
 
     if (section.composePrompt && narrative.length > 0) {
+      // Always ship the narrative; verifyComposed is telemetry only. The verdict
+      // is kept on the trace and a failure is logged for later investigation,
+      // but it never blocks the composed text (the trainee edits before save).
       verification = verifyComposed(narrative, coveredProbes.map((p) => p.text).join(' '));
-      if (verification.ok) {
-        finalText = narrative;
-        source = 'composed';
-      } else {
+      finalText = narrative;
+      source = 'composed';
+      if (!verification.ok) {
         logger.warn(
-          `[${cid}] section=${section.id} composed text rejected (${verification.reason}); using concat`
+          `[${cid}] section=${section.id} compose verification failed (${verification.reason}); shipping narrative anyway`
         );
       }
     }

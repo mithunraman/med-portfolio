@@ -6,4 +6,4 @@ export type FlatListItem =
   | { type: 'notice'; text: string }
   | { type: 'typingIndicator' };
 
-export type ContextMenuAction = 'react' | 'reply' | 'forward' | 'copy' | 'star' | 'delete';
+export type ContextMenuAction = 'react' | 'reply' | 'forward' | 'copy' | 'star' | 'delete' | 'edit';

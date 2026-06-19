@@ -79,6 +79,15 @@ export class Message {
   @Prop({ required: true, type: String })
   idempotencyKey!: string;
 
+  // True for system-authored audit messages (e.g. a recorded option selection).
+  // Such messages are not user-editable/deletable even though role is USER.
+  @Prop({ required: true, type: Boolean, default: false })
+  generated!: boolean;
+
+  // Timestamp of the last in-place user edit; null if never edited.
+  @Prop({ type: Date, default: null })
+  editedAt!: Date | null;
+
   createdAt!: Date;
   updatedAt!: Date;
 }

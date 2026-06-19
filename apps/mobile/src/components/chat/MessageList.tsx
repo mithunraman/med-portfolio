@@ -1,6 +1,7 @@
-import type { Message } from '@acme/shared';
+import type { ArtefactStatus, Message } from '@acme/shared';
+import { MessageRole } from '@acme/shared';
 import type { RenderableMessage } from '../../store/slices/messages/slice';
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -32,12 +33,17 @@ export interface MessageListProps {
   unreadCount?: number;
   isLoading?: boolean;
   activeQuestionMessageId?: string;
+  /** Artefact lifecycle status (gates edit/delete in the context menu). Null = unresolved → not editable. */
+  artefactStatus?: ArtefactStatus | null;
+  /** True while the AI is actively analysing (edit/delete unavailable). */
+  isAnalysing?: boolean;
   onAnswerQuestion?: (messageId: string, value: Record<string, unknown>) => void;
   onRetry?: (localId: string) => void;
   onReply?: (message: Message) => void;
   onCopy?: (message: Message) => void;
   onStar?: (message: Message) => void;
   onDelete?: (message: Message) => void;
+  onEdit?: (message: Message) => void;
   onForward?: (message: Message) => void;
   onReact?: (message: Message, emoji: string) => void;
 }
@@ -60,12 +66,15 @@ export const MessageList = memo(function MessageList({
   unreadCount = 0,
   isLoading = false,
   activeQuestionMessageId,
+  artefactStatus,
+  isAnalysing = false,
   onAnswerQuestion,
   onRetry,
   onReply,
   onCopy,
   onStar,
   onDelete,
+  onEdit,
   onForward,
   onReact,
 }: MessageListProps) {
@@ -76,6 +85,20 @@ export const MessageList = memo(function MessageList({
   const [menuAnchorY, setMenuAnchorY] = useState(0);
 
   const items = useMessageGroups(messages, { isTyping, noticeText });
+
+  // The latest assistant message marks the cut-off: messages sent at/before it
+  // have been consumed by an analysis turn and are locked from edit/delete. We
+  // include question-less terminal verdicts — they too mean the AI has responded
+  // past that point. Mirrors the server's hasLaterAssistantMessage guard.
+  const latestAssistantMessageAt = useMemo(() => {
+    let latest: string | undefined;
+    for (const m of messages) {
+      if (m.role === MessageRole.ASSISTANT && (!latest || m.createdAt > latest)) {
+        latest = m.createdAt;
+      }
+    }
+    return latest;
+  }, [messages]);
 
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -101,11 +124,12 @@ export const MessageList = memo(function MessageList({
         case 'copy':    onCopy?.(message);    break;
         case 'star':    onStar?.(message);    break;
         case 'delete':  onDelete?.(message);  break;
+        case 'edit':    onEdit?.(message);    break;
         case 'forward': onForward?.(message); break;
         case 'react':   onReact?.(message, '👍'); break;
       }
     },
-    [onReply, onCopy, onStar, onDelete, onForward, onReact]
+    [onReply, onCopy, onStar, onDelete, onEdit, onForward, onReact]
   );
 
   const handleMenuDismiss = useCallback(() => {
@@ -169,6 +193,9 @@ export const MessageList = memo(function MessageList({
 
       <MessageContextMenu
         message={selectedMessage}
+        artefactStatus={artefactStatus}
+        isAnalysing={isAnalysing}
+        latestAssistantMessageAt={latestAssistantMessageAt}
         onAction={handleMenuAction}
         onDismiss={handleMenuDismiss}
       />

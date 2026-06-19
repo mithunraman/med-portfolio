@@ -4,11 +4,11 @@ import type {
   Message,
   MessageListResponse,
 } from '@acme/shared';
-import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { UseQuota } from '../common/decorators/use-quota.decorator';
 import { ConversationsService } from './conversations.service';
-import { AnalysisActionPipe, SendMessageDto } from './dto';
+import { AnalysisActionPipe, EditMessageDto, SendMessageDto } from './dto';
 
 @Controller('conversations')
 export class ConversationsController {
@@ -22,6 +22,21 @@ export class ConversationsController {
     @Param('messageId') messageId: string,
   ): Promise<void> {
     return this.conversationsService.deleteMessage(user.userId, conversationId, messageId);
+  }
+
+  @Patch(':conversationId/messages/:messageId')
+  async editMessage(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('conversationId') conversationId: string,
+    @Param('messageId') messageId: string,
+    @Body() dto: EditMessageDto
+  ): Promise<Message> {
+    return this.conversationsService.editMessage(
+      user.userId,
+      conversationId,
+      messageId,
+      dto.content
+    );
   }
 
   @UseQuota('message')

@@ -2,6 +2,7 @@ import type {
   AnalysisActionRequest,
   ConversationContext,
   ConversationListResponse,
+  EditMessageRequest,
   Message,
   MessageListResponse,
   SendMessageRequest,
@@ -37,6 +38,17 @@ export class ConversationsClient {
 
   async sendMessage(conversationId: string, data: SendMessageRequest): Promise<Message> {
     return this.client.post<Message>(`/conversations/${conversationId}/messages`, data);
+  }
+
+  async editMessage(
+    conversationId: string,
+    messageId: string,
+    data: EditMessageRequest
+  ): Promise<Message> {
+    return this.client.patch<Message>(
+      `/conversations/${conversationId}/messages/${messageId}`,
+      data
+    );
   }
 
   async analysis(conversationId: string, data: AnalysisActionRequest): Promise<ConversationContext> {

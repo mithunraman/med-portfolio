@@ -105,6 +105,7 @@ export async function createTestMessage(
     content: string | null;
     status: MessageStatus;
     question: Question | null;
+    generated: boolean;
   }> = {}
 ): Promise<MessageDocument> {
   const [doc] = await messageModel.create([
@@ -118,6 +119,7 @@ export async function createTestMessage(
       content: overrides.content ?? 'I saw a patient today with type 2 diabetes.',
       status: overrides.status ?? MessageStatus.COMPLETE,
       question: overrides.question ?? null,
+      generated: overrides.generated ?? false,
       idempotencyKey: nanoidAlphanumeric(),
     },
   ]);

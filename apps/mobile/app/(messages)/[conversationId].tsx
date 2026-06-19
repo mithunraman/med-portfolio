@@ -1,5 +1,6 @@
 import { api } from '@/api/client';
 import { ChatComposer, MessageList, ReadinessHeader, useLoading } from '@/components';
+import { MessageEditorModal } from '@/components/chat/MessageEditorModal';
 import { type ActionBarState, ActionBar } from '@/components/ActionBar';
 import { ChatEmptyState } from '@/components/ChatEmptyState';
 import { CompletionCard } from '@/components/CompletionCard';
@@ -8,6 +9,7 @@ import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
 import { useBannerOffset } from '@/hooks/useBannerOffset';
 import {
   deleteConversation,
+  editMessage,
   fetchMessages,
   pollConversation,
   rekeyOptimisticMessages,
@@ -429,12 +431,18 @@ export default function ChatScreen() {
   // Track whether voice recorder is open — hides ActionBar to avoid overlap
   const [isRecording, setIsRecording] = useState(false);
 
+  // The user message currently being edited (null = editor closed)
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+
   // Phase-aware flags derived from server context
   const canSendMessage = (context?.actions.sendMessage.allowed ?? true) && !pendingAnalysis;
   const canSendAudio = (context?.actions.sendAudio.allowed ?? true) && !pendingAnalysis;
   const canStartAnalysis = context?.actions.startAnalysis.allowed ?? false;
   const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
+  // Edit/delete availability is composed on the client from message facts +
+  // artefact status; unavailable while the AI is actively analysing.
+  const isAnalysing = phase === 'analysing' || pendingAnalysis;
 
   // Show delete button in header when conversation is deletable (not completed/closed).
   // Hidden until the entry exists server-side: deletion cascades from the artefact,
@@ -664,6 +672,33 @@ export default function ChatScreen() {
     [effectiveConversationId, dispatch, showLoading, hideLoading]
   );
 
+  const handleEditMessage = useCallback((message: Message) => {
+    setEditingMessage(message);
+  }, []);
+
+  const handleSaveEdit = useCallback(
+    async (content: string) => {
+      if (!editingMessage) return;
+      const messageId = editingMessage.id;
+      // Don't close the editor here — the modal closes only when this resolves,
+      // so a failed save keeps the user's draft intact. Rethrow so the modal
+      // stays open on error. Progress is shown inline by the editor's own
+      // `saving` state — we deliberately do NOT open the global LoadingHUD here,
+      // since stacking its Modal over the editor Modal and dismissing both at
+      // once freezes the screen on iOS (leftover modal container eats touches).
+      try {
+        await dispatch(
+          editMessage({ conversationId: effectiveConversationId, messageId, content })
+        ).unwrap();
+      } catch (error: any) {
+        const msg = typeof error === 'string' ? error : (error?.message ?? 'Could not edit message.');
+        Alert.alert('Error', msg);
+        throw error;
+      }
+    },
+    [editingMessage, effectiveConversationId, dispatch]
+  );
+
   const activeQuestionMessageId = context?.activeQuestion?.messageId;
 
   const isLoading = loadingMessages && mergedMessages.length === 0 && isNew !== 'true';
@@ -691,10 +726,13 @@ export default function ChatScreen() {
               currentUserId={user?.id ?? ''}
               isLoading={isLoading}
               activeQuestionMessageId={activeQuestionMessageId}
+              artefactStatus={context?.artefactStatus}
+              isAnalysing={isAnalysing}
               onAnswerQuestion={handleAnswerQuestion}
               onRetry={handleRetry}
               onCopy={handleCopy}
               onDelete={handleDeleteMessage}
+              onEdit={handleEditMessage}
             />
           )}
         </View>
@@ -737,6 +775,13 @@ export default function ChatScreen() {
 
       {/* Safe area spacer — keyboard covers this when open, visible when closed */}
       <View style={{ height: insets.bottom, backgroundColor: composerBg }} />
+
+      <MessageEditorModal
+        visible={editingMessage !== null}
+        initialText={editingMessage?.content ?? ''}
+        onSave={handleSaveEdit}
+        onClose={() => setEditingMessage(null)}
+      />
     </View>
   );
 }

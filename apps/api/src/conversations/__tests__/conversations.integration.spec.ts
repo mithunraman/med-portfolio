@@ -8,7 +8,7 @@ import {
   type MultiSelectQuestion,
   type SingleSelectQuestion,
 } from '@acme/shared';
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import {
   createCompleteUserMessage,
@@ -1123,6 +1123,162 @@ describe('Conversations Integration Tests', () => {
       expect(transcriptContent).toContain('Second user message');
       expect(transcriptContent).not.toContain('Assistant response');
       expect(transcriptContent).not.toContain('System audit');
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // Group H: editMessage
+  // ════════════════════════════════════════════════════════════════
+
+  describe('Group H: editMessage', () => {
+    it('H1. edits a COMPLETE user message and redacts structured PII in place', async () => {
+      const conv = await createTestConversation();
+      const msg = await createCompleteUserMessage(conv._id, 'Original text.');
+
+      const result = await harness.service.editMessage(
+        TEST_USER_ID_STR,
+        conv.xid,
+        msg.xid,
+        'Reach me at a@b.com'
+      );
+
+      // Returned content is regex-redacted; status stays COMPLETE (no re-process).
+      expect(result.content).toBe('Reach me at [EMAIL]');
+      expect(result.status).toBe(MessageStatus.COMPLETE);
+      expect(result.editedAt).not.toBeNull();
+
+      const [persisted] = await getMessagesForConversation(conv._id);
+      expect(persisted.content).toBe('Reach me at [EMAIL]');
+      expect(persisted.rawContent).toBe('Reach me at a@b.com');
+      expect(persisted.status).toBe(MessageStatus.COMPLETE);
+      expect(persisted.editedAt).toBeTruthy();
+    });
+
+    it('H2. rejects when the artefact is not IN_CONVERSATION', async () => {
+      const artefactOid = new Types.ObjectId();
+      await createTestArtefact({ _id: artefactOid, status: ArtefactStatus.IN_REVIEW });
+      const conv = await createTestConversation({ artefact: artefactOid });
+      const msg = await createCompleteUserMessage(conv._id, 'Original text.');
+
+      await expect(
+        harness.service.editMessage(TEST_USER_ID_STR, conv.xid, msg.xid, 'new text')
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('H3. rejects a message that is not COMPLETE', async () => {
+      const conv = await createTestConversation();
+      const msg = await createPendingUserMessage(conv._id, 'Still processing.');
+
+      await expect(
+        harness.service.editMessage(TEST_USER_ID_STR, conv.xid, msg.xid, 'new text')
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('H4. rejects editing an ASSISTANT message (opaque 404)', async () => {
+      const conv = await createTestConversation();
+      const assistant = await createTestMessage(conv._id, {
+        role: MessageRole.ASSISTANT,
+        content: 'Assistant message',
+        status: MessageStatus.COMPLETE,
+      });
+
+      await expect(
+        harness.service.editMessage(TEST_USER_ID_STR, conv.xid, assistant.xid, 'new text')
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('H5. rejects editing a system-generated (selection) message (opaque 404)', async () => {
+      const conv = await createTestConversation();
+      const selection = await createTestMessage(conv._id, {
+        role: MessageRole.USER,
+        content: 'Selected: Clinical Case Review',
+        status: MessageStatus.COMPLETE,
+        generated: true,
+      });
+
+      await expect(
+        harness.service.editMessage(TEST_USER_ID_STR, conv.xid, selection.xid, 'new text')
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('H6. a FAILED message cannot be edited but can be deleted', async () => {
+      const conv = await createTestConversation();
+      const failed = await createTestMessage(conv._id, {
+        role: MessageRole.USER,
+        content: null,
+        status: MessageStatus.FAILED,
+      });
+
+      await expect(
+        harness.service.editMessage(TEST_USER_ID_STR, conv.xid, failed.xid, 'new text')
+      ).rejects.toThrow(ConflictException);
+
+      await expect(
+        harness.service.deleteMessage(TEST_USER_ID_STR, conv.xid, failed.xid)
+      ).resolves.toBeUndefined();
+
+      const [persisted] = await getMessagesForConversation(conv._id);
+      expect(persisted.status).toBe(MessageStatus.DELETED);
+    });
+
+    it('H7. locks a message once the assistant has responded (asked a question) after it', async () => {
+      const conv = await createTestConversation();
+      const msg = await createCompleteUserMessage(conv._id, 'I saw a diabetic patient.');
+      // The AI then asks a question — message is now consumed by that analysis turn.
+      await createTestMessage(conv._id, {
+        role: MessageRole.ASSISTANT,
+        content: 'Which entry type?',
+        status: MessageStatus.COMPLETE,
+        question: { questionType: 'single_select', options: [] },
+      });
+
+      await expect(
+        harness.service.editMessage(TEST_USER_ID_STR, conv.xid, msg.xid, 'new text')
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('H8. allows editing a message sent after the latest assistant question', async () => {
+      const conv = await createTestConversation();
+      await createCompleteUserMessage(conv._id, 'I saw a diabetic patient.');
+      await createTestMessage(conv._id, {
+        role: MessageRole.ASSISTANT,
+        content: 'Tell me more.',
+        status: MessageStatus.COMPLETE,
+        question: { questionType: 'free_text', prompts: [] },
+      });
+      // The user's reply, sent AFTER the question — not yet consumed, editable.
+      const reply = await createCompleteUserMessage(conv._id, 'It was a follow-up visit.');
+
+      const result = await harness.service.editMessage(
+        TEST_USER_ID_STR,
+        conv.xid,
+        reply.xid,
+        'It was a routine follow-up visit.'
+      );
+      expect(result.content).toBe('It was a routine follow-up visit.');
+      expect(result.editedAt).not.toBeNull();
+    });
+
+    it('H9. locks a message once the assistant has posted a question-less terminal verdict after it', async () => {
+      const conv = await createTestConversation();
+      const msg = await createCompleteUserMessage(conv._id, 'A vague note with no entry type.');
+      // Terminal interrupt (e.g. irrelevant classification): an ASSISTANT message
+      // with NO question. The AI has still consumed `msg` to reach this verdict, so
+      // it must be locked from edit/delete — the position guard keys off any later
+      // assistant message, not just question-bearing ones.
+      await createTestMessage(conv._id, {
+        role: MessageRole.ASSISTANT,
+        content: "I wasn't able to identify a portfolio entry type from what you've shared.",
+        status: MessageStatus.COMPLETE,
+      });
+
+      await expect(
+        harness.service.editMessage(TEST_USER_ID_STR, conv.xid, msg.xid, 'new text')
+      ).rejects.toThrow(ConflictException);
+
+      await expect(
+        harness.service.deleteMessage(TEST_USER_ID_STR, conv.xid, msg.xid)
+      ).rejects.toThrow(ConflictException);
     });
   });
 

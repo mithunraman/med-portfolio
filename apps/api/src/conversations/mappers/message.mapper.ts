@@ -19,6 +19,8 @@ export function toMessageDto(
     question: doc.question ?? null,
     answer: (doc.answer as Answer) ?? null,
     idempotencyKey: doc.idempotencyKey ?? null,
+    generated: doc.generated ?? false,
+    editedAt: doc.editedAt?.toISOString() ?? null,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   };

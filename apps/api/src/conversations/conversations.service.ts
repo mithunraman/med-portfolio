@@ -8,6 +8,7 @@ import type {
   SingleSelectQuestion,
 } from '@acme/shared';
 import {
+  ArtefactStatus,
   ConversationStatus,
   MediaRefCollection,
   MediaStatus,
@@ -42,6 +43,7 @@ import {
   type InterruptNode,
   PortfolioGraphService,
 } from '../portfolio-graph/portfolio-graph.service';
+import { redactStructuredPii } from '../processing/utils/pii-regex';
 import { ConversationContextService } from './conversation-context.service';
 import {
   CONVERSATIONS_REPOSITORY,
@@ -70,80 +72,217 @@ export class ConversationsService {
     private readonly contextService: ConversationContextService
   ) {}
 
-  async deleteMessage(userId: string, conversationXid: string, messageXid: string): Promise<void> {
+  /**
+   * Resolve and authorize one of the user's own messages for in-place
+   * modification (edit or delete). Shared guard ladder:
+   *
+   *  - conversation exists and is owned by the user
+   *  - artefact is IN_CONVERSATION (analysis hasn't produced a reviewable draft)
+   *  - the graph is NOT actively executing (PENDING/RUNNING). A run parked at
+   *    AWAITING_INPUT, or a FAILED run, is safe to mutate underneath:
+   *    gather_context re-reads all COMPLETE messages fresh on the next pass and
+   *    the write is atomic. Only an in-flight pass must be protected.
+   *  - message is USER, a TEXT/AUDIO message, not system-generated (e.g. an
+   *    option-selection audit message), belongs to the routed conversation, and
+   *    its status is in `allowedStatuses` (edit: COMPLETE; delete: COMPLETE|FAILED)
+   *
+   * Privacy: every "not an editable message" rejection (wrong role/type/owner,
+   * generated, cross-conversation) surfaces a generic 404 so message xids in
+   * other conversations the user owns can't be enumerated.
+   */
+  private async assertModifiableUserMessage(
+    userId: string,
+    conversationXid: string,
+    messageXid: string,
+    allowedStatuses: MessageStatus[],
+    action: 'edit' | 'delete',
+    session: ClientSession
+  ): Promise<MessageSchema> {
+    // Single ObjectId conversion for both edit and delete. The conversations
+    // repo interface still declares userId as ObjectId (shared with sendMessage,
+    // listMessages, etc.); converting once here keeps it out of the individual
+    // edit/delete methods. A follow-up should push userId-as-string into the
+    // repo interface to remove this conversion entirely (see CLAUDE.md).
     const userOid = new Types.ObjectId(userId);
 
+    const convResult = await this.conversationsRepository.findConversationByXid(
+      conversationXid,
+      userOid,
+      session
+    );
+    if (isErr(convResult)) throw new InternalServerErrorException(convResult.error.message);
+    if (!convResult.value) throw new NotFoundException('Conversation not found');
+    const conversation = convResult.value;
+
+    // Artefact must still be in the conversation phase (excludes IN_REVIEW /
+    // COMPLETED entries — these the run-state check below can't catch).
+    const artefactResult = await this.artefactsRepository.findById(conversation.artefact, session);
+    if (isErr(artefactResult))
+      throw new InternalServerErrorException(artefactResult.error.message);
+    if (!artefactResult.value || artefactResult.value.status !== ArtefactStatus.IN_CONVERSATION) {
+      throw new ConflictException(
+        'Messages can only be edited or deleted while the entry is in conversation'
+      );
+    }
+
+    // Block only while the graph is actively executing.
+    const executingRun = await this.analysisRunsService.findExecutingRun(conversation._id, session);
+    if (executingRun) {
+      throw new ConflictException(`Cannot ${action} messages while analysis is in progress`);
+    }
+
+    const msgResult = await this.conversationsRepository.findMessagesByXids(
+      [messageXid],
+      userOid,
+      session
+    );
+    if (isErr(msgResult)) throw new InternalServerErrorException(msgResult.error.message);
+    const message = msgResult.value[0];
+
+    // Only the user's own, non-generated, text/audio messages are modifiable.
+    // A tombstoned (DELETED) message is treated as not-found so a re-delete /
+    // stale-client edit returns an opaque 404 (idempotent) rather than a
+    // confusing 409 from the status gate below. findMessagesByXids does not
+    // filter tombstones, so we exclude DELETED here.
+    const isModifiableKind =
+      message &&
+      message.status !== MessageStatus.DELETED &&
+      message.role === MessageRole.USER &&
+      !message.generated &&
+      (message.messageType === MessageType.TEXT || message.messageType === MessageType.AUDIO);
+    if (!isModifiableKind) {
+      if (message) {
+        this.logger.debug(
+          `Rejecting ${action} of message ${messageXid} (role=${message.role} type=${message.messageType} generated=${message.generated} status=${message.status})`
+        );
+      }
+      throw new NotFoundException('Message not found');
+    }
+
+    // Membership: the message must belong to the routed conversation. Without
+    // this, a user with two conversations could route a modification through an
+    // idle conversation to dodge the executing-run guard on the real one.
+    // findMessagesByXids populates `conversation` and runs .lean(), so it's a
+    // plain { _id, xid } at runtime — extract _id before comparing.
+    const messageConvId = (message.conversation as unknown as { _id: Types.ObjectId })._id;
+    if (!objectIdsEqual(messageConvId, conversation._id)) {
+      this.logger.debug(
+        `Rejecting ${action} of message ${messageXid} — belongs to ${messageConvId.toString()} not ${conversation._id.toString()}`
+      );
+      throw new NotFoundException('Message not found');
+    }
+
+    // Status gate differs per action: edit requires COMPLETE; delete also
+    // permits FAILED (clearing a message that failed to process).
+    if (!allowedStatuses.includes(message.status)) {
+      throw new ConflictException('This message cannot be modified in its current state');
+    }
+
+    // Position guard: once the AI has responded after this message, the message
+    // has been fed into that analysis turn (gather_context read it to produce the
+    // response). Mutating it now would desync the analysis — and for capability
+    // tagging, leave the artefact citing quotes that no longer exist. So a message
+    // is only modifiable while no later assistant message exists — including
+    // question-less terminal verdicts, which still mean the AI consumed it. This
+    // is topology-independent: we don't need to know which graph interrupt is
+    // active, only whether the AI has already responded past this message.
+    const laterMessageResult = await this.conversationsRepository.hasLaterAssistantMessage(
+      conversation._id,
+      message._id,
+      session
+    );
+    if (isErr(laterMessageResult))
+      throw new InternalServerErrorException(laterMessageResult.error.message);
+    if (laterMessageResult.value) {
+      throw new ConflictException(
+        'This message can no longer be changed — the assistant has already responded to it.'
+      );
+    }
+
+    return message;
+  }
+
+  async deleteMessage(userId: string, conversationXid: string, messageXid: string): Promise<void> {
     await this.transactionService.withTransaction(
       async (session) => {
-        // 1. Find conversation and verify ownership
-        const convResult = await this.conversationsRepository.findConversationByXid(
+        const message = await this.assertModifiableUserMessage(
+          userId,
           conversationXid,
-          userOid,
+          messageXid,
+          [MessageStatus.COMPLETE, MessageStatus.FAILED],
+          'delete',
           session
         );
-        if (isErr(convResult)) throw new InternalServerErrorException(convResult.error.message);
-        if (!convResult.value) throw new NotFoundException('Conversation not found');
-
-        const conversation = convResult.value;
-
-        // 2. Guard: only allow deletion in active conversations
-        if (conversation.status !== ConversationStatus.ACTIVE) {
-          throw new ConflictException(
-            'Messages can only be deleted while the conversation is active'
-          );
-        }
-
-        // 3. Guard: block deletion if analysis is in progress
-        const activeRun = await this.analysisRunsService.findActiveRun(conversation._id, session);
-        if (activeRun) {
-          throw new ConflictException('Cannot delete messages while analysis is in progress');
-        }
-
-        // 4. Resolve message xid → ObjectId
-        const msgResult = await this.conversationsRepository.findMessagesByXids(
-          [messageXid],
-          userOid,
-          session
-        );
-        if (isErr(msgResult)) throw new InternalServerErrorException(msgResult.error.message);
-        const message = msgResult.value[0];
-        // Return 404 for non-USER messages even though the row exists: surfacing
-        // a distinct "wrong role" error would leak the existence of assistant
-        // message xids to enumerators. The role-mismatch case is logged for
-        // internal debugging instead.
-        if (!message || message.role !== MessageRole.USER) {
-          if (message) {
-            this.logger.debug(
-              `Rejecting delete of non-USER message ${messageXid} (role=${message.role})`
-            );
-          }
-          throw new NotFoundException('Message not found');
-        }
-        // Membership check: message must belong to the route's conversation.
-        // Without this, a user with two conversations can bypass the
-        // ACTIVE-status and active-run guards above by routing the delete
-        // through an idle conversation while the message lives in one with
-        // an in-flight analysis. Same privacy treatment as the role check:
-        // surfacing a distinct "wrong conversation" error would leak that
-        // the message xid exists in another conversation the user owns.
-        //
-        // findMessagesByXids populates `conversation` and runs .lean(), so
-        // message.conversation is a plain { _id, xid } at runtime — NOT a
-        // Types.ObjectId, despite what the TS type claims. Don't call
-        // .equals() on it directly; extract _id first.
-        const messageConvId = (message.conversation as unknown as { _id: Types.ObjectId })._id;
-        if (!objectIdsEqual(messageConvId, conversation._id)) {
-          this.logger.debug(
-            `Rejecting delete of message ${messageXid} — belongs to ${messageConvId.toString()} not ${conversation._id.toString()}`
-          );
-          throw new NotFoundException('Message not found');
-        }
-
-        // 5. Cascade-delete the message (tombstones + media cleanup).
+        // Cascade-delete the message (tombstones + media cleanup).
         await this.deleteMessagesByIds([message._id], session);
       },
       { context: `deleteMessage:${conversationXid}:${messageXid}` }
     );
+  }
+
+  /**
+   * Edit the text of a user message in place.
+   *
+   * Availability is gated by assertModifiableUserMessage (USER + TEXT/AUDIO +
+   * not generated + artefact IN_CONVERSATION + not actively analysing +
+   * status COMPLETE).
+   *
+   * The edit does NOT re-run the processing pipeline. The new text is passed
+   * through the deterministic, regex-only PII redaction (no LLM) and written
+   * straight to the message content — the message stays COMPLETE throughout and
+   * is stamped with editedAt. Note: regex redaction catches structured
+   * identifiers (NHS number, email, phone, postcode, …) but not contextual PII
+   * (names, organisations) that the LLM stage catches on the original send path.
+   */
+  async editMessage(
+    userId: string,
+    conversationXid: string,
+    messageXid: string,
+    content: string
+  ): Promise<Message> {
+    const editedAt = new Date();
+
+    const { updated, populated } = await this.transactionService.withTransaction(
+      async (session) => {
+        const message = await this.assertModifiableUserMessage(
+          userId,
+          conversationXid,
+          messageXid,
+          [MessageStatus.COMPLETE],
+          'edit',
+          session
+        );
+
+        // Regex-only PII redaction (no LLM, no pipeline re-run). The message
+        // stays COMPLETE — we write the raw input and the redacted output so the
+        // three-stage content invariant stays consistent, and stamp editedAt.
+        const { redactedText } = redactStructuredPii(content);
+
+        const updateResult = await this.conversationsRepository.updateMessage(
+          message._id,
+          {
+            rawContent: content,
+            cleanedContent: redactedText,
+            content: redactedText,
+            editedAt,
+          },
+          session
+        );
+        if (isErr(updateResult)) throw new InternalServerErrorException(updateResult.error.message);
+        if (!updateResult.value) throw new NotFoundException('Message not found');
+
+        // `updated` carries the fresh scalar fields (content, editedAt,
+        // updatedAt) but an unpopulated `media`; `message` (the guard read) has
+        // `media` populated. Combine the two below — no extra query needed.
+        return { updated: updateResult.value, populated: message };
+      },
+      { context: `editMessage:${conversationXid}:${messageXid}` }
+    );
+
+    // Build the response DTO from the fresh doc + the already-populated media.
+    // The S3 presign stays outside the transaction.
+    const audioUrl = await this.resolveAudioUrl(populated);
+    return toMessageDto(updated, conversationXid, buildMediaData(populated, audioUrl));
   }
 
   async sendMessage(userId: string, conversationId: string, dto: SendMessageDto): Promise<Message> {
@@ -339,12 +478,7 @@ export class ConversationsService {
     }
 
     // 4. Compute and return updated context (run is now PENDING → phase = 'analysing')
-    const artefactXidResult = await this.conversationsRepository.findArtefactXidByConversationId(
-      conversation._id
-    );
-    const artefactId = !isErr(artefactXidResult) ? (artefactXidResult.value ?? '') : '';
-
-    return this.contextService.computeContext(conversation._id, conversation.status, artefactId);
+    return this.contextService.computeContext(conversation._id, conversation.status);
   }
 
   /**
@@ -551,6 +685,7 @@ export class ConversationsService {
               content: `Selected: ${label}`,
               status: MessageStatus.COMPLETE,
               idempotencyKey,
+              generated: true,
             },
             session
           );
@@ -567,6 +702,7 @@ export class ConversationsService {
               content: `Selected: ${labels.join(', ')}`,
               status: MessageStatus.COMPLETE,
               idempotencyKey,
+              generated: true,
             },
             session
           );
@@ -613,11 +749,7 @@ export class ConversationsService {
     conversationOid: Types.ObjectId,
     conversationStatus: ConversationStatus
   ): Promise<void> {
-    const context = await this.contextService.computeContext(
-      conversationOid,
-      conversationStatus,
-      ''
-    );
+    const context = await this.contextService.computeContext(conversationOid, conversationStatus);
     if (!context.actions.sendMessage.allowed) {
       throw new ConflictException(
         context.actions.sendMessage.reason || 'Cannot send messages at this time.'
@@ -661,17 +793,11 @@ export class ConversationsService {
       })
     );
 
-    // Resolve artefact xid for the context
-    const artefactXidResult = await this.conversationsRepository.findArtefactXidByConversationId(
-      conversation._id
-    );
-    const artefactId = !isErr(artefactXidResult) ? (artefactXidResult.value ?? '') : '';
-
-    // Compute context (server-driven action state)
+    // Compute context (server-driven action state). computeContext resolves the
+    // artefact ref (xid + status) internally.
     let context = await this.contextService.computeContext(
       conversation._id,
-      conversation.status,
-      artefactId
+      conversation.status
     );
 
     // Guard against a read-timing race: the messages query and the context query

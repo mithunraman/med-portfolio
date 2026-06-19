@@ -103,6 +103,9 @@ export const BubbleShell = memo(function BubbleShell({
           <ProcessingLabel label={statusLabel} color={metaColor} />
         ) : null}
         <View style={styles.footerRight}>
+          {message.editedAt ? (
+            <Text style={[styles.editedLabel, { color: metaColor }]}>Edited</Text>
+          ) : null}
           <Text style={[styles.timestamp, { color: metaColor }]}>{formatTimestamp(message.createdAt)}</Text>
           {tick}
         </View>
@@ -150,8 +153,12 @@ const styles = StyleSheet.create({
   footerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 4,
     marginLeft: 'auto',
+  },
+  editedLabel: {
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   timestamp: {
     fontSize: 13,

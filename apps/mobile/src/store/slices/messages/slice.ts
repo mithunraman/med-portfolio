@@ -57,6 +57,8 @@ export function toRenderableMessage(opt: OptimisticMessage): RenderableMessage {
     media: null,
     question: null,
     answer: null,
+    generated: false,
+    editedAt: null,
     createdAt: opt.createdAt,
     updatedAt: opt.createdAt,
     _deliveryStatus: opt.deliveryStatus,

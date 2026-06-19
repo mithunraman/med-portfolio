@@ -1,5 +1,5 @@
 ---
-name: code-review
+name: my-code-review
 
 description: Structured code review producing prioritized [P0]-[P3] findings. Trigger on requests to review branch diffs, uncommitted changes, PRs, or specific commits.
 ---

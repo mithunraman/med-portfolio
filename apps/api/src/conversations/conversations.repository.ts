@@ -1,4 +1,4 @@
-import { ConversationStatus, MessageStatus, MessageRole } from '@acme/shared';
+import { ArtefactStatus, ConversationStatus, MessageStatus, MessageRole } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
@@ -318,6 +318,34 @@ export class ConversationsRepository implements IConversationsRepository {
     }
   }
 
+  async hasLaterAssistantMessage(
+    conversationId: Types.ObjectId,
+    messageId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<boolean, DBError>> {
+    try {
+      // _id is monotonic by insertion, and an assistant message is always
+      // created after the messages it consumed — so "_id greater than target"
+      // reliably means "the AI responded after this message". We match ANY live
+      // later assistant message, not just question-bearing ones: terminal
+      // verdicts (irrelevant classification / empty capabilities) carry no
+      // question yet still mean the AI has responded past this point. Indexed by
+      // the existing { conversation: 1, _id: -1 } compound index.
+      const existing = await this.messageModel
+        .exists({
+          conversation: conversationId,
+          role: MessageRole.ASSISTANT,
+          ...MESSAGE_LIVE_FILTER,
+          _id: { $gt: messageId },
+        })
+        .session(session || null);
+      return ok(existing !== null);
+    } catch (error) {
+      this.logger.error('Failed to check for later assistant message', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to check for later assistant message' });
+    }
+  }
+
   async findMessageByIdempotencyKey(
     userId: Types.ObjectId,
     idempotencyKey: string,
@@ -336,24 +364,27 @@ export class ConversationsRepository implements IConversationsRepository {
     }
   }
 
-  async findArtefactXidByConversationId(
+  async findArtefactRefByConversationId(
     conversationId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<string | null, DBError>> {
+  ): Promise<Result<{ xid: string; status: ArtefactStatus } | null, DBError>> {
     try {
       const conversation = await this.conversationModel
         .findById(conversationId)
-        .populate('artefact', 'xid')
+        .populate('artefact', 'xid status')
         .lean()
         .session(session || null);
 
       if (!conversation) return ok(null);
 
-      const artefact = conversation.artefact as unknown as { xid: string } | null;
-      return ok(artefact?.xid ?? null);
+      const artefact = conversation.artefact as unknown as {
+        xid: string;
+        status: ArtefactStatus;
+      } | null;
+      return ok(artefact ? { xid: artefact.xid, status: artefact.status } : null);
     } catch (error) {
-      this.logger.error('Failed to find artefact xid by conversation id', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to find artefact xid' });
+      this.logger.error('Failed to find artefact ref by conversation id', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find artefact ref' });
     }
   }
 

@@ -1,6 +1,6 @@
 import { logger } from '@/utils/logger';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import type { ConversationPhase } from '@acme/shared';
+import { MAX_MESSAGE_CONTENT_LENGTH, type ConversationPhase } from '@acme/shared';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -273,6 +273,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
             onBlur={handleBlur}
             multiline={true}
             numberOfLines={5}
+            maxLength={MAX_MESSAGE_CONTENT_LENGTH}
             textAlignVertical="center"
             editable={!isInputDisabled}
             accessibilityLabel="Message input"

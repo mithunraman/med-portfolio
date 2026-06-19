@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { AnalysisRunStatus } from '../enums/analysis-run-status.enum';
+import { ArtefactStatus } from '../enums/artefact-status.enum';
 import { ConversationStatus } from '../enums/conversation-status.enum';
-import { MessageStatus } from '../enums/message-status.enum';
 import { MessageRole } from '../enums/message-role.enum';
+import { MessageStatus } from '../enums/message-status.enum';
 import { MessageType } from '../enums/message-type.enum';
 import { ThinkingStep } from '../enums/thinking-step.enum';
 
@@ -164,6 +165,12 @@ export const MessageSchema = z.object({
   question: QuestionSchema.nullable().optional(),
   answer: AnswerSchema.nullable().optional(),
   idempotencyKey: z.string().nullable().optional(),
+  // True for system-authored audit messages (e.g. a recorded option selection).
+  // These are not user-editable/deletable even though role is USER.
+  generated: z.boolean(),
+  // Set when the user edits the message in place; null otherwise. Drives the
+  // "Edited" indicator in the UI.
+  editedAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -182,9 +189,15 @@ export const ConversationSchema = z.object({
 export type Conversation = z.infer<typeof ConversationSchema>;
 
 // Request schemas
+
+// Single source of truth for "a valid user message body" — shared by the send
+// and edit paths so the length rule can't silently diverge between them.
+export const MAX_MESSAGE_CONTENT_LENGTH = 1000;
+export const MessageContentSchema = z.string().min(1).max(MAX_MESSAGE_CONTENT_LENGTH);
+
 export const SendMessageRequestSchema = z
   .object({
-    content: z.string().min(1).max(10000).optional(),
+    content: MessageContentSchema.optional(),
     mediaId: z.string().min(1).max(50).optional(),
     idempotencyKey: z.string().min(1).max(24).optional(),
   })
@@ -193,6 +206,14 @@ export const SendMessageRequestSchema = z
   });
 
 export type SendMessageRequest = z.infer<typeof SendMessageRequestSchema>;
+
+// Edit an existing user message. The new text replaces the message content
+// in place (regex-only PII redaction, no pipeline re-run) — see backend.
+export const EditMessageRequestSchema = z.object({
+  content: MessageContentSchema,
+});
+
+export type EditMessageRequest = z.infer<typeof EditMessageRequestSchema>;
 
 // Analysis action request (unified start + resume)
 // Resume sends messageId (the ASSISTANT question message xid) instead of graph node names.
@@ -221,7 +242,12 @@ export type ConversationListResponse = z.infer<typeof ConversationListResponseSc
 
 // ── ConversationContext schemas ──
 
-export const QuestionTypeSchema = z.enum(['single_select', 'multi_select', 'free_text', 'terminal']);
+export const QuestionTypeSchema = z.enum([
+  'single_select',
+  'multi_select',
+  'free_text',
+  'terminal',
+]);
 export type QuestionType = z.infer<typeof QuestionTypeSchema>;
 
 export const ConversationPhaseSchema = z.enum([
@@ -242,6 +268,12 @@ export type ActionState = z.infer<typeof ActionStateSchema>;
 
 export const ConversationContextSchema = z.object({
   artefactId: z.string(),
+  // Lifecycle status of the parent artefact. The client uses this (with message
+  // facts) to decide whether edit/delete are offered — the backend no longer
+  // computes a per-message capability flag. Null when the artefact ref couldn't
+  // be resolved (missing/DB error) — the client treats null as "not editable"
+  // (fail-closed); the server re-checks the artefact authoritatively.
+  artefactStatus: z.nativeEnum(ArtefactStatus).nullable(),
   actions: z.object({
     sendMessage: ActionStateSchema,
     sendAudio: ActionStateSchema,

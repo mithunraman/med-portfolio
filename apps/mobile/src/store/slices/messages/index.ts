@@ -24,6 +24,7 @@ export { toRenderableMessage } from './slice';
 // Thunks
 export {
   fetchMessages,
+  editMessage,
   sendMessage,
   sendMessageWithRetry,
   retryFailedMessage,

@@ -59,6 +59,7 @@ export { deleteConversation, fetchConversations, conversationSelectors } from '.
 // ── Messages ──
 export {
   fetchMessages,
+  editMessage,
   sendMessage,
   sendMessageWithRetry,
   retryFailedMessage,

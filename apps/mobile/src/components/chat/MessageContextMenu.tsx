@@ -1,8 +1,9 @@
 import type { Message } from '@acme/shared';
-import { MessageRole } from '@acme/shared';
+import { ArtefactStatus } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useCallback, useMemo } from 'react';
 import { Modal, Pressable, StyleSheet, Text } from 'react-native';
+import { canDeleteMessage, canEditMessage } from './messagePermissions';
 import type { ContextMenuAction } from './types';
 
 interface Action {
@@ -12,25 +13,40 @@ interface Action {
 }
 
 const COPY_ACTION: Action = { id: 'copy', label: 'Copy', icon: 'copy-outline' };
+const EDIT_ACTION: Action = { id: 'edit', label: 'Edit', icon: 'create-outline' };
 const DELETE_ACTION: Action = { id: 'delete', label: 'Delete', icon: 'trash-outline' };
 
 interface Props {
   message: Message | null;
+  /** Artefact lifecycle status for the conversation (gates edit/delete). Null = unresolved → not editable. */
+  artefactStatus?: ArtefactStatus | null;
+  /** True while the AI is actively analysing (edit/delete unavailable). */
+  isAnalysing?: boolean;
+  /** createdAt of the latest assistant message; messages at/before it are locked. */
+  latestAssistantMessageAt?: string;
   onAction: (action: ContextMenuAction, message: Message) => void;
   onDismiss: () => void;
 }
 
 export const MessageContextMenu = memo(function MessageContextMenu({
   message,
+  artefactStatus,
+  isAnalysing = false,
+  latestAssistantMessageAt,
   onAction,
   onDismiss,
 }: Props) {
   const actions = useMemo(() => {
     if (!message) return [COPY_ACTION];
     const items: Action[] = [COPY_ACTION];
-    if (message.role === MessageRole.USER) items.push(DELETE_ACTION);
+    // Hide (don't disable) inapplicable actions — the global "analysing" state
+    // and the "AI already replied" lock are conveyed by their absence.
+    if (canEditMessage(message, artefactStatus, isAnalysing, latestAssistantMessageAt))
+      items.push(EDIT_ACTION);
+    if (canDeleteMessage(message, artefactStatus, isAnalysing, latestAssistantMessageAt))
+      items.push(DELETE_ACTION);
     return items;
-  }, [message]);
+  }, [message, artefactStatus, isAnalysing, latestAssistantMessageAt]);
 
   const handleAction = useCallback(
     (action: ContextMenuAction) => {

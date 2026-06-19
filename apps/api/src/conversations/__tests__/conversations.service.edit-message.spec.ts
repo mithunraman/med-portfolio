@@ -58,16 +58,12 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
 const mockConversationsRepo = {
   findConversationByXid: jest.fn(),
   findMessagesByXids: jest.fn(),
-  markDeletedMessagesByIds: jest.fn().mockResolvedValue(ok(1)),
+  updateMessage: jest.fn(),
   hasLaterAssistantMessage: jest.fn(),
 };
 
 const mockArtefactsRepo = {
   findById: jest.fn(),
-};
-
-const mockMediaService = {
-  markPendingDeleteByMessageIds: jest.fn().mockResolvedValue(undefined),
 };
 
 const mockAnalysisRunsService = {
@@ -85,7 +81,7 @@ function createService(): ConversationsService {
     mockConversationsRepo as any,
     mockArtefactsRepo as any, // artefactsRepository
     noopRepo, // mediaRepository
-    mockMediaService as any,
+    noopService, // mediaService
     mockTransactionService as any,
     noopService, // portfolioGraphService
     mockAnalysisRunsService as any,
@@ -101,11 +97,10 @@ function primeHappyPath() {
   mockAnalysisRunsService.findExecutingRun.mockResolvedValue(null);
   mockConversationsRepo.findMessagesByXids.mockResolvedValue(ok([makeMessage()]));
   mockConversationsRepo.hasLaterAssistantMessage.mockResolvedValue(ok(false));
-  mockConversationsRepo.markDeletedMessagesByIds.mockResolvedValue(ok(1));
-  mockMediaService.markPendingDeleteByMessageIds.mockResolvedValue(undefined);
+  mockConversationsRepo.updateMessage.mockResolvedValue(ok(makeMessage()));
 }
 
-describe('ConversationsService.deleteMessage', () => {
+describe('ConversationsService.editMessage', () => {
   let service: ConversationsService;
 
   beforeEach(() => {
@@ -116,41 +111,46 @@ describe('ConversationsService.deleteMessage', () => {
     service = createService();
   });
 
-  it('tombstones a COMPLETE user message (cascades media cleanup)', async () => {
+  it('redacts structured PII, writes the new content, and stamps editedAt', async () => {
     primeHappyPath();
 
-    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).resolves.toBeUndefined();
-
-    expect(mockMediaService.markPendingDeleteByMessageIds).toHaveBeenCalledWith([messageOid], null);
-    expect(mockConversationsRepo.markDeletedMessagesByIds).toHaveBeenCalledWith([messageOid], null);
-  });
-
-  it('allows deleting a FAILED message', async () => {
-    primeHappyPath();
-    mockConversationsRepo.findMessagesByXids.mockResolvedValue(
-      ok([makeMessage({ status: MessageStatus.FAILED })]),
+    const result = await service.editMessage(
+      userIdStr,
+      'conv_abc',
+      'msg_abc',
+      'Call me at test@example.com',
     );
 
-    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).resolves.toBeUndefined();
-    expect(mockConversationsRepo.markDeletedMessagesByIds).toHaveBeenCalledWith([messageOid], null);
+    expect(mockConversationsRepo.updateMessage).toHaveBeenCalledWith(
+      messageOid,
+      {
+        rawContent: 'Call me at test@example.com',
+        cleanedContent: 'Call me at [EMAIL]',
+        content: 'Call me at [EMAIL]',
+        editedAt: expect.any(Date),
+      },
+      null,
+    );
+    expect(result.id).toBe('msg_abc');
   });
 
-  it('throws NotFoundException when conversation does not exist', async () => {
+  it('throws NotFoundException when the conversation does not exist', async () => {
     mockConversationsRepo.findConversationByXid.mockResolvedValue(ok(null));
 
-    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).rejects.toThrow(
+    await expect(service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'new')).rejects.toThrow(
       NotFoundException,
     );
+    expect(mockConversationsRepo.updateMessage).not.toHaveBeenCalled();
   });
 
   it('throws ConflictException when the artefact is not IN_CONVERSATION', async () => {
     mockConversationsRepo.findConversationByXid.mockResolvedValue(ok(makeConversation()));
     mockArtefactsRepo.findById.mockResolvedValue(ok(makeArtefact({ status: ArtefactStatus.IN_REVIEW })));
 
-    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).rejects.toThrow(
+    await expect(service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'new')).rejects.toThrow(
       ConflictException,
     );
-    expect(mockConversationsRepo.markDeletedMessagesByIds).not.toHaveBeenCalled();
+    expect(mockConversationsRepo.updateMessage).not.toHaveBeenCalled();
   });
 
   it('throws ConflictException when the graph is actively executing', async () => {
@@ -158,19 +158,30 @@ describe('ConversationsService.deleteMessage', () => {
     mockArtefactsRepo.findById.mockResolvedValue(ok(makeArtefact()));
     mockAnalysisRunsService.findExecutingRun.mockResolvedValue({ _id: oid() });
 
-    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).rejects.toThrow(
+    await expect(service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'new')).rejects.toThrow(
       ConflictException,
     );
-    expect(mockConversationsRepo.markDeletedMessagesByIds).not.toHaveBeenCalled();
+    expect(mockConversationsRepo.updateMessage).not.toHaveBeenCalled();
   });
 
-  it('throws NotFoundException when message does not exist', async () => {
+  it('allows editing while a run is paused (findExecutingRun returns null)', async () => {
+    // A run parked at AWAITING_INPUT is not "executing" — editExecutingRun is null.
+    primeHappyPath();
+
+    await expect(
+      service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'corrected'),
+    ).resolves.toBeDefined();
+    expect(mockConversationsRepo.updateMessage).toHaveBeenCalled();
+  });
+
+  it('throws NotFoundException when the message does not exist', async () => {
     primeHappyPath();
     mockConversationsRepo.findMessagesByXids.mockResolvedValue(ok([]));
 
-    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).rejects.toThrow(
+    await expect(service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'new')).rejects.toThrow(
       NotFoundException,
     );
+    expect(mockConversationsRepo.updateMessage).not.toHaveBeenCalled();
   });
 
   it('throws NotFoundException for a non-USER message', async () => {
@@ -179,9 +190,10 @@ describe('ConversationsService.deleteMessage', () => {
       ok([makeMessage({ role: MessageRole.ASSISTANT })]),
     );
 
-    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).rejects.toThrow(
+    await expect(service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'new')).rejects.toThrow(
       NotFoundException,
     );
+    expect(mockConversationsRepo.updateMessage).not.toHaveBeenCalled();
   });
 
   it('throws NotFoundException for a system-generated (selection) message', async () => {
@@ -190,9 +202,10 @@ describe('ConversationsService.deleteMessage', () => {
       ok([makeMessage({ generated: true })]),
     );
 
-    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).rejects.toThrow(
+    await expect(service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'new')).rejects.toThrow(
       NotFoundException,
     );
+    expect(mockConversationsRepo.updateMessage).not.toHaveBeenCalled();
   });
 
   it('throws NotFoundException for a non-text/audio message', async () => {
@@ -201,54 +214,75 @@ describe('ConversationsService.deleteMessage', () => {
       ok([makeMessage({ messageType: MessageType.IMAGE })]),
     );
 
-    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).rejects.toThrow(
+    await expect(service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'new')).rejects.toThrow(
       NotFoundException,
     );
+    expect(mockConversationsRepo.updateMessage).not.toHaveBeenCalled();
   });
 
-  it('throws NotFoundException when message belongs to a different conversation', async () => {
+  it('throws NotFoundException when the message belongs to a different conversation', async () => {
     primeHappyPath();
     mockConversationsRepo.findMessagesByXids.mockResolvedValue(
       ok([makeMessage({ conversation: { _id: oid(), xid: 'conv_other' } })]),
     );
 
-    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).rejects.toThrow(
+    await expect(service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'new')).rejects.toThrow(
       NotFoundException,
     );
-    expect(mockConversationsRepo.markDeletedMessagesByIds).not.toHaveBeenCalled();
+    expect(mockConversationsRepo.updateMessage).not.toHaveBeenCalled();
   });
 
   it('throws ConflictException when the assistant has already responded after the message', async () => {
     primeHappyPath();
     mockConversationsRepo.hasLaterAssistantMessage.mockResolvedValue(ok(true));
 
-    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).rejects.toThrow(
+    await expect(service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'new')).rejects.toThrow(
       ConflictException,
     );
-    expect(mockConversationsRepo.markDeletedMessagesByIds).not.toHaveBeenCalled();
+    expect(mockConversationsRepo.updateMessage).not.toHaveBeenCalled();
   });
 
-  it('throws NotFoundException (opaque, idempotent) for an already-deleted message', async () => {
+  it('throws NotFoundException (opaque) for an already-deleted message', async () => {
     primeHappyPath();
     mockConversationsRepo.findMessagesByXids.mockResolvedValue(
       ok([makeMessage({ status: MessageStatus.DELETED })]),
     );
 
-    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).rejects.toThrow(
+    await expect(service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'new')).rejects.toThrow(
       NotFoundException,
     );
-    expect(mockConversationsRepo.markDeletedMessagesByIds).not.toHaveBeenCalled();
+    expect(mockConversationsRepo.updateMessage).not.toHaveBeenCalled();
   });
 
-  it('throws ConflictException for a status that is neither COMPLETE nor FAILED', async () => {
+  it('throws ConflictException when the message is not COMPLETE', async () => {
     primeHappyPath();
     mockConversationsRepo.findMessagesByXids.mockResolvedValue(
       ok([makeMessage({ status: MessageStatus.PENDING })]),
     );
 
-    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).rejects.toThrow(
+    await expect(service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'new')).rejects.toThrow(
       ConflictException,
     );
-    expect(mockConversationsRepo.markDeletedMessagesByIds).not.toHaveBeenCalled();
+    expect(mockConversationsRepo.updateMessage).not.toHaveBeenCalled();
+  });
+
+  it('preserves messageType for an edited AUDIO (transcript) message', async () => {
+    const audioMsg = makeMessage({ messageType: MessageType.AUDIO });
+    mockConversationsRepo.findConversationByXid.mockResolvedValue(ok(makeConversation()));
+    mockArtefactsRepo.findById.mockResolvedValue(ok(makeArtefact()));
+    mockAnalysisRunsService.findExecutingRun.mockResolvedValue(null);
+    mockConversationsRepo.findMessagesByXids.mockResolvedValue(ok([audioMsg]));
+    mockConversationsRepo.hasLaterAssistantMessage.mockResolvedValue(ok(false));
+    mockConversationsRepo.updateMessage.mockResolvedValue(ok(audioMsg));
+
+    const result = await service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'corrected transcript');
+
+    expect(result.messageType).toBe(MessageType.AUDIO);
+    // Edit never re-runs transcription nor touches status.
+    expect(mockConversationsRepo.updateMessage).toHaveBeenCalledWith(
+      messageOid,
+      expect.not.objectContaining({ status: expect.anything() }),
+      null,
+    );
   });
 });

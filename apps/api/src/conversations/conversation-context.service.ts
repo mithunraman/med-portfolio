@@ -40,11 +40,27 @@ export class ConversationContextService {
   async computeContext(
     conversationOid: Types.ObjectId,
     conversationStatus: ConversationStatus,
-    artefactId: string,
   ): Promise<ConversationContext> {
+    // Resolve the artefact ref (xid + status) once. The client uses
+    // artefactStatus (with message facts) to decide edit/delete availability.
+    // Fail closed: if the ref can't be resolved (DB error or missing artefact),
+    // leave artefactStatus null so the client withholds edit/delete rather than
+    // offering an action the server would reject.
+    const refResult =
+      await this.conversationsRepository.findArtefactRefByConversationId(conversationOid);
+    if (isErr(refResult)) {
+      this.logger.warn(
+        `[computeContext] failed to resolve artefact ref for ${conversationOid}: ${refResult.error.message}`
+      );
+    }
+    const ref = !isErr(refResult) ? refResult.value : null;
+    const artefactId = ref?.xid ?? '';
+    const artefactStatus = ref?.status ?? null;
+
     if (conversationStatus === ConversationStatus.CLOSED) {
       return {
         artefactId,
+        artefactStatus,
         phase: 'closed',
         actions: {
           sendMessage: denied('CONVERSATION_CLOSED', 'This conversation is closed.'),
@@ -111,7 +127,7 @@ export class ConversationContextService {
         }
       : undefined;
 
-    return { artefactId, phase, actions, activeQuestion, analysisRun };
+    return { artefactId, artefactStatus, phase, actions, activeQuestion, analysisRun };
   }
 
   private derivePhase(

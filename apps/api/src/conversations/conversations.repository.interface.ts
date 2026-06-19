@@ -1,4 +1,4 @@
-import { type Question, MessageStatus, MessageRole, MessageType } from '@acme/shared';
+import { type Question, ArtefactStatus, MessageStatus, MessageRole, MessageType } from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
 import type { DBError, Result } from '../common/utils/result.util';
 import type { Conversation } from './schemas/conversation.schema';
@@ -26,6 +26,8 @@ export interface CreateMessageData {
   media?: Types.ObjectId | null;
   question?: Question | null;
   idempotencyKey: string;
+  /** Mark system-authored audit messages (e.g. recorded option selections). */
+  generated?: boolean;
 }
 
 export interface UpdateMessageData {
@@ -36,6 +38,7 @@ export interface UpdateMessageData {
   processingError?: string | null;
   transcription?: TranscriptionMetadata | null;
   answer?: Record<string, unknown> | null;
+  editedAt?: Date | null;
 }
 
 export interface ListMessagesQuery {
@@ -133,6 +136,18 @@ export interface IConversationsRepository {
   ): Promise<Result<MessageRole | null, DBError>>;
 
   /**
+   * Whether a live ASSISTANT message exists after the given message (by _id) in
+   * the conversation. Used to lock a message from edit/delete once the AI has
+   * responded past it (i.e. it's been consumed by an analysis turn). Matches any
+   * assistant message, including question-less terminal verdicts.
+   */
+  hasLaterAssistantMessage(
+    conversationId: Types.ObjectId,
+    messageId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<boolean, DBError>>;
+
+  /**
    * Find a message by its idempotency key, scoped to a specific user.
    * Used for deduplication on retries.
    */
@@ -143,12 +158,13 @@ export interface IConversationsRepository {
   ): Promise<Result<Message | null, DBError>>;
 
   /**
-   * Resolve the artefact xid for a conversation by populating the artefact ref.
+   * Resolve the artefact xid + status for a conversation by populating the
+   * artefact ref. Returns null if the conversation or artefact is missing.
    */
-  findArtefactXidByConversationId(
+  findArtefactRefByConversationId(
     conversationId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<string | null, DBError>>;
+  ): Promise<Result<{ xid: string; status: ArtefactStatus } | null, DBError>>;
 
   /**
    * Return conversation IDs belonging to a user.

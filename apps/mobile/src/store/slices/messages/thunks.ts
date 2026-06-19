@@ -6,6 +6,7 @@ import { retryWrite } from '../../../utils/retry';
 import {
   addOptimisticMessage,
   updateOptimisticStatus,
+  upsertMessage,
   type OptimisticMessage,
 } from './slice';
 
@@ -55,6 +56,37 @@ export const fetchMessages = createAsyncThunk(
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch messages';
       messagesLogger.error('Failed to fetch messages', { error: message });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
+ * Edit the text of an existing user message in place. The server redacts the
+ * new text (regex-only) and returns the updated message, which we upsert into
+ * the store — no optimistic placeholder is needed since the message stays
+ * COMPLETE and the round-trip is a single low-latency PATCH.
+ */
+export const editMessage = createAsyncThunk(
+  'messages/editMessage',
+  async (
+    params: { conversationId: string; messageId: string; content: string },
+    { dispatch, rejectWithValue }
+  ) => {
+    messagesLogger.info('Editing message', {
+      conversationId: params.conversationId,
+      messageId: params.messageId,
+    });
+
+    try {
+      const updated = await api.conversations.editMessage(params.conversationId, params.messageId, {
+        content: params.content,
+      });
+      dispatch(upsertMessage(updated));
+      return updated;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to edit message';
+      messagesLogger.error('Failed to edit message', { error: message });
       return rejectWithValue(message);
     }
   }

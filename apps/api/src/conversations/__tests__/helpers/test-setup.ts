@@ -194,6 +194,7 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
         useValue: {
           validateMediaUpload: jest.fn(),
           getPresignedUrl: jest.fn(),
+          markPendingDeleteByMessageIds: jest.fn().mockResolvedValue(undefined),
         },
       },
 

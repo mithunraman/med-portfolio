@@ -111,13 +111,15 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
 
   async findByArtefactIds(
     ids: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Map<string, PdpGoal[]>, DBError>> {
     try {
       if (ids.length === 0) return ok(new Map());
 
+      // Ownership predicate at the persistence layer — defence in depth.
       const goals = await this.pdpGoalModel
-        .find({ artefactId: { $in: ids } })
+        .find({ artefactId: { $in: ids }, userId })
         .lean()
         .session(session || null);
 
@@ -139,11 +141,13 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
 
   async findByArtefactId(
     id: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<PdpGoal[], DBError>> {
     try {
+      // Ownership predicate at the persistence layer — defence in depth.
       const goals = await this.pdpGoalModel
-        .find({ artefactId: id })
+        .find({ artefactId: id, userId })
         .lean()
         .session(session || null);
 
@@ -287,6 +291,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
 
   async updateGoal(
     goalXid: string,
+    userId: Types.ObjectId,
     data: UpdatePdpGoalData,
     actionUpdates?: UpdatePdpGoalActionData[],
     session?: ClientSession
@@ -298,9 +303,20 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       if (data.completionReview !== undefined)
         goalSetFields.completionReview = data.completionReview;
 
+      // Ownership predicate at the persistence layer — every filter is scoped by
+      // userId so a caller can never mutate another user's goal, even if it
+      // forgets to pre-check. A non-matching filter (wrong/unknown user) yields
+      // matchedCount === 0 → NOT_FOUND. Mirrors saveGoal/anonymizeGoal.
       if (actionUpdates && actionUpdates.length > 0) {
         if (Object.keys(goalSetFields).length > 0) {
-          await this.pdpGoalModel.updateOne({ xid: goalXid }, { $set: goalSetFields }, { session });
+          const goalResult = await this.pdpGoalModel.updateOne(
+            { xid: goalXid, userId },
+            { $set: goalSetFields },
+            { session }
+          );
+          if (goalResult.matchedCount === 0) {
+            return err({ code: 'NOT_FOUND', message: 'PDP goal not found' });
+          }
         }
 
         const byStatus = new Map<PdpGoalStatus, string[]>();
@@ -311,11 +327,14 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
         }
 
         for (const [targetStatus, xids] of byStatus) {
-          await this.pdpGoalModel.updateOne(
-            { xid: goalXid },
+          const actionResult = await this.pdpGoalModel.updateOne(
+            { xid: goalXid, userId },
             { $set: { 'actions.$[elem].status': targetStatus } },
             { session, arrayFilters: [{ 'elem.xid': { $in: xids } }] }
           );
+          if (actionResult.matchedCount === 0) {
+            return err({ code: 'NOT_FOUND', message: 'PDP goal not found' });
+          }
         }
       } else {
         // Cascade: update goal fields and propagate status to all actions
@@ -324,7 +343,14 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
         }
 
         if (Object.keys(goalSetFields).length > 0) {
-          await this.pdpGoalModel.updateOne({ xid: goalXid }, { $set: goalSetFields }, { session });
+          const goalResult = await this.pdpGoalModel.updateOne(
+            { xid: goalXid, userId },
+            { $set: goalSetFields },
+            { session }
+          );
+          if (goalResult.matchedCount === 0) {
+            return err({ code: 'NOT_FOUND', message: 'PDP goal not found' });
+          }
         }
       }
 

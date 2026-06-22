@@ -24,12 +24,14 @@ export interface IVersionHistoryRepository {
   findByEntity(
     entityType: VersionHistoryEntity,
     entityId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<VersionHistory[], DBError>>;
 
   findVersion(
     entityType: VersionHistoryEntity,
     entityId: Types.ObjectId,
+    userId: Types.ObjectId,
     version: number,
     session?: ClientSession
   ): Promise<Result<VersionHistory | null, DBError>>;
@@ -37,6 +39,7 @@ export interface IVersionHistoryRepository {
   countByEntity(
     entityType: VersionHistoryEntity,
     entityId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
 

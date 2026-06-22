@@ -36,6 +36,22 @@ export function analysisRunTombstoneUpdate() {
   };
 }
 
+/**
+ * Ownership model — read before adding a userId predicate here.
+ *
+ * AnalysisRun has NO userId field; it is owned transitively through its
+ * `conversationId` (a run belongs to a conversation, which belongs to a user).
+ * Reads/mutations therefore scope by conversationId/runId, not userId, and that
+ * is correct — there is no userId on the document to filter by.
+ *
+ * These methods are also SYSTEM-CONTEXT code: every mutating caller is an outbox
+ * handler / graph node operating on a server-derived runId or conversationId
+ * (from job state or the LangGraph checkpoint), never request input. The
+ * conversation's owner is verified upstream in the request-facing services
+ * before any run is started or resumed. This is the system/no-user-caller
+ * carve-out in CLAUDE.md's "Ownership predicate at the persistence layer" rule —
+ * do not plumb userId through the outbox/graph pipeline to "scope" these.
+ */
 @Injectable()
 export class AnalysisRunsRepository implements IAnalysisRunsRepository {
   private readonly logger = new Logger(AnalysisRunsRepository.name);
@@ -79,22 +95,6 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
       }
       this.logger.error('Failed to create analysis run', error);
       return err({ code: 'DB_ERROR', message: 'Failed to create analysis run' });
-    }
-  }
-
-  async findRunByXid(
-    xid: string,
-    session?: ClientSession
-  ): Promise<Result<AnalysisRun | null, DBError>> {
-    try {
-      const run = await this.analysisRunModel
-        .findOne({ xid })
-        .lean()
-        .session(session || null);
-      return ok(run);
-    } catch (error) {
-      this.logger.error('Failed to find analysis run by xid', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to find analysis run by xid' });
     }
   }
 

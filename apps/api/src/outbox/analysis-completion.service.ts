@@ -74,6 +74,7 @@ export class AnalysisCompletionService {
         // Artefact update (idempotent — overwrites same doc)
         const artefactResult = await this.artefactsRepository.updateArtefactById(
           artefactOid,
+          userOid,
           {
             artefactType: finalState.entryType,
             title: finalState.title,

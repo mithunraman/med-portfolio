@@ -57,7 +57,7 @@ describe('VersionHistoryService', () => {
 
       await service.createVersion(entityType, entityId, userId, { title: 'Hello' });
 
-      expect(mockRepo.countByEntity).toHaveBeenCalledWith(entityType, entityId, undefined);
+      expect(mockRepo.countByEntity).toHaveBeenCalledWith(entityType, entityId, userId, undefined);
       expect(mockRepo.createVersion).toHaveBeenCalledWith(
         expect.objectContaining({ entityType, entityId, userId, version: 1 }),
         undefined,
@@ -83,7 +83,7 @@ describe('VersionHistoryService', () => {
 
       await service.createVersion(entityType, entityId, userId, { title: 'Test' }, session);
 
-      expect(mockRepo.countByEntity).toHaveBeenCalledWith(entityType, entityId, session);
+      expect(mockRepo.countByEntity).toHaveBeenCalledWith(entityType, entityId, userId, session);
       expect(mockRepo.createVersion).toHaveBeenCalledWith(expect.anything(), session);
     });
 
@@ -127,16 +127,16 @@ describe('VersionHistoryService', () => {
       const versions = [makeVersionDoc(3), makeVersionDoc(2), makeVersionDoc(1)];
       mockRepo.findByEntity.mockResolvedValue(ok(versions));
 
-      const result = await service.getVersions(entityType, entityId);
+      const result = await service.getVersions(entityType, entityId, userId);
 
       expect(result).toEqual(versions);
-      expect(mockRepo.findByEntity).toHaveBeenCalledWith(entityType, entityId);
+      expect(mockRepo.findByEntity).toHaveBeenCalledWith(entityType, entityId, userId);
     });
 
     it('returns empty array when no versions exist', async () => {
       mockRepo.findByEntity.mockResolvedValue(ok([]));
 
-      const result = await service.getVersions(entityType, entityId);
+      const result = await service.getVersions(entityType, entityId, userId);
 
       expect(result).toEqual([]);
     });
@@ -146,7 +146,7 @@ describe('VersionHistoryService', () => {
         err({ code: 'DB_ERROR', message: 'find failed' }),
       );
 
-      await expect(service.getVersions(entityType, entityId)).rejects.toThrow(
+      await expect(service.getVersions(entityType, entityId, userId)).rejects.toThrow(
         InternalServerErrorException,
       );
     });
@@ -159,16 +159,16 @@ describe('VersionHistoryService', () => {
       const version = makeVersionDoc(2);
       mockRepo.findVersion.mockResolvedValue(ok(version));
 
-      const result = await service.getVersion(entityType, entityId, 2);
+      const result = await service.getVersion(entityType, entityId, userId, 2);
 
       expect(result).toEqual(version);
-      expect(mockRepo.findVersion).toHaveBeenCalledWith(entityType, entityId, 2, undefined);
+      expect(mockRepo.findVersion).toHaveBeenCalledWith(entityType, entityId, userId, 2, undefined);
     });
 
     it('returns null when version does not exist', async () => {
       mockRepo.findVersion.mockResolvedValue(ok(null));
 
-      const result = await service.getVersion(entityType, entityId, 999);
+      const result = await service.getVersion(entityType, entityId, userId, 999);
 
       expect(result).toBeNull();
     });
@@ -178,7 +178,7 @@ describe('VersionHistoryService', () => {
         err({ code: 'DB_ERROR', message: 'find failed' }),
       );
 
-      await expect(service.getVersion(entityType, entityId, 1)).rejects.toThrow(
+      await expect(service.getVersion(entityType, entityId, userId, 1)).rejects.toThrow(
         InternalServerErrorException,
       );
     });
@@ -190,7 +190,7 @@ describe('VersionHistoryService', () => {
     it('returns version count', async () => {
       mockRepo.countByEntity.mockResolvedValue(ok(5));
 
-      const result = await service.countVersions(entityType, entityId);
+      const result = await service.countVersions(entityType, entityId, userId);
 
       expect(result).toBe(5);
     });
@@ -198,7 +198,7 @@ describe('VersionHistoryService', () => {
     it('returns 0 when no versions exist', async () => {
       mockRepo.countByEntity.mockResolvedValue(ok(0));
 
-      const result = await service.countVersions(entityType, entityId);
+      const result = await service.countVersions(entityType, entityId, userId);
 
       expect(result).toBe(0);
     });
@@ -207,9 +207,9 @@ describe('VersionHistoryService', () => {
       const session = {} as any;
       mockRepo.countByEntity.mockResolvedValue(ok(3));
 
-      await service.countVersions(entityType, entityId, session);
+      await service.countVersions(entityType, entityId, userId, session);
 
-      expect(mockRepo.countByEntity).toHaveBeenCalledWith(entityType, entityId, session);
+      expect(mockRepo.countByEntity).toHaveBeenCalledWith(entityType, entityId, userId, session);
     });
 
     it('throws InternalServerErrorException on repository error', async () => {
@@ -217,7 +217,7 @@ describe('VersionHistoryService', () => {
         err({ code: 'DB_ERROR', message: 'count failed' }),
       );
 
-      await expect(service.countVersions(entityType, entityId)).rejects.toThrow(
+      await expect(service.countVersions(entityType, entityId, userId)).rejects.toThrow(
         InternalServerErrorException,
       );
     });

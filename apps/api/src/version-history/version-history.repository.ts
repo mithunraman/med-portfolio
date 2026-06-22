@@ -46,11 +46,15 @@ export class VersionHistoryRepository implements IVersionHistoryRepository {
   async findByEntity(
     entityType: VersionHistoryEntity,
     entityId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<VersionHistory[], DBError>> {
     try {
+      // Ownership predicate at the persistence layer — defence in depth. This is
+      // an entity-agnostic shared service; scoping by userId here keeps a future
+      // caller that forgets the upstream ownership check from leaking snapshots.
       const versions = await this.versionHistoryModel
-        .find({ entityType, entityId })
+        .find({ entityType, entityId, userId })
         .sort({ version: -1 })
         .lean()
         .session(session || null);
@@ -64,12 +68,14 @@ export class VersionHistoryRepository implements IVersionHistoryRepository {
   async findVersion(
     entityType: VersionHistoryEntity,
     entityId: Types.ObjectId,
+    userId: Types.ObjectId,
     version: number,
     session?: ClientSession
   ): Promise<Result<VersionHistory | null, DBError>> {
     try {
+      // Ownership predicate at the persistence layer — defence in depth.
       const versionDoc = await this.versionHistoryModel
-        .findOne({ entityType, entityId, version })
+        .findOne({ entityType, entityId, userId, version })
         .lean()
         .session(session || null);
       return ok(versionDoc);
@@ -82,11 +88,13 @@ export class VersionHistoryRepository implements IVersionHistoryRepository {
   async countByEntity(
     entityType: VersionHistoryEntity,
     entityId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>> {
     try {
+      // Ownership predicate at the persistence layer — defence in depth.
       const count = await this.versionHistoryModel
-        .countDocuments({ entityType, entityId })
+        .countDocuments({ entityType, entityId, userId })
         .session(session || null);
       return ok(count);
     } catch (error) {

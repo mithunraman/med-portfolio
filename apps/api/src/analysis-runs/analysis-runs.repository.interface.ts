@@ -40,11 +40,6 @@ export interface IAnalysisRunsRepository {
     session?: ClientSession,
   ): Promise<Result<AnalysisRun, DBError>>;
 
-  findRunByXid(
-    xid: string,
-    session?: ClientSession,
-  ): Promise<Result<AnalysisRun | null, DBError>>;
-
   findRunById(
     runId: Types.ObjectId,
     session?: ClientSession,

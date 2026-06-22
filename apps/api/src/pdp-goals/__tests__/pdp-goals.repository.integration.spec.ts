@@ -188,6 +188,7 @@ describe('PdpGoalsRepository (integration)', () => {
       const reviewDate = new Date('2026-06-15');
       const result = await repo.updateGoal(
         'goal_ug1',
+        userId,
         { status: PdpGoalStatus.STARTED, reviewDate },
         [
           { actionXid: 'act_1', status: PdpGoalStatus.STARTED },
@@ -215,6 +216,7 @@ describe('PdpGoalsRepository (integration)', () => {
 
       const result = await repo.updateGoal(
         'goal_cascade',
+        userId,
         { status: PdpGoalStatus.ARCHIVED },
         undefined,
       );
@@ -239,6 +241,7 @@ describe('PdpGoalsRepository (integration)', () => {
 
       await repo.updateGoal(
         'goal_mixed',
+        userId,
         { status: PdpGoalStatus.STARTED },
         [
           { actionXid: 'act_a', status: PdpGoalStatus.STARTED },
@@ -251,6 +254,117 @@ describe('PdpGoalsRepository (integration)', () => {
       expect(updated!.actions[0].status).toBe(PdpGoalStatus.STARTED);  // act_a
       expect(updated!.actions[1].status).toBe(PdpGoalStatus.ARCHIVED); // act_b
       expect(updated!.actions[2].status).toBe(PdpGoalStatus.STARTED);  // act_c
+    });
+
+    // ─── Ownership scoping (IDOR regression) ───
+
+    it('does not mutate a goal owned by another user (cascade path) and returns NOT_FOUND', async () => {
+      const otherUserId = new Types.ObjectId();
+      await insertGoal(model, {
+        xid: 'goal_victim',
+        userId: otherUserId,
+        status: PdpGoalStatus.STARTED,
+        actions: [
+          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.STARTED },
+        ],
+      });
+
+      // Attacker (userId) tries to archive a victim-owned goal.
+      const result = await repo.updateGoal(
+        'goal_victim',
+        userId,
+        { status: PdpGoalStatus.ARCHIVED },
+        undefined,
+      );
+
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) expect(result.error.code).toBe('NOT_FOUND');
+
+      // Victim's goal and action are untouched.
+      const victim = await model.findOne({ xid: 'goal_victim' }).lean();
+      expect(victim!.status).toBe(PdpGoalStatus.STARTED);
+      expect(victim!.actions[0].status).toBe(PdpGoalStatus.STARTED);
+    });
+
+    it('does not mutate another user\'s goal or actions (actionUpdates path) and returns NOT_FOUND', async () => {
+      const otherUserId = new Types.ObjectId();
+      const reviewDate = new Date('2026-01-01');
+      await insertGoal(model, {
+        xid: 'goal_victim2',
+        userId: otherUserId,
+        status: PdpGoalStatus.NOT_STARTED,
+        reviewDate,
+        actions: [
+          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.NOT_STARTED },
+        ],
+      });
+
+      // Attacker tries to flip the goal to STARTED, overwrite reviewDate, and mutate the action.
+      const result = await repo.updateGoal(
+        'goal_victim2',
+        userId,
+        { status: PdpGoalStatus.STARTED, reviewDate: new Date('2030-12-31') },
+        [{ actionXid: 'act_1', status: PdpGoalStatus.STARTED }],
+      );
+
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) expect(result.error.code).toBe('NOT_FOUND');
+
+      const victim = await model.findOne({ xid: 'goal_victim2' }).lean();
+      expect(victim!.status).toBe(PdpGoalStatus.NOT_STARTED);
+      expect(victim!.reviewDate!.toISOString()).toBe(reviewDate.toISOString());
+      expect(victim!.actions[0].status).toBe(PdpGoalStatus.NOT_STARTED);
+    });
+  });
+
+  // ─── findByArtefactId (ownership scoping) ───
+
+  describe('findByArtefactId', () => {
+    it('returns only goals owned by the given user for the artefact', async () => {
+      await insertGoal(model, { xid: 'goal_own', userId, artefactId });
+
+      const result = await repo.findByArtefactId(artefactId, userId);
+
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value).toHaveLength(1);
+        expect(result.value[0].xid).toBe('goal_own');
+      }
+    });
+
+    it('does not return another user\'s goals even for a shared artefactId', async () => {
+      const otherUserId = new Types.ObjectId();
+      // Same artefactId, different owner — must not leak across users.
+      await insertGoal(model, { xid: 'goal_foreign', userId: otherUserId, artefactId });
+
+      const result = await repo.findByArtefactId(artefactId, userId);
+
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) expect(result.value).toHaveLength(0);
+    });
+  });
+
+  // ─── findByArtefactIds (ownership scoping) ───
+
+  describe('findByArtefactIds', () => {
+    it('groups goals by artefact for the given user only', async () => {
+      const artefactA = new Types.ObjectId();
+      const artefactB = new Types.ObjectId();
+      const otherUserId = new Types.ObjectId();
+
+      await insertGoal(model, { xid: 'goal_a', userId, artefactId: artefactA });
+      await insertGoal(model, { xid: 'goal_b', userId, artefactId: artefactB });
+      // Foreign goal sharing artefactA — must be excluded.
+      await insertGoal(model, { xid: 'goal_foreign', userId: otherUserId, artefactId: artefactA });
+
+      const result = await repo.findByArtefactIds([artefactA, artefactB], userId);
+
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value.get(artefactA.toString())).toHaveLength(1);
+        expect(result.value.get(artefactA.toString())![0].xid).toBe('goal_a');
+        expect(result.value.get(artefactB.toString())).toHaveLength(1);
+      }
     });
   });
 

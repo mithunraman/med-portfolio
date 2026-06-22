@@ -22,6 +22,9 @@ import { TokenService } from './token.service';
         secret: configService.get<string>('app.jwt.accessSecret'),
         signOptions: {
           expiresIn: configService.get<string>('app.jwt.accessExpiresIn'),
+          // Pin the signing algorithm explicitly (defence in depth) so it stays
+          // in lockstep with the verifier's allowlist in jwt.strategy.ts.
+          algorithm: 'HS256',
         },
       }),
     }),

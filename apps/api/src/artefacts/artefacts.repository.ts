@@ -130,12 +130,16 @@ export class ArtefactsRepository implements IArtefactsRepository {
 
   async updateArtefactById(
     id: Types.ObjectId,
+    userId: Types.ObjectId,
     data: UpdateArtefactData,
     session?: ClientSession
   ): Promise<Result<Artefact, DBError>> {
     try {
+      // Ownership predicate at the persistence layer — defence in depth. A
+      // foreign _id degrades to NOT_FOUND rather than mutating another user's
+      // artefact, even if a future caller forgets to pre-check.
       const artefact = await this.artefactModel
-        .findByIdAndUpdate(id, { $set: data }, { new: true, session })
+        .findOneAndUpdate({ _id: id, userId }, { $set: data }, { new: true, session })
         .lean();
 
       if (!artefact) {

@@ -49,7 +49,11 @@ export function createGatherContextNode(deps: GraphDeps) {
 
     const conversationId = new Types.ObjectId(state.conversationId);
 
-    // Fetch all messages — conversations are <50 messages
+    // Fetch all messages — conversations are <50 messages.
+    // SYSTEM READ: runs inside the graph off a server-set state.conversationId
+    // (never request input); the conversation's owner is verified upstream before
+    // the run starts. Unscoped by userId by design — see CLAUDE.md's ownership-
+    // predicate carve-out.
     const result = await deps.conversationsRepository.listMessages({
       conversation: conversationId,
     });

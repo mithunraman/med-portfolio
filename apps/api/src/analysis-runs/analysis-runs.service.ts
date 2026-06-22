@@ -147,14 +147,6 @@ export class AnalysisRunsService {
     return result.value;
   }
 
-  async findRunByXid(xid: string): Promise<AnalysisRun | null> {
-    const result = await this.repository.findRunByXid(xid);
-    if (!result.ok) {
-      throw new Error(result.error.message);
-    }
-    return result.value;
-  }
-
   async findRunById(runId: Types.ObjectId, session?: ClientSession): Promise<AnalysisRun | null> {
     const result = await this.repository.findRunById(runId, session);
     if (!result.ok) {

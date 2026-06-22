@@ -54,18 +54,9 @@ export class MediaRepository implements IMediaRepository {
     }
   }
 
-  async findByXidInternal(xid: string): Promise<Result<Media | null, DBError>> {
-    try {
-      const media = await this.mediaModel.findOne({ xid }).lean();
-      return ok(media);
-    } catch (error) {
-      this.logger.error('Failed to find media by xid (internal)', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to find media' });
-    }
-  }
-
   async updateStatus(
     xid: string,
+    userId: Types.ObjectId,
     data: UpdateMediaStatusData,
     session?: ClientSession
   ): Promise<Result<Media | null, DBError>> {
@@ -86,10 +77,17 @@ export class MediaRepository implements IMediaRepository {
         updateData.sizeBytes = data.sizeBytes;
       }
 
+      // Ownership predicate at the persistence layer — defence in depth. A
+      // non-matching (xid, userId) yields null → NOT_FOUND rather than a silent
+      // no-op, so an unauthorized id is loud.
       const media = await this.mediaModel
-        .findOneAndUpdate({ xid }, { $set: updateData }, { new: true })
+        .findOneAndUpdate({ xid, userId }, { $set: updateData }, { new: true })
         .lean()
         .session(session || null);
+
+      if (!media) {
+        return err({ code: 'NOT_FOUND', message: 'Media not found' });
+      }
 
       return ok(media);
     } catch (error) {

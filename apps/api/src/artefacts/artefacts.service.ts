@@ -125,6 +125,7 @@ export class ArtefactsService {
         const existingConversationResult =
           await this.conversationsRepository.findActiveConversationByArtefact(
             artefact._id,
+            artefact.userId,
             session
           );
 
@@ -210,9 +211,13 @@ export class ArtefactsService {
     const artefact = artefactResult.value;
 
     const [conversationResult, pdpGoalsResult, versionCount] = await Promise.all([
-      this.conversationsRepository.findActiveConversationByArtefact(artefact._id),
-      this.pdpGoalsRepository.findByArtefactId(artefact._id),
-      this.versionHistoryService.countVersions(VersionHistoryEntity.ARTEFACT, artefact._id),
+      this.conversationsRepository.findActiveConversationByArtefact(artefact._id, artefact.userId),
+      this.pdpGoalsRepository.findByArtefactId(artefact._id, artefact.userId),
+      this.versionHistoryService.countVersions(
+        VersionHistoryEntity.ARTEFACT,
+        artefact._id,
+        artefact.userId
+      ),
     ]);
 
     if (isErr(conversationResult)) {
@@ -244,6 +249,7 @@ export class ArtefactsService {
         // Simple status update (non-archive transitions)
         const updateResult = await this.artefactsRepository.updateArtefactById(
           artefactDoc._id,
+          artefactDoc.userId,
           { status: dto.status },
           session
         );
@@ -269,9 +275,10 @@ export class ArtefactsService {
     xid: string,
     dto: FinaliseArtefactRequest
   ): Promise<Artefact> {
+    const userOid = new Types.ObjectId(userId);
     const artefact = await this.transactionService.withTransaction(
       async (session) => {
-        const artefactDoc = await this.findOrThrow(xid, new Types.ObjectId(userId), session);
+        const artefactDoc = await this.findOrThrow(xid, userOid, session);
 
         if (artefactDoc.status !== ArtefactStatus.IN_REVIEW) {
           throw new BadRequestException('Artefact must be in IN_REVIEW status to finalise');
@@ -280,6 +287,7 @@ export class ArtefactsService {
         // 1. Set artefact to COMPLETED
         const updateResult = await this.artefactsRepository.updateArtefactById(
           artefactDoc._id,
+          userOid,
           { status: ArtefactStatus.COMPLETED, completedAt: new Date() },
           session
         );
@@ -304,6 +312,7 @@ export class ArtefactsService {
 
             const result = await this.pdpGoalsRepository.updateGoal(
               selection.goalId,
+              userOid,
               {
                 status: PdpGoalStatus.STARTED,
                 reviewDate: new Date(selection.reviewDate),
@@ -313,18 +322,25 @@ export class ArtefactsService {
             );
 
             if (isErr(result)) {
+              if (result.error.code === 'NOT_FOUND') {
+                throw new NotFoundException(`PDP goal not found: ${selection.goalId}`);
+              }
               throw new InternalServerErrorException(result.error.message);
             }
           } else {
             // Unselected goal → ARCHIVED (cascades to all actions)
             const result = await this.pdpGoalsRepository.updateGoal(
               selection.goalId,
+              userOid,
               { status: PdpGoalStatus.ARCHIVED },
               undefined, // no specific action updates → cascades status to all actions
               session
             );
 
             if (isErr(result)) {
+              if (result.error.code === 'NOT_FOUND') {
+                throw new NotFoundException(`PDP goal not found: ${selection.goalId}`);
+              }
               throw new InternalServerErrorException(result.error.message);
             }
           }
@@ -382,6 +398,7 @@ export class ArtefactsService {
       // 1. Set artefact status to ARCHIVED
       const updateResult = await this.artefactsRepository.updateArtefactById(
         artefactDoc._id,
+        artefactDoc.userId,
         { status: ArtefactStatus.ARCHIVED },
         session
       );
@@ -484,6 +501,7 @@ export class ArtefactsService {
 
         const updateResult = await this.artefactsRepository.updateArtefactById(
           artefactDoc._id,
+          artefactDoc.userId,
           editData,
           session
         );
@@ -529,7 +547,8 @@ export class ArtefactsService {
 
     const versions = await this.versionHistoryService.getVersions(
       VersionHistoryEntity.ARTEFACT,
-      artefact._id
+      artefact._id,
+      artefact.userId
     );
 
     // Capabilities are snapshotted in their persisted shape ({ code, evidence,
@@ -578,6 +597,7 @@ export class ArtefactsService {
         const targetVersion = await this.versionHistoryService.getVersion(
           VersionHistoryEntity.ARTEFACT,
           artefactDoc._id,
+          artefactDoc.userId,
           dto.version,
           session
         );
@@ -618,6 +638,7 @@ export class ArtefactsService {
 
         const updateResult = await this.artefactsRepository.updateArtefactById(
           artefactDoc._id,
+          artefactDoc.userId,
           editData,
           session
         );
@@ -643,12 +664,18 @@ export class ArtefactsService {
     // and parallelises them otherwise.
     const [conversationResult, pdpGoalsResult, versionCount] = await runWithSession(
       [
-        () => this.conversationsRepository.findActiveConversationByArtefact(artefactId, session),
-        () => this.pdpGoalsRepository.findByArtefactId(artefactId, session),
+        () =>
+          this.conversationsRepository.findActiveConversationByArtefact(
+            artefactId,
+            artefactDoc.userId,
+            session
+          ),
+        () => this.pdpGoalsRepository.findByArtefactId(artefactId, artefactDoc.userId, session),
         () =>
           this.versionHistoryService.countVersions(
             VersionHistoryEntity.ARTEFACT,
             artefactId,
+            artefactDoc.userId,
             session
           ),
       ],
@@ -681,6 +708,7 @@ export class ArtefactsService {
         // Fetch source conversation and messages
         const convResult = await this.conversationsRepository.findActiveConversationByArtefact(
           sourceArtefact._id,
+          userOid,
           session
         );
         if (isErr(convResult)) throw new InternalServerErrorException(convResult.error.message);
@@ -696,6 +724,7 @@ export class ArtefactsService {
         // Fetch source PDP goals
         const goalsResult = await this.pdpGoalsRepository.findByArtefactId(
           sourceArtefact._id,
+          userOid,
           session
         );
         if (isErr(goalsResult)) throw new InternalServerErrorException(goalsResult.error.message);
@@ -719,6 +748,7 @@ export class ArtefactsService {
         // Update new artefact to IN_REVIEW with cloned content
         const updateResult = await this.artefactsRepository.updateArtefactById(
           newArtefact._id,
+          userOid,
           {
             status: ArtefactStatus.IN_REVIEW,
             artefactType: sourceArtefact.artefactType ?? null,
@@ -816,8 +846,11 @@ export class ArtefactsService {
     const artefactIds = artefacts.map((a) => a._id);
 
     const [conversationsResult, pdpGoalsResult] = await Promise.all([
-      this.conversationsRepository.findActiveConversationsByArtefacts(artefactIds),
-      this.pdpGoalsRepository.findByArtefactIds(artefactIds),
+      this.conversationsRepository.findActiveConversationsByArtefacts(
+        artefactIds,
+        new Types.ObjectId(userId)
+      ),
+      this.pdpGoalsRepository.findByArtefactIds(artefactIds, new Types.ObjectId(userId)),
     ]);
 
     if (isErr(conversationsResult)) {

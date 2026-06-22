@@ -1,5 +1,5 @@
 import { MediaStatus, MediaType } from '@acme/shared';
-import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { ok } from '../../common/utils/result.util';
 import { StorageService } from '../../storage/storage.service';
@@ -14,7 +14,6 @@ function createMockRepo(): jest.Mocked<IMediaRepository> {
   return {
     create: jest.fn().mockResolvedValue(ok(buildMedia())),
     findByXid: jest.fn().mockResolvedValue(ok(null)),
-    findByXidInternal: jest.fn().mockResolvedValue(ok(null)),
     updateStatus: jest.fn().mockResolvedValue(ok(null)),
     findByUser: jest.fn().mockResolvedValue(ok([])),
     markPendingDeleteByMessageIds: jest.fn().mockResolvedValue(ok(0)),
@@ -29,13 +28,18 @@ function createMockRepo(): jest.Mocked<IMediaRepository> {
 function createMockStorage(): jest.Mocked<
   Pick<
     StorageService,
-    'getMediaBucket' | 'generateMediaKey' | 'generatePresignedUploadUrl' | 'headObject'
+    | 'getMediaBucket'
+    | 'generateMediaKey'
+    | 'generatePresignedUploadUrl'
+    | 'generatePresignedDownloadUrl'
+    | 'headObject'
   >
 > {
   return {
     getMediaBucket: jest.fn().mockReturnValue('test-bucket'),
     generateMediaKey: jest.fn().mockReturnValue('media/u/x.m4a'),
     generatePresignedUploadUrl: jest.fn().mockResolvedValue('https://signed.example/put'),
+    generatePresignedDownloadUrl: jest.fn().mockResolvedValue('https://signed.example/get'),
     headObject: jest.fn(),
   } as never;
 }
@@ -121,6 +125,41 @@ describe('MediaService.initiateUpload', () => {
       5_000_000,
       expect.any(Number)
     );
+  });
+});
+
+describe('MediaService.getPresignedUrl', () => {
+  beforeEach(() => jest.resetAllMocks());
+
+  it('signs a download URL for media owned by the caller', async () => {
+    const { service, repo, storage } = createService();
+    const media = buildMedia({ status: MediaStatus.ATTACHED });
+    repo.findByXid.mockResolvedValue(ok(media));
+    storage.generatePresignedDownloadUrl.mockResolvedValue('https://signed.example/get');
+
+    const url = await service.getPresignedUrl(userIdStr, media.xid);
+
+    expect(url).toBe('https://signed.example/get');
+    // Ownership is enforced at the repo via (xid, userId).
+    expect(repo.findByXid).toHaveBeenCalledWith(media.xid, userObjectId);
+    expect(storage.generatePresignedDownloadUrl).toHaveBeenCalledWith(
+      media.bucket,
+      media.key,
+      expect.any(Number)
+    );
+  });
+
+  it('throws NotFoundException and never signs a URL when media is not owned by the caller (IDOR)', async () => {
+    const { service, repo, storage } = createService();
+    // Repo scopes by userId → another user's media resolves to null.
+    repo.findByXid.mockResolvedValue(ok(null));
+
+    await expect(service.getPresignedUrl(userIdStr, 'med_victim')).rejects.toThrow(
+      NotFoundException
+    );
+
+    expect(repo.findByXid).toHaveBeenCalledWith('med_victim', userObjectId);
+    expect(storage.generatePresignedDownloadUrl).not.toHaveBeenCalled();
   });
 });
 

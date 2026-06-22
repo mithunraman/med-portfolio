@@ -307,9 +307,22 @@ export class ConversationsService {
         );
         // Return existing message — find conversation xid for the DTO
         const convResult = await this.conversationsRepository.findConversationById(
-          existing.conversation
+          existing.conversation,
+          userOid
         );
         if (isErr(convResult)) throw new InternalServerErrorException(convResult.error.message);
+
+        // Bind the key to its original conversation. Replaying it against a
+        // different route is a client error (keys are meant to dedupe retries of
+        // the same send), so surface it explicitly rather than silently
+        // returning a message from another conversation. Also pre-empts the
+        // duplicate-key 500 the short-circuit would otherwise mask.
+        if (convResult.value && convResult.value.xid !== conversationId) {
+          throw new ConflictException(
+            'Idempotency key already used for a different conversation'
+          );
+        }
+
         return toMessageDto(
           existing,
           convResult.value?.xid ?? conversationId,
@@ -373,6 +386,7 @@ export class ConversationsService {
         if (validatedMedia) {
           const updateResult = await this.mediaRepository.updateStatus(
             validatedMedia.xid,
+            userOid,
             {
               status: MediaStatus.ATTACHED,
               refCollection: MediaRefCollection.MESSAGES,
@@ -853,7 +867,7 @@ export class ConversationsService {
     const mediaDoc = msg.media as unknown as Media;
     if (mediaDoc.status !== MediaStatus.ATTACHED) return null;
     try {
-      return await this.mediaService.getPresignedUrl(mediaDoc.xid);
+      return await this.mediaService.getPresignedUrl(msg.userId.toString(), mediaDoc.xid);
     } catch {
       return null;
     }

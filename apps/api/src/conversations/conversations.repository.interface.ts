@@ -58,6 +58,7 @@ export interface IConversationsRepository {
 
   findConversationById(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Conversation | null, DBError>>;
 
@@ -69,11 +70,13 @@ export interface IConversationsRepository {
 
   findActiveConversationByArtefact(
     artefactId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Conversation | null, DBError>>;
 
   findActiveConversationsByArtefacts(
     artefactIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Map<string, Conversation>, DBError>>;
 
@@ -83,6 +86,14 @@ export interface IConversationsRepository {
     session?: ClientSession
   ): Promise<Result<Message, DBError>>;
 
+  /**
+   * SYSTEM READ — intentionally NOT scoped by userId. Looks up a message by its
+   * internal _id, which never originates from request input: callers are the
+   * outbox processor (its entry lookup, before any user is known) and
+   * conversation-context computation (user-agnostic). Both pass a server-derived
+   * id. Do NOT wire this to a request-supplied id — use a userId-scoped read for
+   * that. See "Ownership predicate at the persistence layer" in CLAUDE.md.
+   */
   findMessageById(
     messageId: Types.ObjectId,
     session?: ClientSession
@@ -160,6 +171,12 @@ export interface IConversationsRepository {
   /**
    * Resolve the artefact xid + status for a conversation by populating the
    * artefact ref. Returns null if the conversation or artefact is missing.
+   *
+   * SYSTEM READ — intentionally NOT scoped by userId. The sole caller is
+   * conversation-context computation, which is user-agnostic and passes an
+   * owner-verified conversation._id (never request input). Do NOT wire this to
+   * a request-supplied id without adding a userId predicate. See "Ownership
+   * predicate at the persistence layer" in CLAUDE.md.
    */
   findArtefactRefByConversationId(
     conversationId: Types.ObjectId,

@@ -86,11 +86,13 @@ export class ConversationsRepository implements IConversationsRepository {
 
   async findConversationById(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Conversation | null, DBError>> {
     try {
+      // Ownership predicate at the persistence layer — defence in depth.
       const conversation = await this.conversationModel
-        .findOne({ _id: conversationId, ...CONVERSATION_LIVE_FILTER })
+        .findOne({ _id: conversationId, userId, ...CONVERSATION_LIVE_FILTER })
         .lean()
         .session(session || null);
       return ok(conversation);
@@ -119,11 +121,13 @@ export class ConversationsRepository implements IConversationsRepository {
 
   async findActiveConversationByArtefact(
     artefactId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Conversation | null, DBError>> {
     try {
+      // Ownership predicate at the persistence layer — defence in depth.
       const conversation = await this.conversationModel
-        .findOne({ artefact: artefactId, status: ConversationStatus.ACTIVE })
+        .findOne({ artefact: artefactId, userId, status: ConversationStatus.ACTIVE })
         .lean()
         .session(session || null);
       return ok(conversation);
@@ -135,12 +139,15 @@ export class ConversationsRepository implements IConversationsRepository {
 
   async findActiveConversationsByArtefacts(
     artefactIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Map<string, Conversation>, DBError>> {
     try {
+      // Ownership predicate at the persistence layer — defence in depth.
       const conversations = await this.conversationModel
         .find({
           artefact: { $in: artefactIds },
+          userId,
           status: ConversationStatus.ACTIVE,
         })
         .lean()
@@ -179,6 +186,8 @@ export class ConversationsRepository implements IConversationsRepository {
     }
   }
 
+  // SYSTEM READ — intentionally unscoped by userId; messageId is a server-derived
+  // internal id, never request input. See interface doc + CLAUDE.md.
   async findMessageById(
     messageId: Types.ObjectId,
     session?: ClientSession
@@ -364,6 +373,9 @@ export class ConversationsRepository implements IConversationsRepository {
     }
   }
 
+  // SYSTEM READ — intentionally unscoped by userId; conversationId is a
+  // server-derived internal id from user-agnostic context computation. See
+  // interface doc + CLAUDE.md.
   async findArtefactRefByConversationId(
     conversationId: Types.ObjectId,
     session?: ClientSession

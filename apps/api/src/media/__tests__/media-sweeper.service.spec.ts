@@ -36,7 +36,6 @@ function createMockRepo(): jest.Mocked<IMediaRepository> {
   return {
     create: jest.fn(),
     findByXid: jest.fn(),
-    findByXidInternal: jest.fn(),
     updateStatus: jest.fn(),
     findByUser: jest.fn(),
     markPendingDeleteByMessageIds: jest.fn(),

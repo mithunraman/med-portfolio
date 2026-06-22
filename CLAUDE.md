@@ -90,6 +90,14 @@ State management: Redux Toolkit with 9 slices (artefacts, auth, conversations, m
 
 All repository methods return `Result<T, DBError>` — they never throw. Services check `isErr()` and translate to NestJS exceptions (NotFoundException, etc.). Controllers never see DB errors directly.
 
+### Ownership predicate at the persistence layer (defence in depth)
+
+Any repository method that **reads or mutates a user-owned record must scope its query by `userId`**, even when the only current caller has already verified ownership. The owner predicate belongs in the filter (`findOne({ xid, userId })`, `findOneAndUpdate({ _id, userId }, …)`), not solely in caller discipline — a future caller that forgets the pre-check (e.g. wiring a method to a new controller route) would otherwise turn a "safe" method into an IDOR with no compiler or test signal.
+
+- A non-matching `(id, userId)` filter must surface as `NOT_FOUND` (e.g. `matchedCount === 0` or a null result), never a silent no-op.
+- Do **not** add unscoped sibling methods (`findByXidInternal(xid)`); if a genuine system/no-user caller ever needs one, name it to scream the hazard and document why.
+- Reference implementations: `saveGoal` / `updateGoal` (`pdp-goals.repository.ts`), `updateArtefactById` (`artefacts.repository.ts`), `updateStatus` / `findByXid` (`media.repository.ts`).
+
 ### ID strategy
 
 - **xid**: external id, 21-char nanoid (`nanoidAlphanumeric()`), visible to customers in API routes and responses.

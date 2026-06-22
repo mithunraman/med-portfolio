@@ -242,20 +242,6 @@ export class PortfolioGraphService implements OnModuleInit {
   }
 
   /**
-   * Check if a graph checkpoint exists for a conversation.
-   * Used to determine whether to start a new graph or resume an existing one.
-   *
-   * Note: graph.getState() returns a StateSnapshot with default channel values
-   * even for threads that have never been invoked. We check for `conversationId`
-   * which has no default - it's only set when startGraph() provides initial input.
-   */
-  async hasCheckpoint(conversationId: string): Promise<boolean> {
-    const config = { configurable: { thread_id: conversationId } };
-    const state = await this.graph.getState(config);
-    return !!state?.values?.conversationId;
-  }
-
-  /**
    * Inspect the graph checkpoint to determine which interrupt node (if any)
    * the graph is currently paused at.
    *

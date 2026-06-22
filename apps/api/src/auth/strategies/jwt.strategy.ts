@@ -24,6 +24,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('app.jwt.accessSecret'),
+      // Pin the accepted signing algorithm explicitly (defence in depth). Tokens
+      // are HMAC-signed with a symmetric secret; restricting verification to
+      // HS256 prevents an algorithm downgrade/confusion if the library default or
+      // key material ever changes. Hardcoded — must not be runtime-weakenable.
+      algorithms: ['HS256'],
     });
   }
 

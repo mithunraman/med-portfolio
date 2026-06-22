@@ -67,6 +67,7 @@ export interface IArtefactsRepository {
 
   updateArtefactById(
     id: Types.ObjectId,
+    userId: Types.ObjectId,
     data: UpdateArtefactData,
     session?: ClientSession
   ): Promise<Result<Artefact, DBError>>;

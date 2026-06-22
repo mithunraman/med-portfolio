@@ -198,10 +198,13 @@ export class MediaService {
   }
 
   /**
-   * Get presigned download URL for media (internal use - for transcription)
+   * Get presigned download URL for media. Scoped by userId — the URL grants
+   * unauthenticated access to the underlying object, so ownership is enforced
+   * here rather than trusted from the caller.
    */
-  async getPresignedUrl(mediaId: string): Promise<string> {
-    const findResult = await this.mediaRepository.findByXidInternal(mediaId);
+  async getPresignedUrl(userId: string, mediaId: string): Promise<string> {
+    const userObjectId = new Types.ObjectId(userId);
+    const findResult = await this.mediaRepository.findByXid(mediaId, userObjectId);
 
     if (isErr(findResult)) throw new InternalServerErrorException(findResult.error.message);
 

@@ -68,7 +68,8 @@ export class ProcessingService {
 
     // Look up artefact via conversation to get specialty
     const convResult = await this.conversationsRepository.findConversationById(
-      message.conversation
+      message.conversation,
+      message.userId
     );
     if (isErr(convResult) || !convResult.value) {
       this.logger.error(`Conversation not found for message ${messageId}`);
@@ -118,7 +119,7 @@ export class ProcessingService {
     if (!(await this.applyUpdate(messageId, { status: MessageStatus.TRANSCRIBING }))) return;
 
     // Get presigned URL for the audio
-    const audioUrl = await this.mediaService.getPresignedUrl(media.xid);
+    const audioUrl = await this.mediaService.getPresignedUrl(message.userId.toString(), media.xid);
 
     // Stage 1: Transcription
     this.logger.info(`Transcribing audio for message ${message.xid}`);
@@ -233,9 +234,25 @@ export class ProcessingService {
   }
 
   private async markFailed(messageId: Types.ObjectId, error: string): Promise<void> {
-    await this.conversationsRepository.updateMessage(messageId, {
+    const result = await this.conversationsRepository.updateMessage(messageId, {
       status: MessageStatus.FAILED,
       processingError: error,
     });
+    // Do not swallow a failed FAILED-write. If we returned silently, processMessage
+    // would complete normally, the outbox would mark the job done, and the message
+    // would be stranded in a non-terminal state (e.g. TRANSCRIBING) with the error
+    // invisible. Throwing routes into the outbox's bounded retry + dead-letter +
+    // Sentry path (capped at maxAttempts), so a transient write gets retried and a
+    // persistent one is escalated rather than lost. Mirrors applyUpdate.
+    // A null value (message deleted mid-pipeline) is a no-op success — there is no
+    // live row to mark FAILED, and retrying would be pointless.
+    if (isErr(result)) {
+      this.logger.error(
+        `Failed to mark message ${messageId} as FAILED (original error: ${error}): ${result.error.message}`
+      );
+      throw new Error(
+        `Failed to persist FAILED status for message ${messageId}: ${result.error.message}`
+      );
+    }
   }
 }

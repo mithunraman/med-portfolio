@@ -37,7 +37,7 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
     label: 'Significant Event Analysis',
     description:
       'Analysis of an event that met the GMC threshold for harm. Focus on root cause and systemic change.',
-    templateId: 'SEA_TEMPLATE',
+    templateId: 'LEA_SEA_TEMPLATE',
     classificationSignals: [
       'harm',
       'near-miss',
@@ -57,7 +57,7 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
     label: 'Learning Event Analysis',
     description:
       'Analysis of an event that presented a learning opportunity but did not cause GMC-threshold harm.',
-    templateId: 'LEA_TEMPLATE',
+    templateId: 'LEA_SEA_TEMPLATE',
     classificationSignals: [
       'learning opportunity',
       'no harm occurred',

@@ -275,6 +275,7 @@ describe('AnalysisResumeHandler', () => {
       // Persists the completeness signal derived from final state.
       expect(updateArtefactById).toHaveBeenCalledWith(
         expect.anything(),
+        expect.any(Types.ObjectId), // userId — ownership predicate
         expect.objectContaining({ completeness: { complete: true, unmetSections: [] } }),
         expect.anything(),
       );

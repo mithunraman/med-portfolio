@@ -280,6 +280,7 @@ describe('AnalysisStartHandler', () => {
       // Artefact updated
       expect(updateArtefactById).toHaveBeenCalledWith(
         expect.any(Types.ObjectId),
+        expect.any(Types.ObjectId), // userId — ownership predicate
         expect.objectContaining({ status: ArtefactStatus.IN_REVIEW }),
         expect.anything(), // session
       );

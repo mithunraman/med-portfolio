@@ -71,11 +71,13 @@ export interface IPdpGoalsRepository {
 
   findByArtefactIds(
     ids: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Map<string, PdpGoal[]>, DBError>>;
 
   findByArtefactId(
     id: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<PdpGoal[], DBError>>;
 
@@ -110,6 +112,7 @@ export interface IPdpGoalsRepository {
 
   updateGoal(
     goalXid: string,
+    userId: Types.ObjectId,
     data: UpdatePdpGoalData,
     actionUpdates?: UpdatePdpGoalActionData[],
     session?: ClientSession

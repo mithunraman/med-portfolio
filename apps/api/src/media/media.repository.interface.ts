@@ -28,10 +28,9 @@ export interface IMediaRepository {
 
   findByXid(xid: string, userId: Types.ObjectId): Promise<Result<Media | null, DBError>>;
 
-  findByXidInternal(xid: string): Promise<Result<Media | null, DBError>>;
-
   updateStatus(
     xid: string,
+    userId: Types.ObjectId,
     data: UpdateMediaStatusData,
     session?: ClientSession
   ): Promise<Result<Media | null, DBError>>;

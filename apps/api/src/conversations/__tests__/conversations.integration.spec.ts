@@ -727,6 +727,44 @@ describe('Conversations Integration Tests', () => {
         harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, { content: 'More info...' })
       ).rejects.toThrow(ConflictException);
     });
+
+    it('B6. Replaying an idempotency key against a different conversation — rejected', async () => {
+      const convA = await createTestConversation();
+      const convB = await createTestConversation();
+      const idempotencyKey = 'idem-key-b6';
+
+      const first = await harness.service.sendMessage(TEST_USER_ID_STR, convA.xid, {
+        content: 'Original send.',
+        idempotencyKey,
+      });
+      expect(first).toBeDefined();
+
+      // Same key, different routed conversation → the key is bound to convA.
+      await expect(
+        harness.service.sendMessage(TEST_USER_ID_STR, convB.xid, {
+          content: 'Replay against another conversation.',
+          idempotencyKey,
+        })
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('B7. Replaying an idempotency key against the same conversation — returns the original', async () => {
+      const conv = await createTestConversation();
+      const idempotencyKey = 'idem-key-b7';
+
+      const first = await harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, {
+        content: 'Original send.',
+        idempotencyKey,
+      });
+
+      const replay = await harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, {
+        content: 'Original send.',
+        idempotencyKey,
+      });
+
+      // Idempotent hit: same message returned, no duplicate created.
+      expect(replay.id).toBe(first.id);
+    });
   });
 
   // ════════════════════════════════════════════════════════════════

@@ -25,6 +25,7 @@ export class VersionHistoryService {
     const countResult = await this.versionHistoryRepository.countByEntity(
       entityType,
       entityId,
+      userId,
       session
     );
 
@@ -51,8 +52,12 @@ export class VersionHistoryService {
     }
   }
 
-  async getVersions(entityType: VersionHistoryEntity, entityId: Types.ObjectId): Promise<VersionHistory[]> {
-    const result = await this.versionHistoryRepository.findByEntity(entityType, entityId);
+  async getVersions(
+    entityType: VersionHistoryEntity,
+    entityId: Types.ObjectId,
+    userId: Types.ObjectId
+  ): Promise<VersionHistory[]> {
+    const result = await this.versionHistoryRepository.findByEntity(entityType, entityId, userId);
 
     if (isErr(result)) {
       throw new InternalServerErrorException(result.error.message);
@@ -64,10 +69,17 @@ export class VersionHistoryService {
   async getVersion(
     entityType: VersionHistoryEntity,
     entityId: Types.ObjectId,
+    userId: Types.ObjectId,
     version: number,
     session?: ClientSession
   ): Promise<VersionHistory | null> {
-    const result = await this.versionHistoryRepository.findVersion(entityType, entityId, version, session);
+    const result = await this.versionHistoryRepository.findVersion(
+      entityType,
+      entityId,
+      userId,
+      version,
+      session
+    );
 
     if (isErr(result)) {
       throw new InternalServerErrorException(result.error.message);
@@ -79,9 +91,15 @@ export class VersionHistoryService {
   async countVersions(
     entityType: VersionHistoryEntity,
     entityId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<number> {
-    const result = await this.versionHistoryRepository.countByEntity(entityType, entityId, session);
+    const result = await this.versionHistoryRepository.countByEntity(
+      entityType,
+      entityId,
+      userId,
+      session
+    );
 
     if (isErr(result)) {
       throw new InternalServerErrorException(result.error.message);

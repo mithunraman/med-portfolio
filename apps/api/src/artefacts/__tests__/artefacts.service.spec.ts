@@ -297,6 +297,7 @@ describe('ArtefactsService', () => {
       expect(mockVersionHistoryService.countVersions).toHaveBeenCalledWith(
         'artefact',
         artefact._id,
+        userId,
       );
       expect(result.versionCount).toBe(3);
     });
@@ -345,6 +346,7 @@ describe('ArtefactsService', () => {
 
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
+        userId,
         { status: ArtefactStatus.COMPLETED, completedAt: expect.any(Date) },
         expect.anything(), // session
       );
@@ -376,6 +378,7 @@ describe('ArtefactsService', () => {
 
       expect(mockPdpGoalsRepo.updateGoal).toHaveBeenCalledWith(
         'goal_1',
+        userId, // ownership predicate threaded through to the repository
         { status: PdpGoalStatus.STARTED, reviewDate: new Date(reviewDate) },
         [
           { actionXid: 'act_1', status: PdpGoalStatus.STARTED },
@@ -401,6 +404,7 @@ describe('ArtefactsService', () => {
 
       expect(mockPdpGoalsRepo.updateGoal).toHaveBeenCalledWith(
         'goal_1',
+        userId, // ownership predicate threaded through to the repository
         { status: PdpGoalStatus.ARCHIVED },
         undefined, // no action updates → cascade
         expect.anything(), // session
@@ -432,6 +436,7 @@ describe('ArtefactsService', () => {
       // First call: activate goal_1
       expect(mockPdpGoalsRepo.updateGoal).toHaveBeenCalledWith(
         'goal_1',
+        userId,
         expect.objectContaining({ status: PdpGoalStatus.STARTED }),
         expect.any(Array),
         expect.anything(),
@@ -440,10 +445,48 @@ describe('ArtefactsService', () => {
       // Second call: archive goal_2
       expect(mockPdpGoalsRepo.updateGoal).toHaveBeenCalledWith(
         'goal_2',
+        userId,
         { status: PdpGoalStatus.ARCHIVED },
         undefined,
         expect.anything(),
       );
+    });
+
+    it('rejects with NotFoundException when a selected goal is not owned by the caller (IDOR)', async () => {
+      const artefact = makeArtefactDoc();
+      const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.COMPLETED });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      // Repo scopes by userId → a goal belonging to another user yields NOT_FOUND.
+      mockPdpGoalsRepo.updateGoal.mockResolvedValue(
+        err({ code: 'NOT_FOUND', message: 'PDP goal not found' }),
+      );
+      setupBuildArtefactDtoMocks();
+
+      await expect(
+        service.finaliseArtefact(userIdStr, 'art_abc123', {
+          pdpGoalSelections: [
+            { goalId: 'victim_goal', selected: true, reviewDate: '2026-06-01T00:00:00.000Z' },
+          ],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('rejects with NotFoundException when an unselected goal is not owned by the caller (IDOR)', async () => {
+      const artefact = makeArtefactDoc();
+      const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.COMPLETED });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      mockPdpGoalsRepo.updateGoal.mockResolvedValue(
+        err({ code: 'NOT_FOUND', message: 'PDP goal not found' }),
+      );
+      setupBuildArtefactDtoMocks();
+
+      await expect(
+        service.finaliseArtefact(userIdStr, 'art_abc123', {
+          pdpGoalSelections: [{ goalId: 'victim_goal', selected: false }],
+        }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -539,6 +582,7 @@ describe('ArtefactsService', () => {
       // Status update inside transaction, no PDP goal changes
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
+        userId,
         { status: ArtefactStatus.IN_REVIEW },
         expect.anything(),
       );
@@ -607,6 +651,7 @@ describe('ArtefactsService', () => {
 
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
+        userId,
         { title: 'New Title' },
         expect.anything(), // session
       );
@@ -677,6 +722,7 @@ describe('ArtefactsService', () => {
 
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
+        userId,
         { title: 'New Title' },
         expect.anything(),
       );
@@ -699,6 +745,7 @@ describe('ArtefactsService', () => {
 
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
+        userId,
         {
           composedDocument: [
             { sectionId: 'brief_description', label: 'Brief Description', text: 'New Text' },
@@ -728,6 +775,7 @@ describe('ArtefactsService', () => {
 
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
+        userId,
         {
           capabilities: [
             { code: 'C-01', evidence: 'I reflected on my limits', justification: 'old just' },
@@ -755,6 +803,7 @@ describe('ArtefactsService', () => {
 
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
+        userId,
         { capabilities: [{ code: 'C-01', evidence: 'e1', justification: 'j1' }] },
         expect.anything(),
       );
@@ -889,6 +938,7 @@ describe('ArtefactsService', () => {
 
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
+        userId,
         {
           title: 'Restored Title',
           composedDocument: [{ sectionId: 's1', label: 'Restored', text: 'Body' }],
@@ -921,6 +971,7 @@ describe('ArtefactsService', () => {
 
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
+        userId,
         {
           title: 'Restored Title',
           capabilities: [{ code: 'C-01', evidence: 'e1', justification: 'original' }],
@@ -951,6 +1002,7 @@ describe('ArtefactsService', () => {
 
       expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
+        userId,
         { title: 'Old Title', composedDocument: null },
         expect.anything(),
       );

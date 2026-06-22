@@ -5,7 +5,8 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Model, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
 import { ConversationsRepository } from '../conversations.repository';
-import { Conversation, ConversationSchema } from '../schemas/conversation.schema';
+import { ConversationStatus } from '@acme/shared';
+import { Conversation, ConversationDocument, ConversationSchema } from '../schemas/conversation.schema';
 import { Message, MessageDocument, MessageSchema } from '../schemas/message.schema';
 import { Media, MediaSchema } from '../../media/schemas/media.schema';
 
@@ -18,8 +19,23 @@ describe('ConversationsRepository — deleted message filtering', () => {
   let module: TestingModule;
   let repo: ConversationsRepository;
   let messageModel: Model<MessageDocument>;
+  let conversationModel: Model<ConversationDocument>;
   const userId = new Types.ObjectId();
   const conversationId = new Types.ObjectId();
+
+  async function insertConversation(overrides: Partial<{
+    userId: Types.ObjectId;
+    artefact: Types.ObjectId;
+    status: ConversationStatus;
+  }> = {}): Promise<ConversationDocument> {
+    const [doc] = await conversationModel.create([{
+      userId: overrides.userId ?? userId,
+      artefact: overrides.artefact ?? new Types.ObjectId(),
+      title: 'Test conversation',
+      status: overrides.status ?? ConversationStatus.ACTIVE,
+    }]);
+    return doc;
+  }
 
   async function insertMessage(overrides: Partial<{
     role: MessageRole;
@@ -55,10 +71,12 @@ describe('ConversationsRepository — deleted message filtering', () => {
 
     repo = module.get(ConversationsRepository);
     messageModel = module.get<Model<MessageDocument>>(getModelToken(Message.name));
+    conversationModel = module.get<Model<ConversationDocument>>(getModelToken(Conversation.name));
   });
 
   afterEach(async () => {
     await messageModel.deleteMany({});
+    await conversationModel.deleteMany({});
   });
 
   afterAll(async () => {
@@ -157,6 +175,69 @@ describe('ConversationsRepository — deleted message filtering', () => {
       expect(result.ok).toBe(true);
       expect(result.value!.status).toBe(MessageStatus.COMPLETE);
       expect(result.value!.content).toBe('cleaned');
+    });
+  });
+
+  // ─── Ownership scoping (IDOR regression) ───
+
+  describe('findConversationById — userId scoping', () => {
+    it('returns the conversation for its owner', async () => {
+      const conv = await insertConversation();
+
+      const result = await repo.findConversationById(conv._id, userId);
+
+      expect(result.ok).toBe(true);
+      expect(result.value?._id.toString()).toBe(conv._id.toString());
+    });
+
+    it('returns null for a different user', async () => {
+      const conv = await insertConversation();
+      const otherUserId = new Types.ObjectId();
+
+      const result = await repo.findConversationById(conv._id, otherUserId);
+
+      expect(result.ok).toBe(true);
+      expect(result.value).toBeNull();
+    });
+  });
+
+  describe('findActiveConversationByArtefact — userId scoping', () => {
+    it('returns the active conversation for its owner', async () => {
+      const artefact = new Types.ObjectId();
+      await insertConversation({ artefact, status: ConversationStatus.ACTIVE });
+
+      const result = await repo.findActiveConversationByArtefact(artefact, userId);
+
+      expect(result.ok).toBe(true);
+      expect(result.value).not.toBeNull();
+    });
+
+    it('does not return another user\'s conversation for the same artefact', async () => {
+      const artefact = new Types.ObjectId();
+      const otherUserId = new Types.ObjectId();
+      await insertConversation({ artefact, userId: otherUserId, status: ConversationStatus.ACTIVE });
+
+      const result = await repo.findActiveConversationByArtefact(artefact, userId);
+
+      expect(result.ok).toBe(true);
+      expect(result.value).toBeNull();
+    });
+  });
+
+  describe('findActiveConversationsByArtefacts — userId scoping', () => {
+    it('groups only the caller\'s conversations', async () => {
+      const artefactA = new Types.ObjectId();
+      const artefactB = new Types.ObjectId();
+      const otherUserId = new Types.ObjectId();
+      await insertConversation({ artefact: artefactA, userId });
+      // Foreign conversation sharing artefactB — must be excluded.
+      await insertConversation({ artefact: artefactB, userId: otherUserId });
+
+      const result = await repo.findActiveConversationsByArtefacts([artefactA, artefactB], userId);
+
+      expect(result.ok).toBe(true);
+      expect(result.value!.get(artefactA.toString())).toBeDefined();
+      expect(result.value!.get(artefactB.toString())).toBeUndefined();
     });
   });
 });

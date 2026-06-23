@@ -93,6 +93,28 @@ export const ArtefactReviewSchema = z.object({
 
 export type ArtefactReview = z.infer<typeof ArtefactReviewSchema>;
 
+// Note invariants — single source of truth for the request Zod schema below.
+// Enforced at the API boundary (ZodValidationPipe); unlike the review bounds these
+// are NOT mirrored onto the Mongoose @Prop, since the only write path
+// (PUT :id/notes) is DTO-validated and Mongoose validators wouldn't run on the
+// findOneAndUpdate/$set the repo uses anyway. Add persistence-layer validation
+// (maxlength + array-length validator + runValidators) only if a non-DTO writer
+// for notes ever appears.
+export const NOTE_MAX_LENGTH = 5000;
+export const NOTES_MAX_COUNT = 100;
+
+// A freeform note the author attaches to an artefact after creation (embedded in
+// the artefact response). Each note carries a server-minted xid so individual
+// notes keep their identity (and createdAt) across the array-replace save contract.
+export const NoteSchema = z.object({
+  xid: z.string(),
+  text: z.string(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export type Note = z.infer<typeof NoteSchema>;
+
 // Active conversation (embedded in artefact response)
 export const ActiveConversationSchema = z.object({
   id: z.string(),
@@ -123,6 +145,8 @@ export const ArtefactSchema = z.object({
   composedDocument: z.array(ComposedDocumentFieldSchema).nullable(),
   tags: z.record(z.array(z.string())).nullable(),
   review: ArtefactReviewSchema.nullable(),
+  // Author notes — always present (defaults to [] server-side), never null.
+  notes: z.array(NoteSchema).default([]),
   conversation: ActiveConversationSchema,
   versionCount: z.number().default(0),
   createdAt: z.string().datetime(),
@@ -204,6 +228,33 @@ export const UpsertArtefactReviewRequestSchema = z.object({
 });
 
 export type UpsertArtefactReviewRequest = z.infer<typeof UpsertArtefactReviewRequestSchema>;
+
+// Notes request — the full desired notes array (array-replace, last-write-wins).
+// Each entry's xid is optional: present = an existing note to preserve (its
+// createdAt is kept server-side), absent = a new note the server mints an xid and
+// timestamps for. A persisted note whose xid is omitted from the array is deleted.
+export const UpdateNotesRequestSchema = z.object({
+  notes: z
+    .array(
+      z.object({
+        xid: z.string().optional(),
+        text: z.string().trim().min(1).max(NOTE_MAX_LENGTH),
+      })
+    )
+    .max(NOTES_MAX_COUNT)
+    // Each xid identifies one existing note; two entries citing the same xid would
+    // reconcile into duplicate-id notes (breaking per-note identity). New notes
+    // (no xid) are exempt — they get minted server-side.
+    .refine(
+      (notes) => {
+        const xids = notes.flatMap((n) => (n.xid ? [n.xid] : []));
+        return new Set(xids).size === xids.length;
+      },
+      { message: 'Duplicate note ids are not allowed' }
+    ),
+});
+
+export type UpdateNotesRequest = z.infer<typeof UpdateNotesRequestSchema>;
 
 // Version schemas
 // A version's capability snapshot, projected for preview: justification only

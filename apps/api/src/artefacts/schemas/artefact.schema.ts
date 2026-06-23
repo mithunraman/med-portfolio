@@ -69,6 +69,24 @@ export class ArtefactReview {
   updatedAt!: Date;
 }
 
+// A freeform note the author attaches to an artefact after creation. The
+// server-minted xid is the stable per-note identity — the array is replaced
+// wholesale on save, so the xid is how an existing note keeps its createdAt.
+// Independent of the AI pipeline and version history.
+export class Note {
+  @Prop({ required: true })
+  xid!: string;
+
+  @Prop({ required: true })
+  text!: string;
+
+  @Prop({ required: true, type: Date })
+  createdAt!: Date;
+
+  @Prop({ required: true, type: Date })
+  updatedAt!: Date;
+}
+
 @Schema({
   collection: 'artefacts',
   timestamps: true,
@@ -126,6 +144,12 @@ export class Artefact {
   // null until the author rates; never touched by the LLM pipeline or version snapshots.
   @Prop({ type: ArtefactReview, default: null, _id: false })
   review!: ArtefactReview | null;
+
+  // Freeform author notes, managed via PUT :id/notes (array-replace). Defaults to
+  // [] (not null) — user-authored, with no "pipeline hasn't run" state to signal.
+  // Excluded from version snapshots, like `review`.
+  @Prop({ type: [Note], default: [], _id: false })
+  notes!: Note[];
 
   @Prop({ type: Date, default: null })
   completedAt!: Date | null;

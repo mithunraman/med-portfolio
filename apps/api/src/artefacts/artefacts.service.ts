@@ -6,6 +6,7 @@ import type {
   FinaliseArtefactRequest,
   RestoreArtefactVersionRequest,
   UpdateArtefactStatusRequest,
+  UpdateNotesRequest,
   UpsertArtefactReviewRequest,
 } from '@acme/shared';
 import {
@@ -61,6 +62,7 @@ import { CreateArtefactDto, ListArtefactsDto } from './dto';
 import { toArtefactDto } from './mappers/artefact.mapper';
 import type { Artefact as ArtefactSchema } from './schemas/artefact.schema';
 import { createInternalArtefactId } from './utils/artefact-id.util';
+import { reconcileNotes } from './utils/notes-reconcile.util';
 
 function generateDefaultTitle(): string {
   return `Log Entry - ${format(new Date(), 'dd/MM')}`;
@@ -540,6 +542,45 @@ export class ArtefactsService {
     const artefact = updateResult.value;
 
     return this.buildArtefactDto(artefact._id, artefact);
+  }
+
+  async replaceNotes(userId: string, xid: string, dto: UpdateNotesRequest): Promise<Artefact> {
+    const userOid = new Types.ObjectId(userId);
+
+    // A prior read is required to preserve each surviving note's createdAt across
+    // the array-replace. No transaction/snapshot: notes aren't versioned and the
+    // write is a single atomic document update.
+    //
+    // Concurrency: notes are last-write-wins by design (the chosen array-replace
+    // contract). The request IS the full desired array, so a writer whose client
+    // never saw a concurrently-added note will drop it on reconcile regardless of
+    // isolation — a transaction here would not change that. If real concurrent
+    // multi-device editing ever matters, escalate to granular per-note endpoints
+    // or an optimistic-concurrency version token, not a transaction.
+    const artefactDoc = await this.findOrThrow(xid, userOid);
+
+    // Notes are editable throughout an entry's life except once archived. This
+    // check yields a clean 400 in the common case; the repo write filter enforces
+    // the same rule atomically to cover an archive that races this read.
+    if (artefactDoc.status === ArtefactStatus.ARCHIVED) {
+      throw new BadRequestException('Notes cannot be edited on an archived entry');
+    }
+
+    // Server owns note identity and timestamps; the request is the full desired array.
+    const notes = reconcileNotes(artefactDoc.notes ?? [], dto.notes, new Date());
+
+    // Pass the domain string to the repo (it converts internally). userOid above
+    // is only needed by the existing findOrThrow helper, which still takes ObjectId.
+    const updateResult = await this.artefactsRepository.replaceNotes(xid, userId, notes);
+
+    if (isErr(updateResult)) {
+      if (updateResult.error.code === 'NOT_FOUND') {
+        throw new NotFoundException('Artefact not found');
+      }
+      throw new InternalServerErrorException(updateResult.error.message);
+    }
+
+    return this.buildArtefactDto(updateResult.value._id, updateResult.value);
   }
 
   async getVersionHistory(userId: string, xid: string): Promise<ArtefactVersionHistoryResponse> {

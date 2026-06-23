@@ -4,6 +4,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import { DBError, Result, err, ok } from '../common/utils/result.util';
 import {
+  ArtefactNoteData,
   CountByUserFilter,
   IArtefactsRepository,
   ListArtefactsQuery,
@@ -197,6 +198,43 @@ export class ArtefactsRepository implements IArtefactsRepository {
     } catch (error) {
       this.logger.error('Failed to upsert artefact review', error);
       return err({ code: 'DB_ERROR', message: 'Failed to upsert artefact review' });
+    }
+  }
+
+  async replaceNotes(
+    xid: string,
+    userId: string,
+    notes: ArtefactNoteData[],
+    session?: ClientSession
+  ): Promise<Result<Artefact, DBError>> {
+    try {
+      // userId arrives as a domain string (no Mongo types leak through the
+      // interface); the conversion to ObjectId is a persistence concern handled here.
+      // Single atomic write: { xid, userId } enforces ownership at the DB level —
+      // a non-owner gets NOT_FOUND. The status predicate enforces "editable" in
+      // the write filter itself (not just the service's pre-read), closing the
+      // race where an artefact is archived between the read and this write — it
+      // then degrades to NOT_FOUND rather than mutating a forbidden state.
+      const artefact = await this.artefactModel
+        .findOneAndUpdate(
+          {
+            xid,
+            userId: new Types.ObjectId(userId),
+            status: { $nin: [ArtefactStatus.DELETED, ArtefactStatus.ARCHIVED] },
+          },
+          { $set: { notes } },
+          { new: true, session }
+        )
+        .lean();
+
+      if (!artefact) {
+        return err({ code: 'NOT_FOUND', message: 'Artefact not found' });
+      }
+
+      return ok(artefact);
+    } catch (error) {
+      this.logger.error('Failed to replace artefact notes', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to replace artefact notes' });
     }
   }
 

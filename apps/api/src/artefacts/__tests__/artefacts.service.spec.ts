@@ -74,6 +74,7 @@ const mockArtefactsRepo = {
   updateArtefactById: jest.fn(),
   upsertArtefact: jest.fn(),
   upsertReview: jest.fn(),
+  replaceNotes: jest.fn(),
   listArtefacts: jest.fn(),
   countByUser: jest.fn(),
   markDeleted: jest.fn().mockResolvedValue(ok(1)),
@@ -1235,6 +1236,103 @@ describe('ArtefactsService', () => {
       await expect(
         service.upsertReview(userIdStr, 'art_abc123', { rating: 2 }),
       ).rejects.toThrow('boom');
+    });
+  });
+
+  // ─── replaceNotes ───
+
+  describe('replaceNotes', () => {
+    it('throws NotFoundException when artefact does not exist', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(null));
+
+      await expect(
+        service.replaceNotes(userIdStr, 'art_abc123', { notes: [] }),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockArtefactsRepo.replaceNotes).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when the artefact is ARCHIVED', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(
+        ok(makeArtefactDoc({ status: ArtefactStatus.ARCHIVED })),
+      );
+
+      await expect(
+        service.replaceNotes(userIdStr, 'art_abc123', { notes: [{ text: 'nope' }] }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockArtefactsRepo.replaceNotes).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ArtefactStatus.IN_CONVERSATION,
+      ArtefactStatus.IN_REVIEW,
+      ArtefactStatus.COMPLETED,
+    ])('allows replacing notes in %s status', async (status) => {
+      const artefact = makeArtefactDoc({ status, notes: [] });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockArtefactsRepo.replaceNotes.mockResolvedValue(ok(artefact));
+      setupBuildArtefactDtoMocks();
+
+      await service.replaceNotes(userIdStr, 'art_abc123', { notes: [{ text: 'a note' }] });
+
+      expect(mockArtefactsRepo.replaceNotes).toHaveBeenCalledTimes(1);
+    });
+
+    it('reconciles new + existing notes and writes the full array scoped by userId', async () => {
+      const existingNote = {
+        xid: 'note_existing',
+        text: 'original',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      };
+      const artefact = makeArtefactDoc({
+        status: ArtefactStatus.COMPLETED,
+        notes: [existingNote],
+      });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockArtefactsRepo.replaceNotes.mockResolvedValue(ok(artefact));
+      setupBuildArtefactDtoMocks();
+
+      await service.replaceNotes(userIdStr, 'art_abc123', {
+        notes: [
+          { xid: 'note_existing', text: 'edited' }, // existing -> keep createdAt
+          { text: 'a brand new note' }, // new -> mint xid + timestamps
+        ],
+      });
+
+      const [calledXid, calledUserId, calledNotes] = mockArtefactsRepo.replaceNotes.mock.calls[0];
+      expect(calledXid).toBe('art_abc123');
+      // Repo interface takes the domain string (no Mongo types leak); it converts internally.
+      expect(calledUserId).toBe(userIdStr); // ownership predicate threaded to the repo
+      expect(calledNotes).toHaveLength(2);
+      // Existing note keeps its xid and createdAt; updatedAt bumped on text change.
+      expect(calledNotes[0]).toMatchObject({ xid: 'note_existing', text: 'edited' });
+      expect(calledNotes[0].createdAt).toEqual(existingNote.createdAt);
+      expect(calledNotes[0].updatedAt).not.toEqual(existingNote.updatedAt);
+      // New note gets a fresh server-minted xid.
+      expect(calledNotes[1].text).toBe('a brand new note');
+      expect(calledNotes[1].xid).toHaveLength(21);
+    });
+
+    it('maps repo NOT_FOUND (missing or not owned) to NotFoundException', async () => {
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(makeArtefactDoc({ notes: [] })));
+      mockArtefactsRepo.replaceNotes.mockResolvedValue(
+        err({ code: 'NOT_FOUND', message: 'Artefact not found' }),
+      );
+
+      await expect(
+        service.replaceNotes(userIdStr, 'art_abc123', { notes: [{ text: 'x' }] }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('does not create a version snapshot (notes are not versioned)', async () => {
+      const artefact = makeArtefactDoc({ status: ArtefactStatus.IN_REVIEW, notes: [] });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockArtefactsRepo.replaceNotes.mockResolvedValue(ok(artefact));
+      setupBuildArtefactDtoMocks();
+
+      await service.replaceNotes(userIdStr, 'art_abc123', { notes: [{ text: 'a note' }] });
+
+      expect(mockVersionHistoryService.createVersion).not.toHaveBeenCalled();
     });
   });
 });

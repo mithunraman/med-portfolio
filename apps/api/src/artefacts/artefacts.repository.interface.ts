@@ -49,6 +49,15 @@ export interface UpsertArtefactReviewData {
   comment: string | null;
 }
 
+// A fully-formed note as persisted — xid and timestamps are server-owned (the
+// service reconciles the request array into this shape before the repo writes it).
+export interface ArtefactNoteData {
+  xid: string;
+  text: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface IArtefactsRepository {
   findById(
     id: Types.ObjectId,
@@ -82,6 +91,13 @@ export interface IArtefactsRepository {
     xid: string,
     userId: Types.ObjectId,
     data: UpsertArtefactReviewData,
+    session?: ClientSession
+  ): Promise<Result<Artefact, DBError>>;
+
+  replaceNotes(
+    xid: string,
+    userId: string,
+    notes: ArtefactNoteData[],
     session?: ClientSession
   ): Promise<Result<Artefact, DBError>>;
 

@@ -79,6 +79,12 @@ export function toArtefactDto(
           updatedAt: artefact.review.updatedAt.toISOString(),
         }
       : null,
+    notes: (artefact.notes ?? []).map((n) => ({
+      xid: n.xid,
+      text: n.text,
+      createdAt: n.createdAt.toISOString(),
+      updatedAt: n.updatedAt.toISOString(),
+    })),
     conversation: toActiveConversationDto(conversation),
     versionCount,
     createdAt: artefact.createdAt.toISOString(),

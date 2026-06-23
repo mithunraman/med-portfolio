@@ -8,6 +8,7 @@ import type {
   FinaliseArtefactRequest,
   RestoreArtefactVersionRequest,
   UpdateArtefactStatusRequest,
+  UpdateNotesRequest,
   UpsertArtefactReviewRequest,
 } from '@acme/shared';
 import { BaseApiClient } from '../core/api-client';
@@ -47,6 +48,10 @@ export class ArtefactsClient {
 
   async upsertReview(id: string, data: UpsertArtefactReviewRequest): Promise<Artefact> {
     return this.client.put<Artefact>(`/artefacts/${id}/review`, data);
+  }
+
+  async replaceNotes(id: string, data: UpdateNotesRequest): Promise<Artefact> {
+    return this.client.put<Artefact>(`/artefacts/${id}/notes`, data);
   }
 
   async getVersionHistory(id: string): Promise<ArtefactVersionHistoryResponse> {

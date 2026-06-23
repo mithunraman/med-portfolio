@@ -112,7 +112,7 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
     label: 'Academic Activity',
     description:
       'Reflection on an academic activity such as research, teaching, journal club, or literature review.',
-    templateId: 'LEA_TEMPLATE',
+    templateId: 'GENERIC_REFLECTIVE_TEMPLATE',
     classificationSignals: [
       'research',
       'teaching',

@@ -1,36 +1,28 @@
 import { ArtefactTemplate } from '@acme/shared';
 import { CCR_TEMPLATE } from './ccr.template';
+import { FEEDBACK_TEMPLATE } from './feedback.template';
 import { LEA_SEA_TEMPLATE } from './lea-sea.template';
+import { LEADERSHIP_TEMPLATE } from './leadership.template';
+import { PRESCRIBING_TEMPLATE } from './prescribing.template';
 import { QIA_TEMPLATE } from './qia.template';
 import { QIP_TEMPLATE } from './qip.template';
-import { SEA_TEMPLATE } from './sea.template';
-// Remaining templates still live in ../gp.templates and are migrated into this
-// folder one file at a time. GP_TEMPLATES is the single public surface — once a
-// template moves here, consumers are unaffected.
-import {
-  LEA_TEMPLATE,
-  FEEDBACK_TEMPLATE,
-  LEADERSHIP_TEMPLATE,
-  PRESCRIBING_TEMPLATE,
-} from '../gp.templates';
+import { GENERIC_REFLECTIVE_TEMPLATE } from './reflective.template';
 
+// GP_TEMPLATES is the single public surface for GP templates; each lives in its
+// own file in this folder.
 export { CCR_TEMPLATE } from './ccr.template';
+export { FEEDBACK_TEMPLATE } from './feedback.template';
 export { LEA_SEA_TEMPLATE } from './lea-sea.template';
+export { LEADERSHIP_TEMPLATE } from './leadership.template';
+export { PRESCRIBING_TEMPLATE } from './prescribing.template';
 export { QIA_TEMPLATE } from './qia.template';
 export { QIP_TEMPLATE } from './qip.template';
-export { SEA_TEMPLATE } from './sea.template';
-export {
-  LEA_TEMPLATE,
-  FEEDBACK_TEMPLATE,
-  LEADERSHIP_TEMPLATE,
-  PRESCRIBING_TEMPLATE,
-} from '../gp.templates';
+export { GENERIC_REFLECTIVE_TEMPLATE } from './reflective.template';
 
 export const GP_TEMPLATES: Record<string, ArtefactTemplate> = {
   CCR_TEMPLATE,
   LEA_SEA_TEMPLATE,
-  SEA_TEMPLATE,
-  LEA_TEMPLATE,
+  GENERIC_REFLECTIVE_TEMPLATE,
   FEEDBACK_TEMPLATE,
   LEADERSHIP_TEMPLATE,
   QIP_TEMPLATE,

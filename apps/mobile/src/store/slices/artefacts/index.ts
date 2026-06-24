@@ -33,5 +33,6 @@ export {
   fetchVersionHistory,
   restoreVersion,
   finaliseArtefact,
+  replaceNotes,
   upsertReview,
 } from './thunks';

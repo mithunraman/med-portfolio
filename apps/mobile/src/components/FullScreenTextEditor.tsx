@@ -20,6 +20,12 @@ interface FullScreenSectionEditorProps {
   sectionText: string;
   onSave: (title: string, text: string) => void;
   onClose: () => void;
+  // Hide the (editable) title field for titleless content like freeform notes.
+  // The passed sectionTitle is preserved and returned unchanged on save, and
+  // doubles as the modal header label.
+  hideTitle?: boolean;
+  // Placeholder for the content field (defaults to section-oriented copy).
+  contentPlaceholder?: string;
 }
 
 export function FullScreenSectionEditor({
@@ -28,6 +34,8 @@ export function FullScreenSectionEditor({
   sectionText,
   onSave,
   onClose,
+  hideTitle = false,
+  contentPlaceholder = 'Section content',
 }: FullScreenSectionEditorProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -63,7 +71,9 @@ export function FullScreenSectionEditor({
           <Pressable onPress={onClose} hitSlop={8}>
             <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
           </Pressable>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Edit Section</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            {hideTitle ? sectionTitle : 'Edit Section'}
+          </Text>
           <Pressable onPress={handleDone} style={styles.doneButton} hitSlop={8}>
             <Feather name="check" size={20} color={colors.primary} />
             <Text style={[styles.doneText, { color: colors.primary }]}>Done</Text>
@@ -75,29 +85,33 @@ export function FullScreenSectionEditor({
           contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Title Field */}
-          <View style={styles.fieldGroup}>
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Title</Text>
-            <TextInput
-              style={[
-                styles.titleInput,
-                {
-                  color: colors.text,
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Section title"
-              placeholderTextColor={colors.textSecondary}
-              returnKeyType="next"
-            />
-          </View>
+          {/* Title Field — hidden for titleless content (e.g. notes) */}
+          {!hideTitle && (
+            <View style={styles.fieldGroup}>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Title</Text>
+              <TextInput
+                style={[
+                  styles.titleInput,
+                  {
+                    color: colors.text,
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Section title"
+                placeholderTextColor={colors.textSecondary}
+                returnKeyType="next"
+              />
+            </View>
+          )}
 
           {/* Text Field */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Content</Text>
+            {!hideTitle && (
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Content</Text>
+            )}
             <TextInput
               style={[
                 styles.textInput,
@@ -111,8 +125,9 @@ export function FullScreenSectionEditor({
               onChangeText={setText}
               multiline
               textAlignVertical="top"
-              placeholder="Section content"
+              placeholder={contentPlaceholder}
               placeholderTextColor={colors.textSecondary}
+              autoFocus={hideTitle}
             />
           </View>
         </ScrollView>

@@ -18,6 +18,7 @@ import {
   fetchArtefact,
   fetchArtefacts,
   finaliseArtefact,
+  replaceNotes,
   restoreVersion,
   updateArtefactStatus,
   upsertReview,
@@ -223,6 +224,18 @@ const artefactsSlice = createSlice({
         artefactsAdapter.upsertOne(state, action.payload);
       })
       .addCase(editArtefact.rejected, (state, action) => {
+        delete state.statusById[action.meta.arg.artefactId];
+      })
+
+      // replaceNotes — embedded notes change only, no view impact
+      .addCase(replaceNotes.pending, (state, action) => {
+        state.statusById[action.meta.arg.artefactId] = 'saving';
+      })
+      .addCase(replaceNotes.fulfilled, (state, action) => {
+        delete state.statusById[action.meta.arg.artefactId];
+        artefactsAdapter.upsertOne(state, action.payload);
+      })
+      .addCase(replaceNotes.rejected, (state, action) => {
         delete state.statusById[action.meta.arg.artefactId];
       })
 

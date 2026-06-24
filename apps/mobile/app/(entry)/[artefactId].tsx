@@ -1,4 +1,4 @@
-import type { GoalSelectionState, StatusVariant } from '@/components';
+import type { GoalSelectionState, LocalNote, StatusVariant } from '@/components';
 import {
   ArtefactAdvisoryBanner,
   Button,
@@ -6,6 +6,8 @@ import {
   EditableTitle,
   ExportSheet,
   FullScreenSectionEditor,
+  NotesSection,
+  noteKey,
   PdpGoalSelector,
   ReviewSheet,
   StarRating,
@@ -18,6 +20,7 @@ import {
   editArtefact,
   fetchArtefact,
   finaliseArtefact,
+  replaceNotes,
   selectArtefactById,
   updateArtefactStatus,
 } from '@/store';
@@ -34,7 +37,7 @@ import { ArtefactStatus, PdpGoalStatus } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -64,6 +67,25 @@ function toggleInSet<T>(set: Set<T>, value: T): Set<T> {
     next.add(value);
   }
   return next;
+}
+
+// Notes display newest-first. Unsaved drafts (no createdAt yet) sort to the top
+// so a freshly added note is immediately visible.
+function sortNotesNewestFirst(notes: LocalNote[]): LocalNote[] {
+  return [...notes].sort((a, b) => {
+    const ta = a.createdAt ? Date.parse(a.createdAt) : Infinity;
+    const tb = b.createdAt ? Date.parse(b.createdAt) : Infinity;
+    return tb - ta;
+  });
+}
+
+// True when the local notes are identical to the persisted set — used to collapse
+// the edit buffer back to null (e.g. after adding then cancelling a blank draft)
+// so the sticky save bar doesn't appear for a no-op change.
+function notesMatchServer(local: LocalNote[], server: LocalNote[]): boolean {
+  if (local.length !== server.length) return false;
+  const serverByXid = new Map(server.map((n) => [n.xid, n.text]));
+  return local.every((n) => n.xid !== undefined && serverByXid.get(n.xid) === n.text);
 }
 
 function formatGoalDate(isoDate: string): string {
@@ -114,6 +136,13 @@ export default function EntryDetailScreen() {
   const [editedTitle, setEditedTitle] = useState<string | null>(null);
   const [editedDocument, setEditedDocument] = useState<ComposedDocumentField[] | null>(null);
   const [editedCapabilities, setEditedCapabilities] = useState<Capability[] | null>(null);
+  // Notes edit buffer (null = no unsaved note changes). Held in display order.
+  const [editedNotes, setEditedNotes] = useState<LocalNote[] | null>(null);
+  // The note currently open in the editor, addressed by its stable key
+  // (xid for saved notes, clientId for drafts) — never by list position.
+  const [editingNoteKey, setEditingNoteKey] = useState<string | null>(null);
+  // Monotonic source of client-side draft ids for the current screen session.
+  const draftSeq = useRef(0);
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0]));
   // Capability edit/expand state is keyed by capability code (the API's natural
   // key), not list position — so a future display-time sort/filter can't misalign
@@ -132,7 +161,10 @@ export default function EntryDetailScreen() {
     artefact?.status === ArtefactStatus.IN_REVIEW || artefact?.status === ArtefactStatus.COMPLETED;
 
   const hasChanges =
-    editedTitle !== null || editedDocument !== null || editedCapabilities !== null;
+    editedTitle !== null ||
+    editedDocument !== null ||
+    editedCapabilities !== null ||
+    editedNotes !== null;
 
   // Current displayed values (edited or server). The composed document is the
   // single source of truth for the entry body — shown and edited in place.
@@ -142,6 +174,23 @@ export default function EntryDetailScreen() {
   const editingCapability =
     editingCapabilityCode !== null
       ? displayCapabilities.find((c) => c.code === editingCapabilityCode)
+      : undefined;
+
+  // Notes — visible from review onward; editable in any non-archived state
+  // (notes are post-creation addenda, unlike the body which locks at completion).
+  const serverNotes = useMemo(
+    () => sortNotesNewestFirst(artefact?.notes ?? []),
+    [artefact?.notes]
+  );
+  const displayNotes = editedNotes ?? serverNotes;
+  const showNotes = !!artefact && artefact.status !== ArtefactStatus.IN_CONVERSATION;
+  const notesEditable =
+    artefact?.status !== undefined &&
+    artefact.status !== ArtefactStatus.IN_CONVERSATION &&
+    artefact.status !== ArtefactStatus.ARCHIVED;
+  const editingNote =
+    editingNoteKey !== null
+      ? displayNotes.find((n) => noteKey(n) === editingNoteKey)
       : undefined;
 
   // ── Edit Handlers ──
@@ -177,33 +226,160 @@ export default function EntryDetailScreen() {
     [editingCapabilityCode, artefact?.capabilities]
   );
 
+  // ── Notes Handlers ──
+
+  // Collapse the edit buffer back to null when it matches the persisted set, so a
+  // no-op (e.g. add-then-cancel a blank draft) doesn't trip the sticky save bar.
+  const collapseNotes = useCallback(
+    (notes: LocalNote[]) => (notesMatchServer(notes, serverNotes) ? null : notes),
+    [serverNotes]
+  );
+
+  // All note mutators use functional setEditedNotes(prev => …) updates so they
+  // COMPOSE within a single event. The editor's Done fires onSave then onClose
+  // synchronously; a functional close updater sees the post-save value (not the
+  // pre-render closure) and correctly no-ops on a non-blank note instead of
+  // clobbering the save with null.
+  const handleAddNote = useCallback(() => {
+    // Prepend an empty draft (newest-first) with a stable client id and open the
+    // editor on it — addressed by key, so a later sibling draft can't shift it.
+    const clientId = `draft-${(draftSeq.current += 1)}`;
+    setEditedNotes((prev) => [{ text: '', clientId }, ...(prev ?? serverNotes)]);
+    setEditingNoteKey(clientId);
+  }, [serverNotes]);
+
+  const handleEditNote = useCallback((key: string) => {
+    setEditingNoteKey(key);
+  }, []);
+
+  // Single deletion path — used by both the trash icon and the "edited to blank"
+  // case below, so removing a note always goes through the same confirmation.
+  const confirmDeleteNote = useCallback(
+    (key: string) => {
+      Alert.alert('Delete note?', 'This note will be removed when you save.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () =>
+            setEditedNotes((prev) =>
+              collapseNotes((prev ?? serverNotes).filter((n) => noteKey(n) !== key))
+            ),
+        },
+      ]);
+    },
+    [serverNotes, collapseNotes]
+  );
+
+  const handleNoteSave = useCallback(
+    (_title: string, text: string) => {
+      if (editingNoteKey === null) return;
+      const key = editingNoteKey;
+
+      // A note can't be saved empty (DTO requires min length 1). Emptying an
+      // existing note is a delete request, not an edit — route it through the
+      // same confirmation as the trash icon rather than silently dropping it.
+      // The blank text is NOT applied, so the note is untouched unless confirmed.
+      const target = displayNotes.find((n) => noteKey(n) === key);
+      if (text.trim().length === 0 && target?.xid !== undefined) {
+        confirmDeleteNote(key);
+        return;
+      }
+
+      setEditedNotes((prev) =>
+        collapseNotes(
+          (prev ?? serverNotes).map((n) => (noteKey(n) === key ? { ...n, text } : n))
+        )
+      );
+    },
+    [editingNoteKey, displayNotes, serverNotes, collapseNotes, confirmDeleteNote]
+  );
+
+  // On close, drop a never-saved DRAFT left blank (added but never typed). An
+  // existing note can't reach a blank state here — emptying one is handled above
+  // via confirmation — so the xid guard keeps deletion of saved notes confirmed.
+  // Functional update reads the post-onSave value, so a real note survives Done.
+  const handleNoteEditorClose = useCallback(() => {
+    const key = editingNoteKey;
+    setEditedNotes((prev) => {
+      if (prev === null || key === null) return prev;
+      const note = prev.find((n) => noteKey(n) === key);
+      if (note && note.xid === undefined && note.text.trim().length === 0) {
+        return collapseNotes(prev.filter((n) => noteKey(n) !== key));
+      }
+      return prev;
+    });
+    setEditingNoteKey(null);
+  }, [editingNoteKey, serverNotes, collapseNotes]);
+
+  const handleDeleteNote = confirmDeleteNote;
+
   // ── Save Changes ──
 
   const handleSaveChanges = useCallback(async () => {
     if (!artefactId || !hasChanges) return;
 
-    const payload: { artefactId: string } & EditArtefactRequest = { artefactId };
-    if (editedTitle !== null) payload.title = editedTitle;
-    if (editedDocument !== null) {
-      payload.composedDocument = editedDocument.map((s) => ({ sectionId: s.sectionId, text: s.text }));
-    }
-    if (editedCapabilities !== null) {
-      payload.capabilities = editedCapabilities.map((c) => ({
-        code: c.code,
-        justification: c.justification ?? '',
-      }));
-    }
+    const bodyChanged =
+      editedTitle !== null || editedDocument !== null || editedCapabilities !== null;
 
-    const result = await dispatch(editArtefact(payload));
-    if (editArtefact.fulfilled.match(result)) {
+    // Body and notes are independent sub-resources of the same artefact, saved
+    // sequentially: body first, then notes. On body failure we short-circuit so
+    // nothing is half-applied; each slice clears on its own success, so a retry
+    // re-sends only what's still pending.
+    if (bodyChanged) {
+      const payload: { artefactId: string } & EditArtefactRequest = { artefactId };
+      if (editedTitle !== null) payload.title = editedTitle;
+      if (editedDocument !== null) {
+        payload.composedDocument = editedDocument.map((s) => ({
+          sectionId: s.sectionId,
+          text: s.text,
+        }));
+      }
+      if (editedCapabilities !== null) {
+        payload.capabilities = editedCapabilities.map((c) => ({
+          code: c.code,
+          justification: c.justification ?? '',
+        }));
+      }
+
+      const result = await dispatch(editArtefact(payload));
+      if (!editArtefact.fulfilled.match(result)) {
+        Alert.alert('Error', 'Failed to save changes. Please try again.');
+        return;
+      }
       setEditedTitle(null);
       setEditedDocument(null);
       setEditedCapabilities(null);
-      Alert.alert('Saved', 'Your changes have been saved.');
-    } else {
-      Alert.alert('Error', 'Failed to save changes. Please try again.');
     }
-  }, [artefactId, hasChanges, editedTitle, editedDocument, editedCapabilities, dispatch]);
+
+    if (editedNotes !== null) {
+      const notes = editedNotes
+        .filter((n) => n.text.trim().length > 0)
+        .map((n) => ({ xid: n.xid, text: n.text }));
+
+      const result = await dispatch(replaceNotes({ artefactId, notes }));
+      if (!replaceNotes.fulfilled.match(result)) {
+        Alert.alert(
+          'Error',
+          bodyChanged
+            ? "Your entry was saved, but your notes couldn't be saved. Please try again."
+            : "Your notes couldn't be saved. Please try again."
+        );
+        return;
+      }
+      setEditedNotes(null);
+    }
+
+    Alert.alert('Saved', 'Your changes have been saved.');
+  }, [
+    artefactId,
+    hasChanges,
+    editedTitle,
+    editedDocument,
+    editedCapabilities,
+    editedNotes,
+    dispatch,
+  ]);
 
   const handleDiscardChanges = useCallback(() => {
     Alert.alert('Discard changes?', 'All unsaved edits will be lost.', [
@@ -215,6 +391,8 @@ export default function EntryDetailScreen() {
           setEditedTitle(null);
           setEditedDocument(null);
           setEditedCapabilities(null);
+          setEditedNotes(null);
+          setEditingNoteKey(null);
         },
       },
     ]);
@@ -236,6 +414,8 @@ export default function EntryDetailScreen() {
             setEditedTitle(null);
             setEditedDocument(null);
             setEditedCapabilities(null);
+            setEditedNotes(null);
+            setEditingNoteKey(null);
             navigation.dispatch(e.data.action);
           },
         },
@@ -761,6 +941,32 @@ export default function EntryDetailScreen() {
               )}
             </View>
           )}
+
+        {/* Notes — user-authored addenda, editable in any non-archived state
+            (read-only when archived). Stays visible while editing, unlike the
+            actions below. */}
+        {showNotes && (
+          <View style={styles.section}>
+            <NotesSection
+              notes={displayNotes}
+              editable={notesEditable}
+              onAddNote={handleAddNote}
+              onEditNote={handleEditNote}
+              onDeleteNote={handleDeleteNote}
+            />
+          </View>
+        )}
+
+        {/* Full Screen Section Editor — notes (titleless, freeform) */}
+        <FullScreenSectionEditor
+          visible={editingNoteKey !== null}
+          sectionTitle="Note"
+          sectionText={editingNote?.text ?? ''}
+          onSave={handleNoteSave}
+          onClose={handleNoteEditorClose}
+          hideTitle
+          contentPlaceholder="Write your note…"
+        />
 
         {/* Your rating — hidden until the artefact has AI output to rate */}
         {!hasChanges && artefact.status !== ArtefactStatus.IN_CONVERSATION && (

@@ -1,6 +1,7 @@
 import type {
   EditArtefactRequest,
   PdpGoalSelection,
+  UpdateNotesRequest,
   UpsertArtefactReviewRequest,
 } from '@acme/shared';
 import { ArtefactStatus, QuotaErrorCode } from '@acme/shared';
@@ -172,6 +173,30 @@ export const editArtefact = createAsyncThunk(
       return response;
     } catch (error) {
       artefactsLogger.error('Failed to edit artefact', { error });
+      return rejectWithValue(classifyError(error));
+    }
+  }
+);
+
+/**
+ * Replace the full notes array on an artefact (last-write-wins array-replace).
+ * The server reconciles xids/timestamps; the returned artefact is authoritative.
+ */
+export const replaceNotes = createAsyncThunk(
+  'artefacts/replaceNotes',
+  async (
+    params: { artefactId: string } & UpdateNotesRequest,
+    { rejectWithValue }
+  ) => {
+    artefactsLogger.info('Replacing artefact notes', { artefactId: params.artefactId });
+
+    try {
+      const { artefactId, ...notesData } = params;
+      const response = await api.artefacts.replaceNotes(artefactId, notesData);
+      artefactsLogger.info('Replaced artefact notes', { id: response.id });
+      return response;
+    } catch (error) {
+      artefactsLogger.error('Failed to replace artefact notes', { error });
       return rejectWithValue(classifyError(error));
     }
   }

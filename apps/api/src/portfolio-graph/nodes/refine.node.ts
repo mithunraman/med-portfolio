@@ -35,21 +35,21 @@ type RefineResponse = z.infer<typeof refineResponseSchema>;
 const refinePrompt = ChatPromptTemplate.fromMessages([
   [
     'system',
-    `You are a copy-editing assistant for a medical portfolio. You are given the sections of an entry whose CONTENT has already been written and approved. Your ONLY job, within each section, is two things:
+    `You are a copy-editing assistant for a medical portfolio. You are given the sections of an entry whose CONTENT has already been written and approved. Your job, within each section, is to make it read as clear, fluent, well-structured prose suitable for a professional portfolio entry, by doing both of:
 
 1. Merge sentences that restate the same point into a single sentence, keeping every distinct detail from each.
-2. Join choppy or fragmented sentences so the section reads fluently.
+2. Improve readability: join choppy or fragmented sentences, smooth awkward or spoken-sounding phrasing, and order sentences so related content sits together — so the section reads fluently from start to finish.
 
-The input is produced by an upstream step that sorts and cleans the trainee's words but does NOT de-duplicate, so a section may contain the same point restated across several sentences (common with voice input), or the same detail repeated in different places. You are the only step that removes this repetition.
+Apply this to EVERY section, not only those with duplication. The input is produced by an upstream step that sorts and lightly cleans the trainee's voice input but does NOT de-duplicate or polish for flow, so most sections will read better after a faithful copy-edit; a section may also contain the same point restated across several sentences, and you are the only step that removes this repetition.
 
-You are NOT rewriting, summarising, or improving the content. The following rules are absolute — if any conflicts with making the text read well, obey the rule:
+You are NOT rewriting the substance, summarising, or adding to the content — you change HOW it reads, never WHAT it says. The following rules are absolute — if any conflicts with making the text read well, obey the rule:
 
 - NEVER change the meaning of anything.
 - NEVER add a fact, number, clinical term, reasoning, conclusion, or sentiment that is not already present.
 - NEVER drop a distinct fact, number, or detail. When two sentences overlap but each carries a unique detail, merge them into ONE sentence that keeps BOTH details.
 - NEVER merge, collapse, drop, or reword a distinct emotional, evaluative, or hedging statement (e.g. "I was a bit worried", "I felt out of my depth", "I was mortified"). Keep each emotional beat in the trainee's own words, even when it seems to repeat a sentiment.
-- Do NOT reorder content beyond what a clean merge of adjacent restatements requires.
-- If a section has no duplication and already reads well, return its text UNCHANGED.
+- Do NOT reorder content beyond what improves the readability of adjacent material.
+- Only return a section's text UNCHANGED if it already reads as clean, fluent prose with no awkward phrasing or duplication; otherwise improve its readability within these rules.
 
 ## Examples
 
@@ -137,8 +137,12 @@ function fallbackTrace(document: DocumentField[]): RefineTrace {
 /**
  * Factory that creates the refine node with injected dependencies.
  *
- * Post-processes the reflect node's `composedDocument`: a single LLM call merges
- * restatements and joins sentences across all sections. The model output is
+ * Post-processes the reflect node's `composedDocument`: a single LLM call
+ * copy-edits every section into clear, fluent prose — merging restatements,
+ * joining choppy sentences, and smoothing spoken-sounding phrasing — faithfully
+ * (no new facts or sentiment). This is the universal polish stage that runs for
+ * every template, so sections need no per-template `composePrompt` to read well.
+ * The model output is
  * trusted directly — the trainee reviews and edits the entry before it is saved
  * to their profile, which is the human safety net (so no faithfulness gate here).
  * The only guards are data integrity (keep the original if the model omits or

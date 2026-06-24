@@ -96,11 +96,17 @@ export const CCR_TEMPLATE: ArtefactTemplate = {
       // not a full case presentation), so a single call that sees the whole is
       // what keeps it tight — concatenating the probes independently cannot.
       composePrompt:
-        'Combine the probes into one flowing case vignette of 3–5 sentences, in this ' +
-        'order: presentation → clinical findings → clinical reasoning → management → ' +
+        'Combine the probes into one flowing case vignette of at most 5 sentences, in ' +
+        'this order: presentation → clinical findings → clinical reasoning → management → ' +
         'outcome. It exists only to give enough context for the reflection that follows, ' +
         'so keep it tight and factual — context, not a full case presentation. Omit any ' +
-        'probe with no content. Add nothing that is not already in the probes.',
+        'probe with no content. Add nothing that is not already in the probes. ' +
+        "When tightening, preserve the STRENGTH and MODALITY of the trainee's clinical " +
+        'reasoning and evaluative judgements: do NOT weaken an assertive clinical stance ' +
+        'into a tentative one (e.g. "you have to assume a GI cause until proven otherwise" ' +
+        'must NOT become "prompting me to consider a GI cause"), and do not drop the ' +
+        'reasoning that discriminated between differentials. Compress wording, never the ' +
+        'force of the judgement.',
       probes: CCR_BRIEF_DESCRIPTION_PROBES,
     },
     {

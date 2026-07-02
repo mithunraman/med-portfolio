@@ -7,8 +7,10 @@ deploys, restarts, and log inspection.
 
 > **Scope:** Covers the full stack — the **application tier** (the box running NestJS)
 > and the **edge tier** (Caddy reverse proxy + Cloudflare + firewall). The service is
-> live at `https://api.logdit.app`. Remaining hardening (Authenticated Origin Pulls,
-> SSH lockdown) is tracked in [§9.8](#98-remaining-hardening--todo).
+> live at `https://api.logdit.app`, with Authenticated Origin Pulls (mTLS) enforced
+> ([§9.8](#98-authenticated-origin-pulls-mtls--done)) and SSH hardened — key-only auth, root
+> login disabled, and fail2ban ([§9.9](#99-ssh-hardening)). Remaining hardening (uptime monitor)
+> is tracked in [§9.10](#910-remaining--todo).
 
 ---
 
@@ -494,6 +496,7 @@ sudo chmod 644 /etc/ssl/cloudflare/origin.pem
 sudo tee /etc/caddy/Caddyfile > /dev/null <<'EOF'
 api.logdit.app {
     # Cloudflare Origin CA cert (explicit tls also disables ACME — correct behind Cloudflare)
+    # NOTE: §9.8 upgrades this line to a client_auth block to enforce AOP (mTLS)
     tls /etc/ssl/cloudflare/origin.pem /etc/ssl/cloudflare/origin.key
     encode zstd gzip
     log {
@@ -572,16 +575,167 @@ sudo systemctl reset-failed 'fw-rescue*' 2>/dev/null || true
 curl -i https://api.logdit.app/api/health     # expect HTTP 200 + a `cf-ray:` header
 ```
 
-### 9.8 Remaining hardening — TODO
-- [ ] **Authenticated Origin Pulls (mTLS):** make Caddy *require* Cloudflare's client cert
-  (a `client_auth` block trusting Cloudflare's origin-pull CA). This is the durable origin
-  lock — it survives Cloudflare IP-range changes, unlike the §9.4 allowlist.
-- [ ] **Tighten SSH to your IP** (both layers, with the rescue timer armed):
-  ```bash
-  sudo ufw allow from <YOUR_IP> to any port 22
-  sudo ufw delete allow 22/tcp
-  ```
-  and change the OCI Security List port-22 rule source from `0.0.0.0/0` to your IP.
+### 9.8 Authenticated Origin Pulls (mTLS) — DONE
+The durable origin lock: Caddy *requires* a client certificate that only **our** Cloudflare zone
+holds, so even a caller inside Cloudflare's IP ranges (which the §9.4 allowlist can't distinguish)
+is rejected. We use **zone-level** AOP (our own cert), not global AOP (a shared Cloudflare cert
+that every customer presents).
+
+**Certificate model — a two-tier chain (CA → leaf):**
+
+| File | Role | Lives |
+|---|---|---|
+| `aop-ca.pem` | CA (root) — the trust anchor | **Caddy** `trust_pool` (server) |
+| `aop-ca.key` | CA private key — can mint new client certs | **offline on the admin Mac only** — never on the server, never uploaded |
+| `aop-client.pem` | leaf cert (signed by the CA, `CA:FALSE`) | **uploaded to Cloudflare** |
+| `aop-client.key` | leaf private key | **uploaded to Cloudflare** |
+
+> Cloudflare rejects a self-signed root with a **"missing leaf certificate"** error — the uploaded
+> cert *must* be a leaf (`CA:FALSE`) signed by a separate CA. Hence the two-tier chain below.
+
+**1. Generate the chain (on the admin Mac, outside any git repo):**
+```bash
+mkdir -p ~/aop-certs && cd ~/aop-certs
+# CA (root)
+openssl genrsa -out aop-ca.key 2048
+openssl req -new -x509 -days 3650 -key aop-ca.key -out aop-ca.pem \
+  -subj "/C=GB/O=Logdit/CN=Logdit AOP CA"
+# leaf key + CSR
+openssl genrsa -out aop-client.key 2048
+openssl req -new -key aop-client.key -out aop-client.csr \
+  -subj "/C=GB/O=Logdit/CN=aop.logdit.app"
+# sign leaf with the CA — CA:FALSE makes it a real leaf
+openssl x509 -req -in aop-client.csr -CA aop-ca.pem -CAkey aop-ca.key \
+  -CAcreateserial -days 3650 -out aop-client.pem \
+  -extfile <(printf "basicConstraints=CA:FALSE\nkeyUsage=digitalSignature\nextendedKeyUsage=clientAuth")
+openssl x509 -in aop-client.pem -noout -subject -issuer   # subject=leaf, issuer=CA → correct
+```
+
+**2. Upload the leaf to Cloudflare (dashboard UI):**
+1. Cloudflare dashboard → select `logdit.app` → **SSL/TLS → Origin Server → Authenticated Origin Pulls**.
+2. Under **Zone-level Authenticated Origin Pulls**, click **Upload a certificate**.
+3. **Certificate** field → paste the full contents of `aop-client.pem` (include the
+   `-----BEGIN/END CERTIFICATE-----` lines).
+4. **Private key** field → paste the full contents of `aop-client.key`.
+5. Save, then flip the **zone-level toggle ON** so Cloudflare presents the leaf on origin pulls.
+
+> If the form errors with **"missing leaf certificate"**, the uploaded cert is a self-signed root,
+> not a leaf — regenerate the chain in step 1 so the leaf is signed by the CA with `CA:FALSE`.
+
+**3. Put the CA on the server + require it in Caddy:**
+```bash
+scp ~/aop-certs/aop-ca.pem portfolio-api:/tmp/aop-ca.pem
+ssh portfolio-api
+sudo mv /tmp/aop-ca.pem /etc/ssl/cloudflare/aop-ca.pem
+sudo chown root:root /etc/ssl/cloudflare/aop-ca.pem && sudo chmod 644 /etc/ssl/cloudflare/aop-ca.pem
+```
+Change the §9.3 `tls` line to open a `client_auth` block:
+```caddy
+    tls /etc/ssl/cloudflare/origin.pem /etc/ssl/cloudflare/origin.key {
+        client_auth {
+            mode require_and_verify
+            trust_pool file {
+                pem_file /etc/ssl/cloudflare/aop-ca.pem
+            }
+        }
+    }
+```
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy
+```
+
+**4. Verify:**
+```bash
+# through Cloudflare (presents the leaf) → 200
+curl -sI https://api.logdit.app/api/health | head -1
+# mTLS layer alone, from the server (loopback isn't firewalled; no client cert presented) → must FAIL
+ssh portfolio-api 'curl -skI --resolve api.logdit.app:443:127.0.0.1 https://api.logdit.app/api/health | head -1'
+```
+The first is `HTTP/2 200`; the second returns **empty** (handshake refused) — that's AOP rejecting a
+certless client. A direct-to-origin test from outside instead **hangs**, because the §9.4/§9.5
+firewall drops the packet before Caddy is even reached (defence in depth: firewall *and* mTLS).
+
+> Rollback: delete the `{ … }` block from the `tls` line and `sudo systemctl reload caddy`.
+
+### 9.9 SSH hardening
+Four levers, in order of impact: key-only auth → disable root → restrict source IP → fail2ban.
+Always check the **effective** config (Ubuntu spreads settings across `sshd_config` +
+`sshd_config.d/*.conf`, and sshd is **first-match-wins**):
+```bash
+sudo sshd -T | grep -Ei 'passwordauthentication|permitrootlogin|pubkeyauthentication|kbdinteractiveauthentication'
+```
+Target state: `passwordauthentication no`, `kbdinteractiveauthentication no`,
+`pubkeyauthentication yes`, `permitrootlogin no`.
+
+> ⚠️ **Golden rule for every SSH change:** keep your current session open, `sudo sshd -t` to
+> validate *before* reloading, `sudo systemctl reload ssh` (reload, not restart — live sessions
+> survive), then test a **fresh login in a second terminal** before trusting it. If locked out,
+> recover via the OCI **Cloud Shell / serial console**.
+
+**#1 Key-only auth — DONE.** Provided by the cloud image (`60-cloudimg-settings.conf` sets
+`PasswordAuthentication no`) plus `kbdinteractiveauthentication no`. No password path exists.
+
+**#2 Disable root SSH login — DONE.** The compiled default is `prohibit-password` (root *can*
+still log in with a key), so we set it explicitly. Because sshd is first-match-wins, the override
+must sort **before** any cloud drop-in — name it `10-` (beats `60-cloudimg-settings.conf`):
+```bash
+echo 'PermitRootLogin no' | sudo tee /etc/ssh/sshd_config.d/10-hardening.conf
+sudo sshd -t && sudo systemctl reload ssh
+sudo sshd -T | grep -i permitrootlogin      # expect: permitrootlogin no
+```
+> This is policy, not coincidence: root was already unreachable only because no key sits in
+> `/root/.ssh/authorized_keys`. `PermitRootLogin no` keeps it refused even if a key ever lands there.
+> You still log in as `ubuntu` + `sudo` exactly as before — root *account* and `sudo` are unaffected.
+
+**#3 / #4 Restrict who can reach port 22 — DONE via fail2ban (roaming setup).**
+This box is administered from **multiple networks** (home/cafés/hotspots), so a static-IP lock
+would risk locking us out. Instead we keep 22 reachable and let fail2ban auto-ban brute-force
+scanners. Key-only auth already defeats guessing; fail2ban is scanner/noise reduction + defence
+in depth. Config (`/etc/fail2ban/jail.local` — never edit `jail.conf`, it's overwritten on upgrade):
+```ini
+[DEFAULT]
+backend   = systemd          # read journald, where sshd logs (NOT /var/log/auth.log)
+banaction = ufw              # bans appear in `ufw status`, one firewall to reason about
+bantime   = 1h
+findtime  = 10m
+maxretry  = 5
+bantime.increment = true     # escalate repeat offenders: 1h → 2h → 4h ...
+bantime.factor    = 2
+bantime.maxtime   = 1w       # ...capped at a week
+ignoreip  = 127.0.0.1/8 ::1  # add a stable VPN/bastion CIDR here if you ever get one
+
+[sshd]
+enabled = true               # the ONLY jail — 22 is the sole exposed auth surface
+```
+```bash
+sudo apt install -y fail2ban
+sudo systemctl enable --now fail2ban
+sudo fail2ban-client status sshd     # jail active; "Journal matches: ...sshd.service" = watching journald
+```
+> **Self-ban recovery:** a repeatedly-fumbling client (e.g. the 1Password wrong-key case above) can
+> ban *your* IP. Recover via the OCI **serial console / Cloud Shell**:
+> `sudo fail2ban-client set sshd unbanip <IP>` (or wait out `bantime`). See bans in `ufw status | grep -i deny`.
+
+**Alternative — static-IP lock** (if this box ever becomes single-network): restrict 22 in **both**
+layers with the rescue timer armed, instead of / alongside fail2ban:
+```bash
+sudo systemd-run --on-active=5min --unit=fw-rescue /bin/sh -c 'ufw --force disable; iptables -P INPUT ACCEPT; iptables -F'
+sudo ufw allow from <YOUR_IP> to any port 22
+sudo ufw delete allow 22/tcp
+# then: OCI Security List → change the port-22 ingress source from 0.0.0.0/0 to <YOUR_IP>/32
+# verify a fresh login in a 2nd terminal, then: sudo systemctl stop fw-rescue.timer
+```
+
+> **Operational gotcha — 1Password SSH agent (learned the hard way):** the agent only serves keys
+> from vaults listed in `~/.config/1password/ssh/agent.toml` (or all keys if that file is absent).
+> **Moving the server key to a new vault silently drops it from the agent** → `ssh` presents the
+> wrong key → `Permission denied (publickey)`, and 1Password shows **no Touch ID prompt** (the tell —
+> there's no managed key to authorize). Fix: add the new vault to `agent.toml` (or move the key back),
+> quit+reopen 1Password, and confirm with
+> `SSH_AUTH_SOCK="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock" ssh-add -l`.
+
+### 9.10 Remaining — TODO
+- [ ] **Uptime monitor** on `https://api.logdit.app/api/health` (external, e.g. UptimeRobot/BetterStack).
 
 ---
 
@@ -627,3 +781,5 @@ sudo ufw status verbose
 | `/srv/portfolio/.ssh/github_deploy` | read-only GitHub deploy key |
 | `/etc/caddy/Caddyfile` | Caddy reverse-proxy config |
 | `/etc/ssl/cloudflare/origin.{pem,key}` | Cloudflare Origin CA cert + key |
+| `/etc/ssl/cloudflare/aop-ca.pem` | AOP CA cert — Caddy `trust_pool` (client-cert verify) |
+| `~/aop-certs/*` (admin Mac) | AOP CA + leaf; **`aop-ca.key` kept offline, never on server** |

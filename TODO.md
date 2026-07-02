@@ -23,3 +23,11 @@ IMPORTANT before release
 - Scan to check that all queries are using correct indexes, find unused indexes.
 - Scan for dead code in the backend
 - Check OCI S3 is not accessible outside, and is not getting exposed.
+- set up email otp service
+- make sure when artefact is exported, notes are included
+- Retest all the flows again
+- Add credits to openai
+- Update privacy and terms of use to include oracle provider
+- update landing page
+- review deployment plan with another agent
+-

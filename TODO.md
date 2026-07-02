@@ -22,3 +22,4 @@ IMPORTANT before release
 - Make sure all repo updates take in a user id to prevent cross access.
 - Scan to check that all queries are using correct indexes, find unused indexes.
 - Scan for dead code in the backend
+- Check OCI S3 is not accessible outside, and is not getting exposed.

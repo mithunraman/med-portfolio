@@ -8,9 +8,11 @@ deploys, restarts, and log inspection.
 > **Scope:** Covers the full stack — the **application tier** (the box running NestJS)
 > and the **edge tier** (Caddy reverse proxy + Cloudflare + firewall). The service is
 > live at `https://api.logdit.app`, with Authenticated Origin Pulls (mTLS) enforced
-> ([§9.8](#98-authenticated-origin-pulls-mtls--done)) and SSH hardened — key-only auth, root
-> login disabled, and fail2ban ([§9.9](#99-ssh-hardening)). Remaining hardening (uptime monitor)
-> is tracked in [§9.10](#910-remaining--todo).
+> ([§9.8](#98-authenticated-origin-pulls-mtls--done)), SSH hardened — key-only auth, root login
+> disabled, and fail2ban ([§9.9](#99-ssh-hardening)), and an external uptime monitor with alerting
+> ([§9.10](#910-uptime-monitor-grafana-cloud-synthetic-monitoring--done)). Core hardening complete.
+> ⚠️ **Before the first real user:** enable database backups ([§9.11](#911-database-backups-mongodump--object-storage--todo-before-first-real-user)).
+> Other post-MVP items are listed at the end of §9.10.
 
 ---
 
@@ -734,8 +736,76 @@ sudo ufw delete allow 22/tcp
 > quit+reopen 1Password, and confirm with
 > `SSH_AUTH_SOCK="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock" ssh-add -l`.
 
-### 9.10 Remaining — TODO
-- [ ] **Uptime monitor** on `https://api.logdit.app/api/health` (external, e.g. UptimeRobot/BetterStack).
+### 9.10 Uptime monitor (Grafana Cloud Synthetic Monitoring) — DONE
+External black-box check of the full public path (Cloudflare → Caddy → NestJS → Mongo/S3). We use
+**Grafana Cloud Synthetic Monitoring** rather than a separate vendor so uptime sits in the *same*
+stack as our OTel traces/metrics — one pane of glass. Configured in the Grafana UI
+(**Testing & synthetics → Synthetics**); the check lives in Grafana Cloud, nothing in this repo.
+
+**Check config (HTTP):**
+| Setting | Value | Why |
+|---|---|---|
+| Target | `GET https://api.logdit.app/api/health` | the public URL users hit, not the origin IP |
+| Probes | **London + Amsterdam** (2) | near our LDN origin/users; 2 = multi-location confirmation |
+| Frequency | **60s** | 2 × 60s ≈ **87.6k executions/month**, under the **100k free** tier |
+| Timeout | **5s** | `/api/health` pings Mongo + S3; 3s risked false "down" on a slow-but-alive dep |
+| Valid status codes | **2xx** | Terminus returns **200 healthy / 503 degraded**, so `2xx` already catches a bad dependency — no body regex needed |
+| SSL options | **Fail if SSL is not present** | require valid TLS; also enables cert-expiry metrics |
+| Labels | `env=production`, `service=portfolio-api` | ≤5 labels so they stay log-indexed |
+
+**Per-check alerts:**
+- **Failed Checks:** alert if **≥4 of 10** executions fail in the last **5 min**. 4 sits above one
+  probe's ~5 executions/window, so a single flaky probe can't page you — needs a real (multi-run)
+  outage. Detects a true outage in ~2–3 min; ignores the few-second deploy restart.
+- **TLS Certificate:** alert if the cert expires in **<30 days** (cheap insurance; Cloudflare
+  auto-renews the edge cert, so rarely fires).
+- **Latency:** **left OFF** — 300ms is too tight for a health endpoint that hits Mongo + S3 through
+  Cloudflare. Add later with a threshold above the observed p95 baseline.
+
+**Alert delivery (the part that's easy to miss):**
+Per-check alerts auto-create Grafana Alerting *rules*, but delivery is separate. The default
+contact point **`admin` shipped with "No integrations configured"** → alerts would fire and go
+**nowhere**. Fix: **Alerting → Contact points → edit `admin` → add an Email integration** (your
+address) → Save → **Test**. The default notification policy already routes to `admin`, so no policy
+change is needed. Confirmed with a test email.
+> ⚠️ An untested alert is not an alert. Always send a test notification (and ideally trigger a real
+> failure by pointing the check at a bad path for ~6 min) before trusting the monitor.
+
+**Deferred (post-MVP, not blockers):** managed Atlas backups/PITR + tier upgrade (a *scaling*-era
+step, ~1000 users) · Slack/phone paging (Grafana OnCall) instead of email · latency alert once a
+p95 baseline exists · Compass SSH tunnel · SMTP for OTP login · Grafana Alloy → Loki for logs.
+
+### 9.11 Database backups (mongodump → Object Storage) — TODO before first real user
+**Trigger:** not needed while pre-launch with throwaway test data. **Enable the day the first real
+user stores data** — losing user health data is unrecoverable *and* a UK GDPR Art. 32 gap
+("ability to restore availability of personal data after an incident"). This is decoupled from
+*scaling* the DB: it's cheap recoverability now, not a tier upgrade. Managed Atlas backups/PITR
+(second-level RPO) can wait for the ~1000-user scaling milestone.
+
+**Approach:** a nightly `mongodump` on the server, gzipped, uploaded to a **dedicated** OCI Object
+Storage bucket (S3-compatible), on a **systemd timer** (consistent with §9.5's pattern; a cron entry
+works too). RPO ≈ 24h — acceptable for MVP; protects against the catastrophic/irreversible cases
+(dropped collection, leaked creds → ransomware, accidental cluster deletion).
+
+- [ ] **Dedicated bucket** `portfolio-db-backups` (separate from `portfolio-media`); **private**,
+  server-side encryption on, its own scoped Object Storage credential (not the media key).
+- [ ] **Least-privilege Mongo user** for dumps (read-only), separate from the app's `MONGODB_URI`.
+- [ ] **Backup script** (`/usr/local/bin/backup-mongo`, `set -euo pipefail`):
+  ```bash
+  # mongodump --archive --gzip → timestamped object in the bucket
+  mongodump --uri="$MONGO_BACKUP_URI" --archive --gzip \
+    | aws s3 cp - "s3://portfolio-db-backups/$(date +%F)/dump.gz" \
+        --endpoint-url "$S3_ENDPOINT"
+  ```
+  > `date` runs on the server (fine here — this is a shell script, not a workflow). Store creds in a
+  > root-only env file like `/etc/portfolio-backup.env` (600), never in the repo.
+- [ ] **Retention** — keep ~7 daily + ~4 weekly; delete older. Prefer an **Object Storage lifecycle
+  rule** (server-side, can't be skipped by a failing script) over in-script deletion.
+- [ ] **systemd timer** `backup-mongo.timer` (daily, e.g. 03:00) + oneshot `backup-mongo.service`.
+- [ ] **Alert on failure** — a silent backup that stopped running is worse than none. Emit a
+  heartbeat/metric or alert if no new object landed in >36h.
+- [ ] **Test a restore** (`mongorestore --archive --gzip` into a scratch DB) — an untested backup is
+  not a backup. Re-test after any schema-shaping change.
 
 ---
 

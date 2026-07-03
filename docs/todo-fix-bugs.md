@@ -12,7 +12,16 @@ Priority order: **1 (Medium) → 2, 3, 4 (Low)**.
 
 ---
 
-## 1. [Medium] `finalise` mutates PDP goals without checking they belong to the artefact
+## 1. [Medium] ✅ DONE — `finalise` mutates PDP goals without checking they belong to the artefact
+
+> **Resolved (2026-07-03):** Added `updateGoalForArtefact(goalXid, userId, artefactId, …)` to the
+> pdp-goals repository with the ownership predicate `{ xid, userId, artefactId }` baked into the
+> filter; `finaliseArtefact` now calls it (both selected/unselected branches), so a goal from
+> another of the user's artefacts → `NOT_FOUND`. The old repo `updateGoal` was dead after the
+> repoint (the `PATCH /pdp-goals/:xid` route persists via `saveGoal`) and was removed along with
+> its interface decl. Regression tests added at the service (parent-scope boundary) and repository
+> (cross-artefact + foreign-user NOT_FOUND, cascade/mixed-status behaviour) layers. Typecheck +
+> unit + integration green.
 
 **Affected API:** `POST /artefacts/:id/finalise`
 

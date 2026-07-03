@@ -312,9 +312,10 @@ export class ArtefactsService {
               status: a.selected ? PdpGoalStatus.STARTED : PdpGoalStatus.ARCHIVED,
             }));
 
-            const result = await this.pdpGoalsRepository.updateGoal(
+            const result = await this.pdpGoalsRepository.updateGoalForArtefact(
               selection.goalId,
               userOid,
+              artefactDoc._id,
               {
                 status: PdpGoalStatus.STARTED,
                 reviewDate: new Date(selection.reviewDate),
@@ -331,9 +332,10 @@ export class ArtefactsService {
             }
           } else {
             // Unselected goal → ARCHIVED (cascades to all actions)
-            const result = await this.pdpGoalsRepository.updateGoal(
+            const result = await this.pdpGoalsRepository.updateGoalForArtefact(
               selection.goalId,
               userOid,
+              artefactDoc._id,
               { status: PdpGoalStatus.ARCHIVED },
               undefined, // no specific action updates → cascades status to all actions
               session

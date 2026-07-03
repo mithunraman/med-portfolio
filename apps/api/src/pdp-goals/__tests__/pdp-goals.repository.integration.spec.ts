@@ -173,50 +173,52 @@ describe('PdpGoalsRepository (integration)', () => {
     });
   });
 
-  // ─── updateGoal ───
+  // ─── updateGoalForArtefact (parent-scope boundary + update behaviour) ───
 
-  describe('updateGoal', () => {
-    it('updates goal-level fields and specific action statuses via actionUpdates', async () => {
+  describe('updateGoalForArtefact', () => {
+    it('updates a goal that belongs to the given artefact', async () => {
+      const reviewDate = new Date('2026-06-15');
       await insertGoal(model, {
-        xid: 'goal_ug1',
+        xid: 'goal_in_artefact',
+        userId,
+        artefactId,
+        status: PdpGoalStatus.NOT_STARTED,
         actions: [
           { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.NOT_STARTED },
-          { xid: 'act_2', action: 'A2', intendedEvidence: 'E2', status: PdpGoalStatus.NOT_STARTED },
         ],
       });
 
-      const reviewDate = new Date('2026-06-15');
-      const result = await repo.updateGoal(
-        'goal_ug1',
+      const result = await repo.updateGoalForArtefact(
+        'goal_in_artefact',
         userId,
+        artefactId,
         { status: PdpGoalStatus.STARTED, reviewDate },
-        [
-          { actionXid: 'act_1', status: PdpGoalStatus.STARTED },
-          { actionXid: 'act_2', status: PdpGoalStatus.ARCHIVED },
-        ],
+        [{ actionXid: 'act_1', status: PdpGoalStatus.STARTED }],
       );
 
       expect(isOk(result)).toBe(true);
 
-      const updated = await model.findOne({ xid: 'goal_ug1' }).lean();
+      const updated = await model.findOne({ xid: 'goal_in_artefact' }).lean();
       expect(updated!.status).toBe(PdpGoalStatus.STARTED);
       expect(updated!.reviewDate!.toISOString()).toBe(reviewDate.toISOString());
       expect(updated!.actions[0].status).toBe(PdpGoalStatus.STARTED);
-      expect(updated!.actions[1].status).toBe(PdpGoalStatus.ARCHIVED);
     });
 
     it('cascades goal status to all actions when actionUpdates is undefined', async () => {
       await insertGoal(model, {
         xid: 'goal_cascade',
+        userId,
+        artefactId,
         actions: [
           { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.NOT_STARTED },
           { xid: 'act_2', action: 'A2', intendedEvidence: 'E2', status: PdpGoalStatus.NOT_STARTED },
         ],
       });
 
-      const result = await repo.updateGoal(
+      const result = await repo.updateGoalForArtefact(
         'goal_cascade',
         userId,
+        artefactId,
         { status: PdpGoalStatus.ARCHIVED },
         undefined,
       );
@@ -232,6 +234,8 @@ describe('PdpGoalsRepository (integration)', () => {
     it('handles actions with mixed target statuses in one call', async () => {
       await insertGoal(model, {
         xid: 'goal_mixed',
+        userId,
+        artefactId,
         actions: [
           { xid: 'act_a', action: 'A', intendedEvidence: 'E', status: PdpGoalStatus.NOT_STARTED },
           { xid: 'act_b', action: 'B', intendedEvidence: 'E', status: PdpGoalStatus.NOT_STARTED },
@@ -239,9 +243,10 @@ describe('PdpGoalsRepository (integration)', () => {
         ],
       });
 
-      await repo.updateGoal(
+      await repo.updateGoalForArtefact(
         'goal_mixed',
         userId,
+        artefactId,
         { status: PdpGoalStatus.STARTED },
         [
           { actionXid: 'act_a', status: PdpGoalStatus.STARTED },
@@ -256,42 +261,14 @@ describe('PdpGoalsRepository (integration)', () => {
       expect(updated!.actions[2].status).toBe(PdpGoalStatus.STARTED);  // act_c
     });
 
-    // ─── Ownership scoping (IDOR regression) ───
-
-    it('does not mutate a goal owned by another user (cascade path) and returns NOT_FOUND', async () => {
-      const otherUserId = new Types.ObjectId();
-      await insertGoal(model, {
-        xid: 'goal_victim',
-        userId: otherUserId,
-        status: PdpGoalStatus.STARTED,
-        actions: [
-          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.STARTED },
-        ],
-      });
-
-      // Attacker (userId) tries to archive a victim-owned goal.
-      const result = await repo.updateGoal(
-        'goal_victim',
-        userId,
-        { status: PdpGoalStatus.ARCHIVED },
-        undefined,
-      );
-
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) expect(result.error.code).toBe('NOT_FOUND');
-
-      // Victim's goal and action are untouched.
-      const victim = await model.findOne({ xid: 'goal_victim' }).lean();
-      expect(victim!.status).toBe(PdpGoalStatus.STARTED);
-      expect(victim!.actions[0].status).toBe(PdpGoalStatus.STARTED);
-    });
-
-    it('does not mutate another user\'s goal or actions (actionUpdates path) and returns NOT_FOUND', async () => {
-      const otherUserId = new Types.ObjectId();
+    it('does not mutate a goal from another artefact of the same user and returns NOT_FOUND', async () => {
+      const otherArtefactId = new Types.ObjectId();
       const reviewDate = new Date('2026-01-01');
+      // Goal is owned by the caller, but belongs to a DIFFERENT artefact.
       await insertGoal(model, {
-        xid: 'goal_victim2',
-        userId: otherUserId,
+        xid: 'goal_other_artefact',
+        userId,
+        artefactId: otherArtefactId,
         status: PdpGoalStatus.NOT_STARTED,
         reviewDate,
         actions: [
@@ -299,10 +276,11 @@ describe('PdpGoalsRepository (integration)', () => {
         ],
       });
 
-      // Attacker tries to flip the goal to STARTED, overwrite reviewDate, and mutate the action.
-      const result = await repo.updateGoal(
-        'goal_victim2',
+      // Finalising `artefactId` must not be able to touch `otherArtefactId`'s goal.
+      const result = await repo.updateGoalForArtefact(
+        'goal_other_artefact',
         userId,
+        artefactId,
         { status: PdpGoalStatus.STARTED, reviewDate: new Date('2030-12-31') },
         [{ actionXid: 'act_1', status: PdpGoalStatus.STARTED }],
       );
@@ -310,10 +288,35 @@ describe('PdpGoalsRepository (integration)', () => {
       expect(isErr(result)).toBe(true);
       if (isErr(result)) expect(result.error.code).toBe('NOT_FOUND');
 
-      const victim = await model.findOne({ xid: 'goal_victim2' }).lean();
-      expect(victim!.status).toBe(PdpGoalStatus.NOT_STARTED);
-      expect(victim!.reviewDate!.toISOString()).toBe(reviewDate.toISOString());
-      expect(victim!.actions[0].status).toBe(PdpGoalStatus.NOT_STARTED);
+      // The other artefact's goal is untouched — status, reviewDate, and action.
+      const other = await model.findOne({ xid: 'goal_other_artefact' }).lean();
+      expect(other!.status).toBe(PdpGoalStatus.NOT_STARTED);
+      expect(other!.reviewDate!.toISOString()).toBe(reviewDate.toISOString());
+      expect(other!.actions[0].status).toBe(PdpGoalStatus.NOT_STARTED);
+    });
+
+    it('does not mutate a goal owned by another user even with a matching artefactId and returns NOT_FOUND', async () => {
+      const otherUserId = new Types.ObjectId();
+      await insertGoal(model, {
+        xid: 'goal_foreign_owner',
+        userId: otherUserId,
+        artefactId,
+        status: PdpGoalStatus.STARTED,
+      });
+
+      const result = await repo.updateGoalForArtefact(
+        'goal_foreign_owner',
+        userId,
+        artefactId,
+        { status: PdpGoalStatus.ARCHIVED },
+        undefined,
+      );
+
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) expect(result.error.code).toBe('NOT_FOUND');
+
+      const foreign = await model.findOne({ xid: 'goal_foreign_owner' }).lean();
+      expect(foreign!.status).toBe(PdpGoalStatus.STARTED);
     });
   });
 

@@ -110,9 +110,10 @@ export interface IPdpGoalsRepository {
     data: SaveGoalData
   ): Promise<Result<void, DBError>>;
 
-  updateGoal(
+  updateGoalForArtefact(
     goalXid: string,
     userId: Types.ObjectId,
+    artefactId: Types.ObjectId,
     data: UpdatePdpGoalData,
     actionUpdates?: UpdatePdpGoalActionData[],
     session?: ClientSession

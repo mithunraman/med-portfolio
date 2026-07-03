@@ -289,13 +289,20 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     }
   }
 
-  async updateGoal(
+  async updateGoalForArtefact(
     goalXid: string,
     userId: Types.ObjectId,
+    artefactId: Types.ObjectId,
     data: UpdatePdpGoalData,
     actionUpdates?: UpdatePdpGoalActionData[],
     session?: ClientSession
   ): Promise<Result<void, DBError>> {
+    // Ownership predicate at the persistence layer: every write is scoped by
+    // { xid, userId, artefactId } — the goal must belong to both this user and
+    // this artefact. A goal from another of the user's artefacts (or another
+    // user) → matchedCount === 0 → NOT_FOUND, so a finalise flow can only mutate
+    // its own goals. Mirrors saveGoal/anonymizeGoal.
+    const baseFilter = { xid: goalXid, userId, artefactId };
     try {
       const goalSetFields: Record<string, unknown> = {};
       if (data.status !== undefined) goalSetFields.status = data.status;
@@ -303,14 +310,10 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       if (data.completionReview !== undefined)
         goalSetFields.completionReview = data.completionReview;
 
-      // Ownership predicate at the persistence layer — every filter is scoped by
-      // userId so a caller can never mutate another user's goal, even if it
-      // forgets to pre-check. A non-matching filter (wrong/unknown user) yields
-      // matchedCount === 0 → NOT_FOUND. Mirrors saveGoal/anonymizeGoal.
       if (actionUpdates && actionUpdates.length > 0) {
         if (Object.keys(goalSetFields).length > 0) {
           const goalResult = await this.pdpGoalModel.updateOne(
-            { xid: goalXid, userId },
+            baseFilter,
             { $set: goalSetFields },
             { session }
           );
@@ -328,7 +331,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
 
         for (const [targetStatus, xids] of byStatus) {
           const actionResult = await this.pdpGoalModel.updateOne(
-            { xid: goalXid, userId },
+            baseFilter,
             { $set: { 'actions.$[elem].status': targetStatus } },
             { session, arrayFilters: [{ 'elem.xid': { $in: xids } }] }
           );
@@ -344,7 +347,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
 
         if (Object.keys(goalSetFields).length > 0) {
           const goalResult = await this.pdpGoalModel.updateOne(
-            { xid: goalXid, userId },
+            baseFilter,
             { $set: goalSetFields },
             { session }
           );

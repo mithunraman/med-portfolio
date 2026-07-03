@@ -30,4 +30,4 @@ IMPORTANT before release
 - Update privacy and terms of use to include oracle provider
 - update landing page
 - review deployment plan with another agent
--
+- database backups, read deploy.md

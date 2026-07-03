@@ -28,7 +28,7 @@ function makeOtpDoc(overrides: Record<string, unknown> = {}) {
 const mockOtpRepo = {
   create: jest.fn(),
   findLatestByEmail: jest.fn(),
-  incrementAttempts: jest.fn(),
+  claimVerificationAttempt: jest.fn(),
   deleteByEmail: jest.fn(),
   countRecentByEmail: jest.fn(),
 };
@@ -70,6 +70,9 @@ describe('OtpService', () => {
     mockEmailService.sendOtp.mockResolvedValue(undefined);
     mockOtpRepo.findLatestByEmail.mockResolvedValue(ok(null));
     mockOtpRepo.deleteByEmail.mockResolvedValue(ok(0));
+    // Default: an attempt slot is available (claim succeeds). Tests that need the
+    // cap-reached path override this with ok(null).
+    mockOtpRepo.claimVerificationAttempt.mockResolvedValue(ok(makeOtpDoc()));
     mockConfigService.get.mockImplementation((key: string, defaultValue?: unknown) => {
       const config: Record<string, unknown> = {
         'app.otp.expiryMinutes': 5,
@@ -206,19 +209,17 @@ describe('OtpService', () => {
       expect(expiresAt).toBeLessThanOrEqual(after + 5 * 60 * 1000 + 100);
     });
 
-    it('should delete old OTPs before creating new one', async () => {
+    it('does NOT delete old OTPs on send — that would wipe the rate-limit window', async () => {
       mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
       mockOtpRepo.findLatestByEmail.mockResolvedValue(ok(null));
-      mockOtpRepo.deleteByEmail.mockResolvedValue(ok(0));
       mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
 
       await service.sendOtp(TEST_EMAIL);
 
-      expect(mockOtpRepo.deleteByEmail).toHaveBeenCalledWith(TEST_EMAIL);
-      // deleteByEmail should be called before create
-      const deleteOrder = mockOtpRepo.deleteByEmail.mock.invocationCallOrder[0];
-      const createOrder = mockOtpRepo.create.mock.invocationCallOrder[0];
-      expect(deleteOrder).toBeLessThan(createOrder);
+      // Prior rows must survive so checkRateLimit can count real send volume;
+      // superseded codes are inert (verify picks the latest + rejects expired).
+      expect(mockOtpRepo.deleteByEmail).not.toHaveBeenCalled();
+      expect(mockOtpRepo.create).toHaveBeenCalled();
     });
 
     it('should carry over attempt count from existing unexpired OTP', async () => {
@@ -304,20 +305,21 @@ describe('OtpService', () => {
       await expect(service.verifyOtp(TEST_EMAIL, '123456')).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw BadRequestException when max attempts exceeded', async () => {
+    it('should throw BadRequestException when the attempt cap is reached (claim returns null)', async () => {
       mockOtpRepo.findLatestByEmail.mockResolvedValue(ok(makeOtpDoc({ attempts: 3 })));
+      mockOtpRepo.claimVerificationAttempt.mockResolvedValue(ok(null)); // no slot left
 
       await expect(service.verifyOtp(TEST_EMAIL, '123456')).rejects.toThrow(BadRequestException);
     });
 
-    it('should increment attempts on invalid code', async () => {
+    it('atomically claims an attempt (with maxAttempts) on invalid code', async () => {
       const otpDoc = makeOtpDoc();
       mockOtpRepo.findLatestByEmail.mockResolvedValue(ok(otpDoc));
-      mockOtpRepo.incrementAttempts.mockResolvedValue(ok({ ...otpDoc, attempts: 1 }));
+      mockOtpRepo.claimVerificationAttempt.mockResolvedValue(ok(otpDoc)); // slot claimed
 
       await expect(service.verifyOtp(TEST_EMAIL, '000000')).rejects.toThrow(BadRequestException);
 
-      expect(mockOtpRepo.incrementAttempts).toHaveBeenCalledWith(otpDoc._id.toString());
+      expect(mockOtpRepo.claimVerificationAttempt).toHaveBeenCalledWith(otpDoc._id.toString(), 3);
     });
 
     it('should delete all OTPs for email after successful verification', async () => {
@@ -351,7 +353,7 @@ describe('OtpService', () => {
     it('should record failure on invalid code', async () => {
       const otpDoc = makeOtpDoc();
       mockOtpRepo.findLatestByEmail.mockResolvedValue(ok(otpDoc));
-      mockOtpRepo.incrementAttempts.mockResolvedValue(ok({ ...otpDoc, attempts: 1 }));
+      mockOtpRepo.claimVerificationAttempt.mockResolvedValue(ok(otpDoc));
 
       await expect(service.verifyOtp(TEST_EMAIL, '000000')).rejects.toThrow(BadRequestException);
 
@@ -372,7 +374,7 @@ describe('OtpService', () => {
     it('should not delete OTPs on failed verification', async () => {
       const otpDoc = makeOtpDoc();
       mockOtpRepo.findLatestByEmail.mockResolvedValue(ok(otpDoc));
-      mockOtpRepo.incrementAttempts.mockResolvedValue(ok({ ...otpDoc, attempts: 1 }));
+      mockOtpRepo.claimVerificationAttempt.mockResolvedValue(ok(otpDoc));
 
       await expect(service.verifyOtp(TEST_EMAIL, '000000')).rejects.toThrow(BadRequestException);
 

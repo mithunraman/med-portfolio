@@ -28,7 +28,9 @@ export class OtpRepository implements IOtpRepository {
     try {
       const otp = await this.otpModel
         .findOne({ email: email.toLowerCase() })
-        .sort({ createdAt: -1 })
+        // _id tiebreak makes "latest" deterministic when two sends share a
+        // millisecond createdAt (rows now coexist since sendOtp stopped deleting).
+        .sort({ createdAt: -1, _id: -1 })
         .lean();
       return ok(otp);
     } catch (error) {
@@ -37,15 +39,25 @@ export class OtpRepository implements IOtpRepository {
     }
   }
 
-  async incrementAttempts(id: string): Promise<Result<Otp | null, DBError>> {
+  async claimVerificationAttempt(
+    id: string,
+    maxAttempts: number
+  ): Promise<Result<Otp | null, DBError>> {
     try {
+      // Atomic check-and-consume: only increment if still under the cap. Under
+      // concurrency at most maxAttempts requests match { attempts: { $lt } } and
+      // increment; the rest get null. Closes the read-then-$inc TOCTOU race.
       const otp = await this.otpModel
-        .findByIdAndUpdate(id, { $inc: { attempts: 1 } }, { new: true })
+        .findOneAndUpdate(
+          { _id: id, attempts: { $lt: maxAttempts } },
+          { $inc: { attempts: 1 } },
+          { new: true }
+        )
         .lean();
-      return ok(otp);
+      return ok(otp); // null → no slot available (cap reached or row gone)
     } catch (error) {
-      this.logger.error('Failed to increment OTP attempts', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to increment OTP attempts' });
+      this.logger.error('Failed to claim OTP attempt', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to verify OTP' });
     }
   }
 

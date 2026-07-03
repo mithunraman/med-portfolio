@@ -16,7 +16,7 @@ export interface IOtpRepository {
 
   findLatestByEmail(email: string): Promise<Result<Otp | null, DBError>>;
 
-  incrementAttempts(id: string): Promise<Result<Otp | null, DBError>>;
+  claimVerificationAttempt(id: string, maxAttempts: number): Promise<Result<Otp | null, DBError>>;
 
   deleteByEmail(email: string): Promise<Result<number, DBError>>;
 

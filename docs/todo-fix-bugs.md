@@ -2026,7 +2026,23 @@ holds.
 > **item 47** (in-process lockout/throttle not shared across instances), **item 49** (redundant
 > `Otp.email` single-field index — folded in below as item 54).
 
-## 51. [Medium] Per-email OTP send rate-limit is silently defeated by `deleteByEmail` on every send
+## 51. [Medium] ✅ DONE — Per-email OTP send rate-limit is silently defeated by `deleteByEmail` on every send
+
+> **Resolved (2026-07-03):** Removed the `deleteByEmail` call from `sendOtp` (kept it on
+> verify-success) so prior rows survive and `countRecentByEmail` reflects real send volume — the
+> "3 sends / 10 min / email" cap now fires. To honour the full window, moved the OTP TTL from
+> `expiresAt` (5m) to `createdAt + OTP_RETENTION_SECONDS` (60m, ≥ the max configurable window);
+> code *validity* is still enforced by the `expiresAt` check in `verifyOtp`, and lingering
+> superseded/expired rows remain inert (verify selects the latest + rejects expired). New
+> `otp.service.integration.spec.ts` (real Mongo): 4th send blocked, out-of-window rows not counted,
+> latest-code-wins preserved, attempt carry-over intact, single `createdAt` TTL (no `expiresAt` TTL).
+> Unit spec updated (send no longer deletes). Auth unit+integration (109) green.
+>
+> **Deploy note:** `autoIndex` creates the new `createdAt` TTL but does **not** drop the old
+> `expiresAt` TTL — drop the `otps` collection/indexes in any existing dev DB so rows aren't reaped
+> at 5m (greenfield: no prod data).
+
+**Files:**
 
 **Files:**
 - `apps/api/src/otp/otp.service.ts` (`sendOtp` — `checkRateLimit` L59 + `deleteByEmail` L72)
@@ -2052,7 +2068,21 @@ TTL/Redis counter keyed by email. Confirm carry-over-attempts still reads the la
 **Tests:** 4 sends to the same email within 10 min → the 4th returns the rate-limit error; verify
 still accepts only the latest code after multiple sends.
 
-## 52. [Low-Medium] Attempt cap is non-atomic (read-then-`$inc`) — concurrent verifies bypass `maxAttempts`
+## 52. [Low-Medium] ✅ DONE — Attempt cap is non-atomic (read-then-`$inc`) — concurrent verifies bypass `maxAttempts`
+
+> **Resolved (2026-07-03):** Replaced the read-then-`$inc` with an atomic claim. New repo method
+> `claimVerificationAttempt(id, maxAttempts)` = `findOneAndUpdate({ _id, attempts: { $lt: max } },
+> { $inc: { attempts: 1 } })`, so check-and-consume is one indivisible op — N concurrent verifies
+> claim at most `maxAttempts` slots; the rest get `null` → rejected (holds across instances, since
+> the DB is the serialization point). `verifyOtp` restructured to **claim-then-compare**: read latest
+> (for no-row/expired messaging + `_id`), atomically claim on that `_id`, then compare — the claim
+> targets the latest row's `_id` (not a sort+filter) to preserve latest-code-only semantics. Removed
+> the now-dead `incrementAttempts`. All messages/behaviour preserved (incl. correct code rejected once
+> cap reached). Integration test fires 8 concurrent wrong verifies → `attempts` lands at exactly 3
+> (3× "Invalid OTP code" + 5× "Too many failed attempts"), demonstrably red pre-fix (would be 8).
+> OTP unit (26) + integration (10) + auth unit (54) + auth integration (55) green.
+
+**Files:**
 
 **Files:**
 - `apps/api/src/otp/otp.service.ts` (`verifyOtp` — cap read L118, increment L123)

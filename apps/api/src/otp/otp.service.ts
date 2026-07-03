@@ -68,9 +68,11 @@ export class OtpService {
       }
     }
 
-    // Delete old OTPs before creating the new one — ensures only one valid code
-    await this.otpRepo.deleteByEmail(normalizedEmail);
-
+    // Note: old OTPs are intentionally NOT deleted here. verifyOtp only ever
+    // accepts the latest code (findLatestByEmail) and rejects expired ones, so
+    // superseded rows are inert; they linger only until the createdAt TTL reaps
+    // them. Deleting them here would wipe the per-email send-rate-limit window
+    // (checkRateLimit counts recent rows), silently disabling the cap.
     const useTestOtp = this.isTestEmail(normalizedEmail);
     const code = useTestOtp ? TEST_OTP_CODE : this.generateCode();
     const codeHash = this.hashCode(code);
@@ -115,12 +117,23 @@ export class OtpService {
       throw new BadRequestException('No OTP found for this email. Please request a new one.');
     if (otp.expiresAt < new Date())
       throw new BadRequestException('OTP has expired. Please request a new one.');
-    if (otp.attempts >= this.maxAttempts)
+
+    // Atomically reserve one of the maxAttempts slots on this (latest) code before
+    // comparing it. Claim-then-compare makes the cap race-safe: N concurrent
+    // verifies can claim at most maxAttempts slots; the rest get null → rejected.
+    const claim = await this.otpRepo.claimVerificationAttempt(
+      otp._id.toString(),
+      this.maxAttempts
+    );
+    if (isErr(claim)) {
+      throw new InternalServerErrorException('Failed to verify OTP');
+    }
+    if (!claim.value)
       throw new BadRequestException('Too many failed attempts. Please request a new OTP.');
 
     if (!this.verifyCode(code, otp.codeHash)) {
+      // Attempt already consumed atomically by the claim above.
       this.emailLockout.recordFailure(normalizedEmail);
-      await this.otpRepo.incrementAttempts(otp._id.toString());
       throw new BadRequestException('Invalid OTP code.');
     }
 

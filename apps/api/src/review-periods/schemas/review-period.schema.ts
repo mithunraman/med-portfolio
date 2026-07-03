@@ -10,10 +10,11 @@ import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
 export class ReviewPeriod {
   _id!: Types.ObjectId;
 
-  @Prop({ required: true, unique: true, index: true, default: () => nanoidAlphanumeric() })
+  @Prop({ required: true, unique: true, default: () => nanoidAlphanumeric() })
   xid!: string;
 
-  @Prop({ required: true, type: Types.ObjectId, index: true })
+  // No standalone index: userId queries are served by the { userId: 1, status: 1 } compound prefix.
+  @Prop({ required: true, type: Types.ObjectId })
   userId!: Types.ObjectId;
 
   @Prop({ required: true, type: String, maxlength: 100 })

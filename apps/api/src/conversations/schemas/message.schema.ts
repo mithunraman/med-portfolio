@@ -26,10 +26,11 @@ export class TranscriptionMetadata {
 export class Message {
   _id!: Types.ObjectId;
 
-  @Prop({ required: true, unique: true, index: true, default: () => nanoidAlphanumeric() })
+  @Prop({ required: true, unique: true, default: () => nanoidAlphanumeric() })
   xid!: string;
 
-  @Prop({ required: true, type: Types.ObjectId, ref: Conversation.name, index: true })
+  // No standalone index: conversation queries are served by the { conversation: 1, _id: -1 } compound prefix.
+  @Prop({ required: true, type: Types.ObjectId, ref: Conversation.name })
   conversation!: Types.ObjectId;
 
   @Prop({ required: true, type: Types.ObjectId })

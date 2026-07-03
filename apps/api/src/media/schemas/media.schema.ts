@@ -9,10 +9,11 @@ import { Document, Types } from 'mongoose';
 export class Media {
   _id!: Types.ObjectId;
 
-  @Prop({ required: true, unique: true, index: true, type: String })
+  @Prop({ required: true, unique: true, type: String })
   xid!: string;
 
-  @Prop({ required: true, type: Types.ObjectId, index: true })
+  // No standalone index: userId queries are served by the { userId: 1, status: 1 } compound prefix.
+  @Prop({ required: true, type: Types.ObjectId })
   userId!: Types.ObjectId;
 
   // S3 location
@@ -63,8 +64,12 @@ export const MediaSchema = SchemaFactory.createForClass(Media);
 
 // Indexes
 MediaSchema.index({ userId: 1, status: 1 });
-// Supports the sweeper's status-only scan of PENDING_DELETE rows.
-MediaSchema.index({ status: 1 });
+// Sweeper hot path: findPendingDeleteBatch seeks PENDING_DELETE rows below the
+// dead-letter threshold; countDeadLettered counts those at/above it. Bounding
+// deleteAttempts in the index (not as a residual filter) stops every poll from
+// re-scanning the permanent dead-letter backlog. Its { status: 1 } prefix also
+// serves any status-only scan, so no separate single-field status index is needed.
+MediaSchema.index({ status: 1, deleteAttempts: 1 });
 // Cascade hot path: markPendingDeleteByMessageIds filters
 // { refDocumentId: { $in }, refCollection, status }. refDocumentId leads
 // (most selective); refCollection + status served from the index.

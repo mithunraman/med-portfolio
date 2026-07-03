@@ -10,13 +10,15 @@ import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
 export class Conversation {
   _id!: Types.ObjectId;
 
-  @Prop({ required: true, unique: true, index: true, default: () => nanoidAlphanumeric() })
+  @Prop({ required: true, unique: true, default: () => nanoidAlphanumeric() })
   xid!: string;
 
-  @Prop({ required: true, type: Types.ObjectId, index: true })
+  // No standalone index: userId queries are served by the { userId: 1, _id: -1 } compound prefix.
+  @Prop({ required: true, type: Types.ObjectId })
   userId!: Types.ObjectId;
 
-  @Prop({ required: true, type: Types.ObjectId, ref: 'Artefact', index: true })
+  // No standalone index: artefact queries are served by the { artefact: 1, status: 1 } compound prefix.
+  @Prop({ required: true, type: Types.ObjectId, ref: 'Artefact' })
   artefact!: Types.ObjectId;
 
   @Prop({ required: true, maxlength: 200 })

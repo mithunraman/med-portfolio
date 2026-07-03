@@ -21,7 +21,7 @@ export const AcknowledgementEntrySchema = SchemaFactory.createForClass(Acknowled
 export class Acknowledgement {
   _id!: Types.ObjectId;
 
-  @Prop({ required: true, unique: true, index: true, default: () => nanoidAlphanumeric() })
+  @Prop({ required: true, unique: true, default: () => nanoidAlphanumeric() })
   xid!: string;
 
   @Prop({ required: true, type: Types.ObjectId })

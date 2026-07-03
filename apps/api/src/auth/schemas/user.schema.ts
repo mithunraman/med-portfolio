@@ -12,7 +12,7 @@ export class User {
   @Prop({ required: true })
   name!: string;
 
-  @Prop({ required: true, unique: true, index: true })
+  @Prop({ required: true, unique: true })
   email!: string;
 
   @Prop({ required: true, type: Number, default: UserRole.USER })
@@ -41,5 +41,5 @@ export type UserDocument = User & Document;
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
-// Indexes (email unique index is created by @Prop({ unique: true, index: true }))
+// Indexes (email unique index is created by @Prop({ unique: true }))
 UserSchema.index({ deletionScheduledFor: 1 }, { sparse: true });

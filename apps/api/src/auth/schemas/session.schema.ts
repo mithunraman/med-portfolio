@@ -10,7 +10,7 @@ import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
 export class Session {
   _id!: Types.ObjectId;
 
-  @Prop({ required: true, unique: true, index: true, default: () => nanoidAlphanumeric() })
+  @Prop({ required: true, unique: true, default: () => nanoidAlphanumeric() })
   xid!: string;
 
   @Prop({ required: true, type: Types.ObjectId })
@@ -22,10 +22,10 @@ export class Session {
   @Prop({ required: true })
   deviceName!: string;
 
-  @Prop({ required: true, unique: true, index: true })
+  @Prop({ required: true, unique: true })
   refreshTokenHash!: string;
 
-  @Prop({ required: true, index: true })
+  @Prop({ required: true })
   refreshTokenFamily!: string;
 
   @Prop({ type: [String], default: [] })

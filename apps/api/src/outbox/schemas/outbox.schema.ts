@@ -43,11 +43,10 @@ export const OutboxEntrySchema = SchemaFactory.createForClass(OutboxEntry);
 // Consumer query: find pending jobs ready to process
 OutboxEntrySchema.index({ status: 1, processAfter: 1 });
 
-// Filter by job type
-OutboxEntrySchema.index({ type: 1, status: 1 });
-
 // Cascade hot paths: cancelByConversationIds and hasPendingByConversationId
-// filter on payload.conversationId + status.
+// filter on payload.conversationId + status. hasPendingByConversationId also
+// filters `type`, but that leads with the far-more-selective conversationId
+// equality — so no `type`-leading index is needed.
 OutboxEntrySchema.index({ 'payload.conversationId': 1, status: 1 });
 
 // Cascade hot path: cancelByUser's $or branch on payload.userId + status.

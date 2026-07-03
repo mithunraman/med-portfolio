@@ -39,7 +39,7 @@ export class AnalysisRunError {
 export class AnalysisRun {
   _id!: Types.ObjectId;
 
-  @Prop({ required: true, unique: true, index: true, default: () => nanoidAlphanumeric() })
+  @Prop({ required: true, unique: true, default: () => nanoidAlphanumeric() })
   xid!: string;
 
   @Prop({ required: true, type: Types.ObjectId, ref: Conversation.name })

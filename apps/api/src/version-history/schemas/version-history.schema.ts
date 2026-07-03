@@ -9,7 +9,7 @@ import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
 export class VersionHistory {
   _id!: Types.ObjectId;
 
-  @Prop({ required: true, unique: true, index: true, default: () => nanoidAlphanumeric() })
+  @Prop({ required: true, unique: true, default: () => nanoidAlphanumeric() })
   xid!: string;
 
   @Prop({ required: true })
@@ -39,3 +39,6 @@ export type VersionHistoryDocument = VersionHistory & Document;
 export const VersionHistorySchema = SchemaFactory.createForClass(VersionHistory);
 
 VersionHistorySchema.index({ entityType: 1, entityId: 1, version: -1 });
+// Serves deleteByUserId (account erasure). Without it the deleteMany full-scans
+// this large, append-heavy collection — no other method filters by userId alone.
+VersionHistorySchema.index({ userId: 1 });

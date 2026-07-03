@@ -9,7 +9,7 @@ import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
 })
 export class Notice {
   _id!: Types.ObjectId;
-  @Prop({ required: true, unique: true, index: true, default: () => nanoidAlphanumeric() })
+  @Prop({ required: true, unique: true, default: () => nanoidAlphanumeric() })
   xid!: string;
 
   @Prop({ required: true, type: String, enum: Object.values(NoticeType) })

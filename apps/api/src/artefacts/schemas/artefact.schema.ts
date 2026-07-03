@@ -94,7 +94,7 @@ export class Note {
 export class Artefact {
   _id!: Types.ObjectId;
 
-  @Prop({ required: true, unique: true, index: true, default: () => nanoidAlphanumeric() })
+  @Prop({ required: true, unique: true, default: () => nanoidAlphanumeric() })
   xid!: string;
 
   @Prop({ required: true, unique: true })
@@ -163,6 +163,13 @@ export type ArtefactDocument = Artefact & Document;
 export const ArtefactSchema = SchemaFactory.createForClass(Artefact);
 
 // Indexes (artefactId unique index is created by @Prop({ unique: true }))
-ArtefactSchema.index({ userId: 1, status: 1 });
-ArtefactSchema.index({ userId: 1, createdAt: -1 });
-ArtefactSchema.index({ userId: 1, status: 1, completedAt: 1 });
+// Serves status-filtered listArtefacts keyset pagination (userId+status eq bounds,
+// then _id:-1 for both sort order and the _id<cursor range — examines ~limit docs
+// per page, no residual over-scan). Its { userId, status } prefix also covers
+// countByUser's status branch and markDeletedByUserId, so no separate
+// { userId, status } index is needed.
+ArtefactSchema.index({ userId: 1, status: 1, _id: -1 });
+// Serves the default (no-status) listArtefacts: userId scope + _id-desc sort +
+// _id-range cursor. Needed separately because that path filters status as a range
+// ($ne DELETED), which the compound above can't stream _id-sorted across.
+ArtefactSchema.index({ userId: 1, _id: -1 });

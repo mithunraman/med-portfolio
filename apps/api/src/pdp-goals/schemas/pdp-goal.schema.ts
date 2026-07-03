@@ -31,13 +31,13 @@ export class PdpGoalAction {
 export class PdpGoal {
   _id!: Types.ObjectId;
 
-  @Prop({ required: true, unique: true, index: true })
+  @Prop({ required: true, unique: true })
   xid!: string;
 
   @Prop({ required: true })
   goal!: string;
 
-  @Prop({ required: true, type: Types.ObjectId, index: true })
+  @Prop({ required: true, type: Types.ObjectId })
   userId!: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, default: null })

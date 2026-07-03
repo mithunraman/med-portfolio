@@ -167,3 +167,50 @@ describe('Guest flows', () => {
       .expect(400);
   });
 });
+
+// Item 45: POST /auth/guest must be rate-limited per-IP so it can't be scripted
+// into unbounded account/session creation. Uses its own harness so the in-memory
+// throttler counter starts fresh (throttler state is not reset by collection
+// cleanup, and other guest tests would otherwise consume the per-IP budget).
+describe('Guest registration throttle (item 45)', () => {
+  let harness: AuthTestHarness;
+
+  beforeAll(async () => {
+    harness = await createAuthHarness();
+  });
+
+  afterAll(async () => {
+    await destroyAuthHarness(harness);
+  });
+
+  // ── I-GU-06 ──
+  it('bounds guest registration to 5/min per IP — the 6th rapid call is 429', async () => {
+    const server = harness.app.getHttpServer();
+
+    // First 5 within the window succeed and mint a guest each.
+    for (let i = 0; i < 5; i++) {
+      await request(server).post('/api/auth/guest').set(DEVICE_HEADERS).send({}).expect(201);
+    }
+
+    // 6th within the same 60s window is throttled.
+    await request(server).post('/api/auth/guest').set(DEVICE_HEADERS).send({}).expect(429);
+  });
+
+  // ── I-GU-07 ──
+  it('a single guest registration still succeeds with a valid token payload', async () => {
+    const fresh = await createAuthHarness();
+    try {
+      const res = await request(fresh.app.getHttpServer())
+        .post('/api/auth/guest')
+        .set(DEVICE_HEADERS)
+        .send({})
+        .expect(201);
+
+      expect(res.body.accessToken).toBeDefined();
+      expect(res.body.refreshToken).toBeDefined();
+      expect(res.body.user.role).toBe(UserRole.USER_GUEST);
+    } finally {
+      await destroyAuthHarness(fresh);
+    }
+  });
+});

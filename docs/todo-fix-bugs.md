@@ -1283,7 +1283,12 @@ transitions. Confirm the intended lifecycle first.
 
 **Tests:** `PATCH status:DELETED` is rejected (400) or scrubs content; illegal transitions rejected.
 
-## 31. [Low] Redundant index declarations on `PdpGoal` (supersedes item 16)
+## 31. [Low] ✅ DONE — Redundant index declarations on `PdpGoal` (supersedes item 16)
+
+> **Resolved (2026-07-03):** Dropped the duplicate `index: true` on the `unique` `xid` prop and the
+> redundant single-field `userId` index (it's the leading prefix of the
+> `{ userId, status, sortDate, _id }` compound, which already serves every userId-only/prefixed
+> query). Net 6 → 4 indexes; kept `xid` unique, the keyset compound, and `{ artefactId }`.
 
 **Files:**
 - `apps/api/src/pdp-goals/schemas/pdp-goal.schema.ts` (`xid` L33, `userId` L39, compound L69)
@@ -1811,7 +1816,36 @@ refresh tokens & OTP codes with timing-safe compare, layered OTP brute-force def
 owner-scoped session revocation, TTL cleanup. Authn/authz are cleanly separated; no IDOR/BOLA or
 injection surface. One Medium to fix before launch; the rest is Low.
 
-## 45. [Medium] `POST /auth/guest` is unauthenticated **and** unthrottled — unbounded account/session creation
+## 45. [Medium] ✅ DONE — `POST /auth/guest` is unauthenticated **and** unthrottled — unbounded account/session creation
+
+**Resolution (2026-07-03):** Added `@Throttle({ short: { limit: 5, ttl: 60_000 }, medium: { limit: 5, ttl: 60_000 } })`
+to `registerGuest` → 5 guest registrations / minute / IP. Covered by
+`guest-flows.integration.spec.ts` I-GU-06 (6th call → 429) and I-GU-07 (happy path preserved).
+
+**Correction to the premise + broader finding (needs a follow-up item):** the route was not
+*fully* unthrottled — but not for the reason assumed. On `@nestjs/throttler` v6.5 the guard resolves
+per-route overrides **by configured throttler name** (`THROTTLER_LIMIT + namedThrottler.name`), and the
+app registers **named** throttlers (`short`, `medium`). The decorators, however, write metadata under
+the key **`default`** (`@SkipThrottle()` defaults to `{ default: true }`; every `@Throttle({ default: … })`).
+Since no throttler named `default` exists, **the class-level `@SkipThrottle()` and every
+`@Throttle({ default })` in `auth.controller.ts` are silently no-ops** — those routes fall back to the
+**global** `short` (20/10s) + `medium` (60/60s) limits, not their intended per-route values
+(`otp/send` 10/60s, `otp/verify` 10/60s, `refresh` 30/60s). So `otp/*` and `refresh` are currently
+**looser** than intended, and the "skip everything then re-arm a few" design never actually skipped.
+The item-45 fix sidesteps this by keying on the real throttler names.
+
+**Follow-up RESOLVED (2026-07-03):** re-keyed the whole surface. Added a third `long` tier
+(`config/rate-limit.config.ts`: short 50/10s, medium 200/60s, long 2000/hr) and two name-aware
+decorators (`common/throttler/throttler.decorators.ts`): `@RateLimit({ limit, ttl })` and
+`@SkipAllThrottles()`, both derived from `THROTTLER_NAMES` so the `default`-key footgun cannot recur.
+Dropped the class-level `@SkipThrottle()` on `AuthController` (global tiers now apply as a baseline);
+converted `otp/send` (5/10min), `otp/verify` (10/10min), `refresh` (30/min), `guest` (5/min) to
+`@RateLimit`; fixed `HealthController` to `@SkipAllThrottles()` (probes were being throttled).
+Coverage: `auth/__tests__/throttling.integration.spec.ts` (per-route 429 boundaries + exemption).
+See the original text below.
+
+---
+
 
 **Files:**
 - `apps/api/src/auth/auth.controller.ts` (`registerGuest`, L104-108; class-level `@SkipThrottle()` L26)

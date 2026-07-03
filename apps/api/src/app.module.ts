@@ -43,7 +43,7 @@ import { VersionPolicyModule } from './version-policy';
     MetricsModule,
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot({ throttlers: [rateLimitConfig.short, rateLimitConfig.medium] }),
+    ThrottlerModule.forRoot({ throttlers: Object.values(rateLimitConfig) }),
     LoggerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({

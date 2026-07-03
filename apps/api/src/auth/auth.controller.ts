@@ -16,21 +16,22 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { DeviceInfo, DeviceInfoHeaders } from '../common/decorators/device-info.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { RateLimit } from '../common/throttler/throttler.decorators';
 import { AuthService } from './auth.service';
 import { OtpClaimDto, OtpSendDto, OtpVerifyDto, RefreshTokenDto, UpdateProfileDto } from './dto';
 
-@SkipThrottle()
+// No class-level @SkipThrottle: every route inherits the global tiers as a
+// baseline; sensitive routes tighten further with @RateLimit below.
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
   @Post('otp/send')
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @RateLimit({ limit: 10, ttl: 600_000 })
   @HttpCode(HttpStatus.OK)
   async otpSend(@Body() dto: OtpSendDto): Promise<OtpSendResponse> {
     return this.authService.otpSend(dto.email);
@@ -38,7 +39,7 @@ export class AuthController {
 
   @Public()
   @Post('otp/verify')
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @RateLimit({ limit: 10, ttl: 600_000 })
   @HttpCode(HttpStatus.OK)
   async otpVerify(
     @Body() dto: OtpVerifyDto,
@@ -66,7 +67,7 @@ export class AuthController {
 
   @Public()
   @Post('refresh')
-  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @RateLimit({ limit: 30, ttl: 60_000 })
   @HttpCode(HttpStatus.OK)
   async refresh(
     @Body() dto: RefreshTokenDto,
@@ -103,6 +104,10 @@ export class AuthController {
 
   @Public()
   @Post('guest')
+  // Guest registration is unauthenticated and mints a user + session per call,
+  // so bound it per-IP to stop it being scripted into unbounded account/session
+  // creation (item 45).
+  @RateLimit({ limit: 5, ttl: 60_000 })
   async registerGuest(@DeviceInfoHeaders() device: DeviceInfo): Promise<LoginResponse> {
     return this.authService.registerGuest(device);
   }

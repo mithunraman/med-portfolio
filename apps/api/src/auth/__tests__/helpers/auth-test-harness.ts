@@ -4,7 +4,13 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { MongooseModule, getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import { PassportModule } from '@nestjs/passport';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import {
+  ThrottlerGuard,
+  ThrottlerModule,
+  ThrottlerStorage,
+  ThrottlerStorageService,
+} from '@nestjs/throttler';
+import { rateLimitConfig } from '../../../config/rate-limit.config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Connection, Model } from 'mongoose';
@@ -96,6 +102,7 @@ export interface AuthTestHarness {
   userModel: Model<UserDocument>;
   sessionModel: Model<SessionDocument>;
   emailService: MockEmailService;
+  throttlerStorage: ThrottlerStorageService;
   jwtSecret: string;
 }
 
@@ -123,9 +130,9 @@ export async function createAuthHarness(): Promise<AuthTestHarness> {
           signOptions: { expiresIn: cfg.get<string>('app.jwt.accessExpiresIn') },
         }),
       }),
-      ThrottlerModule.forRoot({
-        throttlers: [{ name: 'short', ttl: 10_000, limit: 20 }],
-      }),
+      // Mirror production: register all configured tiers so tests exercise the
+      // real limits (and per-route @RateLimit overrides bind identically).
+      ThrottlerModule.forRoot({ throttlers: Object.values(rateLimitConfig) }),
       EmailModule,
       OtpModule,
     ],
@@ -154,6 +161,7 @@ export async function createAuthHarness(): Promise<AuthTestHarness> {
   const connection = module.get<Connection>(getConnectionToken());
   const userModel = module.get<Model<UserDocument>>(getModelToken(User.name));
   const sessionModel = module.get<Model<SessionDocument>>(getModelToken(Session.name));
+  const throttlerStorage = module.get<ThrottlerStorageService>(ThrottlerStorage);
 
   return {
     app,
@@ -163,6 +171,7 @@ export async function createAuthHarness(): Promise<AuthTestHarness> {
     userModel,
     sessionModel,
     emailService,
+    throttlerStorage,
     jwtSecret: TEST_JWT_SECRET,
   };
 }
@@ -177,6 +186,22 @@ export async function cleanupAuthCollections(harness: AuthTestHarness): Promise<
   await harness.sessionModel.deleteMany({});
   const otpModel = harness.connection.collection('otps');
   await otpModel.deleteMany({});
+  // Throttler counters are in-memory and NOT cleared by collection cleanup;
+  // reset them so per-route limits (e.g. otp/send 5/10min) don't bleed across
+  // tests that share a harness.
+  resetThrottler(harness);
+}
+
+/** Clears all in-memory rate-limit counters. Call between tests that hit throttled routes. */
+export function resetThrottler(harness: AuthTestHarness): void {
+  // Cancel pending expiry timers BEFORE clearing storage. Each throttled hit
+  // schedules a setTimeout (kept in the service's private timeoutIds) that later
+  // does `storage.get(key)` to decrement the counter. If we only clear storage,
+  // a stale timer fires against a missing key → TypeError (or decrements a
+  // recreated counter → flaky under-count). onApplicationShutdown() is the
+  // service's own timer-cancellation path.
+  harness.throttlerStorage.onApplicationShutdown();
+  harness.throttlerStorage.storage.clear();
 }
 
 /**

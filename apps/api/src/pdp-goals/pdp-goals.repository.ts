@@ -5,6 +5,7 @@ import { ClientSession, Model, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { DBError, Result, err, ok } from '../common/utils/result.util';
 import { buildPdpGoalCursor, parsePdpGoalCursor } from './cursor.util';
+import { toSortDate } from './pdp-goal.constants';
 import {
   CreatePdpGoalData,
   FindByUserOptions,
@@ -48,9 +49,6 @@ const ARTEFACT_LOOKUP_PIPELINE = [
   {
     $addFields: {
       _artefactDoc: { $arrayElemAt: ['$_artefact', 0] },
-      _sortDate: {
-        $cond: [{ $eq: ['$reviewDate', null] }, new Date('9999-12-31'), '$reviewDate'],
-      },
     },
   },
   { $project: { _artefact: 0 } },
@@ -166,12 +164,14 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     try {
       const filter: Record<string, unknown> = { userId, status: { $in: statuses } };
       if (options?.dueBefore) {
-        filter.reviewDate = { $ne: null, $lte: options.dueBefore };
+        // sortDate is never null (unscheduled goals carry the far-future sentinel),
+        // so { $lte } alone excludes them — no explicit $ne: null needed.
+        filter.sortDate = { $lte: options.dueBefore };
       }
 
       let query = this.pdpGoalModel
         .find(filter)
-        .sort(options?.sortByReviewDate ? { reviewDate: 1, createdAt: 1 } : { createdAt: -1 })
+        .sort(options?.sortByReviewDate ? { sortDate: 1, _id: 1 } : { createdAt: -1 })
         .lean();
 
       if (options?.limit) {
@@ -198,15 +198,15 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       if (cursor) {
         const { sortDate, id } = parsePdpGoalCursor(cursor);
         filter.$or = [
-          { reviewDate: { $gt: sortDate } },
-          { reviewDate: sortDate, _id: { $gt: id } },
+          { sortDate: { $gt: sortDate } },
+          { sortDate, _id: { $gt: id } },
         ];
       }
 
       const fetchLimit = limit + 1;
       const goals = await this.pdpGoalModel
         .find(filter)
-        .sort({ reviewDate: 1, _id: 1 })
+        .sort({ sortDate: 1, _id: 1 })
         .limit(fetchLimit)
         .lean();
 
@@ -232,7 +232,6 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       const results = await this.pdpGoalModel.aggregate([
         { $match: { xid: goalXid, userId } },
         ...ARTEFACT_LOOKUP_PIPELINE,
-        { $project: { _sortDate: 0 } },
         { $limit: 1 },
       ]);
 
@@ -259,6 +258,21 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     }
   }
 
+  /**
+   * Apply a reviewDate to a `$set`, keeping the derived `sortDate` keyset-pagination
+   * key in lockstep (sortDate = reviewDate ?? sentinel). Every write path that can
+   * change reviewDate must go through this so the invariant can't drift.
+   */
+  private setReviewDate(
+    setFields: Record<string, unknown>,
+    data: { reviewDate?: Date | null }
+  ): void {
+    if (data.reviewDate !== undefined) {
+      setFields.reviewDate = data.reviewDate;
+      setFields.sortDate = toSortDate(data.reviewDate);
+    }
+  }
+
   async saveGoal(
     xid: string,
     userId: Types.ObjectId,
@@ -267,7 +281,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     try {
       const setFields: Record<string, unknown> = {};
       if (data.status !== undefined) setFields.status = data.status;
-      if (data.reviewDate !== undefined) setFields.reviewDate = data.reviewDate;
+      this.setReviewDate(setFields, data);
       if (data.completedAt !== undefined) setFields.completedAt = data.completedAt;
       if (data.completionReview !== undefined) setFields.completionReview = data.completionReview;
       if (data.actions !== undefined) setFields.actions = data.actions;
@@ -306,7 +320,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     try {
       const goalSetFields: Record<string, unknown> = {};
       if (data.status !== undefined) goalSetFields.status = data.status;
-      if (data.reviewDate !== undefined) goalSetFields.reviewDate = data.reviewDate;
+      this.setReviewDate(goalSetFields, data);
       if (data.completionReview !== undefined)
         goalSetFields.completionReview = data.completionReview;
 
@@ -376,9 +390,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
         setFields.status = data.status;
         setFields['actions.$[].status'] = data.status;
       }
-      if (data.reviewDate !== undefined) {
-        setFields.reviewDate = data.reviewDate;
-      }
+      this.setReviewDate(setFields, data);
 
       if (Object.keys(setFields).length > 0) {
         await this.pdpGoalModel.updateMany(

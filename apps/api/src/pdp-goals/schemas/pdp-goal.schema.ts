@@ -1,6 +1,7 @@
 import { PdpGoalStatus } from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { PDP_GOAL_SORT_SENTINEL } from '../pdp-goal.constants';
 
 // Embedded action subdocument
 export class PdpGoalAction {
@@ -48,6 +49,11 @@ export class PdpGoal {
   @Prop({ type: Date, default: null })
   reviewDate!: Date | null;
 
+  // Internal, non-null keyset-pagination sort key: reviewDate ?? SENTINEL.
+  // Maintained by the repository on every reviewDate write; never surfaced in DTOs.
+  @Prop({ required: true, type: Date, default: PDP_GOAL_SORT_SENTINEL })
+  sortDate!: Date;
+
   @Prop({ type: Date, default: null })
   completedAt!: Date | null;
 
@@ -66,5 +72,7 @@ export type PdpGoalDocument = PdpGoal & Document;
 export const PdpGoalSchema = SchemaFactory.createForClass(PdpGoal);
 
 // Compound indexes
-PdpGoalSchema.index({ userId: 1, status: 1, reviewDate: 1 });
+// Keyset pagination + dashboard "due soon" both filter { userId, status } and
+// sort/seek on sortDate with an _id tiebreak — this index backs both (item 29).
+PdpGoalSchema.index({ userId: 1, status: 1, sortDate: 1, _id: 1 });
 PdpGoalSchema.index({ artefactId: 1 });

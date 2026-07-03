@@ -30,11 +30,10 @@ export function parsePdpGoalCursor(raw: string): PdpGoalCursor {
 }
 
 /**
- * Build a cursor string from a goal document.
+ * Build a cursor string from a goal document. Keyed on `sortDate`, which the
+ * repository guarantees is always a Date (reviewDate ?? sentinel), so this never
+ * throws — even for goals with no scheduled review.
  */
 export function buildPdpGoalCursor(goal: PdpGoal): string {
-  if (!(goal.reviewDate instanceof Date)) {
-    throw new Error(`Cannot build cursor: goal ${goal.xid} has no reviewDate`);
-  }
-  return `${goal.reviewDate.toISOString()}__${goal._id.toString()}`;
+  return `${goal.sortDate.toISOString()}__${goal._id.toString()}`;
 }

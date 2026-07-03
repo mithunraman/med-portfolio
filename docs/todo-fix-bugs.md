@@ -1194,7 +1194,21 @@ a **Medium reliability bug** in pagination, plus a paired index tweak and Low cl
 > These items **supersede the placeholder item 16** (raised during the dashboard review) — the
 > redundant-index analysis is now folded into item 31 below.
 
-## 28. [Medium] `findPaginated` throws a 500 when a page-boundary goal has a null `reviewDate`
+## 28. [Medium] ✅ DONE — `findPaginated` throws a 500 when a page-boundary goal has a null `reviewDate`
+
+> **Resolved (2026-07-03, incl. item 29):** Introduced a repository-owned, never-null `sortDate`
+> (`reviewDate ?? PDP_GOAL_SORT_SENTINEL`, sentinel `9999-12-31`) maintained on every `reviewDate`
+> write (`saveGoal`, `updateGoalForArtefact`; `create` via schema default). `findPaginated` now
+> sorts/seeks and builds its cursor on `sortDate`, so unscheduled goals sort **last**, the cursor
+> never throws, and the null region is fully traversable. `reviewDate` stays `Date | null` and is
+> returned honestly — the sentinel never leaves the repo. Index replaced with
+> `{ userId, status, sortDate, _id }` (item 29); `findByUserId`/dashboard "due soon" migrated to
+> `sortDate` (dropped the now-dead `$ne: null`) so one index backs both; removed the redundant
+> `_sortDate` aggregation compute. Tests: boundary-null page returns a usable cursor, all-null set
+> paginates without dupes/gaps, scheduled-before-unscheduled ordering, write-invariant, and cursor
+> unit tests. Full unit suite (757) + pdp-goals/account-cleanup/review-periods integration green.
+
+**Files:**
 
 **Files:**
 - `apps/api/src/pdp-goals/pdp-goals.repository.ts` (`findPaginated`, L189-225)
@@ -1224,7 +1238,13 @@ tiebreak in both sort and index (pairs with item 29).
 **Tests:** list with >limit goals where the boundary goal has `reviewDate:null` returns a usable
 `nextCursor` and the next page continues; all-null-`reviewDate` set paginates without throwing.
 
-## 29. [Low-Moderate] Keyset pagination index omits `_id` and is sub-optimal under `status: $in`
+## 29. [Low-Moderate] ✅ DONE (with item 28) — Keyset pagination index omits `_id` and is sub-optimal under `status: $in`
+
+> **Resolved (2026-07-03):** Index replaced with `{ userId, status, sortDate, _id }`, applied
+> together with the item-28 cursor fix. Both `findPaginated` and `findByUserId` now sort/seek on
+> `sortDate` with an `_id` tiebreak, fully backed by this compound. See item 28 for details.
+
+
 
 **Files:**
 - `apps/api/src/pdp-goals/schemas/pdp-goal.schema.ts` (L69)

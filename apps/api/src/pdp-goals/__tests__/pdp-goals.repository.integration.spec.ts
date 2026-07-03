@@ -4,6 +4,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { Model, Types } from 'mongoose';
 import { isErr, isOk } from '../../common/utils/result.util';
+import { PDP_GOAL_SORT_SENTINEL } from '../pdp-goal.constants';
 import { PdpGoalsRepository } from '../pdp-goals.repository';
 import { PDP_GOALS_REPOSITORY } from '../pdp-goals.repository.interface';
 import {
@@ -34,6 +35,7 @@ async function insertGoal(
     }>;
   }> = {},
 ) {
+  const reviewDate = overrides.reviewDate ?? null;
   const [doc] = await model.create([
     {
       xid: overrides.xid ?? `goal_${new Types.ObjectId().toString().slice(-6)}`,
@@ -41,7 +43,9 @@ async function insertGoal(
       userId: overrides.userId ?? userId,
       artefactId: overrides.artefactId ?? artefactId,
       status: overrides.status ?? PdpGoalStatus.NOT_STARTED,
-      reviewDate: overrides.reviewDate ?? null,
+      reviewDate,
+      // Maintain the same invariant the repository enforces on writes.
+      sortDate: reviewDate ?? PDP_GOAL_SORT_SENTINEL,
       actions: overrides.actions ?? [
         {
           xid: 'act_default_1',
@@ -120,6 +124,19 @@ describe('PdpGoalsRepository (integration)', () => {
       expect(updated!.status).toBe(PdpGoalStatus.STARTED);
       expect(updated!.reviewDate!.toISOString()).toBe(reviewDate.toISOString());
       expect(updated!.completionReview).toBe('Great progress');
+      // Invariant: sortDate tracks reviewDate.
+      expect(updated!.sortDate.toISOString()).toBe(reviewDate.toISOString());
+    });
+
+    it('resets sortDate to the sentinel when reviewDate is cleared to null', async () => {
+      await insertGoal(model, { xid: 'goal_sg_null', reviewDate: new Date('2026-09-01') });
+
+      const result = await repo.saveGoal('goal_sg_null', userId, { reviewDate: null });
+
+      expect(isOk(result)).toBe(true);
+      const updated = await model.findOne({ xid: 'goal_sg_null' }).lean();
+      expect(updated!.reviewDate).toBeNull();
+      expect(updated!.sortDate.toISOString()).toBe(PDP_GOAL_SORT_SENTINEL.toISOString());
     });
 
     it('overwrites the actions array', async () => {
@@ -202,6 +219,8 @@ describe('PdpGoalsRepository (integration)', () => {
       expect(updated!.status).toBe(PdpGoalStatus.STARTED);
       expect(updated!.reviewDate!.toISOString()).toBe(reviewDate.toISOString());
       expect(updated!.actions[0].status).toBe(PdpGoalStatus.STARTED);
+      // Invariant: sortDate tracks reviewDate.
+      expect(updated!.sortDate.toISOString()).toBe(reviewDate.toISOString());
     });
 
     it('cascades goal status to all actions when actionUpdates is undefined', async () => {
@@ -457,6 +476,150 @@ describe('PdpGoalsRepository (integration)', () => {
 
       const goal = await model.findOne({ xid: 'goal_active_only' }).lean();
       expect(goal!.status).toBe(PdpGoalStatus.STARTED); // unchanged
+    });
+
+    // Guards the sortDate invariant on the bulk path — latent today (callers pass
+    // only { status }), but the method handles reviewDate and must keep sortDate in sync.
+    it('derives sortDate when the bulk update sets a reviewDate', async () => {
+      const reviewDate = new Date('2026-08-01');
+      await insertGoal(model, { xid: 'goal_bulk_rd', status: PdpGoalStatus.STARTED });
+
+      const result = await repo.updateManyByArtefactId(
+        artefactId,
+        { statuses: [PdpGoalStatus.STARTED] },
+        { reviewDate },
+      );
+
+      expect(isOk(result)).toBe(true);
+      const updated = await model.findOne({ xid: 'goal_bulk_rd' }).lean();
+      expect(updated!.reviewDate!.toISOString()).toBe(reviewDate.toISOString());
+      expect(updated!.sortDate.toISOString()).toBe(reviewDate.toISOString());
+    });
+
+    it('resets sortDate to the sentinel when the bulk update clears reviewDate', async () => {
+      await insertGoal(model, {
+        xid: 'goal_bulk_null',
+        status: PdpGoalStatus.STARTED,
+        reviewDate: new Date('2026-08-01'),
+      });
+
+      const result = await repo.updateManyByArtefactId(
+        artefactId,
+        { statuses: [PdpGoalStatus.STARTED] },
+        { reviewDate: null },
+      );
+
+      expect(isOk(result)).toBe(true);
+      const updated = await model.findOne({ xid: 'goal_bulk_null' }).lean();
+      expect(updated!.reviewDate).toBeNull();
+      expect(updated!.sortDate.toISOString()).toBe(PDP_GOAL_SORT_SENTINEL.toISOString());
+    });
+  });
+
+  // ─── create (sortDate invariant) ───
+
+  describe('create', () => {
+    it('defaults new goals to null reviewDate and the sentinel sortDate', async () => {
+      const result = await repo.create([
+        { userId, artefactId, goal: 'Fresh goal', actions: [] },
+      ]);
+
+      expect(isOk(result)).toBe(true);
+      const created = await model.findOne({ goal: 'Fresh goal' }).lean();
+      expect(created!.reviewDate).toBeNull();
+      expect(created!.sortDate.toISOString()).toBe(PDP_GOAL_SORT_SENTINEL.toISOString());
+    });
+  });
+
+  // ─── findPaginated (null-safe keyset pagination) ───
+
+  describe('findPaginated', () => {
+    const statuses = [
+      PdpGoalStatus.NOT_STARTED,
+      PdpGoalStatus.STARTED,
+      PdpGoalStatus.COMPLETED,
+    ];
+
+    // Walk every page, returning the flattened list of goal xids in order.
+    async function paginateAll(limit: number): Promise<string[]> {
+      const seen: string[] = [];
+      let cursor: string | undefined;
+      // Guard against an infinite loop if pagination ever fails to advance.
+      for (let guard = 0; guard < 100; guard++) {
+        const result = await repo.findPaginated(userId, statuses, cursor, limit);
+        expect(isOk(result)).toBe(true);
+        if (!isOk(result)) break;
+        seen.push(...result.value.items.map((g) => g.xid));
+        if (!result.value.nextCursor) break;
+        cursor = result.value.nextCursor;
+      }
+      return seen;
+    }
+
+    it('returns a usable nextCursor when the boundary goal has a null reviewDate (regression)', async () => {
+      // 21 goals, all with null reviewDate → boundary goal (#20) is null.
+      // Pre-fix this threw while building the cursor → 500.
+      for (let i = 0; i < 21; i++) {
+        await insertGoal(model, { xid: `gnull_${i}`, status: PdpGoalStatus.NOT_STARTED });
+      }
+
+      const page1 = await repo.findPaginated(userId, statuses, undefined, 20);
+
+      expect(isOk(page1)).toBe(true);
+      if (!isOk(page1)) return;
+      expect(page1.value.items).toHaveLength(20);
+      expect(page1.value.nextCursor).not.toBeNull();
+      // reviewDate is still surfaced honestly as null — the sentinel never leaks.
+      expect(page1.value.items[0].reviewDate).toBeNull();
+
+      const page2 = await repo.findPaginated(userId, statuses, page1.value.nextCursor!, 20);
+      expect(isOk(page2)).toBe(true);
+      if (!isOk(page2)) return;
+      expect(page2.value.items).toHaveLength(1);
+      expect(page2.value.nextCursor).toBeNull();
+    });
+
+    it('paginates an all-null-reviewDate set fully, without duplicates or gaps', async () => {
+      const xids = Array.from({ length: 25 }, (_, i) => `gall_${i}`);
+      for (const xid of xids) {
+        await insertGoal(model, { xid, status: PdpGoalStatus.NOT_STARTED });
+      }
+
+      const seen = await paginateAll(10);
+
+      expect(seen).toHaveLength(25);
+      expect(new Set(seen).size).toBe(25); // no duplicates
+      expect(new Set(seen)).toEqual(new Set(xids)); // no gaps
+    });
+
+    it('orders scheduled goals (real reviewDate) before unscheduled (null) goals', async () => {
+      await insertGoal(model, { xid: 'g_unscheduled', status: PdpGoalStatus.STARTED, reviewDate: null });
+      await insertGoal(model, {
+        xid: 'g_early',
+        status: PdpGoalStatus.STARTED,
+        reviewDate: new Date('2026-01-01'),
+      });
+      await insertGoal(model, {
+        xid: 'g_late',
+        status: PdpGoalStatus.STARTED,
+        reviewDate: new Date('2026-12-01'),
+      });
+
+      const seen = await paginateAll(20);
+
+      expect(seen).toEqual(['g_early', 'g_late', 'g_unscheduled']);
+    });
+
+    it('scopes results to the requesting user', async () => {
+      const otherUserId = new Types.ObjectId();
+      await insertGoal(model, { xid: 'mine', userId, status: PdpGoalStatus.STARTED });
+      await insertGoal(model, { xid: 'theirs', userId: otherUserId, status: PdpGoalStatus.STARTED });
+
+      const result = await repo.findPaginated(userId, statuses, undefined, 20);
+
+      expect(isOk(result)).toBe(true);
+      if (!isOk(result)) return;
+      expect(result.value.items.map((g) => g.xid)).toEqual(['mine']);
     });
   });
 });

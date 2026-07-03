@@ -31,3 +31,6 @@ IMPORTANT before release
 - update landing page
 - review deployment plan with another agent
 - database backups, read deploy.md
+- remove ununsed index from pdpgoal, after sortdate refactor
+- investigate removing updating findOneWithArtefact to findOne in pdp-goals repo
+-

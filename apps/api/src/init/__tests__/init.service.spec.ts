@@ -4,7 +4,7 @@ import { AcknowledgementsRepository } from '../../acknowledgements/acknowledgeme
 import { NOTICE_REGISTRY } from '../../acknowledgements/registry';
 import { ARTEFACTS_REPOSITORY } from '../../artefacts/artefacts.repository.interface';
 import { AuthService } from '../../auth/auth.service';
-import { ok, err } from '../../common/utils/result.util';
+import { err, ok } from '../../common/utils/result.util';
 import { GUEST_ARTEFACT_LIMIT } from '../../config/quota.config';
 import { DashboardService } from '../../dashboard/dashboard.service';
 import { NoticesService } from '../../notices/notices.service';
@@ -49,7 +49,7 @@ describe('InitService.acknowledgement (orchestration)', () => {
 
   it('needs:true on first signup (empty versions)', async () => {
     const svc = await build(async () => ok([]));
-    const res = await svc.getInit(USER_ID, 0);
+    const res = await svc.getInit(USER_ID, UserRole.USER);
     expect(res.acknowledgement).toEqual({
       needs: true,
       document: expect.objectContaining({ version: activeVersion }),
@@ -58,13 +58,13 @@ describe('InitService.acknowledgement (orchestration)', () => {
 
   it('needs:false when user has acked the active version', async () => {
     const svc = await build(async () => ok([activeVersion]));
-    const res = await svc.getInit(USER_ID, 0);
+    const res = await svc.getInit(USER_ID, UserRole.USER);
     expect(res.acknowledgement).toEqual({ needs: false });
   });
 
   it('fails closed when repo returns err', async () => {
     const svc = await build(async () => err({ code: 'DB_ERROR', message: 'boom' }));
-    const res = await svc.getInit(USER_ID, 0);
+    const res = await svc.getInit(USER_ID, UserRole.USER);
     expect(res.acknowledgement).toMatchObject({ needs: true });
   });
 
@@ -72,13 +72,13 @@ describe('InitService.acknowledgement (orchestration)', () => {
     const svc = await build(async () => {
       throw new Error('connection lost');
     });
-    const res = await svc.getInit(USER_ID, 0);
+    const res = await svc.getInit(USER_ID, UserRole.USER);
     expect(res.acknowledgement).toMatchObject({ needs: true });
   });
 
   it('fails closed when user has only unknown versions', async () => {
     const svc = await build(async () => ok(['v0.9-retired']));
-    const res = await svc.getInit(USER_ID, 0);
+    const res = await svc.getInit(USER_ID, UserRole.USER);
     expect(res.acknowledgement).toMatchObject({
       needs: true,
       document: expect.objectContaining({ version: activeVersion }),
@@ -87,7 +87,7 @@ describe('InitService.acknowledgement (orchestration)', () => {
 
   it('treats user as up-to-date when active version is among acked, regardless of array order', async () => {
     const svc = await build(async () => ok(['v0.9-retired', activeVersion]));
-    const res = await svc.getInit(USER_ID, 0);
+    const res = await svc.getInit(USER_ID, UserRole.USER);
     expect(res.acknowledgement).toEqual({ needs: false });
   });
 });
@@ -119,9 +119,7 @@ describe('InitService.guestArtefactLimitReached', () => {
   });
 
   it('fails soft to false when count repository errors', async () => {
-    const countByUser = jest
-      .fn()
-      .mockResolvedValue(err({ code: 'DB_ERROR', message: 'boom' }));
+    const countByUser = jest.fn().mockResolvedValue(err({ code: 'DB_ERROR', message: 'boom' }));
     const svc = await build(okAcks, { countByUser });
     const res = await svc.getInit(USER_ID, UserRole.USER_GUEST);
     expect(res.guestArtefactLimitReached).toBe(false);

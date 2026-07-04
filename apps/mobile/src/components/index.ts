@@ -1,4 +1,5 @@
 export { ReviewSheet } from './artefact/ReviewSheet';
+export { AppSwitch } from './AppSwitch';
 export { ArtefactAdvisoryBanner } from './ArtefactAdvisoryBanner';
 export { Button } from './Button';
 export { MessageList } from './chat';

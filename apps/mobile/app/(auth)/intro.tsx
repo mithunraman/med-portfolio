@@ -1,3 +1,4 @@
+import { AppSwitch } from '@/components';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -6,7 +7,6 @@ import {
   Dimensions,
   FlatList,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -183,13 +183,7 @@ export default function IntroScreen() {
         {/* Dark mode toggle */}
         <View style={styles.themeToggle}>
           <Text style={[styles.themeToggleText, { color: colors.textSecondary }]}>Dark Mode</Text>
-          <Switch
-            value={isDark}
-            onValueChange={toggleMode}
-            trackColor={{ false: colors.border, true: colors.primary }}
-            thumbColor="#fff"
-            style={styles.themeSwitch}
-          />
+          <AppSwitch value={isDark} onValueChange={toggleMode} />
         </View>
       </View>
     </View>
@@ -287,9 +281,5 @@ const styles = StyleSheet.create({
   themeToggleText: {
     fontSize: 14,
     fontWeight: '500',
-  },
-  themeSwitch: {
-    width: 51,
-    height: 31,
   },
 });

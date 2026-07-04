@@ -1,4 +1,4 @@
-import { SettingsItem, SettingsSection } from '@/components';
+import { AppSwitch, SettingsItem, SettingsSection } from '@/components';
 import { QuotaUsageSection } from '@/components/QuotaUsageSection';
 import { useAuth } from '@/hooks';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
@@ -13,7 +13,6 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -164,13 +163,7 @@ export default function ProfileScreen() {
             icon="moon-outline"
             label="Dark Mode"
             showChevron={false}
-            rightElement={
-              <Switch
-                value={isDark}
-                onValueChange={toggleMode}
-                trackColor={{ false: colors.border, true: colors.primary }}
-              />
-            }
+            rightElement={<AppSwitch value={isDark} onValueChange={toggleMode} />}
           />
           <SettingsItem
             icon="shield-outline"

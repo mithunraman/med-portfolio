@@ -7,24 +7,26 @@
 [x] PDP goal checkbox in artefact screen is not clickable
 [x] Reflect node creates duplicate content sometimes.
 [x] Allow users to edit the message
+[x] For Artefacts, allow users to add additional notes when saving.
+[x] Onboard rest of GP portfolio artefacts.
+[x] make sure when artefact is exported, notes are included
 
 - Always store Audio chat to local async storage first, and then send from there. In case there is no internet, atleast it will be saved locally and can be send later.
 - Audio not playing fully when messages are being fetchied in polling.
-- For Artefacts, allow users to add additional notes when saving.
 - Check and tests Delete message functionality.
 - Make sure input messages are capped to prevent missuse.
-- Onboard rest of GP portfolio artefacts.
+- Integrate with Firebase.
 
 IMPORTANT before release
 
-- Check each service and do a /code-review for security issues.
-- Check each repository for security issues using /code-review.
+[x] Check each service and do a /code-review for security issues.
+[x] Check each repository for security issues using /code-review.
+
 - Make sure all repo updates take in a user id to prevent cross access.
 - Scan to check that all queries are using correct indexes, find unused indexes.
 - Scan for dead code in the backend
 - Check OCI S3 is not accessible outside, and is not getting exposed.
 - set up email otp service
-- make sure when artefact is exported, notes are included
 - Retest all the flows again
 - Add credits to openai
 - Update privacy and terms of use to include oracle provider

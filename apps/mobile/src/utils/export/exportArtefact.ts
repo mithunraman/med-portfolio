@@ -27,10 +27,11 @@ function buildFileName(artefact: Artefact): string {
 function exportContentSummary(artefact: Artefact) {
   return {
     hasReflection: !!artefact.composedDocument?.some((s) => s.text),
-    hasCapabilities: !!artefact.capabilities?.some((c) => c.name || c.evidence),
+    hasCapabilities: !!artefact.capabilities?.some((c) => c.name || c.justification),
     hasPdpGoals: !!artefact.pdpGoals?.some(
       (g) => g.status !== PdpGoalStatus.ARCHIVED && g.status !== PdpGoalStatus.DELETED && g.goal
     ),
+    hasNotes: !!artefact.notes?.some((n) => n.text.trim()),
   };
 }
 
@@ -57,13 +58,13 @@ function buildPlainText(artefact: Artefact): string {
     lines.push('');
   }
 
-  const caps = artefact.capabilities?.filter((c) => c.name || c.evidence);
+  const caps = artefact.capabilities?.filter((c) => c.name || c.justification);
   if (caps?.length) {
     lines.push('CAPABILITIES');
     lines.push('-'.repeat(20));
     for (const c of caps) {
       lines.push(`\n${c.name}`);
-      lines.push(`Evidence: ${c.evidence}`);
+      lines.push(c.justification);
     }
     lines.push('');
   }
@@ -87,6 +88,19 @@ function buildPlainText(artefact: Artefact): string {
           lines.push(`    Reflection: ${a.completionReview}`);
         }
       }
+    }
+    lines.push('');
+  }
+
+  const notes = artefact.notes?.filter((n) => n.text.trim());
+  if (notes?.length) {
+    // Newest-first, matching the on-screen NotesSection ordering.
+    const sorted = [...notes].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    lines.push('NOTES');
+    lines.push('-'.repeat(20));
+    for (const n of sorted) {
+      lines.push(`\n${n.text}`);
+      lines.push(formatDate(n.createdAt));
     }
   }
 

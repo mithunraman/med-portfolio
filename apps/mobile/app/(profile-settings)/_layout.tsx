@@ -31,6 +31,14 @@ export default function ProfileSettingsLayout() {
         name="privacy-support"
         options={{ title: 'Privacy & Support', headerLeft }}
       />
+      <Stack.Screen
+        name="change-specialty"
+        options={{ title: 'Change Specialty', headerLeft }}
+      />
+      <Stack.Screen
+        name="change-stage"
+        options={{ title: 'Training Year', headerLeft }}
+      />
     </Stack>
   );
 }

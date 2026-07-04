@@ -38,6 +38,8 @@ export { SingleSelect, type SingleSelectOption } from './SingleSelect';
 export { SkeletonBone } from './SkeletonBone';
 export { SkeletonList } from './SkeletonList';
 export { SkeletonProvider } from './SkeletonProvider';
+export { SpecialtyList, type SpecialtyListProps } from './specialty/SpecialtyList';
+export { StageList, type StageListProps } from './specialty/StageList';
 export { StatusPill, type StatusVariant } from './StatusPill';
 export { StepIndicator } from './StepIndicator';
 export { useCollapsibleOptions } from './useCollapsibleOptions';

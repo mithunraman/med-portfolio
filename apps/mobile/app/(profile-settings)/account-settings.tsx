@@ -30,10 +30,11 @@ export default function AccountSettingsScreen() {
   const [isSaving, setIsSaving] = useState(false);
 
   const specialtyLabel = user?.specialty?.name ?? null;
-  const stageLabel = user?.specialty?.trainingStage?.label ?? null;
+  const stageLabel = user?.specialty?.trainingStage?.code ?? null;
+  const trainingValue = [specialtyLabel, stageLabel].filter(Boolean).join(' · ');
 
   const handleChangeSpecialty = useCallback(() => {
-    router.push('/(auth)/select-specialty');
+    router.push('/(profile-settings)/change-specialty');
   }, [router]);
 
   const handleOpenNameEdit = useCallback(() => {
@@ -99,17 +100,9 @@ export default function AccountSettingsScreen() {
             <SettingsItem
               icon="medical-outline"
               label="Specialty"
-              value={specialtyLabel}
+              value={trainingValue}
               onPress={handleChangeSpecialty}
             />
-            {stageLabel && (
-              <SettingsItem
-                icon="school-outline"
-                label="Training Stage"
-                value={stageLabel}
-                onPress={handleChangeSpecialty}
-              />
-            )}
           </SettingsSection>
         )}
       </ScrollView>

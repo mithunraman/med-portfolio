@@ -5,6 +5,7 @@ import {
   RefreshTokenResponseSchema,
   SessionRevokedReason,
   SessionViewSchema,
+  UserRole,
 } from '@acme/shared';
 
 describe('Auth shared contract', () => {
@@ -33,7 +34,7 @@ describe('Auth shared contract', () => {
             id: 'u',
             email: 'e@x.com',
             name: 'n',
-            role: 0,
+            role: UserRole.USER,
             specialty: null,
             deletionRequestedAt: null,
             deletionScheduledFor: null,
@@ -50,7 +51,7 @@ describe('Auth shared contract', () => {
           id: 'u',
           email: 'e@x.com',
           name: 'n',
-          role: 0,
+          role: UserRole.USER,
           specialty: null,
           deletionRequestedAt: null,
           deletionScheduledFor: null,
@@ -78,12 +79,11 @@ describe('Auth shared contract', () => {
 
   describe('RefreshTokenResponseSchema', () => {
     it('requires both tokens', () => {
-      expect(() =>
-        RefreshTokenResponseSchema.parse({ accessToken: 'x' })
-      ).toThrow();
-      expect(
-        RefreshTokenResponseSchema.parse({ accessToken: 'a', refreshToken: 'b' })
-      ).toEqual({ accessToken: 'a', refreshToken: 'b' });
+      expect(() => RefreshTokenResponseSchema.parse({ accessToken: 'x' })).toThrow();
+      expect(RefreshTokenResponseSchema.parse({ accessToken: 'a', refreshToken: 'b' })).toEqual({
+        accessToken: 'a',
+        refreshToken: 'b',
+      });
     });
   });
 

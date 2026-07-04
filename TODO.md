@@ -31,6 +31,6 @@ IMPORTANT before release
 - update landing page
 - review deployment plan with another agent
 - database backups, read deploy.md
-[x] remove ununsed index from pdpgoal, after sortdate refactor
+  [x] remove ununsed index from pdpgoal, after sortdate refactor
 - investigate removing updating findOneWithArtefact to findOne in pdp-goals repo
--
+- check how conversation idempotency key is being generated, and change if needed.

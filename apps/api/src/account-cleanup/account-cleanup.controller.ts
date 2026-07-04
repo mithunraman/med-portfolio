@@ -1,11 +1,12 @@
+import { UserRole } from '@acme/shared';
 import { Controller, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import { DevOnly } from '../common/decorators/dev-only.decorator';
-import { Public } from '../common/decorators/public.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 import { AccountCleanupService } from './account-cleanup.service';
 
 @Controller('dev/account-cleanup')
 @DevOnly()
-@Public()
+@Roles(UserRole.SUPER_ADMIN)
 export class AccountCleanupController {
   constructor(private readonly accountCleanupService: AccountCleanupService) {}
 

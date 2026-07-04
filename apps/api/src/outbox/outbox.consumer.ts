@@ -13,8 +13,8 @@ export interface OutboxHandler {
 
 export const OUTBOX_HANDLERS = Symbol('OUTBOX_HANDLERS');
 
-/** Default polling interval: 500ms */
-const DEFAULT_POLL_INTERVAL_MS = 500;
+/** Default polling interval: 100ms */
+const DEFAULT_POLL_INTERVAL_MS = 100;
 
 /** Maximum number of jobs running concurrently */
 const MAX_CONCURRENCY = 5;

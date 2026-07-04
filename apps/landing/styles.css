@@ -18,9 +18,17 @@
   --color-warm-dark: #b07a3c;
   --color-text: #14302a;
   --color-text-secondary: #4f6a65;
-  --color-text-muted: #8fa29e;
+  --color-text-muted: #5e726b; /* darkened to meet WCAG AA (4.5:1) on bg/surface */
   --color-border: #e4ebe8;
   --color-trust-bg: #eef5f2;
+  /* semantic state colors */
+  --color-success: #2e9e6b;
+  --color-success-soft: #e3f4ea;
+  --color-warning: #b07a1e;
+  --color-warning-soft: #faf1dd;
+  --color-error: #c94b4b;
+  --color-error-soft: #fbe9e9;
+  --color-info: #2f7bbf;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 20px;

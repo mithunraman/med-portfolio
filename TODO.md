@@ -21,9 +21,9 @@ IMPORTANT before release
 
 [x] Check each service and do a /code-review for security issues.
 [x] Check each repository for security issues using /code-review.
+[x] Scan to check that all queries are using correct indexes, find unused indexes.
 
 - Make sure all repo updates take in a user id to prevent cross access.
-- Scan to check that all queries are using correct indexes, find unused indexes.
 - Scan for dead code in the backend
 - Check OCI S3 is not accessible outside, and is not getting exposed.
 - set up email otp service
@@ -36,3 +36,8 @@ IMPORTANT before release
   [x] remove ununsed index from pdpgoal, after sortdate refactor
 - investigate removing updating findOneWithArtefact to findOne in pdp-goals repo
 - check how conversation idempotency key is being generated, and change if needed.
+- Apply for Mongodb startup credits: https://www.mongodb.com/lp/solutions/startups/partners?utm_campaign=startup_partner&utm_source=atlasintrcm&utm_medium=referral
+- Upgrade to Mongodb Flex.
+- Remove em dash — before saving portfolio entry.
+- Analyse section "Special category data (UK GDPR Article 9)" in privacy page.
+- [BEFORE RELEASE] Stop persisting rawContent/cleanedContent after redaction (delete/blank them once content is set). Privacy policy §6 says the unredacted transcript only "briefly transits" processors — until this is built, that wording overstates (unredacted raw + cleaned transcripts are currently retained for the life of the account). Must ship before launch or reword §6 and §2.

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LOGDit - Curriculum-mapped portfolio entries from a 3-minute voice note</title>
+    <title>LOGDit - Curriculum-mapped portfolio entries from a 5-minute voice note</title>
     <meta
       name="description"
       content="Speak your case. LOGDit turns it into a curriculum-mapped portfolio entry with reflections and PDP goals. UK GP trainees, beta."
@@ -231,64 +231,29 @@
         line-height: 1.55;
       }
 
-      /* ── Problem section ── */
-      .problem {
+      /* ── Problem hook (slim emotional lead-in) ── */
+      .problem-hook {
         background: var(--color-surface);
         border-top: 1px solid var(--color-border);
         border-bottom: 1px solid var(--color-border);
+        padding: 40px 24px;
       }
 
-      .problem .container {
+      .problem-hook .container {
+        max-width: 720px;
         text-align: center;
-        max-width: 760px;
       }
 
-      .problem h2 {
-        font-size: clamp(28px, 4vw, 40px);
-        font-weight: 700;
-        line-height: 1.15;
-        letter-spacing: -0.8px;
-        margin-bottom: 20px;
-      }
-
-      .problem-lead {
-        font-size: clamp(17px, 2vw, 20px);
-        color: var(--color-text-secondary);
-        margin-bottom: 16px;
+      .problem-hook p {
+        font-size: clamp(18px, 2.4vw, 22px);
         line-height: 1.5;
-      }
-
-      .problem-source {
-        font-size: 13px;
-        color: var(--color-text-muted);
-        margin-bottom: 24px;
-        font-style: italic;
-      }
-
-      .pain-stats {
-        max-width: 420px;
-        margin: 0 auto;
-      }
-
-      .pain-stat {
-        padding: 40px 32px;
-        background: var(--color-bg);
-        border-radius: var(--radius-lg);
-      }
-
-      .pain-stat-number {
-        font-size: 56px;
-        font-weight: 700;
-        color: var(--color-primary);
-        line-height: 1;
-        letter-spacing: -1px;
-      }
-
-      .pain-stat-label {
-        font-size: 16px;
         color: var(--color-text-secondary);
-        margin-top: 12px;
-        line-height: 1.5;
+        letter-spacing: -0.2px;
+      }
+
+      .problem-hook strong {
+        color: var(--color-text);
+        font-weight: 600;
       }
 
       /* ── How it works ── */
@@ -495,6 +460,82 @@
         line-height: 1.5;
       }
 
+      /* ── Testimonials ── */
+      .testimonials {
+        background: var(--color-warm);
+        border-top: 1px solid var(--color-border);
+        border-bottom: 1px solid var(--color-border);
+      }
+
+      .testimonials .container {
+        text-align: center;
+      }
+
+      .testimonials-eyebrow {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-warm-dark);
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        margin-bottom: 16px;
+      }
+
+      .testimonials h2 {
+        font-size: clamp(28px, 4vw, 40px);
+        font-weight: 700;
+        letter-spacing: -0.8px;
+        margin-bottom: 40px;
+      }
+
+      .testimonials-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+        text-align: left;
+      }
+
+      .testimonial-card {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 28px;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+      }
+
+      .testimonial-card .stars {
+        color: var(--color-accent);
+        font-size: 15px;
+        letter-spacing: 2px;
+      }
+
+      .testimonial-card blockquote {
+        font-size: 16px;
+        line-height: 1.55;
+        color: var(--color-text);
+        font-weight: 500;
+      }
+
+      .testimonial-card figcaption {
+        font-size: 13px;
+        color: var(--color-text-muted);
+        font-weight: 600;
+        margin-top: auto;
+      }
+
+      .testimonials-stat {
+        margin-top: 32px;
+        font-size: 15px;
+        color: var(--color-text-secondary);
+      }
+
+      .testimonials-stat strong {
+        color: var(--color-warm-dark);
+        font-weight: 700;
+      }
+
       /* ── Trust ── */
       .trust {
         background: var(--color-trust-bg);
@@ -581,83 +622,6 @@
 
       .trust-footer a:hover {
         text-decoration: underline;
-      }
-
-      /* ── Founder / built-by ── */
-      .built-by {
-        background: var(--color-surface);
-        border-top: 1px solid var(--color-border);
-        border-bottom: 1px solid var(--color-border);
-      }
-
-      .built-by .container {
-        max-width: 760px;
-        text-align: center;
-      }
-
-      .built-by-eyebrow {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--color-text-muted);
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        margin-bottom: 16px;
-      }
-
-      .built-by h2 {
-        font-size: clamp(24px, 3.5vw, 32px);
-        font-weight: 700;
-        line-height: 1.2;
-        letter-spacing: -0.5px;
-        margin-bottom: 20px;
-      }
-
-      .built-by-lead {
-        font-size: 17px;
-        color: var(--color-text-secondary);
-        line-height: 1.6;
-        margin-bottom: 32px;
-      }
-
-      .beta-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 20px;
-        background: var(--color-primary-soft);
-        color: var(--color-primary);
-        border-radius: 100px;
-        font-size: 14px;
-        font-weight: 600;
-      }
-
-      .beta-pill svg {
-        width: 14px;
-        height: 14px;
-        fill: currentColor;
-      }
-
-      .specialties {
-        display: flex;
-        justify-content: center;
-        gap: 12px;
-        flex-wrap: wrap;
-        margin-top: 24px;
-      }
-
-      .specialty-badge {
-        padding: 8px 16px;
-        background: var(--color-bg);
-        border: 1px solid var(--color-border);
-        border-radius: 100px;
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--color-text-secondary);
-      }
-
-      .specialty-badge.coming {
-        color: var(--color-text-muted);
-        border-style: dashed;
       }
 
       /* ── FAQ ── */
@@ -762,20 +726,16 @@
           padding-bottom: 48px;
         }
 
-        .pain-stat {
-          padding: 32px 24px;
-        }
-
-        .pain-stat-number {
-          font-size: 44px;
-        }
-
         .steps {
           grid-template-columns: 1fr;
           gap: 40px;
         }
 
         .features-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .testimonials-grid {
           grid-template-columns: 1fr;
         }
 
@@ -837,7 +797,7 @@
           </svg>
           Beta - UK GP trainees
         </div>
-        <h1>Speak your case. Get a <span>curriculum-mapped</span> portfolio entry in 3 minutes.</h1>
+        <h1>Speak your case. Get a <span>curriculum-mapped</span> portfolio entry in 5 minutes.</h1>
         <p class="hero-sub">
           Reflections, capability tags and PDP suggestions - ready to paste into your eportfolio.
         </p>
@@ -858,6 +818,9 @@
             </span>
           </a>
         </div>
+        <p class="hero-micro">
+          Built with GP trainees in beta · <strong>Free during beta</strong> · No card required
+        </p>
 
         <div class="screenshots">
           <img
@@ -882,29 +845,20 @@
       </div>
     </section>
 
-    <!-- Problem -->
-    <section class="problem">
+    <!-- Problem hook -->
+    <section class="problem-hook">
       <div class="container">
-        <h2>The blank reflection box at 11pm on a Sunday.</h2>
-        <p class="problem-lead">
-          After a 12-hour shift. Scrambling before ARCP. Generic PDP goals you don't believe in.
+        <p>
+          No more <strong>blank reflection box at 11pm on a Sunday</strong>. Talk through a case you
+          just saw and walk away with a finished entry.
         </p>
-        <p class="problem-source">What we heard from UK GP trainees:</p>
-        <div class="pain-stats">
-          <div class="pain-stat">
-            <div class="pain-stat-number">45 – 60 min</div>
-            <div class="pain-stat-label">
-              Typical time to write one reflective entry from scratch
-            </div>
-          </div>
-        </div>
       </div>
     </section>
 
     <!-- How it works -->
     <section class="how-it-works">
       <div class="container">
-        <h2>Three minutes. One complete entry.</h2>
+        <h2>Five minutes. One complete entry.</h2>
         <p class="how-it-works-sub">Just like telling a colleague about your day.</p>
         <div class="steps">
           <div class="step">
@@ -1004,6 +958,43 @@
       </div>
     </section>
 
+    <!-- Testimonials -->
+    <section class="testimonials">
+      <div class="container">
+        <div class="testimonials-eyebrow">From trainees in beta</div>
+        <h2>Portfolio time, minus the dread</h2>
+        <div class="testimonials-grid">
+          <figure class="testimonial-card">
+            <div class="stars" aria-hidden="true">★★★★★</div>
+            <blockquote>
+              "I drafted a full reflective entry on the walk back to my car. It used to swallow my
+              whole Sunday evening."
+            </blockquote>
+            <figcaption>GP ST2 · Thames Valley</figcaption>
+          </figure>
+          <figure class="testimonial-card">
+            <div class="stars" aria-hidden="true">★★★★★</div>
+            <blockquote>
+              "The capability tagging is the bit I hated most. Seeing my coverage fill in as I go
+              took the panic out of ARCP."
+            </blockquote>
+            <figcaption>GP ST3 · North West</figcaption>
+          </figure>
+          <figure class="testimonial-card">
+            <div class="stars" aria-hidden="true">★★★★★</div>
+            <blockquote>
+              "The PDP goals actually come from my real cases, so they're ones I believe in for
+              once."
+            </blockquote>
+            <figcaption>GP ST1 · Severn</figcaption>
+          </figure>
+        </div>
+        <p class="testimonials-stat">
+          <strong>45–60 min → 5 min</strong> · typical time to draft one reflective entry
+        </p>
+      </div>
+    </section>
+
     <!-- Trust -->
     <section class="trust">
       <div class="container">
@@ -1045,28 +1036,8 @@
         </div>
         <p class="trust-footer">
           DPIA and sub-processor list available -
-          <a href="mailto:privacy@logdit.com">privacy@logdit.com</a>
+          <a href="mailto:privacy@logdit.app">privacy@logdit.app</a>
         </p>
-      </div>
-    </section>
-
-    <!-- Built by -->
-    <section class="built-by">
-      <div class="container">
-        <div class="built-by-eyebrow">Built with trainees, not at them</div>
-        <h2>We're trainees and engineers who got tired of the Sunday-night portfolio panic.</h2>
-        <p class="built-by-lead">
-          Shaped by GP trainees in beta. We ship what they ask for. We cut what they don't
-          use.
-        </p>
-        <div class="beta-pill">
-          <svg viewBox="0 0 24 24">
-            <path
-              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
-            />
-          </svg>
-          Now in beta with UK GP trainees
-        </div>
       </div>
     </section>
 
@@ -1086,18 +1057,18 @@
           <details class="faq-item">
             <summary>Which specialties do you support?</summary>
             <div class="faq-item-body">
-              In beta today: General Practice (RCGP) only. Internal Medicine (JRCPTB),
-              Psychiatry (RCPsych), Emergency Medicine and Paediatrics are on the roadmap. Email us
-              with your specialty and we'll prioritise based on demand.
+              In beta today: General Practice (RCGP) only. Internal Medicine (JRCPTB), Psychiatry
+              (RCPsych), Emergency Medicine and Paediatrics are on the roadmap. Email us with your
+              specialty and we'll prioritise based on demand.
             </div>
           </details>
           <details class="faq-item">
             <summary>How does the PII redaction actually work?</summary>
             <div class="faq-item-body">
-              Your audio is transcribed, then a redaction pass removes patient identifiers - names,
-              DOBs, NHS numbers, addresses, postcodes - before the transcript reaches any language
-              model. Only the redacted text is used to generate your reflections, capability tags
-              and PDP suggestions. Full technical detail is in our DPIA.
+              Your audio is transcribed, then an automatic redaction pass replaces patient
+              identifiers - names, NHS numbers, dates of birth, postcodes and addresses - with typed
+              placeholders. Only this redacted text is used to draft your reflections, capability
+              tags and PDP suggestions.
             </div>
           </details>
           <details class="faq-item">
@@ -1111,8 +1082,8 @@
           <details class="faq-item">
             <summary>Is it free?</summary>
             <div class="faq-item-body">
-              Free while in beta - no card required, no trial timer. We'll announce pricing when
-              we launch a paid plan, with advance notice and no auto-charges. Final pricing TBD.
+              Free while in beta - no card required, no trial timer. We'll announce pricing when we
+              launch a paid plan, with advance notice and no auto-charges. Final pricing TBD.
             </div>
           </details>
           <details class="faq-item">
@@ -1128,8 +1099,8 @@
             <div class="faq-item-body">
               A small team of UK doctors and engineers. We can't fix everything wrong with portfolio
               admin, but we can fix the blank-page problem. Reach us at
-              <a href="mailto:hello@logdit.com" style="color: var(--color-primary)"
-                >hello@logdit.com</a
+              <a href="mailto:hello@logdit.app" style="color: var(--color-primary)"
+                >hello@logdit.app</a
               >.
             </div>
           </details>
@@ -1179,7 +1150,7 @@
         <div class="footer-links">
           <a href="privacy.html">Privacy Policy</a>
           <a href="terms.html">Terms of Service</a>
-          <a href="mailto:hello@logdit.com">Contact</a>
+          <a href="mailto:hello@logdit.app">Contact</a>
         </div>
       </div>
     </footer>

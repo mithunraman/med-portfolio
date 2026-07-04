@@ -1,7 +1,7 @@
 import { PdpGoalStatus } from '@acme/shared';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { Types } from 'mongoose';
-import { ok } from '../../common/utils/result.util';
+import { err, ok } from '../../common/utils/result.util';
 import { PdpGoalsService } from '../pdp-goals.service';
 
 const oid = () => new Types.ObjectId();
@@ -33,6 +33,7 @@ const mockPdpGoalsRepo = {
   findByUserIdWithArtefact: jest.fn(),
   countByUserId: jest.fn(),
   saveGoal: jest.fn(),
+  findPaginated: jest.fn(),
 };
 
 function createService(): PdpGoalsService {
@@ -92,6 +93,28 @@ describe('PdpGoalsService', () => {
       const result = await service.deleteGoal(userIdStr, 'goal_abc');
 
       expect(result).toEqual({ message: 'Goal deleted successfully' });
+    });
+  });
+
+  describe('listGoals', () => {
+    it('maps an INVALID_CURSOR repo error to BadRequestException (400)', async () => {
+      mockPdpGoalsRepo.findPaginated.mockResolvedValue(
+        err({ code: 'INVALID_CURSOR', message: 'Invalid pagination cursor' }),
+      );
+
+      await expect(service.listGoals(userIdStr, { cursor: 'garbage' })).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('maps a DB_ERROR repo error to InternalServerErrorException (500)', async () => {
+      mockPdpGoalsRepo.findPaginated.mockResolvedValue(
+        err({ code: 'DB_ERROR', message: 'Failed to find PDP goals' }),
+      );
+
+      await expect(service.listGoals(userIdStr, {})).rejects.toThrow(
+        InternalServerErrorException,
+      );
     });
   });
 });

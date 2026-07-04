@@ -1,6 +1,7 @@
 import type { ListPdpGoalsResponse, PdpGoalListItem, PdpGoalResponse } from '@acme/shared';
 import { PdpGoalStatus } from '@acme/shared';
 import {
+  BadRequestException,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -19,7 +20,6 @@ import {
 import type { PdpGoal, PdpGoalAction } from './schemas/pdp-goal.schema';
 
 const DEFAULT_STATUSES = [PdpGoalStatus.STARTED, PdpGoalStatus.COMPLETED];
-
 
 function mapActionToDto(a: PdpGoalAction) {
   return {
@@ -95,7 +95,20 @@ export class PdpGoalsService {
       query.limit
     );
 
-    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
+    if (isErr(result)) {
+      switch (result.error.code) {
+        case 'INVALID_CURSOR':
+          throw new BadRequestException(result.error.message);
+        case 'DB_ERROR':
+          throw new InternalServerErrorException(result.error.message);
+        default: {
+          // Adding a code to PdpGoalErrorCode without handling it here is a
+          // compile error — forces a deliberate HTTP mapping decision.
+          const exhaustive: never = result.error.code;
+          throw new InternalServerErrorException(`Unhandled error code: ${String(exhaustive)}`);
+        }
+      }
+    }
 
     return {
       goals: result.value.items.map(mapGoalToListItem),
@@ -235,10 +248,7 @@ export class PdpGoalsService {
   /**
    * Cascade entry point: tombstone PDP goals linked to the given artefacts.
    */
-  async deleteByArtefactIds(
-    artefactIds: Types.ObjectId[],
-    session?: ClientSession
-  ): Promise<void> {
+  async deleteByArtefactIds(artefactIds: Types.ObjectId[], session?: ClientSession): Promise<void> {
     unwrapVoid(await this.pdpGoalsRepository.markDeletedByArtefactIds(artefactIds, session));
   }
 }

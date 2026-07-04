@@ -30,8 +30,8 @@ export function isErr<T, E>(result: Result<T, E>): result is Err<E> {
   return result.ok === false;
 }
 
-export interface DBError {
-  code: string;
+export interface DBError<TCode extends string = string> {
+  code: TCode;
   message: string;
 }
 

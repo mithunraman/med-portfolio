@@ -621,5 +621,15 @@ describe('PdpGoalsRepository (integration)', () => {
       if (!isOk(result)) return;
       expect(result.value.items.map((g) => g.xid)).toEqual(['mine']);
     });
+
+    it('returns INVALID_CURSOR (not DB_ERROR) for a malformed cursor', async () => {
+      // A hand-edited / truncated cursor must be reported as client input error
+      // (→ 400), not swallowed by the catch and mis-reported as DB_ERROR (→ 500).
+      const result = await repo.findPaginated(userId, statuses, 'not-a-valid-cursor', 20);
+
+      expect(isErr(result)).toBe(true);
+      if (!isErr(result)) return;
+      expect(result.error.code).toBe('INVALID_CURSOR');
+    });
   });
 });

@@ -4,13 +4,14 @@ import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { DBError, Result, err, ok } from '../common/utils/result.util';
-import { buildPdpGoalCursor, parsePdpGoalCursor } from './cursor.util';
+import { PdpGoalCursor, buildPdpGoalCursor, parsePdpGoalCursor } from './cursor.util';
 import { toSortDate } from './pdp-goal.constants';
 import {
   CreatePdpGoalData,
   FindByUserOptions,
   IPdpGoalsRepository,
   Page,
+  PdpGoalErrorCode,
   PdpGoalWithArtefact,
   SaveGoalData,
   UpdatePdpGoalActionData,
@@ -191,12 +192,24 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     statuses: PdpGoalStatus[],
     cursor?: string,
     limit = 20
-  ): Promise<Result<Page<PdpGoal>, DBError>> {
+  ): Promise<Result<Page<PdpGoal>, DBError<PdpGoalErrorCode>>> {
+    // Parse the client-supplied cursor outside the try so a malformed value
+    // surfaces as a distinct INVALID_CURSOR (→ 400) rather than being swallowed
+    // by the catch below and mis-reported as a DB_ERROR (→ 500).
+    let parsedCursor: PdpGoalCursor | undefined;
+    if (cursor) {
+      try {
+        parsedCursor = parsePdpGoalCursor(cursor);
+      } catch {
+        return err({ code: 'INVALID_CURSOR', message: 'Invalid pagination cursor' });
+      }
+    }
+
     try {
       const filter: Record<string, unknown> = { userId, status: { $in: statuses } };
 
-      if (cursor) {
-        const { sortDate, id } = parsePdpGoalCursor(cursor);
+      if (parsedCursor) {
+        const { sortDate, id } = parsedCursor;
         filter.$or = [
           { sortDate: { $gt: sortDate } },
           { sortDate, _id: { $gt: id } },

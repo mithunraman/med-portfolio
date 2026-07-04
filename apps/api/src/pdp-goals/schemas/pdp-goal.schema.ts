@@ -1,7 +1,7 @@
 import { PdpGoalStatus } from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { PDP_GOAL_SORT_SENTINEL } from '../pdp-goal.constants';
+import { PDP_GOAL_SORT_SENTINEL_ISO } from '../pdp-goal.constants';
 
 // Embedded action subdocument
 export class PdpGoalAction {
@@ -51,7 +51,8 @@ export class PdpGoal {
 
   // Internal, non-null keyset-pagination sort key: reviewDate ?? SENTINEL.
   // Maintained by the repository on every reviewDate write; never surfaced in DTOs.
-  @Prop({ required: true, type: Date, default: PDP_GOAL_SORT_SENTINEL })
+  // Factory default (not a shared Date object) so every doc gets its own instance.
+  @Prop({ required: true, type: Date, default: () => new Date(PDP_GOAL_SORT_SENTINEL_ISO) })
   sortDate!: Date;
 
   @Prop({ type: Date, default: null })

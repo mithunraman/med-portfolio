@@ -1,5 +1,6 @@
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
+import { MAX_OTP_WINDOW_MINUTES } from '../otp/otp.constants';
 
 export const NodeEnv = {
   Development: 'development',
@@ -107,7 +108,7 @@ export const envSchema = z.object({
   OTP_RATE_LIMIT_WINDOW_MINUTES: z
     .string()
     .transform((val) => parseInt(val, 10))
-    .pipe(z.number().int().min(1).max(60))
+    .pipe(z.number().int().min(1).max(MAX_OTP_WINDOW_MINUTES))
     .default('10'),
 
   // Reverse-proxy hop count. Determines how many proxy hops Express trusts

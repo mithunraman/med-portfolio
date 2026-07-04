@@ -36,9 +36,12 @@ describe('Rate limit enforcement', () => {
     resetThrottler(harness);
   });
 
-  it('otp/send is bounded to 10 / 10min per IP — the 11th is 429', async () => {
+  it('otp/send is bounded to 60 / 10min per IP — the 61st is 429', async () => {
     const server = harness.app.getHttpServer();
-    for (let i = 0; i < 10; i++) {
+    // Distinct emails so the per-email send cap (3/10min) never trips — this
+    // isolates the per-IP tier. Cap is generous by design (CGNAT tolerance);
+    // the per-email cap is the primary send control.
+    for (let i = 0; i < 60; i++) {
       await request(server)
         .post('/api/auth/otp/send')
         .send({ email: `send${i}@example.com` })
@@ -50,11 +53,11 @@ describe('Rate limit enforcement', () => {
       .expect(429);
   });
 
-  it('otp/verify is bounded to 10 / 10min per IP — the 11th is 429', async () => {
+  it('otp/verify is bounded to 30 / 10min per IP — the 31st is 429', async () => {
     const server = harness.app.getHttpServer();
     // Distinct emails so the per-email lockout never accumulates; the per-IP
     // throttler still counts every call regardless of the (failing) body.
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 30; i++) {
       const res = await request(server)
         .post('/api/auth/otp/verify')
         .set(DEVICE_HEADERS)
@@ -65,6 +68,26 @@ describe('Rate limit enforcement', () => {
       .post('/api/auth/otp/verify')
       .set(DEVICE_HEADERS)
       .send({ email: 'verify-over@example.com', code: '000000' })
+      .expect(429);
+  });
+
+  it('claim is bounded to 10 / 10min per IP — the 11th is 429', async () => {
+    const server = harness.app.getHttpServer();
+    // claim requires a guest JWT, but ThrottlerGuard is registered before
+    // JwtAuthGuard (app.module.ts) so it counts every request before auth
+    // rejects it — an unauthenticated call still exercises the per-route cap.
+    // The first 10 come back 401 (no token); only the 11th trips the throttler.
+    for (let i = 0; i < 10; i++) {
+      const res = await request(server)
+        .post('/api/auth/claim')
+        .set(DEVICE_HEADERS)
+        .send({ email: `claim${i}@example.com`, code: '000000' });
+      expect(res.status).not.toBe(429);
+    }
+    await request(server)
+      .post('/api/auth/claim')
+      .set(DEVICE_HEADERS)
+      .send({ email: 'claim-over@example.com', code: '000000' })
       .expect(429);
   });
 

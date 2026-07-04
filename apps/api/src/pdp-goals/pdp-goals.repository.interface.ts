@@ -3,6 +3,14 @@ import { ClientSession, Types } from 'mongoose';
 import type { DBError, Result } from '../common/utils/result.util';
 import type { PdpGoal, PdpGoalAction } from './schemas/pdp-goal.schema';
 
+/**
+ * Error codes `findPaginated` can return. `INVALID_CURSOR` is a client input
+ * error (→ 400); `DB_ERROR` is a genuine persistence failure (→ 500). The
+ * service switches on this union with an exhaustiveness check, so adding a code
+ * here forces the caller to decide its HTTP mapping.
+ */
+export type PdpGoalErrorCode = 'DB_ERROR' | 'INVALID_CURSOR';
+
 export const PDP_GOALS_REPOSITORY = Symbol('PDP_GOALS_REPOSITORY');
 
 export interface CreatePdpGoalActionData {
@@ -92,7 +100,7 @@ export interface IPdpGoalsRepository {
     statuses: PdpGoalStatus[],
     cursor?: string,
     limit?: number
-  ): Promise<Result<Page<PdpGoal>, DBError>>;
+  ): Promise<Result<Page<PdpGoal>, DBError<PdpGoalErrorCode>>>;
 
   findOneWithArtefact(
     goalXid: string,

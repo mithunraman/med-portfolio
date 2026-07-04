@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { MAX_OTP_WINDOW_MINUTES, OTP_RETENTION_MARGIN_MINUTES } from '../otp.constants';
 
 @Schema({
   collection: 'otps',
@@ -30,13 +31,14 @@ export type OtpDocument = Otp & Document;
 
 /**
  * Retain OTP rows at least as long as the rate-limit window so per-email
- * send-volume counts (countRecentByEmail) are accurate. Sized to cover the max
- * configurable window (OTP_RATE_LIMIT_WINDOW_MINUTES, capped at 60m) so a static
- * index stays correct for any runtime value. Code *validity* is enforced
- * separately via the expiresAt check in OtpService.verifyOtp — lingering expired
- * rows are never verifiable.
+ * send-volume counts (countRecentByEmail) are accurate. DERIVED from the shared
+ * MAX_OTP_WINDOW_MINUTES (the same constant that caps OTP_RATE_LIMIT_WINDOW_MINUTES
+ * in app.config.ts) plus a margin, so raising the window cap can never silently
+ * out-run retention and under-count. Code *validity* is enforced separately via
+ * the expiresAt check in OtpService.verifyOtp — lingering expired rows are never
+ * verifiable.
  */
-export const OTP_RETENTION_SECONDS = 60 * 60; // 60m
+export const OTP_RETENTION_SECONDS = (MAX_OTP_WINDOW_MINUTES + OTP_RETENTION_MARGIN_MINUTES) * 60;
 
 export const OtpSchema = SchemaFactory.createForClass(Otp);
 

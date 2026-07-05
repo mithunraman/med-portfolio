@@ -131,13 +131,14 @@
         font-family: inherit;
         text-decoration: none;
         cursor: pointer;
+        box-shadow: var(--elevation-1);
         transition:
-          background 0.2s,
-          transform 0.2s;
+          box-shadow var(--duration-short) var(--ease-standard),
+          transform var(--duration-short) var(--ease-standard);
       }
 
       .app-store-btn:hover {
-        background: #000;
+        box-shadow: var(--elevation-3);
         transform: translateY(-1px);
       }
 
@@ -385,11 +386,15 @@
         background: var(--color-bg);
         border-radius: var(--radius-lg);
         border: 1px solid var(--color-border);
-        transition: box-shadow 0.2s;
+        box-shadow: var(--elevation-1);
+        transition:
+          box-shadow var(--duration-medium) var(--ease-standard),
+          transform var(--duration-medium) var(--ease-standard);
       }
 
       .feature-card:hover {
-        box-shadow: var(--shadow-md);
+        box-shadow: var(--elevation-3);
+        transform: translateY(-2px);
       }
 
       .feature-icon {
@@ -502,7 +507,15 @@
         background: var(--color-surface);
         border: 1px solid var(--color-border);
         border-radius: var(--radius-lg);
-        box-shadow: var(--shadow-sm);
+        box-shadow: var(--elevation-1);
+        transition:
+          box-shadow var(--duration-medium) var(--ease-standard),
+          transform var(--duration-medium) var(--ease-standard);
+      }
+
+      .testimonial-card:hover {
+        box-shadow: var(--elevation-3);
+        transform: translateY(-2px);
       }
 
       .testimonial-card .stars {
@@ -577,6 +590,15 @@
         background: var(--color-surface);
         border-radius: var(--radius-md);
         border: 1px solid var(--color-border);
+        box-shadow: var(--elevation-1);
+        transition:
+          box-shadow var(--duration-medium) var(--ease-standard),
+          transform var(--duration-medium) var(--ease-standard);
+      }
+
+      .trust-item:hover {
+        box-shadow: var(--elevation-3);
+        transform: translateY(-2px);
       }
 
       .trust-item-icon {
@@ -656,11 +678,6 @@
         font-weight: 600;
         color: var(--color-text);
         list-style: none;
-        transition: background 0.15s;
-      }
-
-      .faq-item summary:hover {
-        background: var(--color-bg);
       }
 
       .faq-item summary::-webkit-details-marker {
@@ -775,7 +792,7 @@
         </a>
         <a
           href="https://apps.apple.com/app/logdit"
-          class="nav-cta"
+          class="nav-cta has-state"
           aria-label="Download LOGDit on the App Store"
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
@@ -804,7 +821,7 @@
         <div class="waitlist">
           <a
             href="https://apps.apple.com/app/logdit"
-            class="app-store-btn"
+            class="app-store-btn has-state"
             aria-label="Download LOGDit on the App Store"
           >
             <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
@@ -1047,7 +1064,7 @@
         <h2>Questions trainees ask us</h2>
         <div class="faq-list">
           <details class="faq-item">
-            <summary>Does <span class="brand">LOGDit</span> replace my eportfolio?</summary>
+            <summary class="has-state">Does <span class="brand">LOGDit</span> replace my eportfolio?</summary>
             <div class="faq-item-body">
               No. <span class="brand">LOGDit</span> drafts the entry so you don't start from a blank
               box - export it as a PDF and paste the structured output into whichever eportfolio
@@ -1055,7 +1072,7 @@
             </div>
           </details>
           <details class="faq-item">
-            <summary>Which specialties do you support?</summary>
+            <summary class="has-state">Which specialties do you support?</summary>
             <div class="faq-item-body">
               In beta today: General Practice (RCGP) only. Internal Medicine (JRCPTB), Psychiatry
               (RCPsych), Emergency Medicine and Paediatrics are on the roadmap. Email us with your
@@ -1063,7 +1080,7 @@
             </div>
           </details>
           <details class="faq-item">
-            <summary>How does the PII redaction actually work?</summary>
+            <summary class="has-state">How does the PII redaction actually work?</summary>
             <div class="faq-item-body">
               Your audio is transcribed, then an automatic redaction pass replaces patient
               identifiers - names, NHS numbers, dates of birth, postcodes and addresses - with typed
@@ -1072,7 +1089,7 @@
             </div>
           </details>
           <details class="faq-item">
-            <summary>What about my recordings - where do they go?</summary>
+            <summary class="has-state">What about my recordings - where do they go?</summary>
             <div class="faq-item-body">
               Audio is stored encrypted in UK-region cloud infrastructure and automatically deleted
               within 72 hours of transcription. You can also delete any recording manually from
@@ -1080,14 +1097,14 @@
             </div>
           </details>
           <details class="faq-item">
-            <summary>Is it free?</summary>
+            <summary class="has-state">Is it free?</summary>
             <div class="faq-item-body">
               Free while in beta - no card required, no trial timer. We'll announce pricing when we
               launch a paid plan, with advance notice and no auto-charges. Final pricing TBD.
             </div>
           </details>
           <details class="faq-item">
-            <summary>Will I still own and write my own reflections?</summary>
+            <summary class="has-state">Will I still own and write my own reflections?</summary>
             <div class="faq-item-body">
               Yes. <span class="brand">LOGDit</span> drafts structured reflections from what you
               said, but every section is editable and version-historied. You sign off on what goes
@@ -1095,7 +1112,7 @@
             </div>
           </details>
           <details class="faq-item">
-            <summary>Who built this?</summary>
+            <summary class="has-state">Who built this?</summary>
             <div class="faq-item-body">
               A small team of UK doctors and engineers. We can't fix everything wrong with portfolio
               admin, but we can fix the blank-page problem. Reach us at
@@ -1116,7 +1133,7 @@
         <div class="waitlist">
           <a
             href="https://apps.apple.com/app/logdit"
-            class="app-store-btn"
+            class="app-store-btn has-state"
             aria-label="Download LOGDit on the App Store"
           >
             <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">

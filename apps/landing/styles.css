@@ -36,7 +36,51 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.08);
+  /* Elevation levels (Material-style, brand-tinted ink) */
+  --elevation-1: 0 1px 2px rgba(20, 48, 42, 0.06), 0 1px 3px rgba(20, 48, 42, 0.04);
+  --elevation-2: 0 2px 6px rgba(20, 48, 42, 0.08), 0 1px 2px rgba(20, 48, 42, 0.05);
+  --elevation-3: 0 8px 24px rgba(20, 48, 42, 0.1), 0 2px 6px rgba(20, 48, 42, 0.05);
+  /* Motion tokens */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-short: 150ms;
+  --duration-medium: 280ms;
+  /* State-layer opacities (hover / focus / pressed) */
+  --state-hover: 0.08;
+  --state-focus: 0.1;
+  --state-pressed: 0.12;
   --max-width: 1120px;
+}
+
+/* ── State layer (Material) — semi-transparent overlay of the element's own
+   ink, driven by interaction state. Applied to interactive surfaces via the
+   .has-state helper; sits behind text (z-index:-1) so content stays crisp. ── */
+.has-state {
+  position: relative;
+  isolation: isolate;
+}
+
+.has-state::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+  transition: opacity var(--duration-short) var(--ease-standard);
+}
+
+.has-state:hover::before {
+  opacity: var(--state-hover);
+}
+
+.has-state:focus-visible::before {
+  opacity: var(--state-focus);
+}
+
+.has-state:active::before {
+  opacity: var(--state-pressed);
 }
 
 html {
@@ -76,6 +120,7 @@ nav {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--elevation-1);
 }
 
 .nav-inner {
@@ -131,11 +176,12 @@ footer .logo-mark {
   font-weight: 500;
   text-decoration: none;
   cursor: pointer;
-  transition: background 0.2s;
+  box-shadow: var(--elevation-1);
+  transition: box-shadow var(--duration-short) var(--ease-standard);
 }
 
 .nav-cta:hover {
-  background: var(--color-primary-dark);
+  box-shadow: var(--elevation-2);
 }
 
 /* ── Sections / container ── */

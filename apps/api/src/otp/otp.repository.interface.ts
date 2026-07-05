@@ -20,5 +20,7 @@ export interface IOtpRepository {
 
   deleteByEmail(email: string): Promise<Result<number, DBError>>;
 
+  deleteById(id: string): Promise<Result<number, DBError>>;
+
   countRecentByEmail(email: string, since: Date): Promise<Result<number, DBError>>;
 }

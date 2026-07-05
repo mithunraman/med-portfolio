@@ -69,22 +69,6 @@ export function buildOtpEmail({ code, expiryMinutes }: OtpEmailParams): EmailCon
             </td>
           </tr>
 
-          <!-- Divider -->
-          <tr>
-            <td style="padding:0 36px;">
-              <hr style="border:none;border-top:1px solid #edf0f4;margin:0;">
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="padding:20px 36px 28px;">
-              <p style="margin:0;font-size:12px;color:#a0aab4;text-align:center;line-height:1.5;">
-                PLAB Consultant &middot; Sent automatically &middot; Please do not reply
-              </p>
-            </td>
-          </tr>
-
         </table>
         <!-- /Card -->
 
@@ -102,8 +86,6 @@ export function buildOtpEmail({ code, expiryMinutes }: OtpEmailParams): EmailCon
     `This code expires in ${expiryMinutes} minutes.`,
     '',
     "If you didn't request this code, you can safely ignore this email.",
-    '',
-    '— PLAB Consultant',
   ].join('\n');
 
   return { html, text };

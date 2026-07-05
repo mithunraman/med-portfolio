@@ -4,6 +4,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
@@ -92,10 +93,22 @@ export class OtpService {
     if (useTestOtp) {
       this.logger.warn(`TEST OTP issued for ${normalizedEmail}`);
     } else {
-      // Fire-and-forget — don't block the response on SMTP round-trip
-      this.emailService.sendOtp(normalizedEmail, code, this.expiryMinutes).catch((error) => {
-        this.logger.error(`Failed to send OTP email to ${normalizedEmail}`, error);
-      });
+      // Await delivery so a provider failure surfaces to the user. The failure is
+      // already logged and reported to Sentry inside EmailService; here we only
+      // translate it into a retryable, user-facing response. No-op when disabled.
+      try {
+        await this.emailService.sendOtp(normalizedEmail, code, this.expiryMinutes);
+      } catch {
+        // Roll back the row we just created so a failed delivery (e.g. a provider
+        // outage) doesn't consume a rate-limit slot and lock the user out. Delete
+        // by _id only — deleteByEmail would wipe prior rows and defeat the send
+        // window that checkRateLimit counts (see the note above). Best-effort: if
+        // cleanup fails the row lingers until the TTL reaps it.
+        await this.otpRepo.deleteById(result.value._id.toString());
+        throw new ServiceUnavailableException(
+          'Failed to send verification email. Please try again.'
+        );
+      }
     }
 
     return { message: 'OTP sent successfully' };

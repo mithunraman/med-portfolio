@@ -4,30 +4,30 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { MongooseModule, getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import { PassportModule } from '@nestjs/passport';
+import { Test, TestingModule } from '@nestjs/testing';
 import {
   ThrottlerGuard,
   ThrottlerModule,
   ThrottlerStorage,
   ThrottlerStorageService,
 } from '@nestjs/throttler';
-import { rateLimitConfig } from '../../../config/rate-limit.config';
-import { Test, TestingModule } from '@nestjs/testing';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Connection, Model } from 'mongoose';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { User, UserDocument, UserSchema } from '../../schemas/user.schema';
-import { Session, SessionDocument, SessionSchema } from '../../schemas/session.schema';
-import { AuthController } from '../../auth.controller';
-import { AuthService } from '../../auth.service';
-import { TokenService } from '../../token.service';
-import { JwtStrategy } from '../../strategies/jwt.strategy';
-import { SessionsRepository } from '../../sessions.repository';
-import { SESSION_REPOSITORY } from '../../sessions.repository.interface';
-import { EmailService } from '../../../email/email.service';
-import { EmailModule } from '../../../email/email.module';
-import { OtpModule } from '../../../otp';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
+import { rateLimitConfig } from '../../../config/rate-limit.config';
+import { EmailModule } from '../../../email/email.module';
+import { EmailService } from '../../../email/email.service';
+import { OtpModule } from '../../../otp';
+import { AuthController } from '../../auth.controller';
+import { AuthService } from '../../auth.service';
+import { Session, SessionDocument, SessionSchema } from '../../schemas/session.schema';
+import { User, UserDocument, UserSchema } from '../../schemas/user.schema';
+import { SessionsRepository } from '../../sessions.repository';
+import { SESSION_REPOSITORY } from '../../sessions.repository.interface';
+import { JwtStrategy } from '../../strategies/jwt.strategy';
+import { TokenService } from '../../token.service';
 
 export const TEST_JWT_SECRET = 'test-jwt-access-secret-must-be-at-least-32-chars';
 
@@ -56,11 +56,8 @@ function testAppConfig() {
     openai: { apiKey: 'x' },
     assemblyai: { apiKey: 'x', baseUrl: 'https://api.eu.assemblyai.com' },
     sentry: { dsn: 'https://x@x.ingest.sentry.io/x' },
-    smtp: {
-      host: undefined,
-      port: 587,
-      user: undefined,
-      pass: undefined,
+    resend: {
+      apiKey: undefined,
       from: undefined,
     },
     allowedOrigins: [],
@@ -194,13 +191,6 @@ export async function cleanupAuthCollections(harness: AuthTestHarness): Promise<
 
 /** Clears all in-memory rate-limit counters. Call between tests that hit throttled routes. */
 export function resetThrottler(harness: AuthTestHarness): void {
-  // Cancel pending expiry timers BEFORE clearing storage. Each throttled hit
-  // schedules a setTimeout (kept in the service's private timeoutIds) that later
-  // does `storage.get(key)` to decrement the counter. If we only clear storage,
-  // a stale timer fires against a missing key → TypeError (or decrements a
-  // recreated counter → flaky under-count). onApplicationShutdown() is the
-  // service's own timer-cancellation path.
-  harness.throttlerStorage.onApplicationShutdown();
   harness.throttlerStorage.storage.clear();
 }
 

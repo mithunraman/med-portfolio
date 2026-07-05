@@ -71,6 +71,16 @@ export class OtpRepository implements IOtpRepository {
     }
   }
 
+  async deleteById(id: string): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.otpModel.deleteOne({ _id: id });
+      return ok(result.deletedCount);
+    } catch (error) {
+      this.logger.error('Failed to delete OTP by id', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to delete OTP' });
+    }
+  }
+
   async countRecentByEmail(email: string, since: Date): Promise<Result<number, DBError>> {
     try {
       const count = await this.otpModel.countDocuments({

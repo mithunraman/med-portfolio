@@ -1,4 +1,8 @@
-import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  InternalServerErrorException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import * as crypto from 'crypto';
 import { Types } from 'mongoose';
 import { err, ok } from '../../common/utils/result.util';
@@ -30,6 +34,7 @@ const mockOtpRepo = {
   findLatestByEmail: jest.fn(),
   claimVerificationAttempt: jest.fn(),
   deleteByEmail: jest.fn(),
+  deleteById: jest.fn(),
   countRecentByEmail: jest.fn(),
 };
 
@@ -70,6 +75,7 @@ describe('OtpService', () => {
     mockEmailService.sendOtp.mockResolvedValue(undefined);
     mockOtpRepo.findLatestByEmail.mockResolvedValue(ok(null));
     mockOtpRepo.deleteByEmail.mockResolvedValue(ok(0));
+    mockOtpRepo.deleteById.mockResolvedValue(ok(1));
     // Default: an attempt slot is available (claim succeeds). Tests that need the
     // cap-reached path override this with ok(null).
     mockOtpRepo.claimVerificationAttempt.mockResolvedValue(ok(makeOtpDoc()));
@@ -183,14 +189,27 @@ describe('OtpService', () => {
       );
     });
 
-    it('should not throw when email delivery fails', async () => {
+    it('should surface a ServiceUnavailableException when email delivery fails', async () => {
       mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
       mockOtpRepo.create.mockResolvedValue(ok(makeOtpDoc()));
-      mockEmailService.sendOtp.mockRejectedValue(new Error('SMTP timeout'));
+      mockEmailService.sendOtp.mockRejectedValue(new Error('provider down'));
 
-      const result = await service.sendOtp(TEST_EMAIL);
+      await expect(service.sendOtp(TEST_EMAIL)).rejects.toThrow(ServiceUnavailableException);
+    });
 
-      expect(result.message).toBe('OTP sent successfully');
+    it('frees the rate-limit slot on send failure by deleting the just-created row by id', async () => {
+      const createdOtp = makeOtpDoc();
+      mockOtpRepo.countRecentByEmail.mockResolvedValue(ok(0));
+      mockOtpRepo.create.mockResolvedValue(ok(createdOtp));
+      mockEmailService.sendOtp.mockRejectedValue(new Error('provider down'));
+
+      await expect(service.sendOtp(TEST_EMAIL)).rejects.toThrow(ServiceUnavailableException);
+
+      // A failed delivery must not consume a rate-limit slot. Delete only the row
+      // we just created (by _id); deleteByEmail would wipe sibling rows and defeat
+      // the send-rate-limit window.
+      expect(mockOtpRepo.deleteById).toHaveBeenCalledWith(createdOtp._id.toString());
+      expect(mockOtpRepo.deleteByEmail).not.toHaveBeenCalled();
     });
 
     it('should set correct expiry based on config', async () => {

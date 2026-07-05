@@ -39,7 +39,7 @@ export const envSchema = z.object({
     .pipe(z.number().int().min(1).max(365)),
 
   // Storage (S3/R2)
-  S3_ENDPOINT: z.string().url().optional(),
+  S3_ENDPOINT: z.string().url(),
   S3_REGION: z.string().default('auto'),
   S3_ACCESS_KEY_ID: z
     .string({ required_error: 'S3_ACCESS_KEY_ID is required' })
@@ -67,16 +67,9 @@ export const envSchema = z.object({
     .string({ required_error: 'SENTRY_DSN is required' })
     .url('SENTRY_DSN must be a valid URL'),
 
-  // SMTP (email)
-  SMTP_HOST: z.string().min(1).optional(),
-  SMTP_PORT: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .pipe(z.number().int().min(1).max(65535))
-    .default('587'),
-  SMTP_USER: z.string().min(1).optional(),
-  SMTP_PASS: z.string().min(1).optional(),
-  SMTP_FROM: z.string().min(1).optional(),
+  // Transactional email (Resend) — required; the app cannot deliver OTP logins without both.
+  RESEND_API_KEY: z.string().min(1),
+  MAIL_FROM: z.string().min(1),
 
   // CORS — comma-separated list of allowed browser origins
   ALLOWED_ORIGINS: z
@@ -195,12 +188,9 @@ export const appConfig = registerAs('app', () => {
     sentry: {
       dsn: env.SENTRY_DSN,
     },
-    smtp: {
-      host: env.SMTP_HOST,
-      port: env.SMTP_PORT,
-      user: env.SMTP_USER,
-      pass: env.SMTP_PASS,
-      from: env.SMTP_FROM,
+    resend: {
+      apiKey: env.RESEND_API_KEY,
+      from: env.MAIL_FROM,
     },
     allowedOrigins: env.ALLOWED_ORIGINS,
     trustProxyHops: env.TRUST_PROXY_HOPS,

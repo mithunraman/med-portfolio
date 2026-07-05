@@ -23,12 +23,6 @@ describe('buildOtpEmail', () => {
     expect(text).toContain('expires in 5 minutes');
   });
 
-  it('should include PLAB Consultant branding', () => {
-    const { html, text } = buildOtpEmail(params);
-    expect(html).toContain('PLAB Consultant');
-    expect(text).toContain('PLAB Consultant');
-  });
-
   it('should produce valid HTML structure', () => {
     const { html } = buildOtpEmail(params);
     expect(html).toContain('<!DOCTYPE html>');

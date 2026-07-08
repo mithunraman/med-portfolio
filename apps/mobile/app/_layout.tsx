@@ -43,7 +43,7 @@ Sentry.init({
   sendDefaultPii: false,
 
   // Sample 10% of transactions in production, 100% in dev
-  tracesSampleRate: __DEV__ ? 1.0 : 1,
+  tracesSampleRate: __DEV__ ? 1.0 : 0.2,
 
   // Track crash-free session rate
   enableAutoSessionTracking: true,
@@ -64,7 +64,13 @@ function LoadingScreen() {
   );
 }
 
-function InitErrorScreen({ onRetry, errorDetail }: { onRetry: () => void; errorDetail?: string | null }) {
+function InitErrorScreen({
+  onRetry,
+  errorDetail,
+}: {
+  onRetry: () => void;
+  errorDetail?: string | null;
+}) {
   const { colors } = useTheme();
   return (
     <View style={[styles.errorScreen, { backgroundColor: colors.background }]}>

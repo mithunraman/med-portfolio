@@ -57,8 +57,12 @@ export const envSchema = z.object({
     .min(1, 'OPENAI_API_KEY cannot be empty'),
 
   // LLM A/B variant selector. Selects a complete stage→model profile from
-  // VARIANTS (see llm/model-variants.ts). Expands to 'B'/'C' in later phases.
-  LLM_VARIANT: z.enum(['A']).default('A'),
+  // VARIANTS (see llm/model-variants.ts). Expands to 'C' in a later phase.
+  LLM_VARIANT: z.enum(['A', 'B']).default('A'),
+
+  // OpenRouter — required only when the active variant routes any stage to it
+  // (ModelConfigService enforces this at startup).
+  OPENROUTER_API_KEY: z.string().optional(),
 
   // AssemblyAI
   ASSEMBLYAI_API_KEY: z
@@ -187,6 +191,9 @@ export const appConfig = registerAs('app', () => {
     },
     llm: {
       variant: env.LLM_VARIANT,
+    },
+    openrouter: {
+      apiKey: env.OPENROUTER_API_KEY,
     },
     assemblyai: {
       apiKey: env.ASSEMBLYAI_API_KEY,

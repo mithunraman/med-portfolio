@@ -23,6 +23,13 @@ export type OpenAIModel = (typeof OpenAIModels)[keyof typeof OpenAIModels];
 export type StructuredMethod = 'functionCalling' | 'jsonSchema' | 'jsonMode';
 
 /**
+ * Reasoning ("think") mode for hybrid models (DeepSeek V4). `off` = non-thinking;
+ * `high`/`max` set reasoning effort. Semantic here; LLMService translates it into
+ * the provider's request params.
+ */
+export type ThinkMode = 'off' | 'high' | 'max';
+
+/**
  * A concrete, resolved model target: which provider to call and which model
  * (or Azure deployment) to run on it. This is the entire vocabulary LLMService
  * understands. The mapping from a pipeline stage to a target lives in
@@ -30,7 +37,15 @@ export type StructuredMethod = 'functionCalling' | 'jsonSchema' | 'jsonMode';
  */
 export type ModelTarget =
   | { provider: 'openai'; model: string; structuredMethod?: StructuredMethod }
-  | { provider: 'openrouter'; model: string; structuredMethod?: StructuredMethod }
+  | {
+      provider: 'openrouter';
+      model: string;
+      /** Reasoning effort for hybrid models (DeepSeek V4). */
+      thinkMode?: ThinkMode;
+      /** OpenRouter upstream provider-routing preference, e.g. ['DigitalOcean']. */
+      route?: string[];
+      structuredMethod?: StructuredMethod;
+    }
   | { provider: 'azure'; deployment: string; structuredMethod?: StructuredMethod };
 
 export type LLMOptions = ModelTarget & {
@@ -59,10 +74,29 @@ export interface TranscriptionResult {
   wordCount: number;
 }
 
+/**
+ * Extra completion-token budget to reserve for reasoning ("thinking") tokens,
+ * which share the max_tokens budget with the answer. Without this, a thinking
+ * model exhausts the budget mid-answer and truncates structured output.
+ */
+function reasoningHeadroom(thinkMode?: ThinkMode): number {
+  switch (thinkMode) {
+    case 'high':
+      return 8000;
+    case 'max':
+      return 16000;
+    default:
+      return 0;
+  }
+}
+
 @Injectable()
 export class LLMService {
   private readonly logger = new Logger(LLMService.name);
   private readonly openaiApiKey: string;
+  // Optional — only required when the active variant routes a stage to OpenRouter.
+  // Presence is enforced up front by ModelConfigService's credential guard.
+  private readonly openrouterApiKey: string | undefined;
   private readonly assemblyai: AssemblyAI;
 
   constructor(
@@ -72,6 +106,8 @@ export class LLMService {
     const openaiApiKey = this.configService.get<string>('app.openai.apiKey');
     if (!openaiApiKey) throw new Error('Missing config: app.openai.apiKey');
     this.openaiApiKey = openaiApiKey;
+
+    this.openrouterApiKey = this.configService.get<string>('app.openrouter.apiKey');
 
     const assemblyaiApiKey = this.configService.get<string>('app.assemblyai.apiKey');
     if (!assemblyaiApiKey) throw new Error('Missing config: app.assemblyai.apiKey');
@@ -173,11 +209,61 @@ export class LLMService {
           temperature,
           maxTokens,
         });
-      case 'openrouter':
-        throw new Error("LLM provider 'openrouter' is not enabled yet (added in Phase 2)");
+      case 'openrouter': {
+        if (!this.openrouterApiKey) throw new Error('Missing config: app.openrouter.apiKey');
+        // OpenRouter is OpenAI-wire-compatible: reuse ChatOpenAI, just repoint the base URL.
+        // Reasoning ("think") control and upstream provider routing ride along as
+        // extra request-body params via modelKwargs.
+        //
+        // Reasoning tokens share the completion budget, so a thinking model needs
+        // headroom ON TOP of the caller's answer budget — otherwise the structured
+        // output gets truncated mid-JSON once thinking eats maxTokens. The node's
+        // maxTokens stays the answer budget; we add the reasoning overhead here.
+        return new ChatOpenAI({
+          apiKey: this.openrouterApiKey,
+          model: target.model,
+          temperature,
+          maxTokens: maxTokens + reasoningHeadroom(target.thinkMode),
+          modelKwargs: this.openrouterKwargs(target),
+          configuration: { baseURL: 'https://openrouter.ai/api/v1' },
+        });
+      }
       case 'azure':
         throw new Error("LLM provider 'azure' is not enabled yet (added in Phase 3)");
     }
+  }
+
+  /**
+   * Translate an OpenRouter target's semantic options into extra request-body
+   * params. Single point that owns the OpenRouter wire format.
+   *
+   * Reasoning uses OpenRouter's normalized `reasoning` map. DeepSeek V4 supports
+   * effort `high` and `xhigh` (xhigh = max reasoning); `off` disables thinking.
+   * `provider.order` pins the upstream inference provider (e.g. digitalocean).
+   */
+  private openrouterKwargs(target: Extract<ModelTarget, { provider: 'openrouter' }>): Record<
+    string,
+    unknown
+  > {
+    const kwargs: Record<string, unknown> = {};
+
+    if (target.thinkMode === 'off') {
+      kwargs.reasoning = { enabled: false };
+    } else if (target.thinkMode === 'max') {
+      kwargs.reasoning = { effort: 'xhigh' };
+    } else if (target.thinkMode === 'high') {
+      kwargs.reasoning = { effort: 'high' };
+    }
+
+    // `only` hard-pins to the chosen upstream provider(s) — no fallback to any
+    // other endpoint — so a per-provider A/B stays clean (every request runs on
+    // the provider under test). Trade-off: a request that provider can't serve
+    // fails with "No endpoints found" instead of silently routing elsewhere.
+    if (target.route?.length) {
+      kwargs.provider = { only: target.route };
+    }
+
+    return kwargs;
   }
 
   /**

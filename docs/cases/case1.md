@@ -7,6 +7,8 @@ so she came back and yeah the cough had gone completely, think she said it went 
 
 honestly it was a good reminder to always check what meds someones on when they come in with something new. like its so easy to just think oh its a cough must be a chest thing and not even look at the medications. i think ill make more of a habit of reviewing recent prescribing changes whenever someones got a new symptom. also thinking about it now i probably should of told her to come back sooner if it got worse or if she got any swelling or anything, my safety netting wasnt great on this one
 
+This case highlighted a gap in my safety-netting when switching a patient's medication. My diagnosis of ACE inhibitor–induced cough was sound, but I didn't give clear advice on what to watch for or when to return after starting losartan — important given the risk of angioedema and other effects when changing antihypertensives. To address this, I will review the NICE CKS guidance on ACE inhibitors and ARBs, and build a habit of documenting explicit safety-netting whenever I start or change a medication — naming the specific red-flag symptoms and a defined timeframe for review.
+
 **_ [Case 2] _**
 ok so um this is a case from last week, er, in the surgery. So I saw this gentleman, he's
 68, came in with um shortness of breath. Well, breathlessness I should say, that had been

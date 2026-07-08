@@ -23,6 +23,20 @@ export class ModelConfigService {
     }
     this.variant = variant;
     this.profile = VARIANTS[variant];
+    this.assertCredentials(configService);
+  }
+
+  /**
+   * Fail fast at startup if the active variant routes any stage to a provider
+   * whose credentials are absent — rather than at the first request that hits it.
+   */
+  private assertCredentials(configService: ConfigService): void {
+    const providers = new Set(Object.values(this.profile).map((t) => t.provider));
+    if (providers.has('openrouter') && !configService.get<string>('app.openrouter.apiKey')) {
+      throw new Error(
+        `LLM_VARIANT '${this.variant}' uses OpenRouter but OPENROUTER_API_KEY is not set.`
+      );
+    }
   }
 
   /** Resolve the provider+model target for a stage under the active variant. */

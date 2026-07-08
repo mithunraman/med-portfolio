@@ -2,7 +2,7 @@ import { type FollowupQuestion, leafProbes, Probe, probeThreshold, Specialty } f
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { OpenAIModels } from '../../llm/llm.service';
+import { Stage } from '../../llm';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
@@ -296,7 +296,7 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
       const { data: response } = await deps.llmService.invokeStructured(
         messages,
         followupQuestionsResponseSchema,
-        { model: OpenAIModels.GPT_4_1, temperature: 0.3, maxTokens: 1000 }
+        { ...deps.modelConfig.resolve(Stage.GenerateFollowup), temperature: 0.3, maxTokens: 1000 }
       );
 
       // Log the model's gap analysis (chain-of-thought) before it's mapped away —

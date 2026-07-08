@@ -1,3 +1,4 @@
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { BaseMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { Injectable, Logger } from '@nestjs/common';
@@ -18,23 +19,36 @@ export const OpenAIModels = {
 
 export type OpenAIModel = (typeof OpenAIModels)[keyof typeof OpenAIModels];
 
-export const DEFAULT_MODEL: OpenAIModel = OpenAIModels.GPT_4_1_MINI;
+/** Structured-output strategy passed to LangChain's withStructuredOutput(). */
+export type StructuredMethod = 'functionCalling' | 'jsonSchema' | 'jsonMode';
 
-export interface LLMOptions {
-  model?: OpenAIModel;
+/**
+ * A concrete, resolved model target: which provider to call and which model
+ * (or Azure deployment) to run on it. This is the entire vocabulary LLMService
+ * understands. The mapping from a pipeline stage to a target lives in
+ * ModelConfigService — never here — so this service stays pure transport.
+ */
+export type ModelTarget =
+  | { provider: 'openai'; model: string; structuredMethod?: StructuredMethod }
+  | { provider: 'openrouter'; model: string; structuredMethod?: StructuredMethod }
+  | { provider: 'azure'; deployment: string; structuredMethod?: StructuredMethod };
+
+export type LLMOptions = ModelTarget & {
   temperature?: number;
   maxTokens?: number;
-}
+};
 
 export interface LLMResponse {
   content: string;
-  model: OpenAIModel;
+  /** Resolved model id (or Azure deployment name) the call ran on. */
+  model: string;
   tokensUsed: number | null;
 }
 
 export interface StructuredResponse<T> {
   data: T;
-  model: OpenAIModel;
+  /** Resolved model id (or Azure deployment name) the call ran on. */
+  model: string;
   tokensUsed: number | null;
 }
 
@@ -88,29 +102,33 @@ export class LLMService {
   async invokeStructured<T>(
     messages: BaseMessage[],
     schema: z.ZodType<T>,
-    options: LLMOptions = {}
+    options: LLMOptions
   ): Promise<StructuredResponse<T>> {
-    const { model = DEFAULT_MODEL, temperature = 0.1, maxTokens = 2000 } = options;
+    const { temperature = 0.1, maxTokens = 2000, ...target } = options;
+    const modelLabel = target.provider === 'azure' ? target.deployment : target.model;
 
     this.logger.debug(
-      `invokeStructured [${model}] messages:\n${messages.map((m) => `[${m.type}] ${m.content}`).join('\n')}`
+      `invokeStructured [${target.provider}:${modelLabel}] messages:\n${messages.map((m) => `[${m.type}] ${m.content}`).join('\n')}`
     );
 
     const startTime = Date.now();
     try {
       return await backOff(
         async () => {
-          const chatModel = this.createChatModel({ model, temperature, maxTokens });
+          const chatModel = this.createChatModel(target, temperature, maxTokens);
 
           // Cast to `any` to avoid TS2589 (excessive type depth) from LangChain's
           // heavily overloaded withStructuredOutput generics. Caller-side type
           // safety is preserved by the method signature: schema: ZodType<T> → T.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const structuredModel = (chatModel as any).withStructuredOutput(schema);
+          const structuredModel = (chatModel as any).withStructuredOutput(
+            schema,
+            target.structuredMethod ? { method: target.structuredMethod } : undefined
+          );
 
           const data = (await structuredModel.invoke(messages)) as T;
 
-          return { data, model, tokensUsed: null };
+          return { data, model: modelLabel, tokensUsed: null };
         },
         {
           numOfAttempts: 3,
@@ -129,22 +147,37 @@ export class LLMService {
       );
     } catch (error) {
       Sentry.captureException(error, {
-        tags: { operation: 'invokeStructured', model },
+        tags: { operation: 'invokeStructured', provider: target.provider, model: modelLabel },
         extra: { messageCount: messages.length, maxRetries: 3 },
       });
       throw error;
     } finally {
-      this.metricsService.recordLLMDuration('invokeStructured', model, Date.now() - startTime);
+      this.metricsService.recordLLMDuration('invokeStructured', modelLabel, Date.now() - startTime);
     }
   }
 
-  private createChatModel(options: Required<LLMOptions>): ChatOpenAI {
-    return new ChatOpenAI({
-      openAIApiKey: this.openaiApiKey,
-      model: options.model,
-      temperature: options.temperature,
-      maxTokens: options.maxTokens,
-    });
+  /**
+   * Build the LangChain chat client for a resolved target. This is the only
+   * place provider vocabulary lives — callers pass a target, never wire a client.
+   */
+  private createChatModel(
+    target: ModelTarget,
+    temperature: number,
+    maxTokens: number
+  ): BaseChatModel {
+    switch (target.provider) {
+      case 'openai':
+        return new ChatOpenAI({
+          openAIApiKey: this.openaiApiKey,
+          model: target.model,
+          temperature,
+          maxTokens,
+        });
+      case 'openrouter':
+        throw new Error("LLM provider 'openrouter' is not enabled yet (added in Phase 2)");
+      case 'azure':
+        throw new Error("LLM provider 'azure' is not enabled yet (added in Phase 3)");
+    }
   }
 
   /**

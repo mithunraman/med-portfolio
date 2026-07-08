@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { LLMService, OpenAIModels } from '../../llm/llm.service';
+import { LLMService, ModelConfigService, Stage } from '../../llm';
 import { CLEANING_PROMPT } from '../prompts/cleaning.prompt';
 import { IProcessingStage, StageContext, StageResult } from './stage.interface';
 
@@ -12,7 +12,10 @@ const cleaningResponseSchema = z.object({
 export class CleaningStage implements IProcessingStage {
   readonly name = 'cleaning';
 
-  constructor(private readonly llmService: LLMService) {}
+  constructor(
+    private readonly llmService: LLMService,
+    private readonly modelConfig: ModelConfigService
+  ) {}
 
   /**
    * Clean transcript - fix medical terms, remove fillers, improve formatting
@@ -21,8 +24,8 @@ export class CleaningStage implements IProcessingStage {
     const messages = await CLEANING_PROMPT.formatMessages({ transcript: input });
 
     const response = await this.llmService.invokeStructured(messages, cleaningResponseSchema, {
+      ...this.modelConfig.resolve(Stage.Cleaning),
       temperature: 0.1,
-      model: OpenAIModels.GPT_5_4_NANO,
     });
 
     return {

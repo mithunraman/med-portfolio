@@ -1,7 +1,7 @@
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { OpenAIModels } from '../../llm/llm.service';
+import { Stage } from '../../llm';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { RefineTrace, PortfolioStateType } from '../portfolio-graph.state';
 
@@ -176,7 +176,7 @@ export function createRefineNode(deps: GraphDeps) {
       const { data: response } = await deps.llmService.invokeStructured(
         messages,
         refineResponseSchema,
-        { model: OpenAIModels.GPT_5_4, temperature: 0, maxTokens }
+        { ...deps.modelConfig.resolve(Stage.Refine), temperature: 0, maxTokens }
       );
 
       const { composedDocument, refineTrace } = assembleRefined(document, response);

@@ -8,12 +8,17 @@ This document catalogues every LLM prompt in the backend, identifies which parts
 
 The repo has **8 distinct LLM prompts** (6 in the portfolio-graph nodes, 2 in the processing pipeline). Three other portfolio-graph nodes are interrupt-only and don't call the LLM.
 
+> **Note on current-state metadata.** The per-prompt model/temp/line-reference details below
+> have been removed as stale — for the authoritative, source-verified model, temperature,
+> schema, and source line of each stage (including the newer `elicit_justification` and
+> `refine` nodes not audited here), see [docs/llm/llm-pipeline-stages.md](llm/llm-pipeline-stages.md).
+> This audit is retained for its **curriculum-injection mapping** and the **Part 2 prompt-improvement backlog**, which remain valid.
+
 ### `portfolio-graph/nodes/` — the analysis pipeline
 
 #### 1. Classify entry type — [classify.node.ts:73-101](../apps/api/src/portfolio-graph/nodes/classify.node.ts#L73-L101)
 - **Node**: `classifyNode` → decides which entry type (CCR, SEA, LEA…) a transcript is
 - **Schema**: `classifyResponseSchema` (`isRelevant`, `entryType`, `confidence`, `reasoning`, `signalsFound[]`, `alternatives[]`)
-- **Model**: GPT-4.1-mini, temp 0.1, maxTokens 800
 - **Curriculum injected**:
   - **All `entryTypes[]`** via `formatEntryTypeBlock()`: `code`, `label`, `description`, `classificationSignals[]`
   - `config.name` ("General Practice")
@@ -23,7 +28,6 @@ The repo has **8 distinct LLM prompts** (6 in the portfolio-graph nodes, 2 in th
 #### 2. Check completeness — [check-completeness.node.ts:76-137](../apps/api/src/portfolio-graph/nodes/check-completeness.node.ts#L76-L137)
 - **Node**: `checkCompletenessNode` → decides which template sections are substantively covered
 - **Schema**: `completenessResponseSchema` — array of `{idea, sectionId, isSubstantive}` assignments
-- **Model**: GPT-4.1-mini, temp 0.1, maxTokens 2000
 - **Curriculum injected**:
   - **Filtered `template.sections[]`** (only `required: true` AND non-null `extractionQuestion`) via `formatSectionBlock()`: `id`, `label`, `description`
   - `config.name`, training stage context
@@ -32,7 +36,6 @@ The repo has **8 distinct LLM prompts** (6 in the portfolio-graph nodes, 2 in th
 #### 3. Tag capabilities — [tag-capabilities.node.ts:75-103](../apps/api/src/portfolio-graph/nodes/tag-capabilities.node.ts#L75-L103)
 - **Node**: `tagCapabilitiesNode` → which of the 13 RCGP capabilities the entry evidences
 - **Schema**: `tagCapabilitiesResponseSchema` — array of `{code, demonstrated, confidence, reasoning}`
-- **Model**: GPT-4.1-mini, temp 0.1, maxTokens 2000
 - **Curriculum injected**:
   - **All `capabilities[]`** via `formatCapabilityBlock()`: `code` (C-01…C-13), `name`, `description`, `domainCode`, `domainName`
   - The classified `entryType.code` for context
@@ -42,7 +45,6 @@ The repo has **8 distinct LLM prompts** (6 in the portfolio-graph nodes, 2 in th
 #### 4. Generate follow-up questions — [generate-followup.node.ts:43-89](../apps/api/src/portfolio-graph/nodes/generate-followup.node.ts#L43-L89)
 - **Node**: `generateFollowupNode` → contextualised micro-questions for missing/shallow sections
 - **Schema**: `followupQuestionsResponseSchema` — array of `{sectionId, question, hints.examples[]}`
-- **Model**: GPT-4.1, temp 0.3, maxTokens 1000
 - **Curriculum injected**:
   - **Missing/shallow `template.sections[]`** only (ranked by `weight`, top 3) via `formatMissingSectionBlock()`: `id`, `label`, `description`, default `extractionQuestion`, depth status
   - `config.name`, training stage context
@@ -51,7 +53,6 @@ The repo has **8 distinct LLM prompts** (6 in the portfolio-graph nodes, 2 in th
 #### 5. Reflect (extract & organise) — [reflect.node.ts:60-120](../apps/api/src/portfolio-graph/nodes/reflect.node.ts#L60-L120)
 - **Node**: `reflectNode` → sorts the trainee's transcript into template sections, preserving their voice
 - **Schema**: `reflectResponseSchema` — `{title, sections[], capabilityAnnotations[]}`
-- **Model**: GPT-4.1-mini, temp 0.1, maxTokens proportional to transcript (min 2000)
 - **Curriculum injected**:
   - **All `template.sections[]`** via `formatSectionBlock()`: `id`, `label`, `required`, `description`, `promptHint`
   - **Tagged `capabilities[]`** via `formatCapabilityBlock()`: `code`, `name`, plus the per-capability `reasoning` from step 3 (for the `capabilityAnnotations` mapping back to sections)
@@ -61,7 +62,6 @@ The repo has **8 distinct LLM prompts** (6 in the portfolio-graph nodes, 2 in th
 #### 6. Generate PDP — [generate-pdp.node.ts:72-119](../apps/api/src/portfolio-graph/nodes/generate-pdp.node.ts#L72-L119)
 - **Node**: `generatePdpNode` → 1-2 SMART PDP goals from the reflection + confirmed capabilities
 - **Schema**: `generatePdpResponseSchema` — array of `{goal, actions: [{action, intendedEvidence}]}`
-- **Model**: GPT-4.1, temp 0.2, maxTokens 1000
 - **Curriculum injected**:
   - **User-confirmed `capabilities[]`** via `formatCapabilityBlock()`: `code`, `name`, plus tag-time `reasoning`
   - The classified `entryType.code`
@@ -84,14 +84,12 @@ These reuse pre-computed curriculum-derived options from earlier nodes but issue
 - **Service**: `CleaningStage.execute()` ([cleaning.stage.ts:20-37](../apps/api/src/processing/stages/cleaning.stage.ts#L20-L37))
 - **Purpose**: Fix speech-to-text artefacts, medical terminology mishears, punctuation, paragraphing
 - **Schema**: `cleaningResponseSchema` — `{cleanedTranscript}`
-- **Model**: GPT-5.4-nano, temp 0.1
 - **Curriculum injected**: **None.** Pure transcript hygiene. No specialty, entry-type, or capability context.
 
 #### 8. Redaction — [redaction.prompt.ts:3-57](../apps/api/src/processing/prompts/redaction.prompt.ts#L3-L57)
 - **Service**: `RedactionStage.execute()` ([redaction.stage.ts:34-78](../apps/api/src/processing/stages/redaction.stage.ts#L34-L78))
 - **Purpose**: PII redaction (names, orgs, locations, DOBs, specific dates) after a regex pre-pass
 - **Schema**: `redactionResponseSchema` — `{needsRedaction, redactedText, redactedEntities[]}`
-- **Model**: GPT-5.4-nano, temp 0
 - **Curriculum injected**: **None.** PII categories only. Preserves medical eponyms (Parkinson's, Bell's…), drugs, scales — but these are listed in the prompt itself, not pulled from `SpecialtyConfig`.
 
 ### Summary table — curriculum fields injected per prompt

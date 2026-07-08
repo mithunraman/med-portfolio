@@ -8,28 +8,13 @@
 
 ## 1. Current LLM prompt inventory (backend)
 
-All 8 prompts run through `llmService.invokeStructured<T>()` (OpenAI structured outputs with Zod schemas).
-
-### Processing pipeline (pre-classification)
-
-| # | Stage | File | Model | Temp | Purpose |
-|---|---|---|---|---|---|
-| 1 | Cleaning | [apps/api/src/processing/prompts/cleaning.prompt.ts:3-37](../apps/api/src/processing/prompts/cleaning.prompt.ts#L3-L37) | GPT-5.4-nano | 0.1 | Fix medical terminology in speech-to-text (e.g. "met four men" → "Metformin") |
-| 2 | PII redaction | [apps/api/src/processing/prompts/redaction.prompt.ts:3-57](../apps/api/src/processing/prompts/redaction.prompt.ts#L3-L57) | GPT-5.4-nano | 0 | Second-pass PII catch after regex; tags `[NAME]`, `[ORGANISATION]`, etc. |
-
-### Portfolio graph nodes
-
-| # | Stage | File | Model | Temp | Purpose |
-|---|---|---|---|---|---|
-| 3 | Classify | [apps/api/src/portfolio-graph/nodes/classify.node.ts:73-101](../apps/api/src/portfolio-graph/nodes/classify.node.ts#L73-L101) | GPT-4.1 | 0.1 | Pick portfolio entry type for trainee's specialty |
-| 4 | Check completeness | [apps/api/src/portfolio-graph/nodes/check-completeness.node.ts:66-104](../apps/api/src/portfolio-graph/nodes/check-completeness.node.ts#L66-L104) | GPT-4.1 | 0.1 | Assign transcript content to template sections, rate depth |
-| 5 | Generate followup | [apps/api/src/portfolio-graph/nodes/generate-followup.node.ts:43-89](../apps/api/src/portfolio-graph/nodes/generate-followup.node.ts#L43-L89) | GPT-4.1 | 0.3 | Micro-questions for incomplete sections |
-| 6 | Reflect / format | [apps/api/src/portfolio-graph/nodes/reflect.node.ts:60-113](../apps/api/src/portfolio-graph/nodes/reflect.node.ts#L60-L113) | GPT-4.1-mini | 0.1 | Organise transcript into sections using only trainee's own words |
-| 7 | Tag capabilities | [apps/api/src/portfolio-graph/nodes/tag-capabilities.node.ts:75-103](../apps/api/src/portfolio-graph/nodes/tag-capabilities.node.ts#L75-L103) | GPT-4.1 | 0.1 | Per-capability yes/no recognition against curriculum |
-| 8 | Generate PDP | [apps/api/src/portfolio-graph/nodes/generate-pdp.node.ts:72-119](../apps/api/src/portfolio-graph/nodes/generate-pdp.node.ts#L72-L119) | GPT-4.1 | 0.2 | 1–2 SMART goals from trainee-identified learning needs |
-
-### Nodes without LLM calls
-`ask-followup`, `ask-clarification`, `present-classification`, `present-capabilities`, `gather-context` — interrupt-only or pure assembly.
+> **Removed as stale.** The per-stage model/prompt inventory that used to live here was
+> out of date (wrong model tiers, and missing the `elicit_justification` and `refine`
+> nodes). The authoritative, source-verified stage → model → prompt map now lives in
+> [docs/llm/llm-pipeline-stages.md](llm/llm-pipeline-stages.md).
+>
+> Sections 2–8 below (Groq evaluation, cost model, GDPR/residency analysis, benchmark
+> verdict, resume checklist) remain valid planning content and are unchanged.
 
 ---
 

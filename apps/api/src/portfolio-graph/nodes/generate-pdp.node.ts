@@ -2,7 +2,7 @@ import { Specialty } from '@acme/shared';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { OpenAIModels } from '../../llm/llm.service';
+import { Stage } from '../../llm';
 import { getStageContext } from '../../specialties/stage-context';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
@@ -222,7 +222,7 @@ export function createGeneratePdpNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       generatePdpResponseSchema,
-      { model: OpenAIModels.GPT_4_1, temperature: 0.3, maxTokens: 1000 }
+      { ...deps.modelConfig.resolve(Stage.GeneratePdp), temperature: 0.3, maxTokens: 1000 }
     );
 
     const pdpGoals = validateGoals(response.goals);

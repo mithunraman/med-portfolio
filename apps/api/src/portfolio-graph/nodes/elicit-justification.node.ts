@@ -2,7 +2,7 @@ import { Specialty } from '@acme/shared';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { OpenAIModels } from '../../llm/llm.service';
+import { Stage } from '../../llm';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { CapabilityTag, PortfolioStateType, ReadinessTier } from '../portfolio-graph.state';
@@ -165,7 +165,7 @@ export function createElicitJustificationNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       elicitJustificationResponseSchema,
-      { model: OpenAIModels.GPT_4_1, temperature: 0.3, maxTokens: 1500 }
+      { ...deps.modelConfig.resolve(Stage.ElicitJustification), temperature: 0.3, maxTokens: 1500 }
     );
 
     const byCode = new Map(response.justifications.map((j) => [j.code, j]));

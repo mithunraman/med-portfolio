@@ -11,6 +11,7 @@ import * as Sentry from '@sentry/nestjs';
 import { z } from 'zod';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
+import { Stage } from '../../llm';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PortfolioStateType, ReadinessEntry, ReadinessTier } from '../portfolio-graph.state';
 
@@ -370,7 +371,7 @@ export function createCheckCompletenessNode(deps: GraphDeps) {
       const { data: response } = await deps.llmService.invokeStructured(
         messages,
         responseSchema,
-        { temperature: 0.1, maxTokens: 2000 }
+        { ...deps.modelConfig.resolve(Stage.CheckCompleteness), temperature: 0.1, maxTokens: 2000 }
       );
 
       // ── Tiers: LLM grades quality vs rubric, code applies structural floors ──

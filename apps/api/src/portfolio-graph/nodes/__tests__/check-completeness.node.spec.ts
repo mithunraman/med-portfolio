@@ -20,6 +20,7 @@ function makeDeps(): GraphDeps {
     llmService: {
       invokeStructured: jest.fn().mockResolvedValue({ data: { assignments: [], sectionGrades: [] } }),
     } as any,
+    modelConfig: { resolve: jest.fn(() => ({ provider: 'openai', model: 'test-model' })) } as any,
     eventEmitter: { emit: jest.fn() } as any,
   };
 }

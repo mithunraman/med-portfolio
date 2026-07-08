@@ -17,6 +17,7 @@ function makeDeps(): GraphDeps {
     pdpGoalsRepository: {} as any,
     transactionService: {} as any,
     llmService: {} as any,
+    modelConfig: { resolve: jest.fn(() => ({ provider: 'openai', model: 'test-model' })) } as any,
     eventEmitter: { emit: jest.fn() } as any,
   };
 }

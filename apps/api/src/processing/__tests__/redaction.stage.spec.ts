@@ -18,12 +18,16 @@ const mockLlmService = {
   invokeStructured: jest.fn(),
 };
 
+const mockModelConfig = {
+  resolve: jest.fn(() => ({ provider: 'openai', model: 'test-model' })),
+};
+
 describe('RedactionStage', () => {
   let stage: RedactionStage;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    stage = new RedactionStage(mockLlmService as any);
+    stage = new RedactionStage(mockLlmService as any, mockModelConfig as any);
   });
 
   it('should pass through text unchanged when LLM returns needsRedaction: false and no regex matches', async () => {

@@ -1,6 +1,6 @@
 import type { BaseMessage } from '@langchain/core/messages';
 import type { z } from 'zod';
-import { OpenAIModels, type LLMService, type StructuredResponse } from '../../../llm/llm.service';
+import type { LLMService, StructuredResponse } from '../../../llm/llm.service';
 
 /**
  * A recorded LLM call for post-test assertions.
@@ -78,7 +78,7 @@ export class SequentialLLMMock {
         }
 
         const data = this.responses[this.callIndex++] as T;
-        const model = (options as Record<string, unknown>).model ?? OpenAIModels.GPT_4_1_MINI;
+        const model = (options.model ?? options.deployment ?? 'mock-model') as string;
         return { data, model, tokensUsed: null } as StructuredResponse<T>;
       },
       transcribeAudio: async () => {

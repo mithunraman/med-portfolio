@@ -21,6 +21,7 @@ import {
 } from '../../../artefacts/schemas/artefact.schema';
 import { TransactionService } from '../../../database/transaction.service';
 import { LLMService } from '../../../llm/llm.service';
+import { ModelConfigService } from '../../../llm/model-config.service';
 import { MEDIA_REPOSITORY } from '../../../media/media.repository.interface';
 import { MediaService } from '../../../media/media.service';
 import { Media, MediaSchema } from '../../../media/schemas/media.schema';
@@ -178,6 +179,16 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
       {
         provide: LLMService,
         useValue: llmMock.build(),
+      },
+
+      // Stub ModelConfigService — resolves every stage to a fixed OpenAI target.
+      // The mocked LLMService ignores the target, so any valid one suffices.
+      {
+        provide: ModelConfigService,
+        useValue: {
+          resolve: () => ({ provider: 'openai', model: 'test-model' }),
+          activeVariant: 'A',
+        },
       },
 
       // Mocked ProcessingService — no-op (we manually set message status)

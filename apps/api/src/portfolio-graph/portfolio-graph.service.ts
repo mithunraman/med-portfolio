@@ -24,7 +24,7 @@ import {
   IConversationsRepository,
 } from '../conversations/conversations.repository.interface';
 import { TransactionService } from '../database/transaction.service';
-import { LLMService } from '../llm';
+import { LLMService, ModelConfigService } from '../llm';
 import {
   IPdpGoalsRepository,
   PDP_GOALS_REPOSITORY,
@@ -141,6 +141,7 @@ export class PortfolioGraphService implements OnModuleInit {
     private readonly pdpGoalsRepository: IPdpGoalsRepository,
     private readonly transactionService: TransactionService,
     private readonly llmService: LLMService,
+    private readonly modelConfig: ModelConfigService,
     private readonly eventEmitter: EventEmitter2
   ) {}
 
@@ -172,6 +173,7 @@ export class PortfolioGraphService implements OnModuleInit {
       pdpGoalsRepository: this.pdpGoalsRepository,
       transactionService: this.transactionService,
       llmService: this.llmService,
+      modelConfig: this.modelConfig,
       eventEmitter: this.eventEmitter,
     };
     this.graph = buildPortfolioGraph(this.checkpointer, deps);

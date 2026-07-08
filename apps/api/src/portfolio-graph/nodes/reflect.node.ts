@@ -2,7 +2,7 @@ import { ArtefactTemplate, Section, Specialty } from '@acme/shared';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { OpenAIModels } from '../../llm/llm.service';
+import { Stage } from '../../llm';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
@@ -306,7 +306,7 @@ export function createReflectNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       reflectResponseSchema,
-      { model: OpenAIModels.GPT_4_1, temperature: 0.3, maxTokens }
+      { ...deps.modelConfig.resolve(Stage.Reflect), temperature: 0.3, maxTokens }
     );
 
     const { composedDocument, reflectTrace } = assembleSections(template, response.sections, cid);

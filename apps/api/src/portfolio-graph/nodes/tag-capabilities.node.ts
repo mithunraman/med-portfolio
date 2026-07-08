@@ -3,6 +3,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
+import { Stage } from '../../llm';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { CapabilityTag, PortfolioStateType, ReadinessTier } from '../portfolio-graph.state';
 import {
@@ -267,7 +268,7 @@ export function createTagCapabilitiesNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       tagCapabilitiesResponseSchema,
-      { temperature: 0.1, maxTokens: 2000 }
+      { ...deps.modelConfig.resolve(Stage.TagCapabilities), temperature: 0.1, maxTokens: 2000 }
     );
 
     // Log every assessment for traceability

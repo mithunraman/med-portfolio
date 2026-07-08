@@ -2,7 +2,7 @@ import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { IArtefactsRepository } from '../artefacts/artefacts.repository.interface';
 import { IConversationsRepository } from '../conversations/conversations.repository.interface';
 import { TransactionService } from '../database/transaction.service';
-import { LLMService } from '../llm';
+import { LLMService, ModelConfigService } from '../llm';
 import { IPdpGoalsRepository } from '../pdp-goals/pdp-goals.repository.interface';
 
 /** Event emitted by each graph node when it starts executing. */
@@ -27,5 +27,6 @@ export interface GraphDeps {
   pdpGoalsRepository: IPdpGoalsRepository;
   transactionService: TransactionService;
   llmService: LLMService;
+  modelConfig: ModelConfigService;
   eventEmitter: EventEmitter2;
 }

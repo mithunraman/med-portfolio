@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/nestjs';
 import { z } from 'zod';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
+import { Stage } from '../../llm';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { ClassificationAlternative, PortfolioStateType } from '../portfolio-graph.state';
 
@@ -266,7 +267,7 @@ export function createClassifyNode(deps: GraphDeps) {
       const { data: classification } = await deps.llmService.invokeStructured(
         messages,
         responseSchema,
-        { temperature: 0.1, maxTokens: 800 }
+        { ...deps.modelConfig.resolve(Stage.Classify), temperature: 0.1, maxTokens: 800 }
       );
 
       // Belt-and-suspenders: the enum schema already guarantees a valid code,

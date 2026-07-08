@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { LLMService, OpenAIModels } from '../../llm/llm.service';
+import { LLMService, ModelConfigService, Stage } from '../../llm';
 import { REDACTION_PROMPT } from '../prompts/redaction.prompt';
 import { redactStructuredPii } from '../utils/pii-regex';
 import { IProcessingStage, StageContext, StageResult } from './stage.interface';
@@ -24,7 +24,10 @@ export class RedactionStage implements IProcessingStage {
   readonly name = 'redaction';
   private readonly logger = new Logger(RedactionStage.name);
 
-  constructor(private readonly llmService: LLMService) {}
+  constructor(
+    private readonly llmService: LLMService,
+    private readonly modelConfig: ModelConfigService
+  ) {}
 
   /**
    * Redact PII from text using a two-layer approach:
@@ -45,8 +48,8 @@ export class RedactionStage implements IProcessingStage {
     const messages = await REDACTION_PROMPT.formatMessages({ text: regexResult.redactedText });
 
     const response = await this.llmService.invokeStructured(messages, redactionResponseSchema, {
+      ...this.modelConfig.resolve(Stage.Redaction),
       temperature: 0,
-      model: OpenAIModels.GPT_5_4_NANO,
     });
 
     const { needsRedaction, redactedText, redactedEntities: llmEntities } = response.data;

@@ -56,6 +56,10 @@ export const envSchema = z.object({
     .string({ required_error: 'OPENAI_API_KEY is required' })
     .min(1, 'OPENAI_API_KEY cannot be empty'),
 
+  // LLM A/B variant selector. Selects a complete stage→model profile from
+  // VARIANTS (see llm/model-variants.ts). Expands to 'B'/'C' in later phases.
+  LLM_VARIANT: z.enum(['A']).default('A'),
+
   // AssemblyAI
   ASSEMBLYAI_API_KEY: z
     .string({ required_error: 'ASSEMBLYAI_API_KEY is required' })
@@ -180,6 +184,9 @@ export const appConfig = registerAs('app', () => {
     },
     openai: {
       apiKey: env.OPENAI_API_KEY,
+    },
+    llm: {
+      variant: env.LLM_VARIANT,
     },
     assemblyai: {
       apiKey: env.ASSEMBLYAI_API_KEY,

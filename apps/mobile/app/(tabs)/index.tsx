@@ -21,7 +21,7 @@ import {
   type PdpGoal,
 } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router/react-navigation';
 import { randomUUID } from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';

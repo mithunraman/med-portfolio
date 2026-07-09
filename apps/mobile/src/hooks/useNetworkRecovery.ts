@@ -1,5 +1,5 @@
 import { selectIsOffline } from '@/store/slices/networkSlice';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { useEffect, useRef } from 'react';
 import { useAppSelector } from './useAppSelector';
 

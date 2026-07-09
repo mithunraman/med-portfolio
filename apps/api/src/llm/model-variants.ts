@@ -19,8 +19,8 @@ export const Stage = {
 } as const;
 export type Stage = (typeof Stage)[keyof typeof Stage];
 
-/** Known A/B variants. Expands to 'A' | 'B' | 'C' in later phases. */
-export type VariantKey = 'A' | 'B';
+/** Known variants. */
+export type VariantKey = 'A' | 'B' | 'C';
 
 /** A variant is a complete stage→target mapping — every stage must be present. */
 export type VariantProfile = Record<Stage, ModelTarget>;
@@ -31,6 +31,7 @@ const openai = (model: string): ModelTarget => ({ provider: 'openai', model });
 // Int. as the upstream inference provider (OpenRouter slug `alibaba`) for every
 // stage — its Flash endpoint supports tools, reasoning, and structured_outputs.
 const DEEPSEEK_FLASH = 'deepseek/deepseek-v4-flash';
+const DEEPSEEK_PRO = 'deepseek/deepseek-v4-pro';
 const ALIBABA_ROUTE = ['alibaba'];
 
 /**
@@ -75,19 +76,28 @@ export const VARIANTS = {
     refine: openai(OpenAIModels.GPT_5_4),
     generate_pdp: openai(OpenAIModels.GPT_4_1),
   },
-  // Variant B — DeepSeek V4 Flash for every stage, via OpenRouter → Alibaba Cloud Int.
-  // Per-stage reasoning: Max on the highest-leverage followup, Off where reasoning
-  // is a liability (cleaning copy-edit, refine polish), High elsewhere.
   B: {
     cleaning: deepseek(DEEPSEEK_FLASH, 'off'),
     redaction: deepseek(DEEPSEEK_FLASH, 'off'),
     classify: deepseek(DEEPSEEK_FLASH, 'off'),
     check_completeness: deepseek(DEEPSEEK_FLASH, 'off'),
-    generate_followup: deepseek(DEEPSEEK_FLASH, 'high'),
+    generate_followup: deepseek(DEEPSEEK_FLASH, 'off'),
     tag_capabilities: deepseek(DEEPSEEK_FLASH, 'off'),
-    elicit_justification: deepseek(DEEPSEEK_FLASH, 'high'),
+    elicit_justification: deepseek(DEEPSEEK_FLASH, 'off'),
     reflect: deepseek(DEEPSEEK_FLASH, 'off'),
     refine: deepseek(DEEPSEEK_FLASH, 'off'),
-    generate_pdp: deepseek(DEEPSEEK_FLASH, 'high'),
+    generate_pdp: deepseek(DEEPSEEK_FLASH, 'off'),
+  },
+  C: {
+    cleaning: deepseek(DEEPSEEK_PRO, 'off'),
+    redaction: deepseek(DEEPSEEK_PRO, 'off'),
+    classify: deepseek(DEEPSEEK_PRO, 'off'),
+    check_completeness: deepseek(DEEPSEEK_PRO, 'off'),
+    generate_followup: deepseek(DEEPSEEK_PRO, 'off'),
+    tag_capabilities: deepseek(DEEPSEEK_PRO, 'off'),
+    elicit_justification: deepseek(DEEPSEEK_PRO, 'off'),
+    reflect: deepseek(DEEPSEEK_PRO, 'off'),
+    refine: deepseek(DEEPSEEK_PRO, 'off'),
+    generate_pdp: deepseek(DEEPSEEK_PRO, 'off'),
   },
 } satisfies Record<VariantKey, VariantProfile>;

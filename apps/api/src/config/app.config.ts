@@ -56,9 +56,9 @@ export const envSchema = z.object({
     .string({ required_error: 'OPENAI_API_KEY is required' })
     .min(1, 'OPENAI_API_KEY cannot be empty'),
 
-  // LLM A/B variant selector. Selects a complete stage→model profile from
-  // VARIANTS (see llm/model-variants.ts). Expands to 'C' in a later phase.
-  LLM_VARIANT: z.enum(['A', 'B']).default('A'),
+  // LLM A/B/C variant selector. Selects a complete stage→model profile from
+  // VARIANTS (see llm/model-variants.ts).
+  LLM_VARIANT: z.enum(['A', 'B', 'C']).default('A'),
 
   // OpenRouter — required only when the active variant routes any stage to it
   // (ModelConfigService enforces this at startup).

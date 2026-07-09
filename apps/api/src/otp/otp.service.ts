@@ -13,8 +13,8 @@ import { EmailService } from '../email';
 import { EmailLockoutService } from './email-lockout.service';
 import { IOtpRepository, OTP_REPOSITORY } from './otp.repository.interface';
 
-const TEST_OTP_DOMAIN = '@logdit.app';
-const TEST_OTP_CODE = '112233';
+const TEST_OTP_DOMAIN = '@xyz.logdit.app';
+const TEST_OTP_CODE = '676756';
 
 export interface SendOtpResult {
   message: string;
@@ -32,7 +32,6 @@ export class OtpService {
   private readonly maxAttempts: number;
   private readonly rateLimitMax: number;
   private readonly rateLimitWindowMinutes: number;
-  private readonly isDevelopment: boolean;
 
   constructor(
     @Inject(OTP_REPOSITORY) private readonly otpRepo: IOtpRepository,
@@ -47,11 +46,10 @@ export class OtpService {
       'app.otp.rateLimitWindowMinutes',
       10
     );
-    this.isDevelopment = this.configService.get<boolean>('app.isDevelopment') ?? false;
   }
 
   private isTestEmail(email: string): boolean {
-    return this.isDevelopment && email.endsWith(TEST_OTP_DOMAIN);
+    return email.endsWith(TEST_OTP_DOMAIN);
   }
 
   async sendOtp(email: string): Promise<SendOtpResult> {
@@ -134,10 +132,7 @@ export class OtpService {
     // Atomically reserve one of the maxAttempts slots on this (latest) code before
     // comparing it. Claim-then-compare makes the cap race-safe: N concurrent
     // verifies can claim at most maxAttempts slots; the rest get null → rejected.
-    const claim = await this.otpRepo.claimVerificationAttempt(
-      otp._id.toString(),
-      this.maxAttempts
-    );
+    const claim = await this.otpRepo.claimVerificationAttempt(otp._id.toString(), this.maxAttempts);
     if (isErr(claim)) {
       throw new InternalServerErrorException('Failed to verify OTP');
     }

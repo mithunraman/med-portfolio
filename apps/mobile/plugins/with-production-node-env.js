@@ -21,12 +21,15 @@ const path = require('path');
 const MARKER_BEGIN = '# >>> with-production-node-env BEGIN';
 const MARKER_END = '# <<< with-production-node-env END';
 
+// Keep PROD_API_URL in sync with apps/mobile/.env.production. Hardcoded (rather than
+// sourcing .env.production) because the build-phase working directory made relative
+// paths unreliable; a literal export is immune to that.
+const PROD_API_URL = 'https://api.logdit.app/api';
+
 const SNIPPET = [
   MARKER_BEGIN,
   'if [[ "$CONFIGURATION" != *Debug* ]]; then',
-  '  set -a',
-  '  [ -f "$PODS_ROOT/../.env.production" ] && . "$PODS_ROOT/../.env.production"',
-  '  set +a',
+  `  export EXPO_PUBLIC_API_URL=${PROD_API_URL}`,
   'fi',
   MARKER_END,
   '',

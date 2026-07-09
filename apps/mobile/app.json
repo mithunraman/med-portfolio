@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.logdit.mobile",
-      "buildNumber": "7",
+      "buildNumber": "9",
       "appleTeamId": "D766Z89ML4",
       "config": {
         "usesNonExemptEncryption": false

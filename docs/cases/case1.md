@@ -185,3 +185,13 @@ was nothing else flagged up. So no further action really, I think it just
 resolved like most of these do.
 
 **_ [Case 5] _**
+
+Right, umm, last one of the day. So I saw a chap this afternoon, 58, came in with... lower back pain. It'd been there about a week I think, started after he'd been, ah, shifting boxes at work. No leg pain, no numbness, and umm, bladder and bowels all fine. Otherwise well, no weight loss, no fevers or anything. So, had a look at him — moving a bit stiffly but, ah, could walk alright. Straight leg raise was negative both sides, power and reflexes all normal in the legs, umm, sensation intact. No tenderness over the spine itself, just the muscle either side. Obs were fine. Yeah so, pretty classic mechanical back pain really. Went through the red flags in my head — umm, no cauda equina stuff, no cancer history, not really the age or picture for anything sinister, ah, no infection signs. So I was happy it was musculoskeletal, nothing more going on.
+
+So I told him to, umm, keep moving, don't take to his bed, regular paracetamol and ibuprofen with food.Gave him a leaflet on, ah, back exercises. And said give it a couple of weeks and it should settle down. Didn't need to see him again as far as I know, so, umm, I'm assuming it settled. He seemed reassured on the day anyway, ah, glad it wasn't anything serious.
+
+Reflection
+Handled it fine I think. Explanation and reassurance were good, he left happy. The thing I'd improve is, umm... I was a bit quick and didn't really spell out the safety-netting properly, you know, when to come back if it got worse or if he got any leg weakness or bladder problems. End of the day tiredness, honestly.
+
+Learning Needs
+Thats a good point. Forgot to add learning needs. So, umm, I need to tighten up my safety-netting on back pain, especially the, ah, cauda equina warning signs. I'm going to read the NICE guidance on low back pain and sciatica and, umm, make a point of always giving those specific red-flag instructions before the patient leaves.

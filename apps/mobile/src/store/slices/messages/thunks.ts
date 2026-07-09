@@ -1,5 +1,6 @@
 import { MediaType, MessageType } from '@acme/shared';
 import { createAsyncThunk } from '@reduxjs/toolkit';
+import { File, UploadType } from 'expo-file-system';
 import { api } from '../../../api/client';
 import { logger } from '../../../utils/logger';
 import { retryWrite } from '../../../utils/retry';
@@ -273,12 +274,21 @@ export const sendVoiceNoteWithRetry = createAsyncThunk(
       const result = await ensureConversation(conversationId, isNewConversation, artefactId);
       conversationId = result.conversationId;
 
-      // Read the recording once. The file doesn't change between retries, and
-      // blob.size is what fetch will send as Content-Length on the PUT — which
-      // must match the value signed into the presigned URL.
-      const fileResponse = await fetch(recordingUri);
-      const blob = await fileResponse.blob();
-      const sizeBytes = blob.size;
+      // Read the recording size once. The file doesn't change between retries, and
+      // file.size is what the native upload sends as Content-Length on the PUT —
+      // which must match the value signed into the presigned URL (S3 403s on
+      // mismatch). Both derive from the same on-disk file, so they stay consistent.
+      const file = new File(recordingUri);
+      if (!file.exists) {
+        throw new Error(`Recording not found at ${recordingUri}`);
+      }
+      // file.size returns 0 (not null) for a missing/unreadable file, so guard
+      // against an empty recording too — uploading 0 bytes would yield a message
+      // pointing at empty audio.
+      const sizeBytes = file.size;
+      if (sizeBytes === 0) {
+        throw new Error(`Recording is empty at ${recordingUri}`);
+      }
 
       // 3. Upload + send with retry
       const response = await retryWrite(async () => {
@@ -289,11 +299,19 @@ export const sendVoiceNoteWithRetry = createAsyncThunk(
           sizeBytes,
         });
 
-        await fetch(uploadUrl, {
-          method: 'PUT',
+        // Native binary PUT — streams the file off the JS thread and avoids RN's
+        // Blob layer (fetch(fileUri).blob() throws on RN 0.86). Content-Type must
+        // match the mime signed into the presigned URL.
+        const uploadResult = await file.upload(uploadUrl, {
+          httpMethod: 'PUT',
+          uploadType: UploadType.BINARY_CONTENT,
           headers: { 'Content-Type': recordingMime },
-          body: blob,
         });
+        // upload() resolves (does not throw) on non-2xx, so check explicitly —
+        // otherwise a 403/expired URL would be treated as success and never retried.
+        if (uploadResult.status < 200 || uploadResult.status >= 300) {
+          throw new Error(`Upload failed with status ${uploadResult.status}`);
+        }
 
         // Send message with mediaId
         const body = { mediaId, idempotencyKey };

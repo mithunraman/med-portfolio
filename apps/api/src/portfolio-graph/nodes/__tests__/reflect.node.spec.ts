@@ -147,4 +147,18 @@ describe('reflectNode assemble routing', () => {
     expect(trace.find((t) => t.sectionId === 'brief_description')!.source).toBe('composed');
     expect(trace.find((t) => t.sectionId === 'reflection')!.source).toBe('concat');
   });
+
+  it('explains the TRAINEE: / AI asked: transcript convention in the prompt', async () => {
+    const deps = makeDeps(makeResponse(''));
+    await createReflectNode(deps)(makeState());
+
+    const prompt = (deps.llmService.invokeStructured as jest.Mock).mock.calls[0][0]
+      .map((m: { content: unknown }) => String(m.content))
+      .join('\n');
+    // The role-marker convention must reach the model so it doesn't treat AI
+    // prompts as trainee content or echo the labels into the composed text.
+    expect(prompt).toContain('Transcript format');
+    expect(prompt).toContain('TRAINEE:');
+    expect(prompt).toContain('AI asked:');
+  });
 });

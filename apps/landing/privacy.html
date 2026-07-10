@@ -325,7 +325,7 @@
             We use a small set of trusted third-party providers to operate the Service. These
             include providers of cloud compute and hosting, database services, object storage,
             speech-to-text transcription, large language model processing, business email and
-            mailbox services, and application error monitoring.
+            mailbox services, push notification delivery, and application error monitoring.
           </p>
           <p>
             Each sub-processor is bound by a written data processing agreement (in most cases
@@ -335,12 +335,14 @@
             AI or machine learning models</strong>.
           </p>
           <p>
-            A current, named list of our sub-processors - with their roles, the data they
-            process, regions and applicable international-transfer mechanisms - is published at
-            <a href="sub-processors.html">logdit.app/sub-processors</a>. We will give reasonable
-            advance notice on that page of material changes (such as adding a new sub-processor
-            or changing the role of an existing one) before they take effect, and where
-            practicable will notify active users by email or in-app.
+            A current, named list of our sub-processors - with their purpose and processing
+            location - is published at
+            <a href="sub-processors.html">logdit.app/sub-processors</a>. Where a sub-processor
+            is located outside the UK and EEA, the applicable international-transfer mechanisms
+            are described in section 9 below. We will give reasonable advance notice on that
+            page of material changes (such as adding a new sub-processor or changing the role of
+            an existing one) before they take effect, and where practicable will notify active
+            users by email or in-app.
           </p>
           <p>
             Our Data Protection Impact Assessment (DPIA) summary is available on request at
@@ -351,17 +353,28 @@
           <p>
             Most processing happens in the United Kingdom and the European Economic Area, both of
             which provide an adequate level of protection for personal data under UK law
-            (UK→EEA adequacy regulations 2021). Where personal data is transferred outside the
+            (UK→EEA adequacy regulations 2021). Some language-model processing is performed by
+            <strong>Microsoft Corporation (Azure AI Foundry)</strong> within the United Kingdom
+            (Azure UK South region); as this processing remains in the UK, no international-transfer
+            mechanism is required. Where personal data is transferred outside the
             UK and EEA - specifically, to <strong>OpenAI, L.L.C.</strong> in the United States
-            for language-model processing - we rely on the <strong>EU Standard Contractual
-            Clauses with the UK Addendum</strong> as our transfer mechanism, as incorporated
-            into OpenAI's standard Data Processing Addendum. Supplementary safeguards include
-            contractual restrictions on use of your content for AI model training, contractual
-            limits on retention to what is needed to return a result, and our internal
-            multi-stage redaction pipeline (see section 6), which removes patient identifiers
-            from your transcript before it is used to draft your entry. Note that the audio,
-            raw transcript and cleaned transcript may transit our processors in unredacted form
-            during transcription and cleaning, as described in section 6.
+            for language-model processing, to <strong>Plus Five Five, Inc. (Resend)</strong>
+            in the United States for delivery of transactional emails such as sign-in codes, and
+            to <strong>Google LLC</strong> in the United States for push notification delivery
+            (Firebase Cloud Messaging) - we rely on the <strong>EU Standard Contractual Clauses
+            with the UK Addendum</strong> as our transfer mechanism, as incorporated into each
+            provider's standard Data Processing Addendum. For the OpenAI transfer, supplementary
+            safeguards include contractual restrictions on use of your content for AI model
+            training, contractual limits on retention to what is needed to return a result, and
+            our internal multi-stage redaction pipeline (see section 6), which removes patient
+            identifiers from your transcript before it is used to draft your entry. The Resend
+            transfer is limited to your email address and the contents of the service emails we
+            send you (including time-limited sign-in codes) and does not include any patient or
+            clinical data. The Firebase Cloud Messaging transfer is limited to device push tokens
+            and non-clinical notification metadata (for example, that a new entry is ready);
+            notification payloads do not contain any patient or clinical data. Note
+            that the audio, raw transcript and cleaned transcript may transit our processors in
+            unredacted form during transcription and cleaning, as described in section 6.
           </p>
           <p>
             A summary of our Transfer Impact Assessment is available on request at

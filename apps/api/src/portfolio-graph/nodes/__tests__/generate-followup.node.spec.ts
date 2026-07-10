@@ -251,6 +251,23 @@ describe('GenerateFollowupNode', () => {
       expect(result.pendingFollowupQuestions![0].sectionId).toBe('reflection');
     });
 
+    it('skips an exhausted section and asks the next live one', async () => {
+      const deps = makeDeps();
+      (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({ data: { questions: [] } });
+
+      const node = createGenerateFollowupNode(deps);
+      // reflection has the highest leverage but was asked to its cap without improving,
+      // so it is retired; outcome is asked instead.
+      const state = makeState({
+        missingSections: ['reflection', 'outcome'],
+        sectionAttempts: { reflection: { count: 2, tierAtLastAsk: 'missing' } },
+      });
+      const result = await node(state);
+
+      expect(result.pendingFollowupQuestions).toHaveLength(1);
+      expect(result.pendingFollowupQuestions![0].sectionId).toBe('outcome');
+    });
+
     it('should backfill the selected section when the LLM returns nothing', async () => {
       const deps = makeDeps();
       // LLM returns no questions — the node backfills the selected section.
@@ -266,6 +283,39 @@ describe('GenerateFollowupNode', () => {
       // outcome should be backfilled with the default extraction question from template
       const outcomeQ = result.pendingFollowupQuestions!.find((q) => q.sectionId === 'outcome');
       expect(outcomeQ!.question).toBe('What was the outcome for this patient?');
+    });
+
+    it('dedupes multiple questions for the same section (one ask, one attempt bump)', async () => {
+      const deps = makeDeps();
+      // The model emits TWO micro-questions for the single selected section.
+      // Both pass the valid-id filter, so without deduping they would push two
+      // questions and double-increment sectionAttempts (retiring after one round).
+      (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({
+        data: {
+          questions: [
+            { sectionId: 'reflection', question: 'What did you learn?', hints: { examples: ['Ex'] } },
+            {
+              sectionId: 'reflection',
+              question: 'What would you do differently?',
+              hints: { examples: ['Ex'] },
+            },
+          ],
+        },
+      });
+
+      const node = createGenerateFollowupNode(deps);
+      const state = makeState({
+        missingSections: ['reflection'],
+        probeReadiness: { reflection: { score: 0, tier: 'missing', meetsThreshold: false } },
+      });
+      const result = await node(state);
+
+      // Exactly one question surfaces despite two objects for the section.
+      expect(result.pendingFollowupQuestions).toHaveLength(1);
+      expect(result.pendingFollowupQuestions![0].sectionId).toBe('reflection');
+      expect(result.askedFollowupQuestions).toHaveLength(1);
+      // The attempt counter bumps once — not twice — so the genuine second ask survives.
+      expect(result.sectionAttempts!['reflection'].count).toBe(1);
     });
 
     it('should filter out LLM questions with unknown sectionIds', async () => {

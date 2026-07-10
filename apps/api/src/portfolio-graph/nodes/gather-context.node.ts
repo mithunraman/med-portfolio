@@ -1,31 +1,11 @@
-import {
-  type FreeTextQuestion,
-  MessageStatus,
-  MessageRole,
-  type Question,
-} from '@acme/shared';
+import { MessageStatus, MessageRole } from '@acme/shared';
 import { Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { PortfolioStateType } from '../portfolio-graph.state';
+import { buildTranscript } from './transcript-format.util';
 
 const logger = new Logger('GatherContextNode');
-
-/**
- * Format an ASSISTANT follow-up question message as a Q&A prompt header.
- * For free_text questions, extracts the individual question texts so the
- * downstream reflect node knows which section each subsequent user answer targets.
- */
-function formatAssistantQuestion(question: Question): string {
-  if (question.questionType === 'free_text') {
-    const ftq = question as FreeTextQuestion;
-    const questions = ftq.prompts.map((p) => p.text).join('\n');
-    return `AI asked:\n${questions}`;
-  }
-  // single_select / multi_select are classification/capability interrupts —
-  // not conversational follow-ups, so use a generic label.
-  return 'AI asked a clarification question.';
-}
 
 /**
  * Factory that creates the gather_context node with injected dependencies.
@@ -73,20 +53,12 @@ export function createGatherContextNode(deps: GraphDeps) {
     // Reverse to chronological order (repo returns newest-first).
     allMessages.reverse();
 
-    const transcriptParts: string[] = [];
-    let userMessageCount = 0;
-
-    for (const msg of allMessages) {
-      if (msg.role === MessageRole.USER && msg.content) {
-        transcriptParts.push(msg.content.trim());
-        userMessageCount++;
-      } else if (msg.role === MessageRole.ASSISTANT && msg.question) {
-        transcriptParts.push(formatAssistantQuestion(msg.question));
-      }
-      // Skip ASSISTANT messages without questions (e.g. thinking status messages)
-    }
-
-    const fullTranscript = transcriptParts.join('\n\n---\n\n');
+    // Role-prefix each turn (TRAINEE: / AI asked:) so downstream graders can tell
+    // trainee evidence from the assistant's own prompts. See transcript-format.util.
+    const fullTranscript = buildTranscript(allMessages);
+    const userMessageCount = allMessages.filter(
+      (msg) => msg.role === MessageRole.USER && msg.content
+    ).length;
 
     logger.log(
       `[${cid}] Gathered ${userMessageCount} user messages (${allMessages.length} total), ` +

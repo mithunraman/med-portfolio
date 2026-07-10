@@ -55,8 +55,8 @@ const CCR_BRIEF_DESCRIPTION_PROBES: Probe[] = [
     required: true,
     descriptorCriteria:
       "Strong = the trainee's own specific actions (treatment started, investigations ordered, referrals, safety-netting, planned follow-up) AND the rationale behind each decision. " +
-      'Adequate = a management plan stated with some justification. ' +
-      'Shallow = a vague gesture at a plan ("treated and reviewed") with no specific actions or reasoning.',
+      'Adequate = at least one CONCRETE management action the trainee took or planned — specific analgesia or activity advice, an investigation, a referral, explicit safety-netting instructions given, or a defined follow-up/review — even if the rationale is thin. ' +
+      'Shallow = a vague gesture at a plan ("treated and reviewed"), OR generic explanation/reassurance with no concrete clinical action, OR a reflective remark that management was inadequate (e.g. "I should have safety-netted better") without stating what was actually done.',
     description:
       'Treatment the trainee gave or started, investigations they ordered, referrals they made, safety-netting advice, and the follow-up they themselves planned.',
     promptHint:
@@ -70,8 +70,8 @@ const CCR_BRIEF_DESCRIPTION_PROBES: Probe[] = [
     required: true,
     descriptorCriteria:
       "Strong = a specific account of what happened after management (investigation results, how the patient responded, actions by other teams) AND the patient's current status. " +
-      'Adequate = the outcome stated with some detail. ' +
-      'Shallow = a bare verdict ("patient was fine") with no results or current status.',
+      'Adequate = the outcome stated with some detail; OR, for a self-limiting presentation with no planned follow-up, an explicit statement that no follow-up was required and (where known) the patient did not re-present — a reasoned "assumed resolved" counts. ' +
+      'Shallow = a bare verdict ("patient was fine") with no results, current status, or — where follow-up was expected — any account of what happened.',
     description:
       "What happened after the initial management: investigation results, how the patient responded, actions taken by other clinicians or services, and the patient's current status.",
     promptHint:

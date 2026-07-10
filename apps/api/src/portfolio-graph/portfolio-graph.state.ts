@@ -47,6 +47,24 @@ export interface CapabilityTag {
 /** Readiness tier for a probe or section against the RCGP descriptors. */
 export type ReadinessTier = 'missing' | 'shallow' | 'adequate' | 'strong';
 
+/** The tier ladder's ordering — the single source of truth for tier comparisons. */
+export const TIER_RANK: Record<ReadinessTier, number> = {
+  missing: 0,
+  shallow: 1,
+  adequate: 2,
+  strong: 3,
+};
+
+/**
+ * Per-section elicitation attempt log. `count` is how many times the section has
+ * been asked; `tierAtLastAsk` is its tier when last asked, so a later round can
+ * tell whether re-asking is producing any improvement (see the exhaustion guard).
+ */
+export interface SectionAttempt {
+  count: number;
+  tierAtLastAsk: ReadinessTier;
+}
+
 /** Graded readiness of a single probe (Phase 1) or section roll-up (Phase 5). */
 export interface ReadinessEntry {
   /** 0–1 score normalised from the depth tier and weight. */
@@ -159,10 +177,30 @@ export const PortfolioState = Annotation.Root({
     reducer: (prev, next) => [...prev, ...next],
     default: () => [],
   }),
+  /**
+   * Per-section ask counter + tier-at-last-ask, keyed by section id. Populated by
+   * generate_followup each round; read by the exhaustion guard so a section that is
+   * re-asked without improving is retired rather than looped. Last-write-wins — the
+   * node returns the fully-merged map.
+   */
+  sectionAttempts: Annotation<Record<string, SectionAttempt>>({
+    reducer: (_, next) => next,
+    default: () => ({}),
+  }),
 
   // ── Readiness (Phase 1 grades probes; Phase 5 rolls up to sections) ──
   /** Per-probe graded readiness, keyed by probe id. */
   probeReadiness: Annotation<Record<string, ReadinessEntry>>({
+    reducer: (_, next) => next,
+    default: () => ({}),
+  }),
+  /**
+   * Best (highest) tier each probe has ever reached — the monotonic ratchet.
+   * check_completeness grades each probe against this floor so grader noise can
+   * never re-open a section that has already cleared. Safe because the conversation
+   * is append-only (content accumulates, it is never retracted).
+   */
+  bestTierByProbe: Annotation<Record<string, ReadinessTier>>({
     reducer: (_, next) => next,
     default: () => ({}),
   }),

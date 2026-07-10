@@ -8,6 +8,9 @@ build/
 .next/
 .turbo/
 
+# Dev-only LLM trace dumps (LLM_TRACE=1) — may contain clinical transcript content
+logs/
+
 # IDE
 .idea/
 .vscode/

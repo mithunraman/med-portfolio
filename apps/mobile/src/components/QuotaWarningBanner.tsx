@@ -38,7 +38,7 @@ export function QuotaWarningBanner() {
 
   const label = isExceeded
     ? `Limit reached. Resets in ${resetTime}.`
-    : `Running low: ${remaining} remaining. Resets in ${resetTime}.`;
+    : `${remaining} AI credits remaining. Resets in ${resetTime}.`;
 
   return (
     <Animated.View

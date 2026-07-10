@@ -8,6 +8,7 @@ import { AssemblyAI, SpeechModel } from 'assemblyai';
 import { backOff } from 'exponential-backoff';
 import { z } from 'zod';
 import { MetricsService } from '../common/metrics';
+import { LlmTraceContext, traceLlmCall } from './llm-trace.util';
 import { MEDICAL_KEYTERMS, TRANSCRIPTION_TIMEOUT_MS } from './medical-keyterms';
 
 export const OpenAIModels = {
@@ -51,6 +52,8 @@ export type ModelTarget =
 export type LLMOptions = ModelTarget & {
   temperature?: number;
   maxTokens?: number;
+  /** Dev-only: optional correlation (stage/conversationId) attached to LLM_TRACE output. */
+  traceContext?: LlmTraceContext;
 };
 
 export interface LLMResponse {
@@ -140,16 +143,19 @@ export class LLMService {
     schema: z.ZodType<T>,
     options: LLMOptions
   ): Promise<StructuredResponse<T>> {
-    const { temperature = 0.1, maxTokens = 2000, ...target } = options;
+    const { temperature = 0.1, maxTokens = 2000, traceContext, ...target } = options;
     const modelLabel = target.provider === 'azure' ? target.deployment : target.model;
 
     this.logger.debug(
       `invokeStructured [${target.provider}:${modelLabel}] messages:\n${messages.map((m) => `[${m.type}] ${m.content}`).join('\n')}`
     );
 
+    // Captured for the dev-only LLM_TRACE dump (no-op unless enabled).
+    const traceInput = messages.map((m) => ({ role: m.type, content: m.content }));
+
     const startTime = Date.now();
     try {
-      return await backOff(
+      const result = await backOff(
         async () => {
           const chatModel = this.createChatModel(target, temperature, maxTokens);
 
@@ -181,7 +187,35 @@ export class LLMService {
           },
         }
       );
+
+      traceLlmCall({
+        op: 'invokeStructured',
+        provider: target.provider,
+        model: modelLabel,
+        temperature,
+        maxTokens,
+        durationMs: Date.now() - startTime,
+        ok: true,
+        input: traceInput,
+        output: result.data,
+        context: traceContext,
+      });
+
+      return result;
     } catch (error) {
+      traceLlmCall({
+        op: 'invokeStructured',
+        provider: target.provider,
+        model: modelLabel,
+        temperature,
+        maxTokens,
+        durationMs: Date.now() - startTime,
+        ok: false,
+        input: traceInput,
+        error: error instanceof Error ? error.message : String(error),
+        context: traceContext,
+      });
+
       Sentry.captureException(error, {
         tags: { operation: 'invokeStructured', provider: target.provider, model: modelLabel },
         extra: { messageCount: messages.length, maxRetries: 3 },
@@ -278,7 +312,7 @@ export class LLMService {
 
     const startTime = Date.now();
     try {
-      return await backOff(
+      const result = await backOff(
         async () => {
           // Create transcription with timeout
           const transcriptPromise = this.assemblyai.transcripts.transcribe({
@@ -338,7 +372,29 @@ export class LLMService {
           },
         }
       );
+
+      traceLlmCall({
+        op: 'transcribeAudio',
+        provider: 'assemblyai',
+        model: 'universal-3-pro',
+        durationMs: Date.now() - startTime,
+        ok: true,
+        input: { audioUrl },
+        output: result,
+      });
+
+      return result;
     } catch (error) {
+      traceLlmCall({
+        op: 'transcribeAudio',
+        provider: 'assemblyai',
+        model: 'universal-3-pro',
+        durationMs: Date.now() - startTime,
+        ok: false,
+        input: { audioUrl },
+        error: error instanceof Error ? error.message : String(error),
+      });
+
       Sentry.captureException(error, {
         tags: { operation: 'transcribeAudio' },
         extra: { maxRetries: 3 },

@@ -13,11 +13,12 @@ import {
   quoteAppearsIn,
   tierAtLeast,
 } from './capability-grading.util';
+import { AI_TURN_PREFIX, TRAINEE_TURN_PREFIX, traineeTurnsOnly } from './transcript-format.util';
 
 const logger = new Logger('TagCapabilitiesNode');
 
 /** Bump when the prompt or schema changes materially — aids output traceability. */
-const TAG_PROMPT_VERSION = 'tag-v3-anti-inflation';
+const TAG_PROMPT_VERSION = 'tag-v4-roles';
 
 const MAX_CAPABILITIES = 5;
 
@@ -136,7 +137,7 @@ Your task: given a trainee's transcript for a {entryType} entry, grade EACH curr
 - MISSING (do NOT infer): "Pretty routine, I was confident managing it." → this is tone, not evidence. Nothing was actively demonstrated, so it is missing — do not tag a capability (e.g. fitness to practise) off it.
 
 ## Notes
-- The transcript may contain AI questions (lines starting with "AI asked:"). These are context only — grade only what the trainee said.
+- Turns are role-prefixed. Grade — and quote — ONLY \`${TRAINEE_TURN_PREFIX}\` turns (the trainee's own words). \`${AI_TURN_PREFIX}\` turns are the assistant's prompts: context only, never evidence, even when they paraphrase the trainee.
 - The entry type ({entryType}) gives context but should not override what the transcript actually contains.
 
 ## Security
@@ -271,11 +272,16 @@ export function createTagCapabilitiesNode(deps: GraphDeps) {
       { ...deps.modelConfig.resolve(Stage.TagCapabilities), temperature: 0.1, maxTokens: 2000 }
     );
 
+    // Verbatim-quote evidence must be the trainee's OWN words, so gate every quote
+    // against the trainee-only view of the transcript — an `AI asked:` turn that
+    // paraphrases the trainee can no longer verify (defence in depth behind the prompt).
+    const traineeTranscript = traineeTurnsOnly(state.fullTranscript);
+
     // Log every assessment for traceability
     for (const a of response.assessments) {
       const valid = validCodes.has(a.code);
       const quote = a.quote?.trim() ?? '';
-      const quoteMatches = quoteAppearsIn(state.fullTranscript, quote);
+      const quoteMatches = quoteAppearsIn(traineeTranscript, quote);
       const kept = tierAtLeast(a.tier, KEEP_THRESHOLD);
       logger.log(
         `[${cid}]   ${a.code} tier=${a.tier}` +
@@ -287,7 +293,7 @@ export function createTagCapabilitiesNode(deps: GraphDeps) {
     }
 
     // Filter to capabilities graded adequate+, with a verbatim quote
-    const capabilities = filterAndRank(response, validCodes, state.fullTranscript);
+    const capabilities = filterAndRank(response, validCodes, traineeTranscript);
 
     if (capabilities.length === 0) {
       logger.warn(`[${cid}] No valid capabilities tagged — this is unusual`);

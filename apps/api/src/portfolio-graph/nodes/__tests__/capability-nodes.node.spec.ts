@@ -1,17 +1,27 @@
+import { MessageRole } from '@acme/shared';
 import type { GraphDeps } from '../../graph-deps';
 import type { CapabilityTag, PortfolioStateType } from '../../portfolio-graph.state';
 import { createElicitJustificationNode } from '../elicit-justification.node';
 import { createTagCapabilitiesNode } from '../tag-capabilities.node';
+import { buildTranscript } from '../transcript-format.util';
 
 /**
  * These exercise the post-validation each node owns — the tier gate, the
  * verbatim-evidence gate, and the tag→elicit contradiction guard — by stubbing
  * the LLM response. Specialty '100' is GP, whose capabilities include C-06/C-08.
+ *
+ * Built via buildTranscript so the fixture carries the real TRAINEE: role prefix
+ * that tag-capabilities' trainee-only quote gate keys off.
  */
 
-const TRANSCRIPT =
-  'I saw a 55-year-old patient with poorly controlled type 2 diabetes. ' +
-  'I started metformin and discussed lifestyle changes.';
+const TRANSCRIPT = buildTranscript([
+  {
+    role: MessageRole.USER,
+    content:
+      'I saw a 55-year-old patient with poorly controlled type 2 diabetes. ' +
+      'I started metformin and discussed lifestyle changes.',
+  },
+]);
 
 function makeDeps(structuredResponse: unknown): GraphDeps {
   return {
@@ -155,6 +165,58 @@ describe('elicitJustificationNode gate + contradiction guard', () => {
     expect(c06.justificationTier).toBe('shallow');
     // prose is retained (advisory) even though the tier was downgraded
     expect(c06.justification).toContain('specialist');
+  });
+
+  it('downgrades to shallow when the sourceQuote appears only in an AI-asked turn (trainee-only gate)', async () => {
+    // The phrase "started ramipril" is present in the assistant's question but the
+    // trainee never said it. The full transcript would verify it; the trainee-only
+    // gate must not — mirroring tag_capabilities so the nodes don't drift.
+    const transcriptWithAiTurn = buildTranscript([
+      {
+        role: MessageRole.USER,
+        content: 'I reviewed his blood pressure and adjusted his medications.',
+      },
+      {
+        role: MessageRole.ASSISTANT,
+        question: {
+          questionType: 'free_text',
+          prompts: [{ text: 'You mentioned you started ramipril — why?' }],
+        } as any,
+      },
+      { role: MessageRole.USER, content: 'It was the right call for his hypertension.' },
+    ]);
+
+    const deps = makeDeps({
+      justifications: [
+        {
+          code: 'C-06',
+          sourceQuote: 'started ramipril', // lifted from the AI-asked turn only
+          justification: 'I started ramipril to manage his blood pressure.',
+          justificationTier: 'strong',
+        },
+      ],
+    });
+
+    const result = await createElicitJustificationNode(deps)(
+      makeState({ capabilities: [taggedC06], fullTranscript: transcriptWithAiTurn })
+    );
+
+    const c06 = result.capabilities!.find((c) => c.code === 'C-06')!;
+    expect(c06.justificationTier).toBe('shallow');
+    expect(c06.justification).toContain('ramipril'); // advisory prose retained
+  });
+
+  it('instructs the model to take the sourceQuote only from TRAINEE: turns', async () => {
+    const deps = makeDeps({ justifications: [] });
+    await createElicitJustificationNode(deps)(makeState({ capabilities: [taggedC06] }));
+
+    const prompt = (deps.llmService.invokeStructured as jest.Mock).mock.calls[0][0]
+      .map((m: { content: unknown }) => String(m.content))
+      .join('\n');
+    // Defence-in-depth behind the trainee-only gate: steer the model to quote a
+    // TRAINEE: turn so it doesn't pick an AI-turn span that would be downgraded.
+    expect(prompt).toContain('TRAINEE:');
+    expect(prompt).toContain('AI asked:');
   });
 
   it('grades missing when no justification text is returned', async () => {

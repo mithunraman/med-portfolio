@@ -17,6 +17,7 @@ import {
   createSaveNode,
   createTagCapabilitiesNode,
 } from './nodes';
+import { shouldContinueElicitation } from './elicitation.util';
 import { PortfolioState, PortfolioStateType } from './portfolio-graph.state';
 
 // ── Max loop limits ──
@@ -65,12 +66,11 @@ export function classifyRouter(
  * After check_completeness: proceed to tag capabilities or generate follow-up questions.
  */
 function completenessRouter(state: PortfolioStateType): 'generate_followup' | 'tag_capabilities' {
-  // Exit the elicitation loop when the rubric clears (hasEnoughInfo) or — as a
-  // backstop — when the round cap is hit.
-  if (!state.hasEnoughInfo && state.followUpRound < MAX_FOLLOWUP_ROUNDS) {
-    return 'generate_followup';
-  }
-  return 'tag_capabilities';
+  // The exit policy (rubric met, good-enough, exhausted, done, or round cap) lives in
+  // shouldContinueElicitation so it is pure and unit-testable.
+  return shouldContinueElicitation(state, MAX_FOLLOWUP_ROUNDS)
+    ? 'generate_followup'
+    : 'tag_capabilities';
 }
 
 /**

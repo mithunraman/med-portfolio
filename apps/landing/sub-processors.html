@@ -45,7 +45,7 @@
       <div class="container">
         <div class="legal-eyebrow">Legal</div>
         <h1>Sub-processors</h1>
-        <p class="legal-updated">Last updated: 4 July 2026</p>
+        <p class="legal-updated">Last updated: 10 July 2026</p>
 
         <div class="legal-content">
           <div class="legal-callout">
@@ -68,121 +68,72 @@
             learning models</strong>.
           </p>
 
-          <h2>Hosting and infrastructure</h2>
+          <div class="table-scroll">
+            <table class="subprocessor-table">
+              <thead>
+                <tr>
+                  <th>Sub-processor</th>
+                  <th>Purpose</th>
+                  <th>Location</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Oracle Corporation (OCI)</td>
+                  <td>Cloud hosting and encrypted storage</td>
+                  <td>United Kingdom</td>
+                </tr>
+                <tr>
+                  <td>MongoDB, Inc. (Atlas)</td>
+                  <td>Primary database</td>
+                  <td>Ireland (EU)</td>
+                </tr>
+                <tr>
+                  <td>AssemblyAI, Inc.</td>
+                  <td>Speech-to-text transcription</td>
+                  <td>Ireland (EU)</td>
+                </tr>
+                <tr>
+                  <td>OpenAI, L.L.C.</td>
+                  <td>Language-model processing</td>
+                  <td>United States</td>
+                </tr>
+                <tr>
+                  <td>Microsoft Corporation (Azure AI Foundry)</td>
+                  <td>Language-model processing</td>
+                  <td>United Kingdom</td>
+                </tr>
+                <tr>
+                  <td>Google LLC / Google Ireland Limited (Workspace)</td>
+                  <td>Business email and mailboxes</td>
+                  <td>EU</td>
+                </tr>
+                <tr>
+                  <td>Google LLC (Firebase Cloud Messaging)</td>
+                  <td>Push notification delivery</td>
+                  <td>United States</td>
+                </tr>
+                <tr>
+                  <td>Plus Five Five, Inc. (Resend)</td>
+                  <td>Transactional email (sign-in codes)</td>
+                  <td>United States</td>
+                </tr>
+                <tr>
+                  <td>Functional Software, Inc. (Sentry)</td>
+                  <td>Error monitoring</td>
+                  <td>Germany (EU)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-          <h3>Oracle Corporation (Oracle Cloud Infrastructure) - compute</h3>
           <p>
-            <strong>Role:</strong> Cloud compute and application hosting.<br />
-            <strong>Personal data processed:</strong> All data that passes through our
-            application servers, including account details, audio uploads, transcripts and
-            generated reflections (in transit and during processing).<br />
-            <strong>Region:</strong> United Kingdom.<br />
-            <strong>Transfer mechanism:</strong> None required - processing in the UK.<br />
-            <strong>Privacy and DPA:</strong>
-            <a href="https://www.oracle.com/dataprocessingagreement" target="_blank" rel="noopener">
-              oracle.com/dataprocessingagreement</a>.
-          </p>
-
-          <h3>Oracle Corporation (Oracle Cloud Infrastructure Object Storage)</h3>
-          <p>
-            <strong>Role:</strong> Encrypted object storage for audio recordings and exported
-            PDFs.<br />
-            <strong>Personal data processed:</strong> Audio recordings you make in the app
-            (retained encrypted and automatically deleted within 72 hours of transcription) and
-            PDFs you export from your entries.<br />
-            <strong>Region:</strong> United Kingdom.<br />
-            <strong>Transfer mechanism:</strong> None required - processing in the UK.<br />
-            <strong>Privacy and DPA:</strong>
-            <a href="https://www.oracle.com/dataprocessingagreement" target="_blank" rel="noopener">
-              oracle.com/dataprocessingagreement</a>.
-          </p>
-
-          <h3>MongoDB, Inc. (MongoDB Atlas)</h3>
-          <p>
-            <strong>Role:</strong> Primary managed database for account data, transcripts,
-            reflections, capability tags, PDP goals and version history.<br />
-            <strong>Personal data processed:</strong> Account details (email, display name,
-            specialty, training stage), redacted transcripts and AI-generated content you create
-            in the app.<br />
-            <strong>Region:</strong> Ireland - EU.<br />
-            <strong>Transfer mechanism:</strong> None required - UK→EEA adequacy.<br />
-            <strong>Privacy and DPA:</strong>
-            <a href="https://www.mongodb.com/legal/privacy-policy" target="_blank" rel="noopener">
-              mongodb.com/legal/privacy-policy</a>.
-          </p>
-
-          <h2>AI and transcription</h2>
-
-          <h3>AssemblyAI, Inc.</h3>
-          <p>
-            <strong>Role:</strong> Speech-to-text transcription of voice notes.<br />
-            <strong>Personal data processed:</strong> Audio recordings you make in the app,
-            processed transiently and not retained by AssemblyAI under their no-storage
-            configuration.<br />
-            <strong>Region:</strong> Ireland - EU.<br />
-            <strong>Transfer mechanism:</strong> None required - UK→EEA adequacy.<br />
-            <strong>Privacy and DPA:</strong>
-            <a href="https://www.assemblyai.com/legal/privacy-policy" target="_blank" rel="noopener">
-              assemblyai.com/legal/privacy-policy</a>.
-          </p>
-
-          <h3>OpenAI, L.L.C.</h3>
-          <p>
-            <strong>Role:</strong> Large-language-model processing for transcript cleaning,
-            redaction of unstructured identifiers, drafting reflections and tagging capabilities
-            against the relevant curriculum.<br />
-            <strong>Personal data processed:</strong> Transcripts (with structured identifiers
-            already removed prior to this step) and prompts derived from them. Content is not
-            used to train OpenAI's models under the standard API terms.<br />
-            <strong>Region:</strong> United States.<br />
-            <strong>Transfer mechanism:</strong> EU Standard Contractual Clauses with the UK
-            Addendum, as incorporated into OpenAI's standard Data Processing Addendum.
-            Supplementary safeguards include pre-transfer redaction of patient identifiers
-            (Privacy Policy section 6).<br />
-            <strong>Privacy and DPA:</strong>
-            <a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener">
-              openai.com/policies/privacy-policy</a>.
-          </p>
-
-          <h2>Operations and communications</h2>
-
-          <h3>Google LLC / Google Ireland Limited (Google Workspace)</h3>
-          <p>
-            <strong>Role:</strong> Two related roles. First, business email and mailbox
-            services for the <code>logdit.app</code> domain (the inboxes you may correspond
-            with us at, such as <a href="mailto:support@logdit.app">support@logdit.app</a> and
-            <a href="mailto:privacy@logdit.app">privacy@logdit.app</a>). Second, outbound
-            transactional email delivery via the Google Workspace SMTP relay - used to send
-            one-time passcode (OTP) sign-in codes, account notifications and other service
-            emails to you.<br />
-            <strong>Personal data processed:</strong> Your email address (used to deliver
-            sign-in codes and service emails); the contents of any email correspondence you
-            initiate with us; the contents of any service email we send you, including
-            time-limited OTP codes.<br />
-            <strong>Region:</strong> EU data regions under Google Workspace data residency
-            controls.<br />
-            <strong>Transfer mechanism:</strong> EU Standard Contractual Clauses with the UK
-            Addendum, as incorporated into the Google Workspace Customer Data Processing
-            Addendum (Google Workspace also offers EEA-region storage controls that we apply
-            where available).<br />
-            <strong>Privacy and DPA:</strong>
-            <a href="https://workspace.google.com/terms/dpa_terms.html" target="_blank" rel="noopener">
-              workspace.google.com/terms/dpa_terms</a>.
-          </p>
-
-          <h3>Functional Software, Inc. (Sentry)</h3>
-          <p>
-            <strong>Role:</strong> Application error monitoring and crash diagnostics.<br />
-            <strong>Personal data processed:</strong> Crash reports, error stack traces and
-            limited technical context (app version, device type, operating system). Configured
-            to suppress default personal data collection: we do not send your name, email,
-            content or authentication tokens to Sentry.<br />
-            <strong>Region:</strong> Germany - EU (Sentry EU data residency).<br />
-            <strong>Transfer mechanism:</strong> EU Standard Contractual Clauses with the UK
-            Addendum, as incorporated into Sentry's Data Processing Addendum.<br />
-            <strong>Privacy and DPA:</strong>
-            <a href="https://sentry.io/privacy/" target="_blank" rel="noopener">
-              sentry.io/privacy</a>.
+            Where a sub-processor is located outside the UK and EEA (currently the United
+            States), the applicable international-transfer safeguards - including the EU
+            Standard Contractual Clauses with the UK Addendum and our supplementary measures -
+            are described in section 9 of our <a href="privacy.html">Privacy Policy</a>. A copy
+            of the relevant safeguards is available on request at
+            <a href="mailto:privacy@logdit.app">privacy@logdit.app</a>.
           </p>
 
           <h2>How to be notified of changes</h2>

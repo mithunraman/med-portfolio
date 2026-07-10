@@ -12,6 +12,7 @@ import {
   quoteAppearsIn,
   tierAtLeast,
 } from './capability-grading.util';
+import { traineeTurnsOnly } from './transcript-format.util';
 
 const logger = new Logger('ElicitJustificationNode');
 
@@ -83,7 +84,7 @@ The trainee has confirmed the capabilities below for a {entryType} entry. Each c
 ## Rules
 
 1. Anchor on the evidence already found. Extract ONLY what the trainee actually said they did — never invent actions, reasoning, or detail they did not state.
-2. FIRST give a "sourceQuote": a verbatim span from the transcript (their own words, copied exactly) that grounds the justification.
+2. FIRST give a "sourceQuote": a verbatim span from the transcript (their own words, copied exactly) that grounds the justification. Turns are role-prefixed: take the sourceQuote ONLY from a "TRAINEE:" turn — never from an "AI asked:" turn, even when it paraphrases the trainee.
 3. THEN give a "descriptorClause": the specific phrase from THIS capability's Descriptor criteria that the evidence demonstrates, in the descriptor's own words.
 4. THEN write the "justification" in the FIRST PERSON ("I…") as a LINK, not a recap: (a) the specific action you took, (b) the descriptor clause it satisfies, and (c) why. An educational supervisor should see at a glance which clause is met. A justification that only re-tells what happened, without naming the capability facet it evidences, is NOT acceptable. WEAVE the descriptor's words naturally into your sentence (e.g. "…which demonstrates interpreting clinical data to inform my diagnosis"). Do NOT refer to "the descriptor", "the capability", "the rubric", or write "as required by…" — the trainee is justifying their practice, not annotating a framework.
 5. Justify each capability distinctly, on its OWN descriptor clause — even when two capabilities draw on the SAME evidence span. That overlap is legitimate: one case can evidence several capabilities. What must differ is the justification and the descriptor facet (e.g. gathering/interpreting the data vs reasoning to a diagnosis), NOT the evidence. Only grade a capability lower if it is not genuinely demonstrated on its own merits — never merely because it shares evidence with another.
@@ -170,6 +171,12 @@ export function createElicitJustificationNode(deps: GraphDeps) {
 
     const byCode = new Map(response.justifications.map((j) => [j.code, j]));
 
+    // The verbatim `sourceQuote` must be the trainee's OWN words, so gate it
+    // against the trainee-only view of the transcript — an `AI asked:` turn that
+    // paraphrases the trainee can't verify as evidence. Mirrors tag_capabilities
+    // so the two nodes' match rules never drift (see capability-grading.util).
+    const traineeTranscript = traineeTurnsOnly(state.fullTranscript);
+
     const capabilities: CapabilityTag[] = state.capabilities.map((cap) => {
       const j = byCode.get(cap.code);
       // The justification is pasted into the portfolio as the trainee's own
@@ -185,7 +192,7 @@ export function createElicitJustificationNode(deps: GraphDeps) {
       return {
         ...cap,
         justification,
-        justificationTier: gradeJustification(j, justification, state.fullTranscript),
+        justificationTier: gradeJustification(j, justification, traineeTranscript),
       };
     });
 
@@ -217,7 +224,8 @@ function enforceFirstPerson(justification: string): { text: string; flagged: boo
 
 /**
  * Resolve the justification tier, verifying the model's grade against the
- * verbatim `sourceQuote` gate:
+ * verbatim `sourceQuote` gate. `transcript` must be the trainee-only view
+ * (see the call site) so a quote lifted from an `AI asked:` turn can't verify:
  *  - no justification text → "missing".
  *  - unverifiable sourceQuote → cannot count as justified; downgrade an
  *    adequate+ grade to "shallow" but keep the (advisory) prose.

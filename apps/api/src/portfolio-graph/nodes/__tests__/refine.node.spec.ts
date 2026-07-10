@@ -110,4 +110,38 @@ describe('refineNode', () => {
     expect(result).toEqual({});
     expect(deps.llmService.invokeStructured).not.toHaveBeenCalled();
   });
+
+  it('excludes empty sections from the LLM call and leaves them empty (no few-shot regurgitation)', async () => {
+    const doc = [
+      { sectionId: 'reflection', label: 'Reflection', text: 'I was pleased I tackled the risk factors.' },
+      { sectionId: 'learning', label: 'Learning Needs', text: '' }, // trainee never provided it
+    ];
+    const deps = makeDeps({
+      sections: [
+        { sectionId: 'reflection', text: 'I was pleased I tackled all the risk factors together.' },
+      ],
+    });
+    const result = await createRefineNode(deps)(makeState(doc));
+
+    // Empty section stays empty — never filled from the prompt's few-shot example.
+    expect(section(result, 'learning').text).toBe('');
+    // And it was never sent to the model.
+    const messages = (deps.llmService.invokeStructured as jest.Mock).mock.calls[0][0];
+    const humanContent = String(messages[messages.length - 1].content);
+    expect(humanContent).not.toContain('Learning Needs');
+    expect(humanContent).toContain('Reflection');
+  });
+
+  it('skips the LLM entirely when every section is empty', async () => {
+    const doc = [
+      { sectionId: 'learning', label: 'Learning Needs', text: '' },
+      { sectionId: 'reflection', label: 'Reflection', text: '   ' },
+    ];
+    const deps = makeDeps({ sections: [] });
+    const result = await createRefineNode(deps)(makeState(doc));
+
+    expect(deps.llmService.invokeStructured).not.toHaveBeenCalled();
+    expect(result.composedDocument).toEqual(doc);
+    expect(result.refineTrace!.every((t) => t.source === 'fallback')).toBe(true);
+  });
 });

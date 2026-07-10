@@ -35,6 +35,7 @@ IMPORTANT before release
 - database backups, read deploy.md
   [x] remove ununsed index from pdpgoal, after sortdate refactor
 - investigate removing updating findOneWithArtefact to findOne in pdp-goals repo
+- Increase max number of questions asked to 2\*number of sections.
 - check how conversation idempotency key is being generated, and change if needed.
 - Apply for Mongodb startup credits: https://www.mongodb.com/lp/solutions/startups/partners?utm_campaign=startup_partner&utm_source=atlasintrcm&utm_medium=referral
 - Upgrade to Mongodb Flex.

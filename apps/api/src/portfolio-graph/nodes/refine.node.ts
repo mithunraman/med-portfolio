@@ -165,20 +165,33 @@ export function createRefineNode(deps: GraphDeps) {
       return {};
     }
 
-    const wordCount = document.reduce(
+    // Only send sections that actually have content to the model. An empty section
+    // must NOT be copy-edited: with nothing to edit the model tends to regurgitate
+    // the prompt's few-shot example, fabricating content for a section the trainee
+    // left blank. Empty sections pass through unchanged (they stay empty).
+    const toRefine = document.filter((s) => s.text.trim().length > 0);
+
+    if (toRefine.length === 0) {
+      logger.log(`[${cid}] All ${document.length} sections empty — skipping refine`);
+      return { composedDocument: document, refineTrace: fallbackTrace(document) };
+    }
+
+    const wordCount = toRefine.reduce(
       (sum, s) => sum + s.text.split(/\s+/).filter(Boolean).length,
       0
     );
     const maxTokens = Math.max(Math.ceil(wordCount * 2), 1000);
 
     try {
-      const messages = await refinePrompt.formatMessages({ document: formatDocument(document) });
+      const messages = await refinePrompt.formatMessages({ document: formatDocument(toRefine) });
       const { data: response } = await deps.llmService.invokeStructured(
         messages,
         refineResponseSchema,
         { ...deps.modelConfig.resolve(Stage.Refine), temperature: 0, maxTokens }
       );
 
+      // Reassemble over the FULL document so empty sections pass through unchanged:
+      // they aren't in the response, so assembleRefined keeps their original text.
       const { composedDocument, refineTrace } = assembleRefined(document, response);
       const mergedCount = refineTrace.filter((t) => t.source === 'merged').length;
       logger.log(

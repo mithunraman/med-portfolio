@@ -6,8 +6,9 @@ import { Stage } from '../../llm';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
+import { isSectionExhausted } from '../elicitation.util';
 import { MAX_FOLLOWUP_ROUNDS } from '../portfolio-graph.builder';
-import { PortfolioStateType, ReadinessEntry } from '../portfolio-graph.state';
+import { PortfolioStateType, ReadinessEntry, SectionAttempt } from '../portfolio-graph.state';
 
 const logger = new Logger('GenerateFollowupNode');
 
@@ -100,6 +101,8 @@ Anchor every question to the section's Depth rubric (shown in the context, with 
 5. Keep questions warm and professional. Use "you" language. 1-2 sentences maximum.
 
 6. Never repeat or reword a question from "Questions Already Asked", and never probe an area listed under "Already Covered Well". If the trainee already answered a point anywhere in the transcript, do not ask it again — pick a genuinely different angle, or omit a question for that section entirely if there is nothing new worth asking.
+
+7. Ask only about the trainee's own experience. Never instruct them to perform an external action to satisfy a question — do not tell them to check the records, look up the notes, or contact another service. If information genuinely isn't available to them, that is an acceptable answer: accept it and move on rather than pressing.
 
 ## Hint Rules
 
@@ -253,6 +256,8 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
         (s): s is Probe & { extractionQuestion: string } =>
           state.missingSections.includes(s.id) && s.extractionQuestion !== null
       )
+      // Skip sections the exhaustion cap has retired — asked enough without improving.
+      .filter((s) => !isSectionExhausted(state, s.id))
       .sort((a, b) => leverage(b) - leverage(a))
       .slice(0, MAX_QUESTIONS_PER_ROUND);
 
@@ -309,6 +314,17 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
       const validIds = new Set(missingSectionDefs.map((s) => s.id));
       questions = response.questions.filter((q) => validIds.has(q.sectionId));
 
+      // One question per selected section. The model (temp 0.3) can emit multiple
+      // objects for the same section; keeping them all would double-count
+      // sectionAttempts (retiring the section after a single real round) and push
+      // >1 question per round, breaking the one-question-per-round contract.
+      const seenSectionIds = new Set<string>();
+      questions = questions.filter((q) => {
+        if (seenSectionIds.has(q.sectionId)) return false;
+        seenSectionIds.add(q.sectionId);
+        return true;
+      });
+
       // Backfill any sections the LLM missed with default questions + hints
       for (const section of missingSectionDefs) {
         if (!questions.find((q) => q.sectionId === section.id)) {
@@ -341,11 +357,24 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
         `(${state.missingSections.length - questions.length} missing sections not asked due to max=${MAX_QUESTIONS_PER_ROUND})`
     );
 
+    // Record this round's asks: bump each asked section's count and snapshot its
+    // current tier, so the exhaustion guard can tell next round whether re-asking
+    // is producing any improvement.
+    const sectionAttempts: Record<string, SectionAttempt> = { ...(state.sectionAttempts ?? {}) };
+    for (const q of questions) {
+      const prev = sectionAttempts[q.sectionId];
+      sectionAttempts[q.sectionId] = {
+        count: (prev?.count ?? 0) + 1,
+        tierAtLastAsk: state.probeReadiness?.[q.sectionId]?.tier ?? 'missing',
+      };
+    }
+
     return {
       followUpRound: state.followUpRound + 1,
       pendingFollowupQuestions: questions,
       // Append this round's question texts so future rounds don't re-ask them.
       askedFollowupQuestions: questions.map((q) => q.question),
+      sectionAttempts,
     };
   };
 }

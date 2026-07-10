@@ -5,6 +5,7 @@ import {
   createCheckCompletenessNode,
   deriveReadiness,
   deriveTiers,
+  ratchetTiers,
 } from '../check-completeness.node';
 import type { GraphDeps } from '../../graph-deps';
 import type { PortfolioStateType } from '../../portfolio-graph.state';
@@ -86,6 +87,40 @@ describe('deriveTiers — LLM grade + structural floors', () => {
       new Set(['presentation'])
     );
     expect(tiers['presentation']).toBe('shallow');
+  });
+});
+
+describe('ratchetTiers — monotonic best-tier floor', () => {
+  it('keeps the higher of the prior best and this round (no regression)', () => {
+    expect(ratchetTiers({ reflection: 'strong' }, { reflection: 'adequate' })).toEqual({
+      reflection: 'strong',
+    });
+  });
+
+  it('accepts a genuine improvement', () => {
+    expect(ratchetTiers({ outcome: 'shallow' }, { outcome: 'adequate' })).toEqual({
+      outcome: 'adequate',
+    });
+  });
+
+  it('uses this round when there is no prior best', () => {
+    expect(ratchetTiers({}, { outcome: 'adequate' })).toEqual({ outcome: 'adequate' });
+  });
+
+  it('re-opens a section when this round assigns it no content (partition corrected)', () => {
+    // Round 1 over-graded `management` on content that later re-partitions to reflection;
+    // round 2 leaves management empty (structural `missing` floor). The ratchet must NOT
+    // freeze the orphaned `adequate` — an empty required section can't ship as complete.
+    expect(ratchetTiers({ management: 'adequate' }, { management: 'missing' })).toEqual({
+      management: 'missing',
+    });
+  });
+
+  it('still smooths downward grade noise while content is present', () => {
+    // shallow/adequate/strong all mean content IS assigned — a flicker down is noise.
+    expect(ratchetTiers({ reflection: 'strong' }, { reflection: 'shallow' })).toEqual({
+      reflection: 'strong',
+    });
   });
 });
 

@@ -317,6 +317,39 @@ footer {
   font-weight: 600;
 }
 
+.table-scroll {
+  overflow-x: auto;
+  margin: 0 0 20px;
+}
+
+.subprocessor-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+  min-width: 520px;
+}
+
+.subprocessor-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text);
+  padding: 12px 16px;
+  border-bottom: 2px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.subprocessor-table td {
+  color: var(--color-text-secondary);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+  line-height: 1.5;
+  vertical-align: top;
+}
+
+.subprocessor-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
 .legal-callout {
   padding: 18px 22px;
   background: var(--color-primary-soft);

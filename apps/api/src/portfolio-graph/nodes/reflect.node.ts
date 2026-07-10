@@ -89,6 +89,10 @@ Use this context to calibrate formatting only:
 - For later-stage trainees, preserve more precise clinical language.
 - Do NOT use training stage to add content or change what the trainee said.
 
+## Transcript format
+
+Turns are role-prefixed. \`TRAINEE:\` turns are the trainee's own words — the only content to organise and copy-edit. \`AI asked:\` turns are the assistant's prompts: use them only to see which section a following \`TRAINEE:\` answer addresses. Never treat an \`AI asked:\` turn's wording as the trainee's own content, and never include the \`TRAINEE:\` / \`AI asked:\` labels in your output.
+
 ## Sections
 
 Each section owns one or more probes. For EVERY section, return all of its probes in order — set covered: false and text: "" for probes with no matching content.

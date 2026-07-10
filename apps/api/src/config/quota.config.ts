@@ -5,7 +5,7 @@ import { UserRole } from '@acme/shared';
  * Controls how many expensive operations a user can perform per window.
  */
 export const quotaPlans: Record<number, { shortWindow: number; weeklyWindow: number }> = {
-  [UserRole.USER_GUEST]: { shortWindow: 100, weeklyWindow: 500 },
+  [UserRole.USER_GUEST]: { shortWindow: 200, weeklyWindow: 500 },
   [UserRole.USER]: { shortWindow: 200, weeklyWindow: 1000 },
   // Future: [UserRole.PAID]: { shortWindow: 100, weeklyWindow: 800 },
 };

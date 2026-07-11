@@ -10,7 +10,7 @@ const BUBBLE_COLORS = {
   received: { light: '#f5f3f0', dark: '#1f2c34' },
 } as const;
 
-const TERMINAL = new Set([MessageStatus.COMPLETE, MessageStatus.FAILED]);
+const TERMINAL = new Set([MessageStatus.COMPLETE, MessageStatus.FAILED, MessageStatus.REJECTED]);
 
 function ProcessingLabel({ label, color }: { label: string; color: string }) {
   const [dots, setDots] = useState(0);
@@ -59,6 +59,12 @@ export const BubbleShell = memo(function BubbleShell({
 
   const isProcessing = !TERMINAL.has(message.status);
   const statusLabel = isProcessing ? MESSAGE_STATUS_LABELS[message.status] : null;
+  // Terminal "not added" caption for a message flagged as prompt injection. Shown
+  // statically (no animated dots) beneath the trainee's own words.
+  const rejectedLabel =
+    message.status === MessageStatus.REJECTED
+      ? MESSAGE_STATUS_LABELS[MessageStatus.REJECTED]
+      : null;
 
   const metaColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)';
 
@@ -77,6 +83,10 @@ export const BubbleShell = memo(function BubbleShell({
     // Server message — existing logic
     if (message.status === MessageStatus.FAILED) {
       return <Ionicons name="close" size={12} color="#ef4444" />;
+    }
+    if (message.status === MessageStatus.REJECTED) {
+      // Not delivered to the entry — a neutral marker, not the delivered double-tick.
+      return <Ionicons name="information-circle-outline" size={12} color="#8696a0" />;
     }
     if (TERMINAL.has(message.status)) {
       return <Ionicons name="checkmark-done" size={12} color="#53bdeb" />;
@@ -99,6 +109,8 @@ export const BubbleShell = memo(function BubbleShell({
       <View style={styles.footer}>
         {deliveryStatus === 'failed' ? (
           <Text style={styles.failedLabel}>Failed to send · Tap to retry</Text>
+        ) : rejectedLabel ? (
+          <Text style={[styles.rejectedLabel, { color: metaColor }]}>{rejectedLabel}</Text>
         ) : statusLabel ? (
           <ProcessingLabel label={statusLabel} color={metaColor} />
         ) : null}
@@ -149,6 +161,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#ef4444',
     fontStyle: 'italic',
+  },
+  rejectedLabel: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    flexShrink: 1,
   },
   footerRight: {
     flexDirection: 'row',

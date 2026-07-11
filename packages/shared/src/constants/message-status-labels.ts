@@ -13,4 +13,6 @@ export const MESSAGE_STATUS_LABELS: Record<MessageStatus, string | null> = {
   [MessageStatus.DEIDENTIFYING]: 'Processing',
   [MessageStatus.COMPLETE]: null,
   [MessageStatus.FAILED]: 'Failed',
+  // Flagged as prompt injection — shown alongside the trainee's original words.
+  [MessageStatus.REJECTED]: "This didn't look related to your entry, so it wasn't added",
 };

@@ -60,7 +60,8 @@ export class ProcessingService {
     // Idempotency guard: skip if already in a terminal state (safe for outbox retry)
     if (
       message.status === MessageStatus.COMPLETE ||
-      message.status === MessageStatus.FAILED
+      message.status === MessageStatus.FAILED ||
+      message.status === MessageStatus.REJECTED
     ) {
       this.logger.info(`Message ${messageId} already ${message.status}, skipping`);
       return;
@@ -136,30 +137,8 @@ export class ProcessingService {
     });
     if (!cleaningAlive) return;
 
-    // Stage 2: Cleaning
-    this.logger.info(`Cleaning transcript for message ${message.xid}`);
-    const cleaningResult = await this.cleaningStage.execute(transcriptionResult.text, context);
-
-    // Update with cleaned content
-    const deidentifyAlive = await this.applyUpdate(messageId, {
-      cleanedContent: cleaningResult.text,
-      status: MessageStatus.DEIDENTIFYING,
-    });
-    if (!deidentifyAlive) return;
-
-    // Stage 3: PII Redaction (regex + LLM)
-    const redactedContent = await this.redactPii(cleaningResult.text, context);
-
-    // Update with final redacted content
-    if (
-      !(await this.applyUpdate(messageId, {
-        content: redactedContent,
-        status: MessageStatus.COMPLETE,
-      }))
-    )
-      return;
-
-    this.logger.info(`Message processing complete for ${message.xid}`);
+    // Stages 2-3: Clean → Redact → COMPLETE (or REJECTED on injection)
+    await this.cleanRedactAndComplete(messageId, transcriptionResult.text, context);
   }
 
   /**
@@ -177,38 +156,49 @@ export class ProcessingService {
       await this.markFailed(messageId, 'No raw content to clean');
       return;
     }
-    const cleaningResult = await this.cleaningStage.execute(message.rawContent, context);
+    // Stages 1-2: Clean → Redact → COMPLETE (or REJECTED on injection)
+    await this.cleanRedactAndComplete(messageId, message.rawContent, context);
+  }
 
-    // Update with cleaned content
-    const deidentifyAlive = await this.applyUpdate(messageId, {
-      cleanedContent: cleaningResult.text,
-      status: MessageStatus.DEIDENTIFYING,
-    });
-    if (!deidentifyAlive) return;
-
-    // Stage 2: PII Redaction (regex + LLM)
-    const redactedContent = await this.redactPii(cleaningResult.text, context);
-
-    // Update with final redacted content
+  /**
+   * Shared tail for both processing paths: Clean → Redact → COMPLETE.
+   *
+   * Single enforcement point for the injection gate — if either stage flags the
+   * input as a prompt-injection attempt, the message is marked REJECTED and no
+   * cleaned/redacted content is written (rawContent is preserved). This keeps the
+   * flagged turn out of the AI transcript (gather-context filters status===COMPLETE)
+   * without ever substituting a sentinel string into the content.
+   */
+  private async cleanRedactAndComplete(
+    messageId: Types.ObjectId,
+    input: string,
+    context: StageContext
+  ): Promise<void> {
+    // Stage: Cleaning
+    this.logger.info(`Cleaning text for message ${messageId}`);
+    const cleaningResult = await this.cleaningStage.execute(input, context);
+    if (cleaningResult.injectionDetected) return this.markRejected(messageId);
     if (
       !(await this.applyUpdate(messageId, {
-        content: redactedContent,
+        cleanedContent: cleaningResult.text,
+        status: MessageStatus.DEIDENTIFYING,
+      }))
+    )
+      return;
+
+    // Stage: PII Redaction (regex + LLM)
+    this.logger.info(`Redacting PII for message ${messageId}`);
+    const redaction = await this.redactionStage.execute(cleaningResult.text, context);
+    if (redaction.injectionDetected) return this.markRejected(messageId);
+    if (
+      !(await this.applyUpdate(messageId, {
+        content: redaction.text,
         status: MessageStatus.COMPLETE,
       }))
     )
       return;
 
-    this.logger.info(`Message processing complete for ${message.xid}`);
-  }
-
-  /**
-   * Run PII redaction: regex for structured PII, then LLM for names/orgs/locations.
-   * Shared by both audio and text processing paths.
-   */
-  private async redactPii(text: string, context: StageContext): Promise<string> {
-    this.logger.info(`Redacting PII for message ${context.messageId}`);
-    const redactionResult = await this.redactionStage.execute(text, context);
-    return redactionResult.text;
+    this.logger.info(`Message processing complete for message ${messageId}`);
   }
 
   /**
@@ -231,6 +221,26 @@ export class ProcessingService {
       return false;
     }
     return true;
+  }
+
+  /**
+   * Terminal REJECTED: the content was flagged as a prompt-injection attempt.
+   * rawContent is preserved and no cleaned/redacted content is written, so the
+   * message is excluded from the AI transcript (gather-context filters COMPLETE only)
+   * and rendered as "not added" in the UI. Unlike markFailed this is a deliberate
+   * rejection, not an error, so no processingError is set. A null result (message
+   * deleted mid-pipeline) is a no-op success, mirroring markFailed.
+   */
+  private async markRejected(messageId: Types.ObjectId): Promise<void> {
+    this.logger.warn(`Message ${messageId} flagged as prompt injection — marking REJECTED`);
+    const result = await this.conversationsRepository.updateMessage(messageId, {
+      status: MessageStatus.REJECTED,
+    });
+    if (isErr(result)) {
+      throw new Error(
+        `Failed to persist REJECTED status for message ${messageId}: ${result.error.message}`
+      );
+    }
   }
 
   private async markFailed(messageId: Types.ObjectId, error: string): Promise<void> {

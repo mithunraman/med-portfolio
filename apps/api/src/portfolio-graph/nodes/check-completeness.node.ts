@@ -20,6 +20,7 @@ import {
   TIER_RANK,
 } from '../portfolio-graph.state';
 import { AI_TURN_PREFIX, TRAINEE_TURN_PREFIX } from './transcript-format.util';
+import { ATTEMPT_LIMIT } from '../elicitation.util';
 
 const logger = new Logger('CheckCompletenessNode');
 
@@ -446,6 +447,10 @@ export function createCheckCompletenessNode(deps: GraphDeps) {
         sectionReadiness,
         readinessScore,
         bestTierByProbe,
+        // Round cap scales with the template: each askable probe gets up to
+        // ATTEMPT_LIMIT asks, so the circuit breaker never truncates before the
+        // deterministic exhaustion/coverage logic has run.
+        maxFollowupRounds: assessableSections.length * ATTEMPT_LIMIT,
       };
     } catch (error) {
       // Fail safe. The LLM service exhausts retries before throwing, so this is a

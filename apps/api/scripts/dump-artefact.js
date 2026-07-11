@@ -14,7 +14,7 @@
  *   - artefactId        the composite "{userId}_{clientGeneratedId}" string
  *
  * Joins (field names differ across collections, so they are spelled out):
- *   conversations.artefact      = artefact._id
+ *   conversations.artefact      = artefact._id   (prefers the ACTIVE one, else newest)
  *   messages.conversation       = conversation._id
  *   analysis_runs.artefactId    = artefact._id   (also OR'd on conversationId)
  *   pdp_goals.artefactId        = artefact._id
@@ -112,12 +112,31 @@ async function resolveArtefact(db, id) {
 /*  Gather                                                             */
 /* ------------------------------------------------------------------ */
 
+// ConversationStatus.ACTIVE — see packages/shared/src/enums/conversation-status.enum.ts.
+const CONVERSATION_STATUS_ACTIVE = 1;
+
+/**
+ * The conversation to dump: the ACTIVE one, mirroring the app's own
+ * `findActiveConversation` ({ artefact, status: ACTIVE }). An artefact may have
+ * more than one conversation (the { artefact, status } index is non-unique), and a
+ * bare findOne returns an arbitrary/oldest one. Falls back to the most recent of
+ * ANY status so an artefact whose conversation was archived/closed still dumps.
+ */
+async function findConversation(db, oid) {
+  const conversations = db.collection('conversations');
+  const active = await conversations.findOne({
+    artefact: oid,
+    status: CONVERSATION_STATUS_ACTIVE,
+  });
+  return active ?? conversations.findOne({ artefact: oid }, { sort: { createdAt: -1 } });
+}
+
 async function gather(db, artefact) {
   const oid = artefact._id;
 
   const [user, conversation, pdpGoals, versionHistory] = await Promise.all([
     db.collection('users').findOne({ _id: artefact.userId }),
-    db.collection('conversations').findOne({ artefact: oid }),
+    findConversation(db, oid),
     db.collection('pdp_goals').find({ artefactId: oid }).toArray(),
     db.collection('version_history').find({ entityId: oid }).sort({ version: 1 }).toArray(),
   ]);
@@ -179,6 +198,21 @@ function printSummary(dump, section) {
       m.question ? ' [question]' : ''
     }`);
     if (body) L(`      ${truncate(body, 200)}`);
+    // The `content` above is only the AI's preamble; the actual question text
+    // lives on `question.prompts[].text` (free_text) or the option keys (select).
+    if (m.question) {
+      const q = m.question;
+      if (q.questionType === 'free_text') {
+        for (const p of q.prompts || []) {
+          L(`      Q[${p.key}]: ${truncate(p.text, 200)}`);
+          for (const ex of p.hints?.examples || []) L(`         e.g. ${truncate(ex, 200)}`);
+        }
+      } else {
+        const opts = (q.options || []).map((o) => o.key).join(', ');
+        L(`      Q(${q.questionType})${q.suggestedKey ? ` sugg= ${q.suggestedKey}` : ''}: ${opts}`);
+      }
+    }
+    if (m.answer) L(`      A: ${truncate(JSON.stringify(m.answer), 160)}`);
   }
 
   L('');

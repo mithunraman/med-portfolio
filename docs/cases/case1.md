@@ -195,3 +195,6 @@ Handled it fine I think. Explanation and reassurance were good, he left happy. T
 
 Learning Needs
 Thats a good point. Forgot to add learning needs. So, umm, I need to tighten up my safety-netting on back pain, especially the, ah, cauda equina warning signs. I'm going to read the NICE guidance on low back pain and sciatica and, umm, make a point of always giving those specific red-flag instructions before the patient leaves.
+
+Safety netting:
+I'll keep a quick back-pain safety-netting checklist pinned by my desk — cauda equina red flags and a clear "come back if X within Y" line — and make myself run through it before ending every consultation, tired or not, rather than relying on remembering it at the end of a long day.

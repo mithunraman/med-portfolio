@@ -21,9 +21,10 @@ import { shouldContinueElicitation } from './elicitation.util';
 import { PortfolioState, PortfolioStateType } from './portfolio-graph.state';
 
 // ── Max loop limits ──
-// The planner asks one question per round and exits when the rubric clears
-// (hasEnoughInfo). This is a circuit-breaker backstop, not the exit condition.
-export const MAX_FOLLOWUP_ROUNDS = 8;
+// The follow-up round cap is per-run (state.maxFollowupRounds, derived by
+// check_completeness from the template). This is a circuit-breaker backstop, not
+// the exit condition — the planner asks one question per round and exits when the
+// rubric clears (hasEnoughInfo).
 export const CONFIDENCE_THRESHOLD = 0.7;
 export const MAX_CLARIFICATION_ROUNDS = 2;
 
@@ -68,7 +69,7 @@ export function classifyRouter(
 function completenessRouter(state: PortfolioStateType): 'generate_followup' | 'tag_capabilities' {
   // The exit policy (rubric met, good-enough, exhausted, done, or round cap) lives in
   // shouldContinueElicitation so it is pure and unit-testable.
-  return shouldContinueElicitation(state, MAX_FOLLOWUP_ROUNDS)
+  return shouldContinueElicitation(state, state.maxFollowupRounds)
     ? 'generate_followup'
     : 'tag_capabilities';
 }

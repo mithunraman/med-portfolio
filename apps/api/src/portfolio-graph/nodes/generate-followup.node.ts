@@ -6,8 +6,7 @@ import { Stage } from '../../llm';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
-import { isSectionExhausted } from '../elicitation.util';
-import { MAX_FOLLOWUP_ROUNDS } from '../portfolio-graph.builder';
+import { hasBeenAsked, isSectionExhausted } from '../elicitation.util';
 import { PortfolioStateType, ReadinessEntry, SectionAttempt } from '../portfolio-graph.state';
 
 const logger = new Logger('GenerateFollowupNode');
@@ -218,9 +217,9 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
   ): Promise<Partial<PortfolioStateType>> {
     // Defence-in-depth: circuit breaker against router bugs that could cause
     // an infinite follow-up loop with unbounded LLM spend.
-    if (state.followUpRound >= MAX_FOLLOWUP_ROUNDS) {
+    if (state.followUpRound >= state.maxFollowupRounds) {
       throw new Error(
-        `Follow-up round ${state.followUpRound} exceeds maximum ${MAX_FOLLOWUP_ROUNDS}. ` +
+        `Follow-up round ${state.followUpRound} exceeds maximum ${state.maxFollowupRounds}. ` +
           'This indicates a router bug in completenessRouter.'
       );
     }
@@ -244,12 +243,20 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
     }
     const template = getTemplateForEntryType(config, state.entryType);
 
-    // ── Select top missing sections by weight ──
-    // Leverage = importance × distance from a complete answer. Picks the single
-    // gap where one good answer moves readiness the most (a heavy, empty probe
-    // beats a heavy-but-nearly-there one).
-    const leverage = (p: Probe): number =>
-      p.weight * (1 - (state.probeReadiness?.[p.id]?.score ?? 0));
+    // ── Select the next missing section to ask about, in clinical-story order ──
+    // The template already encodes the natural narrative (presentation → findings →
+    // reasoning → management → outcome → reflection → learning). We ask in that
+    // order so the dialogue builds a story rather than hopping by leverage. Two-key
+    // sort: unasked sections before re-asks (coverage-first — every section gets a
+    // first question before any second, so late-story reflective sections aren't
+    // starved), then template narrative position within each group.
+    let narrativeIndex = 0;
+    const narrativeOrder = new Map<string, number>();
+    for (const section of [...template.sections].sort((a, b) => a.order - b.order)) {
+      for (const probe of section.probes) narrativeOrder.set(probe.id, narrativeIndex++);
+    }
+    const orderRank = (id: string): number =>
+      narrativeOrder.get(id) ?? Number.MAX_SAFE_INTEGER;
 
     const missingSectionDefs = leafProbes(template)
       .filter(
@@ -258,7 +265,11 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
       )
       // Skip sections the exhaustion cap has retired — asked enough without improving.
       .filter((s) => !isSectionExhausted(state, s.id))
-      .sort((a, b) => leverage(b) - leverage(a))
+      .sort((a, b) => {
+        const aAsked = hasBeenAsked(state, a.id) ? 1 : 0;
+        const bAsked = hasBeenAsked(state, b.id) ? 1 : 0;
+        return aAsked - bAsked || orderRank(a.id) - orderRank(b.id);
+      })
       .slice(0, MAX_QUESTIONS_PER_ROUND);
 
     // Guard: nothing to ask about (should not happen due to completenessRouter)

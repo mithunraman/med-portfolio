@@ -9,6 +9,7 @@ import {
 } from '../check-completeness.node';
 import type { GraphDeps } from '../../graph-deps';
 import type { PortfolioStateType } from '../../portfolio-graph.state';
+import { ATTEMPT_LIMIT } from '../../elicitation.util';
 
 jest.mock('@sentry/nestjs', () => ({ captureException: jest.fn() }));
 
@@ -202,5 +203,11 @@ describe('checkCompletenessNode — schema & resilience', () => {
     const result = await createCheckCompletenessNode(deps)(makeState({ entryType: null }));
     expect(result.hasEnoughInfo).toBe(true);
     expect(deps.llmService.invokeStructured).not.toHaveBeenCalled();
+  });
+
+  it('derives the follow-up round cap from the template (askable probes × ATTEMPT_LIMIT)', async () => {
+    const result = await createCheckCompletenessNode(makeDeps())(makeState());
+    // CCR has 6 assessable probes → cap scales with the template, not a fixed 8.
+    expect(result.maxFollowupRounds).toBe(ccrAssessable.length * ATTEMPT_LIMIT);
   });
 });

@@ -1,5 +1,5 @@
 import { createGenerateFollowupNode } from '../generate-followup.node';
-import { MAX_FOLLOWUP_ROUNDS } from '../../portfolio-graph.builder';
+import { DEFAULT_MAX_FOLLOWUP_ROUNDS } from '../../portfolio-graph.state';
 import type { GraphDeps } from '../../graph-deps';
 import type { PortfolioStateType } from '../../portfolio-graph.state';
 
@@ -47,6 +47,7 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     missingSections: ['clinical_reasoning', 'management', 'outcome', 'reflection'],
     hasEnoughInfo: false,
     followUpRound: 0,
+    maxFollowupRounds: DEFAULT_MAX_FOLLOWUP_ROUNDS,
     pendingFollowupQuestions: [],
     askedFollowupQuestions: [],
     capabilities: [],
@@ -63,23 +64,23 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
 
 describe('GenerateFollowupNode', () => {
   describe('circuit breaker', () => {
-    it('should throw when followUpRound equals MAX_FOLLOWUP_ROUNDS', async () => {
+    it('should throw when followUpRound equals the run cap (state.maxFollowupRounds)', async () => {
       const node = createGenerateFollowupNode(makeDeps());
-      const state = makeState({ followUpRound: MAX_FOLLOWUP_ROUNDS });
+      const state = makeState({ followUpRound: 12, maxFollowupRounds: 12 });
 
       await expect(node(state)).rejects.toThrow(
-        `Follow-up round ${MAX_FOLLOWUP_ROUNDS} exceeds maximum ${MAX_FOLLOWUP_ROUNDS}`
+        'Follow-up round 12 exceeds maximum 12'
       );
     });
 
-    it('should throw when followUpRound exceeds MAX_FOLLOWUP_ROUNDS', async () => {
+    it('should throw when followUpRound exceeds the run cap', async () => {
       const node = createGenerateFollowupNode(makeDeps());
-      const state = makeState({ followUpRound: MAX_FOLLOWUP_ROUNDS + 1 });
+      const state = makeState({ followUpRound: 13, maxFollowupRounds: 12 });
 
       await expect(node(state)).rejects.toThrow('exceeds maximum');
     });
 
-    it('should NOT throw when followUpRound is below MAX_FOLLOWUP_ROUNDS', async () => {
+    it('should NOT throw when followUpRound is below the run cap', async () => {
       const deps = makeDeps();
       (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({
         data: {
@@ -233,21 +234,49 @@ describe('GenerateFollowupNode', () => {
       expect(result.followUpRound).toBe(1);
     });
 
-    it('should select the single highest-leverage missing section', async () => {
+    it('asks the earliest gap in template narrative order (management before outcome)', async () => {
       const deps = makeDeps();
       (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({
         data: { questions: [] },
       });
 
       const node = createGenerateFollowupNode(deps);
-      // 4 missing sections — only the highest-leverage one is asked. With no
-      // readiness recorded, leverage reduces to weight, so reflection (0.25) wins.
+      // 4 unasked gaps — narrative order is clinical_reasoning → management → outcome →
+      // reflection, so clinical_reasoning is asked first (NOT reflection by weight),
+      // and management would precede outcome.
       const state = makeState({
-        missingSections: ['clinical_reasoning', 'management', 'outcome', 'reflection'],
+        missingSections: ['reflection', 'outcome', 'management', 'clinical_reasoning'],
       });
       const result = await node(state);
 
       expect(result.pendingFollowupQuestions).toHaveLength(1);
+      expect(result.pendingFollowupQuestions![0].sectionId).toBe('clinical_reasoning');
+    });
+
+    it('picks management before outcome when both are the only gaps', async () => {
+      const deps = makeDeps();
+      (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({ data: { questions: [] } });
+
+      const node = createGenerateFollowupNode(deps);
+      const state = makeState({ missingSections: ['outcome', 'management'] });
+      const result = await node(state);
+
+      expect(result.pendingFollowupQuestions![0].sectionId).toBe('management');
+    });
+
+    it('asks an unasked later section before re-asking an earlier one (coverage-first)', async () => {
+      const deps = makeDeps();
+      (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({ data: { questions: [] } });
+
+      const node = createGenerateFollowupNode(deps);
+      // management is earlier in narrative order but already asked once; reflection is
+      // later but unasked — coverage-first gives reflection its first question first.
+      const state = makeState({
+        missingSections: ['management', 'reflection'],
+        sectionAttempts: { management: { count: 1, tierAtLastAsk: 'missing' } },
+      });
+      const result = await node(state);
+
       expect(result.pendingFollowupQuestions![0].sectionId).toBe('reflection');
     });
 
@@ -256,8 +285,8 @@ describe('GenerateFollowupNode', () => {
       (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({ data: { questions: [] } });
 
       const node = createGenerateFollowupNode(deps);
-      // reflection has the highest leverage but was asked to its cap without improving,
-      // so it is retired; outcome is asked instead.
+      // reflection was asked to its cap without improving, so it is retired; outcome
+      // is the only live gap and is asked instead.
       const state = makeState({
         missingSections: ['reflection', 'outcome'],
         sectionAttempts: { reflection: { count: 2, tierAtLastAsk: 'missing' } },
@@ -352,10 +381,10 @@ describe('GenerateFollowupNode', () => {
       (deps.llmService.invokeStructured as jest.Mock).mockRejectedValue(new Error('API timeout'));
 
       const node = createGenerateFollowupNode(deps);
-      const state = makeState({ missingSections: ['reflection', 'outcome'] });
+      const state = makeState({ missingSections: ['reflection'] });
       const result = await node(state);
 
-      // One question per round — reflection (weight 0.25) outranks outcome (0.10).
+      // One question per round, backfilled from the template default on LLM failure.
       expect(result.pendingFollowupQuestions).toHaveLength(1);
 
       // Should use the default extraction question from template

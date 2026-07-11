@@ -46,7 +46,10 @@ export const justificationAssessmentSchema = z.object({
     .describe(
       "2-3 sentences LINKING the action to the clause: state the trainee's specific action " +
         '(from sourceQuote), then explain WHY it satisfies the descriptorClause, using the ' +
-        "descriptor's language. Do NOT merely restate or paraphrase the evidence. Must be " +
+        "descriptor's language. Do NOT merely restate or paraphrase the evidence. " +
+        'POSITIVE EVIDENCE ONLY: never state or name the tier ("so this is adequate", "rather ' +
+        'than strong") and never describe what the trainee did NOT do, could have done, or any ' +
+        'shortfall — the tier is captured separately in justificationTier. Must be ' +
         "distinct from the other capabilities' justifications. Empty string if nothing to justify."
     ),
   justificationTier: z
@@ -86,7 +89,7 @@ The trainee has confirmed the capabilities below for a {entryType} entry. Each c
 1. Anchor on the evidence already found. Extract ONLY what the trainee actually said they did — never invent actions, reasoning, or detail they did not state.
 2. FIRST give a "sourceQuote": a verbatim span from the transcript (their own words, copied exactly) that grounds the justification. Turns are role-prefixed: take the sourceQuote ONLY from a "TRAINEE:" turn — never from an "AI asked:" turn, even when it paraphrases the trainee.
 3. THEN give a "descriptorClause": the specific phrase from THIS capability's Descriptor criteria that the evidence demonstrates, in the descriptor's own words.
-4. THEN write the "justification" in the FIRST PERSON ("I…") as a LINK, not a recap: (a) the specific action you took, (b) the descriptor clause it satisfies, and (c) why. An educational supervisor should see at a glance which clause is met. A justification that only re-tells what happened, without naming the capability facet it evidences, is NOT acceptable. WEAVE the descriptor's words naturally into your sentence (e.g. "…which demonstrates interpreting clinical data to inform my diagnosis"). Do NOT refer to "the descriptor", "the capability", "the rubric", or write "as required by…" — the trainee is justifying their practice, not annotating a framework.
+4. THEN write the "justification" in the FIRST PERSON ("I…") as a LINK, not a recap: (a) the specific action you took, (b) the descriptor clause it satisfies, and (c) why. An educational supervisor should see at a glance which clause is met. A justification that only re-tells what happened, without naming the capability facet it evidences, is NOT acceptable. WEAVE the descriptor's words naturally into your sentence (e.g. "…which demonstrates interpreting clinical data to inform my diagnosis"). Do NOT refer to "the descriptor", "the capability", "the rubric", or write "as required by…" — the trainee is justifying their practice, not annotating a framework. POSITIVE EVIDENCE ONLY: the justification must read as the trainee's own account of what they DID. NEVER state or explain the grade ("so this is adequate", "rather than strong"), and NEVER narrate what the trainee did not do, omitted, or could have done better — even for a partial/adequate capability. If the evidence only partly meets the clause, describe the part it DOES meet and stop; the tier is recorded separately in justificationTier, not in the prose.
 5. Justify each capability distinctly, on its OWN descriptor clause — even when two capabilities draw on the SAME evidence span. That overlap is legitimate: one case can evidence several capabilities. What must differ is the justification and the descriptor facet (e.g. gathering/interpreting the data vs reasoning to a diagnosis), NOT the evidence. Only grade a capability lower if it is not genuinely demonstrated on its own merits — never merely because it shares evidence with another.
 6. Grade justificationTier against the descriptor: "strong" = a specific action linked to the clause with a rationale; "adequate" = genuine but partial; "shallow" = a bare assertion with no specific action; "missing" = nothing the trainee did demonstrates it.
 7. If the transcript shows nothing the trainee did for this capability, return empty sourceQuote, descriptorClause and justification, and grade it "missing".
@@ -96,6 +99,7 @@ The trainee has confirmed the capabilities below for a {entryType} entry. Each c
 - WEAK (restates — do NOT do this): "I considered the differentials and used the absence of red flags to decide it was mechanical." → recaps the quote; names no descriptor clause and makes no link.
 - STRONG: descriptorClause = "interpreting clinical data to inform the diagnosis"; justification = "I interpreted the specific negative findings — no neurological deficit, no systemic red flags, normal bladder and bowel function — to exclude serious pathology, which is interpreting clinical data to inform the diagnosis."
 - META (do NOT do this — same content, but annotates the framework): "…to exclude serious pathology. This demonstrates that I interpreted clinical data to inform my diagnosis, as required by the descriptor." → drop "This demonstrates… as required by the descriptor"; weave the clause into the sentence as in STRONG above.
+- SHORTFALL (do NOT do this — an ADEQUATE capability that narrates the grade and what was missing): "I examined him and started treatment, but I did not explain my rationale or arrange follow-up, so this is adequate rather than strong." → the "but I did not… so this is adequate" tail is grade meta-commentary that must NEVER appear in the paste-ready prose. Instead state only the part met: "I examined him and started treatment for the presenting problem, which is providing continuity of care." Grade the shortfall via justificationTier, not the sentence.
 - DIFFERENTIATION (one span, two capabilities): for data gathering, rest on "interpreting clinical data"; for decision-making, rest on "managing diagnostic uncertainty and reasoning toward a diagnosis" — different clauses and emphasis, not a reworded copy.
 
 ## Security
@@ -179,10 +183,12 @@ export function createElicitJustificationNode(deps: GraphDeps) {
 
     const capabilities: CapabilityTag[] = state.capabilities.map((cap) => {
       const j = byCode.get(cap.code);
-      // The justification is pasted into the portfolio as the trainee's own
-      // words, so it must be first person. The prompt enforces this; the guard
-      // is a safety net for the common third-person slip.
-      const { text: justification, flagged } = enforceFirstPerson(j?.justification?.trim() ?? '');
+      // Two safety nets behind the prompt, both because this text is pasted into
+      // the portfolio verbatim: strip any trailing grade meta-commentary the model
+      // appends to an adequate/partial capability ("…so this is adequate rather
+      // than strong"), then enforce first person for the common third-person slip.
+      const stripped = stripTierCommentary(j?.justification?.trim() ?? '');
+      const { text: justification, flagged } = enforceFirstPerson(stripped);
       if (flagged) {
         logger.warn(
           `[${cid}] ${cap.code} justification still reads third-person after prefix fix: ` +
@@ -206,6 +212,32 @@ export function createElicitJustificationNode(deps: GraphDeps) {
 
     return { capabilities };
   };
+}
+
+/**
+ * Strip trailing grade meta-commentary from a justification. For adequate/partial
+ * capabilities the model tends to reconcile the evidence against the (strong-bar)
+ * descriptor by narrating the shortfall and the tier — e.g.
+ *   "…gave him a leaflet, but I did not explain the rationale, so this is adequate
+ *    rather than strong."
+ * That tail is not paste-ready portfolio prose (the tier lives on justificationTier),
+ * so we cut the shortfall clause. Anchored on the unambiguous "so this is <tier>"
+ * phrase — which never appears in a clean justification — so legitimate prose that
+ * happens to contain "but" is left untouched. The prompt forbids this; this is the
+ * deterministic safety net for the weaker models that ignore it.
+ */
+const JUSTIFICATION_TIERS = 'adequate|strong|shallow|missing';
+function stripTierCommentary(justification: string): string {
+  const withLead = new RegExp(
+    `[,;.]\\s+(?:but|although|however|though|yet|whereas)\\b[^.]*?\\bso this is (?:${JUSTIFICATION_TIERS})\\b[^.]*\\.?\\s*$`,
+    'i'
+  );
+  const bare = new RegExp(
+    `[,;]\\s*so this is (?:${JUSTIFICATION_TIERS})\\b[^.]*\\.?\\s*$`,
+    'i'
+  );
+  const cleaned = justification.replace(withLead, '.').replace(bare, '.');
+  return cleaned.trim();
 }
 
 /**

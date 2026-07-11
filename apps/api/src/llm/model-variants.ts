@@ -32,7 +32,10 @@ const openai = (model: string): ModelTarget => ({ provider: 'openai', model });
 // stage — its Flash endpoint supports tools, reasoning, and structured_outputs.
 const DEEPSEEK_FLASH = 'deepseek/deepseek-v4-flash';
 const DEEPSEEK_PRO = 'deepseek/deepseek-v4-pro';
-const ALIBABA_ROUTE = ['alibaba'];
+// OpenRouter upstream inference provider slugs (from openrouter.ai/api/v1/providers).
+
+// const ALIBABA_ROUTE = ['alibaba'];
+const ATLAS_CLOUD_ROUTE = ['atlas-cloud'];
 
 /**
  * DeepSeek-on-OpenRouter target with a per-stage reasoning ("think") mode.
@@ -47,7 +50,7 @@ const ALIBABA_ROUTE = ['alibaba'];
 const deepseek = (
   model: string,
   thinkMode: ThinkMode,
-  route: string[] = ALIBABA_ROUTE
+  route: string[] = ATLAS_CLOUD_ROUTE
 ): ModelTarget => ({
   provider: 'openrouter',
   model,

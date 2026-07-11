@@ -206,6 +206,54 @@ describe('elicitJustificationNode gate + contradiction guard', () => {
     expect(c06.justification).toContain('ramipril'); // advisory prose retained
   });
 
+  it('strips trailing grade meta-commentary from the justification (paste-ready)', async () => {
+    // Flash appends "…so this is adequate rather than strong" to adequate/partial
+    // justifications; that grade meta-commentary must never reach the portfolio.
+    const deps = makeDeps({
+      justifications: [
+        {
+          code: 'C-06',
+          sourceQuote: 'I started metformin and discussed lifestyle changes',
+          justification:
+            'I started metformin and discussed lifestyle changes, but I did not explain the ' +
+            'rationale or arrange follow-up, so this is adequate rather than strong.',
+          justificationTier: 'adequate',
+        },
+      ],
+    });
+
+    const result = await createElicitJustificationNode(deps)(
+      makeState({ capabilities: [taggedC06] })
+    );
+
+    const c06 = result.capabilities!.find((c) => c.code === 'C-06')!;
+    expect(c06.justification).toBe('I started metformin and discussed lifestyle changes.');
+    expect(c06.justification).not.toMatch(/so this is|but I did not/i);
+  });
+
+  it('does not over-strip a clean justification that merely contains "but"', async () => {
+    const deps = makeDeps({
+      justifications: [
+        {
+          code: 'C-06',
+          sourceQuote: 'I started metformin and discussed lifestyle changes',
+          justification:
+            'I started metformin, but more importantly I interpreted her rising HbA1c to reach ' +
+            'the diagnosis, which is interpreting clinical data to inform care.',
+          justificationTier: 'strong',
+        },
+      ],
+    });
+
+    const result = await createElicitJustificationNode(deps)(
+      makeState({ capabilities: [taggedC06] })
+    );
+
+    const c06 = result.capabilities!.find((c) => c.code === 'C-06')!;
+    // No "so this is <tier>" anchor → left untouched.
+    expect(c06.justification).toContain('but more importantly');
+  });
+
   it('instructs the model to take the sourceQuote only from TRAINEE: turns', async () => {
     const deps = makeDeps({ justifications: [] });
     await createElicitJustificationNode(deps)(makeState({ capabilities: [taggedC06] }));

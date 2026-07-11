@@ -153,8 +153,8 @@ export const CCR_TEMPLATE: ArtefactTemplate = {
           required: true,
           descriptorCriteria:
             'Strong = names a specific educational gap (DEN) the case revealed AND a concrete plan to address it (a topic to study, a skill to practise, or a linked learning entry). ' +
-            'Adequate = a genuine, specific learning need identified. ' +
-            'Shallow = a vague or generic gap ("read more around the topic") with no specific need or plan.',
+            'Adequate = names a specific gap the case revealed AND a stated intent to act on it (a direction to read, learn, or change practice), even if the plan is not yet concrete. ' +
+            'Shallow = a retrospective EVALUATION of what went wrong or what they would have done differently, with NO stated intent to learn or address it (e.g. "the real gap was the prescribing decision", "I should have safety-netted better") — that is reflection, not a learning need; OR a vague, generic gap ("read more around the topic") with no specific need.',
           description:
             'A specific educational gap (DEN) the case revealed, and how it will be addressed — e.g. a topic to read up on or a follow-up learning entry.',
           promptHint:

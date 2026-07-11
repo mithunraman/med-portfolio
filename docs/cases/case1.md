@@ -198,3 +198,21 @@ Thats a good point. Forgot to add learning needs. So, umm, I need to tighten up 
 
 Safety netting:
 I'll keep a quick back-pain safety-netting checklist pinned by my desk — cauda equina red flags and a clear "come back if X within Y" line — and make myself run through it before ending every consultation, tired or not, rather than relying on remembering it at the end of a long day.
+
+**_ [Case 6] _**
+
+Right, last one of the day, umm… 78-year-old lady, came in with her daughter — she'd had a fall at home two days ago. No loss of consciousness, no head injury, she just sort of went down in the kitchen. Felt a bit dizzy when she stood up from a chair, apparently. No chest pain, no palpitations beforehand, no tongue-biting or incontinence, so it didn't really sound like a seizure or a cardiac collapse. She's normally pretty independent, does her own shopping. Past history — hypertension, bit of osteoarthritis, and, ah, I'd actually started her on tamsulosin about three weeks ago for some urinary symptoms.
+
+On examination she was alright really — no injuries apart from a bruise on the hip, neuro normal, gait a bit cautious but okay. I did a lying and standing BP though, and that's where it was — 142 lying, dropped to about 118 systolic on standing, and she felt dizzy with it. Heart sounds normal, ECG was sinus rhythm, nothing acute. So I was fairly happy this was postural hypotension, most likely the combination of her ramipril and the tamsulosin I'd added, rather than a mechanical trip or anything cardiac.
+
+Q[management] →
+I stopped the tamsulosin, that was the most recent change and the likely culprit. Kept the ramipril for now but told her to hold it if she felt lightheaded, and said I'd review the whole medication list. Gave her advice about standing up slowly, getting up from bed in stages, keeping her fluids up. Referred her to the community falls team for a proper assessment, and booked a review in two weeks to recheck the lying and standing BP. Safety-netted too — come back sooner or ring 111 if any more falls, blackouts or chest pain.
+
+Q[outcome] →
+She came back for the two-week review — the standing BP had come up, only dropped about 8 points that time and no dizziness with it, and she'd had no further falls. The falls team had been out and put a couple of grab rails in at home. So it settled once the tamsulosin was out of the picture, which pretty much confirmed it was the drug.
+
+Q[reflection] →
+Looking back, the thing I did well was actually bothering to do the lying and standing BP — at the end of the day it'd have been easy to just call it a trip and move on, and I nearly did. What I'd change is, honestly, I should have thought about the postural drop when I started the tamsulosin three weeks earlier, in someone her age already on an antihypertensive. I sort of added it without weighing the falls risk. So the real gap was the prescribing decision, not the fall.
+
+Q[learning_needs] →
+The learning point for me is prescribing in older patients. I want to be more systematic about checking falls and postural BP risk before starting things like alpha-blockers in the elderly. I'm going to read up on the STOPP/START criteria, and I'll set myself a rule to do a lying-and-standing BP whenever I start or add an antihypertensive in anyone over 65.

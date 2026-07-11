@@ -19,8 +19,12 @@ import { ArtefactStatus, MessageRole, MessageStatus, MessageType } from '@acme/s
  *    by an analysis turn and is locked. Mirrors the server's
  *    `hasLaterAssistantMessage` guard.
  *
- * Edit additionally requires COMPLETE; delete also permits FAILED (so a message
- * that failed to process can be cleared).
+ * Edit additionally requires COMPLETE; delete also permits FAILED and REJECTED
+ * (so a message that failed to process, or was flagged as injection and never
+ * entered the transcript, can be cleared). REJECTED is deliberately NOT editable:
+ * the edit path runs regex-only redaction with no injection check, so allowing it
+ * would let a flagged message be edited back into a COMPLETE, transcript-included
+ * message and bypass the gate.
  */
 const MODIFIABLE_TYPES = new Set<MessageType>([MessageType.TEXT, MessageType.AUDIO]);
 
@@ -61,6 +65,8 @@ export function canDeleteMessage(
 ): boolean {
   return (
     isOwnModifiableMessage(message, artefactStatus, isAnalysing, latestAssistantMessageAt) &&
-    (message.status === MessageStatus.COMPLETE || message.status === MessageStatus.FAILED)
+    (message.status === MessageStatus.COMPLETE ||
+      message.status === MessageStatus.FAILED ||
+      message.status === MessageStatus.REJECTED)
   );
 }

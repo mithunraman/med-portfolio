@@ -186,6 +186,9 @@ function printSummary(dump, section) {
   L(`  completeness    : complete=${artefact.completeness?.complete ?? '—'}  unmet=${
     artefact.completeness?.unmetSections?.length ?? 0
   }`);
+  for (const s of artefact.completeness?.unmetSections || []) {
+    L(`     ✗ [${s.sectionId}] ${s.label ?? '—'}  (${s.status})`);
+  }
 
   L('');
   L(`CONVERSATION : ${conversation ? `xid=${conversation.xid} status=${conversation.status}` : '(none)'}`);

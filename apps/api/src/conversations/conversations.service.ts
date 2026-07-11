@@ -209,7 +209,9 @@ export class ConversationsService {
           userId,
           conversationXid,
           messageXid,
-          [MessageStatus.COMPLETE, MessageStatus.FAILED],
+          // REJECTED is deletable alongside FAILED (a message that never entered the
+          // transcript can be cleared) but is NOT editable — see editMessage.
+          [MessageStatus.COMPLETE, MessageStatus.FAILED, MessageStatus.REJECTED],
           'delete',
           session
         );
@@ -248,6 +250,9 @@ export class ConversationsService {
           userId,
           conversationXid,
           messageXid,
+          // COMPLETE only — REJECTED is intentionally excluded. Edit runs regex-only
+          // redaction with no injection check, so editing a flagged message would let
+          // it re-enter the transcript as COMPLETE and bypass the injection gate.
           [MessageStatus.COMPLETE],
           'edit',
           session

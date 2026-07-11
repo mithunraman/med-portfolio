@@ -40,6 +40,7 @@ import {
   MessageRole,
   MessageStatus,
   ThinkingStep,
+  isTerminalMessageStatus,
 } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -56,8 +57,6 @@ const chatLogger = logger.createScope('ChatScreen');
 const INITIAL_WORD_THRESHOLD = 60;
 /** Minimum user words (since the question) before "Continue Analysis" is available */
 const FOLLOWUP_WORD_THRESHOLD = 30;
-
-const TERMINAL_STATUSES = new Set([MessageStatus.COMPLETE, MessageStatus.FAILED]);
 
 // Phase-aware polling intervals (ms). null = no polling.
 function getPollInterval(
@@ -264,7 +263,7 @@ export default function ChatScreen() {
   }, [conversationId, isNew, dispatch]);
 
   // Poll fast while any message is still being processed (transcription, cleaning, etc.)
-  const hasProcessingMessages = serverMessages.some((m) => !TERMINAL_STATUSES.has(m.status));
+  const hasProcessingMessages = serverMessages.some((m) => !isTerminalMessageStatus(m.status));
   const pollIntervalMs = getPollInterval(context?.phase, hasProcessingMessages, hasUnsentMessages);
 
   chatLogger.debug('[poll-config]', {

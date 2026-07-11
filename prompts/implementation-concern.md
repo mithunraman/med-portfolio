@@ -18,6 +18,6 @@ In your response:
    - or ask for more context.
 8. Provide a concise suggested reply to the reviewer.
 
-Be pragmatic and specific. Do not assume the reviewer is correct. Separate facts from assumptions, and avoid over-engineering the answer.
+Be pragmatic and specific. Do not assume the reviewer is correct. Separate facts from assumptions, and avoid over-engineering the answer. Do not edit code unless instructed.
 
 Code review comment:

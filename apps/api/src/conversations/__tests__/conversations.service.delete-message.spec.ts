@@ -135,6 +135,16 @@ describe('ConversationsService.deleteMessage', () => {
     expect(mockConversationsRepo.markDeletedMessagesByIds).toHaveBeenCalledWith([messageOid], null);
   });
 
+  it('allows deleting a REJECTED (injection-flagged) message', async () => {
+    primeHappyPath();
+    mockConversationsRepo.findMessagesByXids.mockResolvedValue(
+      ok([makeMessage({ status: MessageStatus.REJECTED, content: null, cleanedContent: null })]),
+    );
+
+    await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).resolves.toBeUndefined();
+    expect(mockConversationsRepo.markDeletedMessagesByIds).toHaveBeenCalledWith([messageOid], null);
+  });
+
   it('throws NotFoundException when conversation does not exist', async () => {
     mockConversationsRepo.findConversationByXid.mockResolvedValue(ok(null));
 

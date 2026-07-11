@@ -266,6 +266,21 @@ describe('ConversationsService.editMessage', () => {
     expect(mockConversationsRepo.updateMessage).not.toHaveBeenCalled();
   });
 
+  // Injection-gate guard: a REJECTED message is deletable (see delete-message spec)
+  // but must NOT be editable — edit runs regex-only redaction with no injection check,
+  // so editing it back to COMPLETE would smuggle flagged content into the transcript.
+  it('throws ConflictException for a REJECTED (injection-flagged) message', async () => {
+    primeHappyPath();
+    mockConversationsRepo.findMessagesByXids.mockResolvedValue(
+      ok([makeMessage({ status: MessageStatus.REJECTED, content: null, cleanedContent: null })]),
+    );
+
+    await expect(service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'new')).rejects.toThrow(
+      ConflictException,
+    );
+    expect(mockConversationsRepo.updateMessage).not.toHaveBeenCalled();
+  });
+
   it('preserves messageType for an edited AUDIO (transcript) message', async () => {
     const audioMsg = makeMessage({ messageType: MessageType.AUDIO });
     mockConversationsRepo.findConversationByXid.mockResolvedValue(ok(makeConversation()));

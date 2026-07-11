@@ -124,12 +124,36 @@ describe('ProcessingService injection gate', () => {
     const statuses = updateMessage.mock.calls.map((c) => c[1].status);
     expect(statuses).toContain(MessageStatus.REJECTED);
     expect(statuses).not.toContain(MessageStatus.COMPLETE);
-    // Redaction never runs and no cleaned/redacted content is persisted (rawContent preserved).
+    // Redaction never runs and no non-null cleaned/redacted content is persisted
+    // (rawContent preserved; markRejected explicitly nulls content/cleanedContent).
     expect(redactionStage.execute).not.toHaveBeenCalled();
-    const wroteContent = updateMessage.mock.calls.some(
-      (c) => 'content' in c[1] || 'cleanedContent' in c[1]
+    const wroteNonNullContent = updateMessage.mock.calls.some(
+      (c) => c[1].content || c[1].cleanedContent
     );
-    expect(wroteContent).toBe(false);
+    expect(wroteNonNullContent).toBe(false);
+  });
+
+  it('clears cleanedContent when redaction flags injection after a successful cleaning stage', async () => {
+    // Cleaning succeeds (persists cleanedContent, status DEIDENTIFYING), then redaction
+    // flags injection. The terminal REJECTED write must null out that cleanedContent so
+    // no cleaned copy of the flagged turn survives, and the DTO falls back to rawContent.
+    const { service, updateMessage, redactionStage } = makeFullPathService({
+      text: 'cleaned text',
+      injectionDetected: false,
+    });
+    redactionStage.execute.mockResolvedValue({ text: 'redacted', injectionDetected: true });
+
+    await service.processMessage(new Types.ObjectId());
+
+    const statuses = updateMessage.mock.calls.map((c) => c[1].status);
+    expect(statuses).toContain(MessageStatus.REJECTED);
+    expect(statuses).not.toContain(MessageStatus.COMPLETE);
+
+    const rejectedCall = updateMessage.mock.calls.find(
+      (c) => c[1].status === MessageStatus.REJECTED
+    );
+    expect(rejectedCall?.[1].cleanedContent).toBeNull();
+    expect(rejectedCall?.[1].content).toBeNull();
   });
 
   it('completes normally when cleaning does not flag injection', async () => {

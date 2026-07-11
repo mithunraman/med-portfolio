@@ -1,4 +1,10 @@
-import { MessageStatus, MessageRole, MESSAGE_STATUS_LABELS, type Message } from '@acme/shared';
+import {
+  MessageStatus,
+  MessageRole,
+  MESSAGE_STATUS_LABELS,
+  isTerminalMessageStatus,
+  type Message,
+} from '@acme/shared';
 import type { DeliveryStatus } from '../../../store/slices/messages/slice';
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useEffect, useState } from 'react';
@@ -9,8 +15,6 @@ const BUBBLE_COLORS = {
   sent: { light: '#dcf8c6', dark: '#005c4b' },
   received: { light: '#f5f3f0', dark: '#1f2c34' },
 } as const;
-
-const TERMINAL = new Set([MessageStatus.COMPLETE, MessageStatus.FAILED, MessageStatus.REJECTED]);
 
 function ProcessingLabel({ label, color }: { label: string; color: string }) {
   const [dots, setDots] = useState(0);
@@ -57,7 +61,7 @@ export const BubbleShell = memo(function BubbleShell({
   const mode = isDark ? 'dark' : 'light';
   const bubbleColor = isUser ? BUBBLE_COLORS.sent[mode] : BUBBLE_COLORS.received[mode];
 
-  const isProcessing = !TERMINAL.has(message.status);
+  const isProcessing = !isTerminalMessageStatus(message.status);
   const statusLabel = isProcessing ? MESSAGE_STATUS_LABELS[message.status] : null;
   // Terminal "not added" caption for a message flagged as prompt injection. Shown
   // statically (no animated dots) beneath the trainee's own words.
@@ -88,7 +92,7 @@ export const BubbleShell = memo(function BubbleShell({
       // Not delivered to the entry — a neutral marker, not the delivered double-tick.
       return <Ionicons name="information-circle-outline" size={12} color="#8696a0" />;
     }
-    if (TERMINAL.has(message.status)) {
+    if (isTerminalMessageStatus(message.status)) {
       return <Ionicons name="checkmark-done" size={12} color="#53bdeb" />;
     }
     return <Ionicons name="checkmark" size={12} color="#8696a0" />;

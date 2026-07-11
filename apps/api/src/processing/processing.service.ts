@@ -165,9 +165,11 @@ export class ProcessingService {
    *
    * Single enforcement point for the injection gate — if either stage flags the
    * input as a prompt-injection attempt, the message is marked REJECTED and no
-   * cleaned/redacted content is written (rawContent is preserved). This keeps the
-   * flagged turn out of the AI transcript (gather-context filters status===COMPLETE)
-   * without ever substituting a sentinel string into the content.
+   * cleaned/redacted content survives (markRejected nulls content/cleanedContent, so
+   * even a cleanedContent persisted by a successful cleaning stage before the redaction
+   * stage flagged it is cleared; rawContent is preserved). This keeps the flagged turn
+   * out of the AI transcript (gather-context filters status===COMPLETE) without ever
+   * substituting a sentinel string into the content.
    */
   private async cleanRedactAndComplete(
     messageId: Types.ObjectId,
@@ -225,16 +227,22 @@ export class ProcessingService {
 
   /**
    * Terminal REJECTED: the content was flagged as a prompt-injection attempt.
-   * rawContent is preserved and no cleaned/redacted content is written, so the
-   * message is excluded from the AI transcript (gather-context filters COMPLETE only)
-   * and rendered as "not added" in the UI. Unlike markFailed this is a deliberate
-   * rejection, not an error, so no processingError is set. A null result (message
-   * deleted mid-pipeline) is a no-op success, mirroring markFailed.
+   * rawContent is preserved but content and cleanedContent are explicitly cleared —
+   * the cleaning stage may already have persisted cleanedContent before the redaction
+   * stage flagged the injection, so nulling both here makes the "no cleaned/redacted
+   * content survives" invariant hold regardless of which stage caught it. That keeps
+   * the message out of the AI transcript (gather-context filters COMPLETE only) and
+   * makes the DTO fall back to rawContent uniformly, so the UI shows the trainee's own
+   * words on both rejection paths and renders "not added". Unlike markFailed this is a
+   * deliberate rejection, not an error, so no processingError is set. A null result
+   * (message deleted mid-pipeline) is a no-op success, mirroring markFailed.
    */
   private async markRejected(messageId: Types.ObjectId): Promise<void> {
     this.logger.warn(`Message ${messageId} flagged as prompt injection — marking REJECTED`);
     const result = await this.conversationsRepository.updateMessage(messageId, {
       status: MessageStatus.REJECTED,
+      content: null,
+      cleanedContent: null,
     });
     if (isErr(result)) {
       throw new Error(

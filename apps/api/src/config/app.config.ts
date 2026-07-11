@@ -56,13 +56,19 @@ export const envSchema = z.object({
     .string({ required_error: 'OPENAI_API_KEY is required' })
     .min(1, 'OPENAI_API_KEY cannot be empty'),
 
-  // LLM A/B/C variant selector. Selects a complete stage→model profile from
+  // LLM A/B/C/D variant selector. Selects a complete stage→model profile from
   // VARIANTS (see llm/model-variants.ts).
-  LLM_VARIANT: z.enum(['A', 'B', 'C']).default('A'),
+  LLM_VARIANT: z.enum(['A', 'B', 'C', 'D']).default('A'),
 
   // OpenRouter — required only when the active variant routes any stage to it
   // (ModelConfigService enforces this at startup).
   OPENROUTER_API_KEY: z.string().optional(),
+
+  // Azure AI Foundry — required only when the active variant (D) routes any stage
+  // to it (ModelConfigService enforces this at startup). Base URL is the
+  // OpenAI-compatible surface, e.g. https://<resource>.services.ai.azure.com/openai/v1/
+  AZURE_FOUNDRY_API_KEY: z.string().optional(),
+  AZURE_FOUNDRY_BASE_URL: z.string().url().optional(),
 
   // AssemblyAI
   ASSEMBLYAI_API_KEY: z
@@ -194,6 +200,10 @@ export const appConfig = registerAs('app', () => {
     },
     openrouter: {
       apiKey: env.OPENROUTER_API_KEY,
+    },
+    azureFoundry: {
+      apiKey: env.AZURE_FOUNDRY_API_KEY,
+      baseUrl: env.AZURE_FOUNDRY_BASE_URL,
     },
     assemblyai: {
       apiKey: env.ASSEMBLYAI_API_KEY,

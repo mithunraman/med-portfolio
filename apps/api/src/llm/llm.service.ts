@@ -47,7 +47,14 @@ export type ModelTarget =
       route?: string[];
       structuredMethod?: StructuredMethod;
     }
-  | { provider: 'azure'; deployment: string; structuredMethod?: StructuredMethod };
+  | {
+      provider: 'azure-foundry';
+      /** Foundry deployment name (used as the OpenAI `model` field). */
+      model: string;
+      /** Reasoning effort for hybrid models (DeepSeek V4). */
+      thinkMode?: ThinkMode;
+      structuredMethod?: StructuredMethod;
+    };
 
 export type LLMOptions = ModelTarget & {
   temperature?: number;
@@ -93,6 +100,35 @@ function reasoningHeadroom(thinkMode?: ThinkMode): number {
   }
 }
 
+/**
+ * Translate an Azure Foundry target's semantic options into extra request-body
+ * params. Single point that owns the Foundry/DeepSeek wire format. Exported as a
+ * pure function so the mapping can be unit-tested directly.
+ *
+ * NB: Foundry's DeepSeek surface does NOT accept DeepSeek's native `thinking`
+ * toggle nor `enable_thinking` (both 400 as "unrecognized request argument").
+ * The V4 Flash deployment runs in non-thinking mode by default — it returns no
+ * `reasoning_content` and answers directly — so `off` sends NO reasoning param.
+ * `high`/`max` map to DeepSeek's `reasoning_effort` values (`high`/`max` per
+ * DeepSeek's API docs — NOT OpenAI's `low`/`medium`/`high` set, so don't
+ * "correct" `max` to `high`; that would silently cap reasoning). Only `off` is
+ * live-verified on Foundry.
+ *
+ * TODO: `high`/`max` are UNVERIFIED against this Foundry deployment — Foundry may
+ * forward them to DeepSeek or validate against OpenAI's enum and 400. Smoke-test
+ * before shipping any variant that sets a thinking mode; Variant D uses `off` only.
+ * (The unit test only pins this mapping — it cannot catch an endpoint 400.)
+ */
+export function azureFoundryKwargs(
+  target: Extract<ModelTarget, { provider: 'azure-foundry' }>
+): Record<string, unknown> {
+  if (target.thinkMode === undefined || target.thinkMode === 'off') {
+    return {};
+  }
+
+  return { reasoning_effort: target.thinkMode === 'max' ? 'max' : 'high' };
+}
+
 @Injectable()
 export class LLMService {
   private readonly logger = new Logger(LLMService.name);
@@ -100,6 +136,10 @@ export class LLMService {
   // Optional — only required when the active variant routes a stage to OpenRouter.
   // Presence is enforced up front by ModelConfigService's credential guard.
   private readonly openrouterApiKey: string | undefined;
+  // Optional — only required when the active variant routes a stage to Azure
+  // Foundry. Presence is enforced up front by ModelConfigService's guard.
+  private readonly azureFoundryApiKey: string | undefined;
+  private readonly azureFoundryBaseUrl: string | undefined;
   private readonly assemblyai: AssemblyAI;
 
   constructor(
@@ -111,6 +151,9 @@ export class LLMService {
     this.openaiApiKey = openaiApiKey;
 
     this.openrouterApiKey = this.configService.get<string>('app.openrouter.apiKey');
+
+    this.azureFoundryApiKey = this.configService.get<string>('app.azureFoundry.apiKey');
+    this.azureFoundryBaseUrl = this.configService.get<string>('app.azureFoundry.baseUrl');
 
     const assemblyaiApiKey = this.configService.get<string>('app.assemblyai.apiKey');
     if (!assemblyaiApiKey) throw new Error('Missing config: app.assemblyai.apiKey');
@@ -144,7 +187,7 @@ export class LLMService {
     options: LLMOptions
   ): Promise<StructuredResponse<T>> {
     const { temperature = 0.1, maxTokens = 2000, traceContext, ...target } = options;
-    const modelLabel = target.provider === 'azure' ? target.deployment : target.model;
+    const modelLabel = target.model;
 
     this.logger.debug(
       `invokeStructured [${target.provider}:${modelLabel}] messages:\n${messages.map((m) => `[${m.type}] ${m.content}`).join('\n')}`
@@ -262,8 +305,24 @@ export class LLMService {
           configuration: { baseURL: 'https://openrouter.ai/api/v1' },
         });
       }
-      case 'azure':
-        throw new Error("LLM provider 'azure' is not enabled yet (added in Phase 3)");
+      case 'azure-foundry': {
+        if (!this.azureFoundryApiKey) throw new Error('Missing config: app.azureFoundry.apiKey');
+        if (!this.azureFoundryBaseUrl) throw new Error('Missing config: app.azureFoundry.baseUrl');
+        // Azure AI Foundry serves DeepSeek through its OpenAI-compatible `/openai/v1`
+        // surface, so — like OpenRouter — we reuse ChatOpenAI and just repoint the
+        // base URL. The API key rides as a Bearer token, which ChatOpenAI does for us.
+        //
+        // Same reasoning-token headroom rule as OpenRouter: thinking shares the
+        // completion budget, so add overhead on top of the caller's answer budget.
+        return new ChatOpenAI({
+          apiKey: this.azureFoundryApiKey,
+          model: target.model,
+          temperature,
+          maxTokens: maxTokens + reasoningHeadroom(target.thinkMode),
+          modelKwargs: azureFoundryKwargs(target),
+          configuration: { baseURL: this.azureFoundryBaseUrl },
+        });
+      }
     }
   }
 

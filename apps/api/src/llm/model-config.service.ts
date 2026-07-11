@@ -37,6 +37,15 @@ export class ModelConfigService {
         `LLM_VARIANT '${this.variant}' uses OpenRouter but OPENROUTER_API_KEY is not set.`
       );
     }
+    if (
+      providers.has('azure-foundry') &&
+      (!configService.get<string>('app.azureFoundry.apiKey') ||
+        !configService.get<string>('app.azureFoundry.baseUrl'))
+    ) {
+      throw new Error(
+        `LLM_VARIANT '${this.variant}' uses Azure Foundry but AZURE_FOUNDRY_API_KEY / AZURE_FOUNDRY_BASE_URL is not set.`
+      );
+    }
   }
 
   /** Resolve the provider+model target for a stage under the active variant. */

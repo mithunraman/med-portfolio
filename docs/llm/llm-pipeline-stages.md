@@ -40,6 +40,32 @@ LangChain's `withStructuredOutput(zodSchema)` so the model is constrained (via f
 calling) to return an object matching a Zod schema. Defaults: `temperature 0.1`,
 `maxTokens 2000`, 3-attempt exponential backoff, Sentry capture on failure.
 
+### Provider variants (`LLM_VARIANT`)
+
+The per-stage model map is no longer hardcoded. `LLM_VARIANT` selects one complete
+**stage → model target** profile from `VARIANTS`
+([`llm/model-variants.ts`](../../apps/api/src/llm/model-variants.ts)); `ModelConfigService.resolve(stage)`
+returns the target and call sites never name a provider. Flipping the env var swaps every
+stage's model with zero call-site edits. The tables in §3/§4/§6 below describe **Variant A**
+(the OpenAI baseline).
+
+| Variant | Provider / route | Model | Structured output |
+|---|---|---|---|
+| **A** *(default)* | OpenAI direct | Per-stage GPT mix (see §6) | function calling |
+| **B** | DeepSeek via OpenRouter (Atlas Cloud) | DeepSeek V4 Flash | `json_schema` |
+| **C** | DeepSeek via OpenRouter (Atlas Cloud) | DeepSeek V4 Pro | `json_schema` |
+| **D** | DeepSeek via **Azure AI Foundry** (OpenAI-compatible `/openai/v1`) | DeepSeek V4 Flash | `json_schema` |
+
+Variants B–D route **every** stage to the same DeepSeek model (thinking disabled). They use
+`json_schema` rather than function calling because DeepSeek's native tool-call format isn't
+normalized into OpenAI `tool_calls`. Non-OpenAI providers require their credentials
+(`OPENROUTER_API_KEY`, or `AZURE_FOUNDRY_API_KEY` + `AZURE_FOUNDRY_BASE_URL`), enforced at
+startup by `ModelConfigService`. Reasoning control differs per provider (owned by
+`LLMService.azureFoundryKwargs` / `openrouterKwargs`): on Foundry, DeepSeek V4 Flash runs
+non-thinking by default and **rejects** DeepSeek's native `thinking` / `enable_thinking` params
+(both 400), so `off` sends **no** reasoning param (`high`/`max` use the standard OpenAI
+`reasoning_effort`); OpenRouter instead uses its normalized `reasoning` map.
+
 ---
 
 ## 2. The two pipelines

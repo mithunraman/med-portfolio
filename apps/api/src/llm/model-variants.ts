@@ -20,7 +20,7 @@ export const Stage = {
 export type Stage = (typeof Stage)[keyof typeof Stage];
 
 /** Known variants. */
-export type VariantKey = 'A' | 'B' | 'C';
+export type VariantKey = 'A' | 'B' | 'C' | 'D';
 
 /** A variant is a complete stage→target mapping — every stage must be present. */
 export type VariantProfile = Record<Stage, ModelTarget>;
@@ -56,6 +56,27 @@ const deepseek = (
   model,
   thinkMode,
   route,
+  structuredMethod: 'jsonSchema',
+});
+
+// Variant D: DeepSeek V4 Flash served through Azure AI Foundry's OpenAI-compatible
+// endpoint (a first-party-cloud alternative to the OpenRouter route in B). The
+// value is the Foundry *deployment name*, not a catalog slug — set it to whatever
+// the deployment is called in your Foundry resource.
+const DEEPSEEK_FLASH_FOUNDRY = 'DeepSeek-V4-Flash';
+
+/**
+ * DeepSeek-on-Azure-Foundry target with a per-stage reasoning ("think") mode.
+ *
+ * Like the OpenRouter helper, uses `jsonSchema` structured output rather than
+ * tool-calling: DeepSeek's native tool-call format isn't normalized into OpenAI
+ * `tool_calls`, so the function-calling parser chokes. Foundry advertises
+ * `json_schema` structured outputs, which constrains the response to the schema.
+ */
+const foundry = (model: string, thinkMode: ThinkMode): ModelTarget => ({
+  provider: 'azure-foundry',
+  model,
+  thinkMode,
   structuredMethod: 'jsonSchema',
 });
 
@@ -102,5 +123,19 @@ export const VARIANTS = {
     reflect: deepseek(DEEPSEEK_PRO, 'off'),
     refine: deepseek(DEEPSEEK_PRO, 'off'),
     generate_pdp: deepseek(DEEPSEEK_PRO, 'off'),
+  },
+  // Same model as B (DeepSeek V4 Flash), different route: Azure AI Foundry instead
+  // of OpenRouter. Enables a clean A/B of the two hosting paths for the same model.
+  D: {
+    cleaning: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
+    redaction: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
+    classify: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
+    check_completeness: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
+    generate_followup: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
+    tag_capabilities: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
+    elicit_justification: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
+    reflect: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
+    refine: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
+    generate_pdp: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
   },
 } satisfies Record<VariantKey, VariantProfile>;

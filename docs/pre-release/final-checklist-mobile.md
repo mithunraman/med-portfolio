@@ -45,7 +45,7 @@ These were explicitly agreed in-session. Build them as specified.
 - [ ] **MOB-087** [DECISION] Remove the edit-lock after completion; entries stay editable, completion is only a filter.
 - [ ] **MOB-089** [DECISION] Status mapping: Save for Later → "Needs review"; Mark as Done → "Completed".
 - [ ] **MOB-092 / MOB-111** [DECISION] After Save for Later / Mark as Done — and after completing a PDP goal — auto-return to the homepage/dashboard.
-- [ ] **MOB-094** [DECISION] Remove the date/time from the homepage.
+- [x] **MOB-094** [DONE] Done 2026-07-13 — removed the date row from the home header (`(tabs)/index.tsx`), along with the now-unused `formatDate()` helper and `dateText` style. Date is retained on the individual entry view per MOB-095. *(Also hid the persistent "Start New Entry" capture card in the first-run/welcome state so new users get a single CTA via the WelcomeModule.)*
 - [ ] **MOB-095** [DECISION] Keep the date visible on the individual entry/record view.
 - [ ] **MOB-106** [DECISION] Rename PDP-goal status "Started" → "In progress"; unify status vocabulary across entry ↔ PDP goal.
 - [ ] **MOB-107** [DECISION] Split a PDP goal into a short (AI-generated) title + a description.
@@ -106,10 +106,10 @@ Clear these (with legal input) before launch.
 - [x] **MOB-019** [DONE] Done 2026-07-13 — bumped the consent disclaimer from 12px → 13px (lineHeight 18 → 20); the rest of the screen's type hierarchy (28 title / 16 body & links / 15 checkbox) was already coherent.
 
 ### Home / dashboard
-- [ ] **MOB-024** [FIX] Different home message for guest (action-first "Start your first…") vs logged-in (possessive welcome).
+- [x] **MOB-024** [WON'T DO] ~~Different home message for guest (action-first "Start your first…") vs logged-in (possessive welcome).~~ Decided against 2026-07-13 — the header instead reads "Home" for guests and "Welcome" for logged-in users (`(tabs)/index.tsx`); no separate action-first vs possessive copy.
 - [ ] **MOB-025 / MOB-103** [FIX] Adopt "case"-based primary CTA language ("Record a Case" / "Talk about your case") — Doctor: "case is the right word". Avoid FourteenFish-associated words.
 - [ ] **MOB-026** [FIX] Keep the primary CTA text fixed; rotate 10–15 sub-prompts underneath.
-- [ ] **MOB-027** [FIX] First-run confirmation: "You're set up for general practice".
+- [x] **MOB-027** [DONE] Verified 2026-07-13 — already implemented in `WelcomeModule` (`setupLine`): a first-run GP user sees "You're set up for General Practice, GP Specialty Training Year 1." Renders only when specialty + stage are set (guaranteed post-MOB-022 onboarding). No code change needed; optional future copy trim of the verbose stage label.
 - [ ] **MOB-093** [FIX] Personalise the dashboard with the user's name.
 - [ ] **MOB-124** [FIX] Primary CTA: use a conversation-bubble icon (not a mic) and give it more weight/size.
 - [ ] **MOB-125** [FIX] Scannable "Recent entries" (list of ~5 + "See all") with richer cards. *(balance vs PDP-goals space — OPEN)*

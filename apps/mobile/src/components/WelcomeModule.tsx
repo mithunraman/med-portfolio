@@ -61,10 +61,10 @@ export function WelcomeModule({ specialtyLabel, stageLabel, onStartFirstEntry }:
         onPress={onStartFirstEntry}
         activeOpacity={0.75}
         accessibilityRole="button"
-        accessibilityLabel="Record your first entry"
+        accessibilityLabel="Record your first case"
       >
-        <Ionicons name="mic" size={18} color="#fff" />
-        <Text style={styles.ctaText}>Record your first entry</Text>
+        <Text style={styles.ctaText}>Record your first case</Text>
+        <Ionicons name="arrow-forward" size={18} color="#fff" />
       </TouchableOpacity>
     </View>
   );

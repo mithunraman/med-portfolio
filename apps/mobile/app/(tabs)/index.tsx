@@ -35,16 +35,6 @@ import {
   View,
 } from 'react-native';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatDate(): string {
-  return new Date().toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
-}
-
 // ─── Module A: Start New Entry ────────────────────────────────────────────────
 
 const PROMPTS = [
@@ -424,6 +414,7 @@ export default function HomeScreen() {
   const dashboardError = useAppSelector((state) => state.dashboard.error);
   const dashboardStale = useAppSelector((state) => state.dashboard.stale);
   const user = useAppSelector((state) => state.auth.user);
+  const isGuest = useAppSelector((state) => state.auth.status === 'guest');
 
   // Data-driven: show welcome when dashboard has no entries (new user or empty account)
   const hasEntries = recentArtefacts.length > 0;
@@ -537,22 +528,25 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]}>
-            {showWelcome ? 'Welcome to your portfolio' : 'Home'}
+            {isGuest ? 'Home' : 'Welcome'}
           </Text>
-          <Text style={[styles.dateText, { color: colors.textSecondary }]}>{formatDate()}</Text>
         </View>
 
         <NoticeBanner />
         <GuestLimitBanner />
 
-        {/* Module A: Start New Entry */}
-        <StartNewEntryCard
-          onPress={handleStartNew}
-          lastEntryDate={recentArtefacts[0]?.updatedAt}
-          prompt={prompt}
-          helper={helper}
-          disabled={!canCreate}
-        />
+        {/* Module A: Start New Entry — hidden in the welcome (first-run) state,
+            where the WelcomeModule provides the single "Record your first entry"
+            CTA. Shown for returning users and during the initial-load skeleton. */}
+        {showWelcome ? null : (
+          <StartNewEntryCard
+            onPress={handleStartNew}
+            lastEntryDate={recentArtefacts[0]?.updatedAt}
+            prompt={prompt}
+            helper={helper}
+            disabled={!canCreate}
+          />
+        )}
 
         {/* First-run: welcome explainer only. Returning: full dashboard modules. */}
         {showWelcome ? (
@@ -625,10 +619,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-  },
-  dateText: {
-    fontSize: 14,
-    marginTop: 2,
   },
 
   // Module A: Start New Entry

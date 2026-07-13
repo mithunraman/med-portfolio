@@ -71,10 +71,10 @@ These were explicitly agreed in-session. Build them as specified.
 
 Clear these (with legal input) before launch.
 
-- [ ] **MOB-014** [LEGAL] Confirm whether "By tapping Continue" is GDPR-sufficient or an explicit consent **checkbox** ("I agree to the privacy policy and terms of service") is required. Add checkbox if needed.
-- [ ] **MOB-016** [LEGAL] Add an "I am a UK doctor in training" attestation checkbox.
-- [ ] **MOB-017** [LEGAL / OPEN] Resolve whether the "I will anonymise patient identifiers" consent is legally required; reword to be friendly (not threatening); consider an optional record-time reminder. Redaction is a secondary safety net, not a substitute. *(Doctor: onus is on the doctor; voice lowers users' guard vs typing.)*
-- [ ] **MOB-012** [FIX] Show consent on first run only, before continuing.
+- [x] **MOB-014** [DONE] Done 2026-07-13 — added an explicit unticked "I have read and agree to the Privacy Policy and Terms of Service" checkbox (`accept_privacy_terms`, required) and removed the redundant "By tapping Continue you agree…" tap-through disclaimer (avoids double-consent). *(Residual: legal to confirm the final Art 6 + Art 9 mapping; research confirmed the checkbox pattern is compliant.)*
+- [x] **MOB-016** [DONE] Done 2026-07-13 — "I am a UK doctor in training" attestation checkbox (`role_uk_trainee`, required) present in the active notice document.
+- [x] **MOB-017** [DONE] Done 2026-07-13 — reworded to the friendlier "I'll keep patients unidentifiable in what I record." *(Deferred sub-item: optional record-time reminder belongs on the recording screen, not here. Residual: legal to confirm whether this consent is strictly required.)*
+- [x] **MOB-012** [DONE] Done 2026-07-13 — consent is gated by `GET /init` (`needs: true` only until the active notice version is acked) and blocks continuing until all required boxes are ticked; shown on first run (and on version bumps) only.
 - [ ] **MOB-100** [FIX/LEGAL] Ensure **Delete** genuinely removes data (PII entered by mistake must be truly deletable, not just archived). *(labels/placement also under §4.)*
 
 ---
@@ -102,8 +102,8 @@ Clear these (with legal input) before launch.
 - [ ] **MOB-113** [FIX] Reword guest-session messaging in user language: "You're currently in a temporary session. Create an account to keep your cases and track your progress"; specify "your reflections, cases and goals aren't being saved".
 - [ ] **MOB-116** [FIX] On the upgrade page, lead with the concrete benefit — more entries ("10 entries a week vs 5").
 - [ ] **MOB-015** [FIX] Add a policy/ToS TL;DR summary — on the **website** privacy page, not in-app. *(nice-to-have)*
-- [ ] **MOB-018** [FIX] Remove the flashing text on the consent screen.
-- [ ] **MOB-019** [FIX] Review/normalise the consent text size.
+- [x] **MOB-018** [WON'T DO] ~~Remove the flashing text on the consent screen.~~ Decided against 2026-07-13 — the data-driven consent screen has no flashing/animated text in the current implementation (the flashing was on the old pre-rewrite screen); nothing to remove.
+- [x] **MOB-019** [DONE] Done 2026-07-13 — bumped the consent disclaimer from 12px → 13px (lineHeight 18 → 20); the rest of the screen's type hierarchy (28 title / 16 body & links / 15 checkbox) was already coherent.
 
 ### Home / dashboard
 - [ ] **MOB-024** [FIX] Different home message for guest (action-first "Start your first…") vs logged-in (possessive welcome).

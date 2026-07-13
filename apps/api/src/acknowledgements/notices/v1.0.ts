@@ -23,10 +23,15 @@ export const NOTICE_V1_0: NoticeDocument = {
     { id: 'role_uk_trainee', label: 'I am a UK doctor in training', required: true },
     {
       id: 'patient_anon_duty',
-      label: 'I will anonymise patient identifiers in my reflections.',
+      label: "I'll keep patients unidentifiable in what I record.",
+      required: true,
+    },
+    {
+      id: 'accept_privacy_terms',
+      label: 'I have read and agree to the Privacy Policy and Terms of Service.',
       required: true,
     },
   ],
   ctaLabel: 'Continue',
-  ctaDisclaimer: 'By tapping Continue you agree to the Privacy Policy and Terms of Service.',
+  ctaDisclaimer: 'You must confirm the statements above to continue.',
 } as const;

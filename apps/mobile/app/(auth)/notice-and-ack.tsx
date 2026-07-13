@@ -194,8 +194,8 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   disclaimer: {
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 20,
     marginTop: 4,
   },
   ctaContainer: {

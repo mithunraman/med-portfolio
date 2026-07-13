@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-export const acknowledgementIdSchema = z.enum(['role_uk_trainee', 'patient_anon_duty']);
+export const acknowledgementIdSchema = z.enum([
+  'role_uk_trainee',
+  'patient_anon_duty',
+  'accept_privacy_terms',
+]);
 export type AcknowledgementId = z.infer<typeof acknowledgementIdSchema>;
 
 export const acknowledgementCopySchema = z.object({

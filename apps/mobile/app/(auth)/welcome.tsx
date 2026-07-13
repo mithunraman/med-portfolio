@@ -14,7 +14,7 @@ export default function WelcomeScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleTryApp = useCallback(async () => {
+  const handleContinueAsGuest = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -43,7 +43,7 @@ export default function WelcomeScreen() {
         />
 
         {/* Welcome text */}
-        <Text style={[styles.title, { color: colors.text }]}>Your portfolio, simplified</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Ready to start?</Text>
 
         {/* Error message */}
         {error && (
@@ -55,17 +55,16 @@ export default function WelcomeScreen() {
 
       {/* CTA Buttons */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
-        {/* Primary: Try the app */}
         <TouchableOpacity
           style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-          onPress={handleTryApp}
+          onPress={handleContinueAsGuest}
           disabled={isLoading}
           activeOpacity={0.8}
         >
           {isLoading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.primaryButtonText}>Try the app</Text>
+            <Text style={styles.primaryButtonText}>Continue as guest</Text>
           )}
         </TouchableOpacity>
 
@@ -97,7 +96,7 @@ const styles = StyleSheet.create({
   },
   logoImage: {
     width: 200,
-    height: 100,
+    height: 50,
     marginBottom: 40,
   },
   title: {

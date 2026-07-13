@@ -6,10 +6,12 @@ import { useCallback, useRef, useState } from 'react';
 import {
   Dimensions,
   FlatList,
+  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  type ImageSourcePropType,
   type ListRenderItem,
   type ViewToken,
 } from 'react-native';
@@ -17,49 +19,32 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-/** Convert a hex colour to rgba with the given alpha (0–1). */
-function hexToRgba(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
 interface Slide {
   id: string;
   title: string;
-  description: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  description?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  image?: ImageSourcePropType;
 }
 
 const SLIDES: Slide[] = [
   {
     id: '1',
-    title: 'Just Talk',
-    description:
-      'Describe your clinical experience in your own words. We\u2019ll do the paperwork.',
-    icon: 'mic-outline',
+    image: require('../../assets/images/splash-icon.png'),
+    title: 'Building your portfolio, simplified',
   },
   {
     id: '2',
-    title: 'Portfolio-Ready in Minutes',
-    description:
-      'Your words become structured reflections, mapped to your curriculum capabilities.',
-    icon: 'document-text-outline',
+    title: 'Talk it through',
+    description: 'Your words become a structured portfolio entry - in minutes.',
+    icon: 'mic-outline',
   },
   {
     id: '3',
-    title: 'Track Your Progress',
-    description:
-      'See which capabilities you\u2019ve evidenced and where the gaps are before your ARCP.',
+    title: 'Stay ARCP-ready',
+    description: 'Track which capabilities you\u2019ve evidenced before your ARCP.',
     icon: 'analytics-outline',
   },
-  // {
-  //   id: '4',
-  //   title: 'Get Started',
-  //   description: 'Create an account or try it first - your entries are saved either way.',
-  //   icon: 'rocket-outline',
-  // },
 ];
 
 export default function IntroScreen() {
@@ -103,23 +88,23 @@ export default function IntroScreen() {
   const renderSlide: ListRenderItem<Slide> = useCallback(
     ({ item }) => (
       <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
-        {/* Icon zone — upper half */}
-        <View style={styles.iconZone}>
-          <View style={[styles.iconRing, { backgroundColor: hexToRgba(colors.primary, 0.06) }]}>
-            <View
-              style={[styles.iconContainer, { backgroundColor: hexToRgba(colors.primary, 0.12) }]}
-            >
-              <Ionicons name={item.icon} size={56} color={colors.primary} />
-            </View>
-          </View>
+        {/* Visual zone — upper half; decorative only, never interactive */}
+        <View style={styles.iconZone} importantForAccessibility="no-hide-descendants">
+          {item.image ? (
+            <Image source={item.image} style={styles.logoImage} resizeMode="contain" />
+          ) : item.icon ? (
+            <Ionicons name={item.icon} size={72} color={colors.primary} />
+          ) : null}
         </View>
 
         {/* Text zone — lower half */}
         <View style={styles.textZone}>
           <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
-          <Text style={[styles.description, { color: colors.textSecondary }]}>
-            {item.description}
-          </Text>
+          {item.description ? (
+            <Text style={[styles.description, { color: colors.textSecondary }]}>
+              {item.description}
+            </Text>
+          ) : null}
         </View>
       </View>
     ),
@@ -147,11 +132,16 @@ export default function IntroScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Skip button */}
+      {/* Skip — hidden on the last slide, where the primary CTA completes onboarding.
+          A same-size spacer keeps the header height stable so slides don't shift. */}
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-        <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
-          <Text style={[styles.skipText, { color: colors.textSecondary }]}>Skip</Text>
-        </TouchableOpacity>
+        {isLastSlide ? (
+          <View style={styles.skipButton} />
+        ) : (
+          <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
+            <Text style={[styles.skipText, { color: colors.textSecondary }]}>Skip</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Carousel */}
@@ -202,6 +192,8 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     padding: 8,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   skipText: {
     fontSize: 16,
@@ -216,20 +208,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     paddingBottom: 40,
+    pointerEvents: 'none',
   },
-  iconRing: {
+  logoImage: {
     width: 200,
-    height: 200,
-    borderRadius: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconContainer: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: 50,
   },
   textZone: {
     flex: 1,

@@ -10,11 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { memo, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../../theme';
-
-const BUBBLE_COLORS = {
-  sent: { light: '#dcf8c6', dark: '#005c4b' },
-  received: { light: '#f5f3f0', dark: '#1f2c34' },
-} as const;
+import { BUBBLE_COLORS, BUBBLE_SHADOW } from './bubbleTokens';
 
 function ProcessingLabel({ label, color }: { label: string; color: string }) {
   const [dots, setDots] = useState(0);
@@ -143,12 +139,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 6,
     paddingBottom: 4,
-    // shadow for received bubbles (light mode)
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    elevation: 1,
+    ...BUBBLE_SHADOW,
   },
   footer: {
     flexDirection: 'row',

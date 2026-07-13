@@ -116,9 +116,9 @@ Clear these (with legal input) before launch.
 - [ ] **MOB-126** [FIX] Add icons/imagery to entry cards for scannability (AI-picked per type/ARCP area). *(differentiation risk: most entries are the same type)*
 
 ### Chat / voice input
-- [ ] **MOB-029** [FIX] Clarify the input accepts text + voice ("Talk or type about it") — "talk" over-implies speaking.
-- [ ] **MOB-030** [FIX] Remove the mic icon from the record button; relabel "Record your case".
-- [ ] **MOB-031** [FIX] Strengthen visual hierarchy so the input/record button is clearly the primary action (it currently "looks disabled").
+- [x] **MOB-029** [DONE] Done 2026-07-13 — resolved by the MOB-031 composer work: the text field and the filled mic button now sit side by side as clear, distinct affordances, so both input modes are visually evident without extra "talk or type" copy.
+- [x] **MOB-030** [WON'T DO] ~~Remove the mic icon from the record button; relabel "Record your case".~~ Decided against 2026-07-13 — the mic icon is retained as the filled accent primary action introduced in MOB-031 (a recognisable voice affordance beside the text field); no text label added to the button.
+- [x] **MOB-031** [DONE] Done 2026-07-13 — in `ChatComposer.tsx`, made the mic a filled accent circle with a white glyph (matching the send button) so the composer has one clear coloured primary action at rest that morphs to send when typing. Also shrank the placeholder to a 13px custom overlay (typed text stays 16px) and tightened the copy to "Describe your case".
 - [ ] **MOB-033** [FIX] Deliver tips as the first AI chat bubble (progressive disclosure; "send as many messages as you need").
 - [ ] **MOB-035** [FIX] Use two ticks for message status (sent vs AI-processed); one tick reads as "not delivered".
 - [ ] **MOB-036** [FIX] Label transcribed voice text "Transcription" (voice messages only).

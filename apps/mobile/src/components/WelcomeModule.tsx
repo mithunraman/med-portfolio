@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const HOW_IT_WORKS = [
-  { step: '1', text: 'Talk about your clinical experience' },
+  { step: '1', text: 'Speak about your clinical experience' },
   { step: '2', text: 'We structure it into a portfolio entry' },
   { step: '3', text: 'Track your curriculum coverage over time' },
 ];
@@ -15,7 +15,11 @@ interface WelcomeModuleProps {
   onStartFirstEntry: () => void;
 }
 
-export function WelcomeModule({ specialtyLabel, stageLabel, onStartFirstEntry }: WelcomeModuleProps) {
+export function WelcomeModule({
+  specialtyLabel,
+  stageLabel,
+  onStartFirstEntry,
+}: WelcomeModuleProps) {
   const { colors } = useTheme();
   const setupLine =
     specialtyLabel && stageLabel ? `You're set up for ${specialtyLabel}, ${stageLabel}.` : null;
@@ -45,9 +49,7 @@ export function WelcomeModule({ specialtyLabel, stageLabel, onStartFirstEntry }:
       <View style={styles.steps}>
         {HOW_IT_WORKS.map((item) => (
           <View key={item.step} style={styles.stepRow}>
-            <View
-              style={[styles.stepCircle, { backgroundColor: hexToRgba(colors.primary, 0.12) }]}
-            >
+            <View style={[styles.stepCircle, { backgroundColor: hexToRgba(colors.primary, 0.12) }]}>
               <Text style={[styles.stepNumber, { color: colors.primary }]}>{item.step}</Text>
             </View>
             <Text style={[styles.stepText, { color: colors.text }]}>{item.text}</Text>

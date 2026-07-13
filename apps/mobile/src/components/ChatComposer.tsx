@@ -1,7 +1,15 @@
 import { logger } from '@/utils/logger';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { MAX_MESSAGE_CONTENT_LENGTH, type ConversationPhase } from '@acme/shared';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -23,7 +31,6 @@ const _logger = logger.createScope('ChatComposer');
 // ============================================================================
 
 // Fixed accent color (consistent across themes)
-
 
 const SPACING = {
   toolbarPadding: 8,
@@ -71,24 +78,23 @@ export interface ChatComposerHandle {
 // CHAT COMPOSER COMPONENT
 // ============================================================================
 
-export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
-  function ChatComposer(
-    {
-      onSend,
-      onOpenAttachments,
-      onOpenCamera,
-      onToggleStickers,
-      onSendVoiceNote,
-      isSending = false,
-      safeAreaBottomInset = 0,
-      style,
-      canSendMessage = true,
-      canSendAudio = true,
-      phase,
-      onRecordingChange,
-    },
-    ref
-  ) {
+export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
+  {
+    onSend,
+    onOpenAttachments,
+    onOpenCamera,
+    onToggleStickers,
+    onSendVoiceNote,
+    isSending = false,
+    safeAreaBottomInset = 0,
+    style,
+    canSendMessage = true,
+    canSendAudio = true,
+    phase,
+    onRecordingChange,
+  },
+  ref
+) {
   const { colors, isDark } = useTheme();
   const [text, setText] = useState('');
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
@@ -166,7 +172,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
       case 'awaiting_input':
         return canSendMessage ? 'Message' : 'Select an option above';
       default:
-        return 'Describe what happened (no patient identifiers)';
+        return 'Speak or type about your case...';
     }
   }, [phase, canSendMessage]);
 
@@ -198,10 +204,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
       ),
     [isSending]
   );
-  const micIcon = useMemo(
-    () => <Feather name="mic" size={SPACING.iconSize} color={colors.textSecondary} />,
-    [colors.textSecondary]
-  );
+  const micIcon = useMemo(() => <Feather name="mic" size={22} color="#ffffff" />, []);
 
   // Dynamic styles based on theme
   const containerStyle = useMemo(
@@ -307,10 +310,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                 icon={micIcon}
                 onPress={handleMicPress}
                 accessibilityLabel="Record voice message"
+                style={[styles.sendButton, { backgroundColor: colors.accent }]}
               />
             )}
             {onOpenCamera && (
-              <IconButton icon={cameraIcon} onPress={onOpenCamera} accessibilityLabel="Open camera" />
+              <IconButton
+                icon={cameraIcon}
+                onPress={onOpenCamera}
+                accessibilityLabel="Open camera"
+              />
             )}
           </>
         )}

@@ -1,8 +1,7 @@
 import { api } from '@/api/client';
 import { ChatComposer, MessageList, ReadinessHeader, useLoading } from '@/components';
-import { MessageEditorModal } from '@/components/chat/MessageEditorModal';
 import { type ActionBarState, ActionBar } from '@/components/ActionBar';
-import { ChatEmptyState } from '@/components/ChatEmptyState';
+import { MessageEditorModal } from '@/components/chat/MessageEditorModal';
 import { CompletionCard } from '@/components/CompletionCard';
 import { useAppDispatch, useAppSelector, useAuth, useCanCreateArtefact } from '@/hooks';
 import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
@@ -44,9 +43,9 @@ import {
 } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useHeaderHeight } from 'expo-router/react-navigation';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -54,7 +53,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const chatLogger = logger.createScope('ChatScreen');
 /** Minimum user words before "Start Analysis" is available */
-const INITIAL_WORD_THRESHOLD = 60;
+const INITIAL_WORD_THRESHOLD = 100;
 /** Minimum user words (since the question) before "Continue Analysis" is available */
 const FOLLOWUP_WORD_THRESHOLD = 30;
 
@@ -236,9 +235,17 @@ export default function ChatScreen() {
         chatLogger.debug('[segmentWordCount] hit assistant message, breaking', { msgId: m.id });
         break;
       }
-      if (m.role === MessageRole.USER && m.content) {
+      // Only count fully-processed messages. In-flight (PENDING…DEIDENTIFYING) and
+      // error/rejected terminals (FAILED/REJECTED) are excluded — their words either
+      // aren't final yet or never enter the AI transcript.
+      if (m.role === MessageRole.USER && m.content && m.status === MessageStatus.COMPLETE) {
         const words = m.content.split(/\s+/).filter(Boolean).length;
-        chatLogger.debug('[segmentWordCount] counting user message', { msgId: m.id, words, status: m.status, contentPreview: m.content.slice(0, 50) });
+        chatLogger.debug('[segmentWordCount] counting user message', {
+          msgId: m.id,
+          words,
+          status: m.status,
+          contentPreview: m.content.slice(0, 50),
+        });
         count += words;
       }
     }
@@ -690,7 +697,8 @@ export default function ChatScreen() {
           editMessage({ conversationId: effectiveConversationId, messageId, content })
         ).unwrap();
       } catch (error: any) {
-        const msg = typeof error === 'string' ? error : (error?.message ?? 'Could not edit message.');
+        const msg =
+          typeof error === 'string' ? error : (error?.message ?? 'Could not edit message.');
         Alert.alert('Error', msg);
         throw error;
       }
@@ -701,7 +709,6 @@ export default function ChatScreen() {
   const activeQuestionMessageId = context?.activeQuestion?.messageId;
 
   const isLoading = loadingMessages && mergedMessages.length === 0 && isNew !== 'true';
-  const showEmptyState = mergedMessages.length === 0 && !isLoading && !context;
   const composerBg = isDark ? colors.surface : colors.background;
 
   return (
@@ -717,23 +724,20 @@ export default function ChatScreen() {
         )}
 
         <View style={phase === 'completed' ? styles.dimmed : styles.flex}>
-          {showEmptyState ? (
-            <ChatEmptyState />
-          ) : (
-            <MessageList
-              messages={mergedMessages}
-              currentUserId={user?.id ?? ''}
-              isLoading={isLoading}
-              activeQuestionMessageId={activeQuestionMessageId}
-              artefactStatus={context?.artefactStatus}
-              isAnalysing={isAnalysing}
-              onAnswerQuestion={handleAnswerQuestion}
-              onRetry={handleRetry}
-              onCopy={handleCopy}
-              onDelete={handleDeleteMessage}
-              onEdit={handleEditMessage}
-            />
-          )}
+          <MessageList
+            messages={mergedMessages}
+            currentUserId={user?.id ?? ''}
+            isLoading={isLoading}
+            showIntro
+            activeQuestionMessageId={activeQuestionMessageId}
+            artefactStatus={context?.artefactStatus}
+            isAnalysing={isAnalysing}
+            onAnswerQuestion={handleAnswerQuestion}
+            onRetry={handleRetry}
+            onCopy={handleCopy}
+            onDelete={handleDeleteMessage}
+            onEdit={handleEditMessage}
+          />
         </View>
 
         {phase === 'completed' ? (

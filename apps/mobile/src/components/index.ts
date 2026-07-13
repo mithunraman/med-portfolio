@@ -4,7 +4,6 @@ export { ArtefactAdvisoryBanner } from './ArtefactAdvisoryBanner';
 export { Button } from './Button';
 export { MessageList } from './chat';
 export { ChatComposer } from './ChatComposer';
-export { ChatEmptyState } from './ChatEmptyState';
 export { StarRating } from './common/StarRating';
 export { CoverageRing } from './CoverageRing';
 export { EditableReflectionSection } from './EditableReflectionSection';

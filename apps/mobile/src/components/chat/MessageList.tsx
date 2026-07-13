@@ -16,6 +16,7 @@ import { useTheme } from '../../theme';
 import { MessageContextMenu } from './MessageContextMenu';
 import { MessageRow } from './MessageRow';
 import { DateSeparator } from './items/DateSeparator';
+import { IntroBubbles } from './items/IntroBubbles';
 import { NoticeItem } from './items/NoticeItem';
 import { TypingIndicator } from './items/TypingIndicator';
 import { ScrollToBottomFAB } from './ScrollToBottomFAB';
@@ -32,6 +33,8 @@ export interface MessageListProps {
   isTyping?: boolean;
   unreadCount?: number;
   isLoading?: boolean;
+  /** Render the client-only onboarding tip bubbles pinned to the top of the thread. */
+  showIntro?: boolean;
   activeQuestionMessageId?: string;
   /** Artefact lifecycle status (gates edit/delete in the context menu). Null = unresolved → not editable. */
   artefactStatus?: ArtefactStatus | null;
@@ -65,6 +68,7 @@ export const MessageList = memo(function MessageList({
   isTyping,
   unreadCount = 0,
   isLoading = false,
+  showIntro = false,
   activeQuestionMessageId,
   artefactStatus,
   isAnalysing = false,
@@ -176,6 +180,9 @@ export const MessageList = memo(function MessageList({
         data={items}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
+        // Inverted list: the footer renders at the visual top (oldest position),
+        // so the client-only intro tips sit above all real messages.
+        ListFooterComponent={showIntro ? <IntroBubbles /> : null}
         inverted
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"

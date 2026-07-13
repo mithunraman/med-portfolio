@@ -5,7 +5,7 @@
 export type OnboardingRoute =
   | '/(auth)/intro'
   | '/(auth)/notice-and-ack'
-  | '/(auth)/select-specialty'
+  | '/(auth)/select-stage'
   | '/(tabs)';
 
 export type RouteDecision = { kind: 'stay' } | { kind: 'redirect'; to: OnboardingRoute };
@@ -30,9 +30,12 @@ export function decideOnboardingRoute(input: OnboardingRouteInput): RouteDecisio
     return onAckScreen ? { kind: 'stay' } : { kind: 'redirect', to: '/(auth)/notice-and-ack' };
   }
   if (!input.hasSpecialty) {
-    return onSpecialtyScreen
-      ? { kind: 'stay' }
-      : { kind: 'redirect', to: '/(auth)/select-specialty' };
+    // GP is the only active specialty today, so we skip the specialty picker and
+    // send users straight to the training-year question (select-stage auto-selects
+    // GP). To reintroduce the specialty step when >1 specialty is active, change
+    // this redirect back to '/(auth)/select-specialty'. The onSpecialtyScreen
+    // guard already treats both routes as valid, so no other gate change is needed.
+    return onSpecialtyScreen ? { kind: 'stay' } : { kind: 'redirect', to: '/(auth)/select-stage' };
   }
   return inAuthGroup ? { kind: 'redirect', to: '/(tabs)' } : { kind: 'stay' };
 }

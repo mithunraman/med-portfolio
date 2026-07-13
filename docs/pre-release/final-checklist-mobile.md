@@ -89,9 +89,9 @@ Clear these (with legal input) before launch.
 - [ ] **MOB-006** [FIX] Reword "Your portfolio simplified" → "Building your portfolio, simplified" (it's the *process* that's simplified).
 
 ### Onboarding — training year & step fatigue
-- [ ] **MOB-020** [FIX] Make the training-year question GP-specific now (year 1/2/3); keep generic templates for later specialties.
-- [ ] **MOB-021** [FIX] Remove/repurpose the onboarding progress bar (it manufactures ~8-step "step fatigue"; intro isn't a step).
-- [ ] **MOB-022** [FIX] Skip the generic first step; open with the training-year question.
+- [x] **MOB-020** [DONE] Verified 2026-07-13 — GP stages are already GP-specific (`ST1/ST2/ST3` → "GP Specialty Training Year 1/2/3" in `apps/api/src/specialties/gp/gp.training-stages.ts`); inactive IM/Psychiatry configs kept as the generic templates for later specialties. No code change needed.
+- [x] **MOB-021** [DONE] Done 2026-07-13 — removed the `StepIndicator` from `select-stage` and `select-specialty` (onboarding is now a single question, so the progress bar manufactured "step fatigue"). Component kept for a future real multi-step wizard.
+- [x] **MOB-022** [DONE] Done 2026-07-13 — onboarding auto-selects GP and opens on the training-year question. Gate redirect repointed `select-specialty` → `select-stage` (`decide-onboarding-route.ts`, single-line reversal marked in a comment); `select-stage` defaults to GP, self-fetches specialties, and hides the back button when reached without a specialty param. The `select-specialty` route/`SpecialtyList` stay intact (dormant) for settings + future multi-specialty; the back button auto-restores when a specialty param is passed again. Hardening (code review P1): `select-stage` now owns the only `fetchSpecialties` dispatch on the GP path, so it models an explicit `loading/error/ready` state and surfaces fetch failures via `ErrorBanner` + Retry (no unrecoverable spinner); warm-path condition-abort guarded.
 
 ### Registration / login / guest mode
 - [ ] **MOB-007** [FIX] Rename "Try the app" → "Continue as guest".

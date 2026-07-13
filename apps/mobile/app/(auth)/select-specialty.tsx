@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SpecialtyList, StepIndicator } from '@/components';
+import { SpecialtyList } from '@/components';
 import { useTheme } from '@/theme';
 import type { SpecialtyOption } from '@acme/shared';
 
@@ -25,9 +25,13 @@ export default function SelectSpecialtyScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top + 16 }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colors.background, paddingTop: insets.top + 16 },
+      ]}
+    >
       <View style={styles.header}>
-        <StepIndicator currentStep={1} totalSteps={2} />
         <Text style={[styles.title, { color: colors.text }]}>What are you training in?</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           This helps us tailor your portfolio experience to your curriculum.

@@ -10,9 +10,7 @@ interface Props {
 export const TextContent = memo(function TextContent({ message }: Props) {
   const { colors } = useTheme();
 
-  return (
-    <Text style={[styles.text, { color: colors.text }]}>{message.content ?? ''}</Text>
-  );
+  return <Text style={[styles.text, { color: colors.text }]}>{message.content ?? ''}</Text>;
 });
 
 const styles = StyleSheet.create({

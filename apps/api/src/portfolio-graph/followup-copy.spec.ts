@@ -66,4 +66,11 @@ describe('pickFollowupLine', () => {
     const { index } = pickFollowupLine(2, -1, () => 0.99);
     expect(index).toBe(FOLLOWUP_LINES[2].length - 1);
   });
+
+  it('clamps an out-of-range rng (1.0) to the last line, never undefined', () => {
+    const { line, index } = pickFollowupLine(3, -1, () => 1);
+    expect(index).toBe(FOLLOWUP_LINES[3].length - 1);
+    expect(line).toBe(FOLLOWUP_LINES[3][index]);
+    expect(line).toBeDefined();
+  });
 });

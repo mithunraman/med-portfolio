@@ -27,11 +27,12 @@ export const FreeTextPrompts = memo(function FreeTextPrompts({ question, isActiv
       {question.prompts.map((prompt, index) => (
         <View key={prompt.key}>
           <View style={styles.promptItem}>
-            {/* Question number + text — single text flow, no column gap */}
-            <Text style={[styles.promptText, { color: colors.text }]}>
-              <Text style={[styles.promptNumber, { color: colors.primary }]}>
-                {index + 1}.{' '}
-              </Text>
+            {/* The question is the primary element (H1). Numbering only appears when
+                there is more than one prompt — a lone "1." adds noise. */}
+            <Text style={[styles.promptText, { color: colors.text }]} accessibilityRole="header">
+              {question.prompts.length > 1 && (
+                <Text style={[styles.promptNumber, { color: colors.primary }]}>{index + 1}. </Text>
+              )}
               {prompt.text}
             </Text>
 
@@ -51,7 +52,7 @@ export const FreeTextPrompts = memo(function FreeTextPrompts({ question, isActiv
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 10,
+    marginTop: 2,
   },
   dimmed: {
     opacity: 0.5,
@@ -63,9 +64,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   promptText: {
-    fontSize: 15,
+    fontSize: 16,
     lineHeight: 22,
-    fontWeight: '400',
+    fontWeight: '600',
   },
   separator: {
     height: StyleSheet.hairlineWidth,

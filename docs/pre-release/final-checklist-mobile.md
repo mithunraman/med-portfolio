@@ -122,7 +122,7 @@ Clear these (with legal input) before launch.
 - [x] **MOB-033** [DONE] Done 2026-07-14 — retired the disappearing `ChatEmptyState` and replaced it with four client-only assistant bubbles (`IntroBubbles.tsx`) pinned to the top of every thread via the inverted list's `ListFooterComponent`, so the guidance (what to talk about, "send as many messages as you need" by voice/text, when analysis unlocks, and the PII warning) persists instead of vanishing on the first message. The PII bubble uses a distinct warning treatment (error-tinted + shield icon). Bubbles are purely presentational — never persisted, sent to the backend, or counted in grouping/analysis/edit-lock.
 - [x] **MOB-035** [DONE] Done 2026-07-14 — in `BubbleShell.tsx`, moved the double-tick threshold earlier: a message shows a grey double tick as soon as the server has it (processing states `PENDING`…`DEIDENTIFYING`) and a blue double tick once AI-processed (`COMPLETE`). Clock (uploading) and error/rejected icons unchanged. Removes the single tick that read as "not delivered".
 - [x] **MOB-036** [WON'T DO] ~~Label transcribed voice text "Transcription" (voice messages only).~~ Decided against 2026-07-14 — the transcript already sits above the audio player pill in the bubble, which makes its voice provenance clear enough; no separate "Transcription" label added.
-- [ ] **MOB-056** [FIX] Strip filler words ("uh/um") from the cleaned transcription.
+- [x] **MOB-056** [N/A] Not applicable — decided 2026-07-14.
 
 ### Entry-type classification & confidence
 - [ ] **MOB-040** [FIX] Remove confidence percentages at the classification step (they don't sum to 100; retain confidence for capability tagging).
@@ -130,7 +130,7 @@ Clear these (with legal input) before launch.
 - [ ] **MOB-042** [FIX] Show the top 3 type suggestions + "see more", not 5.
 
 ### Loading / progress feedback
-- [ ] **MOB-044** [FIX] Replace the ~15 random "thinking" phrases with 2–3 ordered, progress-reflecting stages (generic, don't expose the pipeline).
+- [x] **MOB-044** [DONE] Done 2026-07-14 — removed the pipeline-leaking step-label "reason" line entirely (`ActionBar` status mode + `reason` type field + `THINKING_STEP_LABELS`/`thinkingStepLabel`), leaving a single generic rotating word. Expanded `THINKING_WORDS` to a 15-word interchangeable, entry-focused, non-clinical set. Loading feedback is now generic and exposes nothing about the analysis pipeline.
 
 ### Follow-up questions & copy
 - [ ] **MOB-045** [KEEP] One follow-up question at a time — validated as good; retain.
@@ -140,10 +140,11 @@ Clear these (with legal input) before launch.
 - [x] **MOB-076** [DONE] Done 2026-07-14 — dropped the filler "Thanks" openers from the user-facing acknowledgement copy: the follow-up intro lines + default (`followup-copy.ts`) and the clarification retry prompt (`portfolio-graph.service.ts`) now lead straight with the purpose.
 
 ### Question typography & examples
-- [ ] **MOB-048** [FIX] Make the question the largest element (H1); apply the NHS type hierarchy (section title / question / hint).
-- [ ] **MOB-049** [FIX] Verify hint-text colour contrast against WCAG/NHS (possible failure).
+- [x] **MOB-048** [DONE] Done 2026-07-14 — question promoted to the H1 (16px/600, `accessibilityRole="header"`) in `FreeTextPrompts`; the free-text lead-in demoted (14px, AA-safe `BUBBLE_MUTED_TEXT`) in `QuestionContent`; lone "1." numbering dropped for single-prompt rounds; lead-in↔question gap tightened. The section-eyebrow tier was built then **hidden for MVP** — see MOB-048a.
+- [ ] **MOB-048a** [TODO/POST-MVP] Restore the section eyebrow (clinical section as an overline above the question — the third NHS tier). Built in MOB-048 then removed for MVP (recover from git); when ready, wire a `sectionId → label` source (client-side prettify of `key`, or a backend label).
+- [x] **MOB-049** [DONE] Done 2026-07-14 — confirmed the hint failed WCAG AA on 4 of 7 themes (theme `textSecondary` on the fixed bubble bg). Fixed with a fixed, AA-compliant `BUBBLE_MUTED_TEXT` token (`#5c5c5c` / `#a9b0b5`, ≥6:1 on the bubble), applied to all hint text in `HintCard`.
 - [x] **MOB-050** [DONE] Done 2026-07-14 — removed `fontStyle: 'italic'` from both the always-visible example and the expanded examples in `HintCard.tsx`.
-- [ ] **MOB-051** [FIX] Hide example answers under a "See more examples" accordion (currently looks like a page-leaving hyperlink); label the visible one "Example answer".
+- [x] **MOB-051** [DONE] Done 2026-07-14 — visible example labelled "Example answer"; further examples behind a "See more examples" / "Hide examples" accordion; examples bulleted. Note: per product decision the toggle is styled as an **underlined text link** (background/chevron removed) — a deliberate reversal of the original "looks like a hyperlink" concern.
 - [ ] **MOB-052** [FIX/ANALYTICS] Track "More examples" clicks (high reliance may signal poorly framed questions). *(needs analytics tooling)*
 - [ ] **MOB-053** [FIX] Gate examples to the first ~5 entries (by entry count, not training year).
 

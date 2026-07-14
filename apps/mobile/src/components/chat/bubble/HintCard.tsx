@@ -2,36 +2,40 @@ import type { PromptHints } from '@acme/shared';
 import { memo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../../theme';
+import { BUBBLE_MUTED_TEXT } from './bubbleTokens';
 
 interface Props {
   hints: PromptHints;
 }
 
 /**
- * Hybrid hint display: first example always visible (inline, muted),
- * remaining examples behind a "More examples" toggle.
+ * Hint display: a labelled "Example answer" always visible, with any further
+ * examples behind a "See more examples" accordion (progressive disclosure).
  *
- * Pattern: Wysa-style inline hint with progressive disclosure for overflow.
- * - First example: always visible, sets expectation for answer depth
- * - "More examples" toggle: only shown when 2+ examples exist
+ * Colour uses the fixed bubble-muted token (not theme `textSecondary`) so the
+ * small hint text stays WCAG-AA on the fixed bubble background across all themes
+ * (MOB-049). The toggle is chevron-led so it reads as an in-place expander, not a
+ * page-leaving link, and the visible example is explicitly labelled (MOB-051).
  */
 export const HintCard = memo(function HintCard({ hints }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const { colors } = useTheme();
+  const { isDark } = useTheme();
+  const muted = isDark ? BUBBLE_MUTED_TEXT.dark : BUBBLE_MUTED_TEXT.light;
 
   const [firstExample, ...restExamples] = hints.examples;
   const hasMore = restExamples.length > 0;
 
+  if (!firstExample) return null;
+
   return (
     <View style={styles.container}>
-      {/* First example — always visible */}
-      {firstExample && (
-        <Text style={[styles.inlineHint, { color: colors.textSecondary }]}>
-          e.g., {'\u201C'}{firstExample}{'\u201D'}
-        </Text>
-      )}
+      {/* Example answer — always visible */}
+      <View style={styles.exampleBlock}>
+        <Text style={[styles.exampleLabel, { color: muted }]}>Example answer</Text>
+        <Text style={[styles.exampleText, { color: muted }]}>{'•'} {firstExample}</Text>
+      </View>
 
-      {/* "More examples" toggle — only when additional examples exist */}
+      {/* Accordion — only when additional examples exist */}
       {hasMore && (
         <>
           <Pressable
@@ -39,18 +43,18 @@ export const HintCard = memo(function HintCard({ hints }: Props) {
             style={styles.toggle}
             accessibilityRole="button"
             accessibilityState={{ expanded }}
-            accessibilityLabel={expanded ? 'Hide examples' : 'Show more examples'}
+            accessibilityLabel={expanded ? 'Hide examples' : 'See more examples'}
           >
-            <Text style={[styles.toggleText, { color: colors.textSecondary }]}>
-              {expanded ? '\u25BE' : '\u25B8'} More examples
+            <Text style={[styles.toggleText, { color: muted }]}>
+              {expanded ? 'Hide examples' : 'See more examples'}
             </Text>
           </Pressable>
 
           {expanded && (
             <View style={styles.expandedContent}>
               {restExamples.map((example, i) => (
-                <Text key={i} style={[styles.expandedExample, { color: colors.textSecondary }]}>
-                  {'\u201C'}{example}{'\u201D'}
+                <Text key={i} style={[styles.exampleText, { color: muted }]}>
+                  {'•'} {example}
                 </Text>
               ))}
             </View>
@@ -63,28 +67,35 @@ export const HintCard = memo(function HintCard({ hints }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 6,
-    gap: 2,
+    marginTop: 12,
+    gap: 4,
   },
-  inlineHint: {
+  exampleBlock: {
+    gap: 4,
+  },
+  exampleLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  exampleText: {
     fontSize: 13,
     lineHeight: 18,
   },
   toggle: {
-    paddingVertical: 4,
-    minHeight: 32,
+    alignSelf: 'flex-start',
     justifyContent: 'center',
+    paddingVertical: 6,
+    minHeight: 32,
   },
   toggleText: {
     fontSize: 13,
     fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   expandedContent: {
-    gap: 4,
+    gap: 6,
     marginBottom: 2,
-  },
-  expandedExample: {
-    fontSize: 13,
-    lineHeight: 18,
   },
 });

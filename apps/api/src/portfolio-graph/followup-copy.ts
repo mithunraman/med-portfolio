@@ -116,7 +116,9 @@ export function pickFollowupLine(
   rng: () => number = Math.random
 ): { line: string; index: number } {
   const bank = FOLLOWUP_LINES[tier] ?? FOLLOWUP_LINES[1];
-  let index = Math.floor(rng() * bank.length);
+  // Clamp: a caller-injected rng returning exactly 1.0 would otherwise index one
+  // past the end (Math.random itself is [0,1), so this only guards out-of-range rng).
+  let index = Math.min(bank.length - 1, Math.floor(rng() * bank.length));
   if (bank.length > 1 && index === lastIndex) {
     index = (index + 1) % bank.length;
   }

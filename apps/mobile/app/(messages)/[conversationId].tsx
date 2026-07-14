@@ -38,7 +38,6 @@ import {
   type SingleSelectQuestion,
   MessageRole,
   MessageStatus,
-  ThinkingStep,
   isTerminalMessageStatus,
 } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
@@ -84,24 +83,6 @@ function getPollInterval(
 let localIdCounter = 0;
 function generateLocalId(): string {
   return `opt_${Date.now()}_${++localIdCounter}`;
-}
-
-const THINKING_STEP_LABELS: Record<string, string> = {
-  [ThinkingStep.GATHER_CONTEXT]: 'Gathering context...',
-  [ThinkingStep.CLASSIFY]: 'Classifying entry...',
-  [ThinkingStep.PRESENT_CLASSIFICATION]: 'Reviewing classification...',
-  [ThinkingStep.ASK_FOLLOWUP]: 'Preparing questions...',
-  [ThinkingStep.TAG_CAPABILITIES]: 'Identifying capabilities...',
-  [ThinkingStep.PRESENT_CAPABILITIES]: 'Reviewing capabilities...',
-  [ThinkingStep.CHECK_COMPLETENESS]: 'Checking completeness...',
-  [ThinkingStep.REFLECT]: 'Reflecting on analysis...',
-  [ThinkingStep.GENERATE_PDP]: 'Suggesting development goals...',
-  [ThinkingStep.SAVE]: 'Saving results...',
-};
-
-function thinkingStepLabel(step?: string | null): string | null {
-  if (!step) return null;
-  return THINKING_STEP_LABELS[step] ?? null;
 }
 
 export default function ChatScreen() {
@@ -586,10 +567,10 @@ export default function ChatScreen() {
 
     // Local pipeline states take priority (sending / processing)
     if (hasUnsentMessages) {
-      return { mode: 'status', reason: 'Sending your message...' };
+      return { mode: 'status' };
     }
     if (hasProcessingMessages) {
-      return { mode: 'status', reason: 'Processing your message...' };
+      return { mode: 'status' };
     }
 
     // Optimistic or server-confirmed analysis in progress
@@ -598,9 +579,7 @@ export default function ChatScreen() {
         pendingAnalysis,
         phase,
       });
-      const reason =
-        thinkingStepLabel(context?.analysisRun?.thinkingReason) ?? 'Starting analysis...';
-      return { mode: 'status', reason };
+      return { mode: 'status' };
     }
 
     // Word count gate — composing phase uses initial threshold

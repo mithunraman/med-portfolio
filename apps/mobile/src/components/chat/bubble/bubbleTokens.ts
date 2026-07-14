@@ -16,3 +16,9 @@ export const BUBBLE_SHADOW: ViewStyle = {
   shadowRadius: 2,
   elevation: 1,
 };
+
+// Muted secondary text for content inside bubbles. Fixed (not a theme token)
+// because the bubble background is fixed regardless of theme — using theme
+// `textSecondary` here fails WCAG AA on some themes (MOB-049). These clear ≥6:1
+// on the received-bubble backgrounds above.
+export const BUBBLE_MUTED_TEXT = { light: '#5c5c5c', dark: '#a9b0b5' } as const;

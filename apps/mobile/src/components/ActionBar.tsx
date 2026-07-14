@@ -3,9 +3,25 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme';
 
-
-
-const THINKING_WORDS = ['Thinking', 'Analysing', 'Processing', 'Working', 'Evaluating'];
+// Generic, interchangeable "busy" gerunds — never tied to the actual pipeline step
+// and framed on the entry/text (not clinical judgment on the patient). See MOB-044.
+const THINKING_WORDS = [
+  'Thinking',
+  'Analysing',
+  'Processing',
+  'Working',
+  'Evaluating',
+  'Reviewing',
+  'Reading',
+  'Considering',
+  'Organising',
+  'Structuring',
+  'Connecting',
+  'Summarising',
+  'Refining',
+  'Preparing',
+  'Understanding',
+];
 
 function useRotatingText(words: string[], intervalMs = 2500): string {
   const [index, setIndex] = useState(0);
@@ -29,7 +45,7 @@ function useRotatingText(words: string[], intervalMs = 2500): string {
 // --- Public types ---
 
 export type ActionBarState =
-  | { mode: 'status'; reason: string }
+  | { mode: 'status' }
   | { mode: 'action'; variant: 'start' | 'continue'; onPress: () => void }
   | { mode: 'progress'; wordCount: number; threshold: number };
 
@@ -53,7 +69,7 @@ export const ActionBar = memo(function ActionBar({ state }: ActionBarProps) {
       ]}
     >
       {state.mode === 'status' ? (
-        <StatusBar reason={state.reason} colors={colors} />
+        <StatusBar colors={colors} />
       ) : state.mode === 'progress' ? (
         <ProgressBar wordCount={state.wordCount} threshold={state.threshold} colors={colors} />
       ) : (
@@ -65,15 +81,12 @@ export const ActionBar = memo(function ActionBar({ state }: ActionBarProps) {
 
 // --- Status mode ---
 
-function StatusBar({ reason, colors }: { reason: string; colors: { textSecondary: string; accent: string } }) {
+function StatusBar({ colors }: { colors: { accent: string } }) {
   const thinkingWord = useRotatingText(THINKING_WORDS);
 
   return (
     <View style={styles.statusRow}>
       <Text style={[styles.thinkingLabel, { color: colors.accent }]}>{thinkingWord}...</Text>
-      <Text style={[styles.reasonLabel, { color: colors.textSecondary }]} numberOfLines={1}>
-        {reason}
-      </Text>
     </View>
   );
 }
@@ -157,13 +170,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   thinkingLabel: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-  },
-  reasonLabel: {
-    fontSize: 13,
-    fontWeight: '400',
-    flexShrink: 1,
   },
   // Progress mode
   progressRow: {

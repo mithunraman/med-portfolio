@@ -88,10 +88,13 @@ export const BubbleShell = memo(function BubbleShell({
       // Not delivered to the entry — a neutral marker, not the delivered double-tick.
       return <Ionicons name="information-circle-outline" size={12} color="#8696a0" />;
     }
+    // Fully AI-processed — blue double tick (like "read").
     if (isTerminalMessageStatus(message.status)) {
       return <Ionicons name="checkmark-done" size={12} color="#53bdeb" />;
     }
-    return <Ionicons name="checkmark" size={12} color="#8696a0" />;
+    // On the server but still processing (PENDING…DEIDENTIFYING) — grey double
+    // tick ("delivered"). A single tick here reads as "not delivered" (MOB-035).
+    return <Ionicons name="checkmark-done" size={12} color="#8696a0" />;
   })();
 
   const bubbleRadius = {

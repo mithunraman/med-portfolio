@@ -120,8 +120,8 @@ Clear these (with legal input) before launch.
 - [x] **MOB-030** [WON'T DO] ~~Remove the mic icon from the record button; relabel "Record your case".~~ Decided against 2026-07-13 — the mic icon is retained as the filled accent primary action introduced in MOB-031 (a recognisable voice affordance beside the text field); no text label added to the button.
 - [x] **MOB-031** [DONE] Done 2026-07-13 — in `ChatComposer.tsx`, made the mic a filled accent circle with a white glyph (matching the send button) so the composer has one clear coloured primary action at rest that morphs to send when typing. Also shrank the placeholder to a 13px custom overlay (typed text stays 16px) and tightened the copy to "Describe your case".
 - [x] **MOB-033** [DONE] Done 2026-07-14 — retired the disappearing `ChatEmptyState` and replaced it with four client-only assistant bubbles (`IntroBubbles.tsx`) pinned to the top of every thread via the inverted list's `ListFooterComponent`, so the guidance (what to talk about, "send as many messages as you need" by voice/text, when analysis unlocks, and the PII warning) persists instead of vanishing on the first message. The PII bubble uses a distinct warning treatment (error-tinted + shield icon). Bubbles are purely presentational — never persisted, sent to the backend, or counted in grouping/analysis/edit-lock.
-- [ ] **MOB-035** [FIX] Use two ticks for message status (sent vs AI-processed); one tick reads as "not delivered".
-- [ ] **MOB-036** [FIX] Label transcribed voice text "Transcription" (voice messages only).
+- [x] **MOB-035** [DONE] Done 2026-07-14 — in `BubbleShell.tsx`, moved the double-tick threshold earlier: a message shows a grey double tick as soon as the server has it (processing states `PENDING`…`DEIDENTIFYING`) and a blue double tick once AI-processed (`COMPLETE`). Clock (uploading) and error/rejected icons unchanged. Removes the single tick that read as "not delivered".
+- [x] **MOB-036** [WON'T DO] ~~Label transcribed voice text "Transcription" (voice messages only).~~ Decided against 2026-07-14 — the transcript already sits above the audio player pill in the bubble, which makes its voice provenance clear enough; no separate "Transcription" label added.
 - [ ] **MOB-056** [FIX] Strip filler words ("uh/um") from the cleaned transcription.
 
 ### Entry-type classification & confidence
@@ -135,7 +135,8 @@ Clear these (with legal input) before launch.
 ### Follow-up questions & copy
 - [ ] **MOB-045** [KEEP] One follow-up question at a time — validated as good; retain.
 - [ ] **MOB-046** [FIX] Don't show an exact remaining-question count ("A few more questions. Let's start here").
-- [ ] **MOB-047** [FIX] Sequence the ~15 hard-coded follow-up messages (not random; they repeated "a few final questions"). Engineer to send the 15 variants for UX review.
+- [x] **MOB-047** [DONE] Done 2026-07-14 — replaced the random two-bucket follow-up copy with a readiness-tiered system (`apps/api/src/portfolio-graph/followup-copy.ts`): 4 tone tiers driven by `readinessScore` + an honest terminal signal, monotonic (never regresses), no back-to-back repeats, and "final" only on the genuinely-last round. Old `FOLLOWUP_PROMPTS` removed; 8 new unit tests. Copy wording still to be finalised with UX — see MOB-047a.
+- [ ] **MOB-047a** [TODO/COPY] Revisit, evaluate and finalise the follow-up intro copy after seeing it on real journeys. The readiness-tiered mechanism is built (`apps/api/src/portfolio-graph/followup-copy.ts`), but the four `FOLLOWUP_LINES` banks are **placeholder wording pending UX sign-off**. Also tune the two knobs against real runs: the readiness band cut-points (`3.0` / `5.5`) and the tier-4 terminal signal (`askedRound >= maxFollowupRounds`).
 - [ ] **MOB-076** [FIX] Trim greeting copy (drop "Thanks"; every extra word adds reading time).
 
 ### Question typography & examples

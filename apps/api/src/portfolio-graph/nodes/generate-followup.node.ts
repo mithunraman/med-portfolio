@@ -7,6 +7,7 @@ import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/s
 import { getStageContext } from '../../specialties/stage-context';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { hasBeenAsked, isSectionExhausted } from '../elicitation.util';
+import { pickFollowupLine, resolveFollowupTier } from '../followup-copy';
 import { PortfolioStateType, ReadinessEntry, SectionAttempt } from '../portfolio-graph.state';
 
 const logger = new Logger('GenerateFollowupNode');
@@ -380,12 +381,31 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
       };
     }
 
+    // ── Select the round's intro line (MOB-047) ──
+    // Tone tier is a function of real progress (readinessScore) plus an honest
+    // terminal signal — not the round counter. Monotonic floor + last-index (both
+    // persisted below) give non-regressing tone and no back-to-back repeats.
+    const askedRound = state.followUpRound + 1;
+    const tier = resolveFollowupTier({
+      readinessScore: state.readinessScore,
+      askedRound,
+      maxFollowupRounds: state.maxFollowupRounds,
+      tierFloor: state.followupTierFloor,
+    });
+    const { line: introLine, index: introLineIdx } = pickFollowupLine(
+      tier,
+      state.lastFollowupLineIdx
+    );
+
     return {
       followUpRound: state.followUpRound + 1,
       pendingFollowupQuestions: questions,
       // Append this round's question texts so future rounds don't re-ask them.
       askedFollowupQuestions: questions.map((q) => q.question),
       sectionAttempts,
+      followupTierFloor: tier,
+      lastFollowupLineIdx: introLineIdx,
+      pendingFollowupIntro: introLine,
     };
   };
 }

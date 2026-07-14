@@ -29,6 +29,7 @@ import {
   IPdpGoalsRepository,
   PDP_GOALS_REPOSITORY,
 } from '../pdp-goals/pdp-goals.repository.interface';
+import { DEFAULT_FOLLOWUP_LINE } from './followup-copy';
 import { buildPortfolioGraph } from './portfolio-graph.builder';
 import type { PortfolioStateType } from './portfolio-graph.state';
 import { buildReadinessSnapshot } from './readiness-snapshot';
@@ -58,33 +59,6 @@ const CLASSIFICATION_PROMPTS = [
   "Here's what I came up with - select the entry type that fits best, or choose your own.",
   'A few entry types stood out. Pick the one that best captures your input.',
 ] as const;
-
-const FOLLOWUP_PROMPTS: Record<string, readonly string[]> = {
-  initial: [
-    'Thanks for sharing that. I have a couple more questions to strengthen your portfolio entry. Take your time - answer all at once or one by one.',
-    "Great input! Just a couple more things I'd like to know to make your entry shine.",
-    'Nearly there - I have a couple more questions to round out your portfolio entry.',
-    'Thanks! A couple more quick questions to make sure we capture everything.',
-    'Appreciate the detail. Just a couple more questions to fill in the gaps.',
-    "That's really helpful. I have a couple more follow-ups to get the full picture.",
-    'Good stuff - a couple more questions and your entry will be in great shape.',
-    'Thanks for that. A couple more things to cover so your portfolio entry stands out.',
-    'Nice work so far. Just a couple more questions to bring it all together.',
-    'Almost done - I have a couple more questions to make your entry as strong as possible.',
-  ],
-  final: [
-    "You're almost there! Just a few final questions to polish your portfolio entry.",
-    'Thanks for sticking with it. A few final questions to wrap things up.',
-    "We're in the home stretch - a few final things to make your entry complete.",
-    'Nearly finished! Just a few final questions to tie everything together.',
-    'Last stretch - I have a few final questions to round off your entry.',
-    'Great progress. A few final questions and your portfolio entry will be ready.',
-    'Thanks for all the detail so far. Just a few final follow-ups.',
-    'Almost there - a few final questions to make sure nothing is missed.',
-    "You've done the hard part. A few final questions to finish strong.",
-    'Just a few final things to cover, then your entry will be all set.',
-  ],
-} as const;
 
 const CAPABILITIES_PROMPTS = [
   "I spotted some capabilities in your entry. Confirm the ones that apply, or deselect any that don't fit.",
@@ -441,9 +415,8 @@ export class PortfolioGraphService implements OnModuleInit {
         }>;
         const followUpRound = interruptValue.followUpRound as number;
 
-        const roundKey = followUpRound === 1 ? 'initial' : 'final';
-        const prompts = FOLLOWUP_PROMPTS[roundKey];
-        const content = prompts[Math.floor(Math.random() * prompts.length)];
+        // Readiness-driven intro line chosen in generate_followup (MOB-047).
+        const content = (interruptValue.introLine as string) || DEFAULT_FOLLOWUP_LINE;
 
         const question: FreeTextQuestion = {
           questionType: 'free_text',

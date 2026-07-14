@@ -205,6 +205,25 @@ export const PortfolioState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => ({}),
   }),
+  /**
+   * MOB-047 follow-up intro copy state. `followupTierFloor` is the highest tone tier
+   * shown so far (monotonic — the intro never regresses if readiness dips between
+   * rounds). `lastFollowupLineIdx` backs no-immediate-repeat line selection.
+   * `pendingFollowupIntro` carries the line chosen by generate_followup to
+   * ask_followup (parallels pendingFollowupQuestions).
+   */
+  followupTierFloor: Annotation<number>({
+    reducer: (_, next) => next,
+    default: () => 1,
+  }),
+  lastFollowupLineIdx: Annotation<number>({
+    reducer: (_, next) => next,
+    default: () => -1,
+  }),
+  pendingFollowupIntro: Annotation<string>({
+    reducer: (_, next) => next,
+    default: () => '',
+  }),
 
   // ── Readiness (Phase 1 grades probes; Phase 5 rolls up to sections) ──
   /** Per-probe graded readiness, keyed by probe id. */

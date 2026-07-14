@@ -39,6 +39,8 @@ export function createAskFollowupNode(deps: GraphDeps) {
       missingSections: state.missingSections,
       entryType: state.entryType,
       followUpRound: state.followUpRound,
+      // Readiness-driven intro line chosen by generate_followup (MOB-047).
+      introLine: state.pendingFollowupIntro,
     });
 
     return {};

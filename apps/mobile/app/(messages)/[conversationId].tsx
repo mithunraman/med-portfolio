@@ -47,8 +47,8 @@ import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Platform, Pressable, StyleSheet, View } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { Alert, AppState, Pressable, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, KeyboardController } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const chatLogger = logger.createScope('ChatScreen');
@@ -117,6 +117,19 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const bannerOffset = useBannerOffset();
+
+  // Dismiss the keyboard when this screen loses focus. Leaving the screen with the
+  // keyboard still open lets the navigation transition's React commit collide with a
+  // keyboard frame, which desyncs react-native-keyboard-controller's animation state
+  // and makes every subsequent focus lag. Dismissing on blur resets that state cleanly
+  // before the transition. Uses KeyboardController.dismiss() (not RN's Keyboard) so the
+  // library's own tracked state is reset.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('blur', () => {
+      KeyboardController.dismiss();
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   // Track IDs from backend for new conversations.
   // State drives re-renders (selectors); ref provides stale-closure-safe access in callbacks.
@@ -715,7 +728,7 @@ export default function ChatScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
         style={styles.kav}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="translate-with-padding"
         keyboardVerticalOffset={headerHeight + bannerOffset}
       >
         {/* Live readiness meter — pinned above the thread while analysis is active */}

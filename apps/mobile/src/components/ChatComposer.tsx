@@ -19,6 +19,11 @@ import {
   type TextInput as TextInputType,
   type ViewStyle,
 } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import type { AudioRecordingResult } from '../hooks/useAudioRecorder';
 import { useTheme } from '../theme';
 import { IconButton } from './IconButton';
@@ -98,7 +103,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const { colors, isDark } = useTheme();
   const [text, setText] = useState('');
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
+  const focusProgress = useSharedValue(0);
   const inputRef = useRef<TextInputType>(null);
 
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -148,12 +153,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   );
 
   const handleFocus = useCallback(() => {
-    setIsFocused(true);
-  }, []);
+    focusProgress.value = withTiming(1, { duration: 150 });
+  }, [focusProgress]);
 
   const handleBlur = useCallback(() => {
-    setIsFocused(false);
-  }, []);
+    focusProgress.value = withTiming(0, { duration: 150 });
+  }, [focusProgress]);
 
   const hasText = useMemo(() => text.trim().length > 0, [text]);
 
@@ -225,10 +230,17 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       {
         backgroundColor: isDark ? colors.background : colors.surface,
       },
-      isFocused && { borderWidth: 1, borderColor: colors.primary },
     ],
-    [isDark, colors.background, colors.surface, colors.primary, isFocused]
+    [isDark, colors.background, colors.surface]
   );
+
+  // Focus ring driven by a Reanimated shared value rather than React state: focusing
+  // the input must not trigger a re-render, which would commit in the same frame as the
+  // keyboard event and desync react-native-keyboard-controller's animation (the lag bug).
+  const focusRingStyle = useAnimatedStyle(() => ({
+    borderWidth: focusProgress.value,
+    borderColor: colors.primary,
+  }));
 
   const attachButtonStyle = useMemo(
     () => [styles.attachButton, { backgroundColor: isDark ? colors.background : colors.surface }],
@@ -264,7 +276,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
         )}
 
         {/* Input pill */}
-        <View style={inputContainerStyle}>
+        <Animated.View style={[inputContainerStyle, focusRingStyle]}>
           <TextInput
             ref={inputRef}
             style={textInputStyle}
@@ -292,7 +304,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
               style={styles.stickerButton}
             />
           )}
-        </View>
+        </Animated.View>
 
         {/* Right-side action area */}
         {hasText ? (

@@ -134,15 +134,15 @@ Clear these (with legal input) before launch.
 
 ### Follow-up questions & copy
 - [ ] **MOB-045** [KEEP] One follow-up question at a time — validated as good; retain.
-- [ ] **MOB-046** [FIX] Don't show an exact remaining-question count ("A few more questions. Let's start here").
+- [x] **MOB-046** [DONE] Done 2026-07-14 — no exact count is shown anywhere: one-question-per-round (MOB-045) plus the count-free tiered follow-up copy (MOB-047) removed the old "a few more questions" count claim. No "X of Y" display exists in the question UI.
 - [x] **MOB-047** [DONE] Done 2026-07-14 — replaced the random two-bucket follow-up copy with a readiness-tiered system (`apps/api/src/portfolio-graph/followup-copy.ts`): 4 tone tiers driven by `readinessScore` + an honest terminal signal, monotonic (never regresses), no back-to-back repeats, and "final" only on the genuinely-last round. Old `FOLLOWUP_PROMPTS` removed; 8 new unit tests. Copy wording still to be finalised with UX — see MOB-047a.
 - [ ] **MOB-047a** [TODO/COPY] Revisit, evaluate and finalise the follow-up intro copy after seeing it on real journeys. The readiness-tiered mechanism is built (`apps/api/src/portfolio-graph/followup-copy.ts`), but the four `FOLLOWUP_LINES` banks are **placeholder wording pending UX sign-off**. Also tune the two knobs against real runs: the readiness band cut-points (`3.0` / `5.5`) and the tier-4 terminal signal (`askedRound >= maxFollowupRounds`).
-- [ ] **MOB-076** [FIX] Trim greeting copy (drop "Thanks"; every extra word adds reading time).
+- [x] **MOB-076** [DONE] Done 2026-07-14 — dropped the filler "Thanks" openers from the user-facing acknowledgement copy: the follow-up intro lines + default (`followup-copy.ts`) and the clarification retry prompt (`portfolio-graph.service.ts`) now lead straight with the purpose.
 
 ### Question typography & examples
 - [ ] **MOB-048** [FIX] Make the question the largest element (H1); apply the NHS type hierarchy (section title / question / hint).
 - [ ] **MOB-049** [FIX] Verify hint-text colour contrast against WCAG/NHS (possible failure).
-- [ ] **MOB-050** [FIX] Remove italics from hint text.
+- [x] **MOB-050** [DONE] Done 2026-07-14 — removed `fontStyle: 'italic'` from both the always-visible example and the expanded examples in `HintCard.tsx`.
 - [ ] **MOB-051** [FIX] Hide example answers under a "See more examples" accordion (currently looks like a page-leaving hyperlink); label the visible one "Example answer".
 - [ ] **MOB-052** [FIX/ANALYTICS] Track "More examples" clicks (high reliance may signal poorly framed questions). *(needs analytics tooling)*
 - [ ] **MOB-053** [FIX] Gate examples to the first ~5 entries (by entry count, not training year).

@@ -80,7 +80,7 @@ const CLARIFICATION_PROMPTS: Record<string, readonly string[]> = {
     'Could you share more detail about the clinical experience? A brief description of what happened, your role, and any reflections would help.',
   ],
   retry: [
-    'Thanks for sharing more. A little more detail about the clinical context would help me categorise this correctly.',
+    'A little more detail about the clinical context would help me categorise this correctly.',
     "That's helpful. Could you add a bit more about the clinical situation or your specific role?",
     'A few more details about what happened clinically would help me identify the right entry type.',
   ],

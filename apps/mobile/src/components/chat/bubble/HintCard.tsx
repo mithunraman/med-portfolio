@@ -69,7 +69,6 @@ const styles = StyleSheet.create({
   inlineHint: {
     fontSize: 13,
     lineHeight: 18,
-    fontStyle: 'italic',
   },
   toggle: {
     paddingVertical: 4,
@@ -87,6 +86,5 @@ const styles = StyleSheet.create({
   expandedExample: {
     fontSize: 13,
     lineHeight: 18,
-    fontStyle: 'italic',
   },
 });

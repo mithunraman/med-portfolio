@@ -33,13 +33,13 @@ const TIER_CUTS = { developing: 3.0, refining: 5.5 } as const;
 export const FOLLOWUP_LINES: Record<FollowupTier, readonly string[]> = {
   // Tier 1 — Foundations: orient and encourage; we're building the picture.
   1: [
-    "Thanks for that — let's build out your entry. A bit more on what happened would really help.",
+    "Let's build out your entry — a bit more on what happened would really help.",
     'Good start. To shape this into a strong reflection, tell me a little more about the situation.',
     "Appreciate you sharing that. Let's add some detail so your entry has a solid base.",
     'That gives me something to work with — more context will help your entry take shape.',
     "Let's flesh this out. I'd like to understand a bit more about your role and what happened.",
     'Good beginning — tell me more so we can build a full picture.',
-    "Thanks. To get your entry off to a strong start, let's cover a bit more ground.",
+    "To get your entry off to a strong start, let's cover a bit more ground.",
   ],
   // Tier 2 — Developing: acknowledge momentum; deepen the core.
   2: [
@@ -75,7 +75,7 @@ export const FOLLOWUP_LINES: Record<FollowupTier, readonly string[]> = {
 
 /** Safe fallback if a code path ever reaches the service without a selected line. */
 export const DEFAULT_FOLLOWUP_LINE =
-  'Thanks — a bit more detail will help strengthen your entry.';
+  'A bit more detail will help strengthen your entry.';
 
 /**
  * Resolve the tone tier for the round about to be asked.

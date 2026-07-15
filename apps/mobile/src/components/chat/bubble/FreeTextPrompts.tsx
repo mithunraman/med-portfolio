@@ -64,6 +64,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   promptText: {
+    // flexShrink lets the text wrap at the bubble edge instead of overflowing to
+    // its intrinsic single-line width (the only width cap is a % maxWidth on a
+    // distant ancestor, which doesn't propagate down to this nested Text).
+    flexShrink: 1,
     fontSize: 16,
     lineHeight: 22,
     fontWeight: '600',

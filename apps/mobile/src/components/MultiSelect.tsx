@@ -30,7 +30,7 @@ export const MultiSelect = memo(function MultiSelect({
   disabled = false,
   collapsible = false,
 }: MultiSelectProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const { visible, hiddenCount, collapsed, expand } = useCollapsibleOptions(options, {
     enabled: collapsible,
@@ -55,7 +55,6 @@ export const MultiSelect = memo(function MultiSelect({
             onToggle={onToggle}
             onToggleExpand={handleToggleExpand}
             colors={colors}
-            isDark={isDark}
           />
         );
       })}
@@ -72,7 +71,6 @@ interface ItemProps {
   onToggle: (key: string) => void;
   onToggleExpand: (key: string) => void;
   colors: ReturnType<typeof useTheme>['colors'];
-  isDark: boolean;
 }
 
 const MultiSelectItem = memo(function MultiSelectItem({
@@ -83,7 +81,6 @@ const MultiSelectItem = memo(function MultiSelectItem({
   onToggle,
   onToggleExpand,
   colors,
-  isDark,
 }: ItemProps) {
   const handlePress = useCallback(() => {
     if (!disabled) onToggle(option.key);
@@ -93,60 +90,57 @@ const MultiSelectItem = memo(function MultiSelectItem({
     onToggleExpand(option.key);
   }, [onToggleExpand, option.key]);
 
-  const hasDetails = option.confidence != null || !!option.reasoning;
-
   return (
-    <Pressable
-      onPress={handlePress}
-      disabled={disabled}
+    <View
       style={[
         styles.item,
         { borderColor: isSelected ? colors.primary : colors.border },
         disabled && styles.disabled,
       ]}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: isSelected, disabled }}
     >
       <View style={styles.topRow}>
-        <View
-          style={[
-            styles.checkbox,
-            {
-              borderColor: isSelected ? colors.primary : colors.textSecondary,
-              backgroundColor: isSelected ? colors.primary : 'transparent',
-            },
-          ]}
+        {/* Selection is confined to the checkbox + label. Tapping the reasoning
+            disclosure or anywhere else in the card must not toggle the choice. */}
+        <Pressable
+          onPress={handlePress}
+          disabled={disabled}
+          style={styles.selectTarget}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: isSelected, disabled }}
         >
-          {isSelected && <Feather name="check" size={14} color="#ffffff" />}
-        </View>
-        <View style={styles.labelContainer}>
-          <Text style={[styles.label, { color: colors.text }]}>{option.label}</Text>
-        </View>
-        {hasDetails && option.reasoning && (
+          <View
+            style={[
+              styles.checkbox,
+              {
+                borderColor: isSelected ? colors.primary : colors.textSecondary,
+                backgroundColor: isSelected ? colors.primary : 'transparent',
+              },
+            ]}
+          >
+            {isSelected && <Feather name="check" size={14} color="#ffffff" />}
+          </View>
+          <View style={styles.labelContainer}>
+            <Text style={[styles.label, { color: colors.text }]}>{option.label}</Text>
+          </View>
+        </Pressable>
+        {/* Reasoning disclosure sits where the confidence badge used to be — an
+            accent underlined link so it clearly reads as tappable. */}
+        {option.reasoning && (
           <Pressable
             onPress={handleChevronPress}
-            onStartShouldSetResponder={() => true}
-            style={[styles.detailsTap, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }]}
+            style={({ pressed }) => [styles.whyToggle, pressed && styles.pressed]}
+            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: isExpanded }}
             accessibilityLabel={isExpanded ? 'Hide reasoning' : 'Show reasoning'}
           >
-            {option.confidence != null && (
-              <Text style={[styles.badgeText, { color: colors.textSecondary }]}>
-                {Math.round(option.confidence * 100)}%
-              </Text>
-            )}
+            <Text style={[styles.whyText, { color: colors.primary }]}>Why?</Text>
             <Feather
               name={isExpanded ? 'chevron-down' : 'chevron-right'}
-              size={14}
-              color={colors.textSecondary}
+              size={16}
+              color={colors.primary}
             />
           </Pressable>
-        )}
-        {!option.reasoning && option.confidence != null && (
-          <View style={[styles.badgeOnly, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }]}>
-            <Text style={[styles.badgeText, { color: colors.textSecondary }]}>
-              {Math.round(option.confidence * 100)}%
-            </Text>
-          </View>
         )}
       </View>
       {option.reasoning && (
@@ -154,7 +148,7 @@ const MultiSelectItem = memo(function MultiSelectItem({
           {option.reasoning}
         </CollapsibleReasoning>
       )}
-    </Pressable>
+    </View>
   );
 });
 
@@ -234,6 +228,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  // Tap area for toggling the option — checkbox + label only, takes the row's
+  // free width so the confidence box stays pinned to the right.
+  selectTarget: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   checkbox: {
     width: 20,
     height: 20,
@@ -249,22 +251,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
-  detailsTap: {
+  // Reasoning disclosure control: an accent, underlined link on the right of the
+  // row (where the confidence badge was). hitSlop gives it a 44pt touch target.
+  whyToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    alignSelf: 'flex-start',
+    gap: 4,
+    paddingVertical: 6,
   },
-  badgeOnly: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  badgeText: {
-    fontSize: 12,
+  whyText: {
+    fontSize: 13,
     fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  pressed: {
+    opacity: 0.6,
   },
   collapsibleContainer: {
     overflow: 'hidden' as const,

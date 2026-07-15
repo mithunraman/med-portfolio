@@ -105,59 +105,56 @@ const SingleSelectItem = memo(function SingleSelectItem({
       : 'rgba(0,0,0,0.03)'
     : 'transparent';
 
-  const hasDetails = option.confidence != null || !!option.reasoning;
-
   return (
-    <Pressable
-      onPress={handlePress}
-      disabled={disabled}
+    <View
       style={[
         styles.item,
         { borderColor: isSelected ? colors.primary : colors.border, backgroundColor: itemBg },
         disabled && styles.disabled,
       ]}
-      accessibilityRole="radio"
-      accessibilityState={{ selected: isSelected, disabled }}
     >
       <View style={styles.topRow}>
-        <View
-          style={[
-            styles.radio,
-            { borderColor: isSelected ? colors.primary : colors.textSecondary },
-          ]}
+        {/* Selection is confined to the radio + label. Tapping the reasoning
+            disclosure or anywhere else in the card must not toggle the choice. */}
+        <Pressable
+          onPress={handlePress}
+          disabled={disabled}
+          style={styles.selectTarget}
+          accessibilityRole="radio"
+          accessibilityState={{ selected: isSelected, disabled }}
         >
-          {isSelected && (
-            <View style={[styles.radioFill, { backgroundColor: colors.primary }]} />
-          )}
-        </View>
-        <View style={styles.labelContainer}>
-          <Text style={[styles.label, { color: colors.text }]}>{option.label}</Text>
-        </View>
-        {hasDetails && option.reasoning && (
+          <View
+            style={[
+              styles.radio,
+              { borderColor: isSelected ? colors.primary : colors.textSecondary },
+            ]}
+          >
+            {isSelected && (
+              <View style={[styles.radioFill, { backgroundColor: colors.primary }]} />
+            )}
+          </View>
+          <View style={styles.labelContainer}>
+            <Text style={[styles.label, { color: colors.text }]}>{option.label}</Text>
+          </View>
+        </Pressable>
+        {/* Reasoning disclosure sits where the confidence badge used to be — an
+            accent underlined link so it clearly reads as tappable. */}
+        {option.reasoning && (
           <Pressable
             onPress={handleChevronPress}
-            onStartShouldSetResponder={() => true}
-            style={[styles.detailsTap, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }]}
+            style={({ pressed }) => [styles.whyToggle, pressed && styles.pressed]}
+            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: isExpanded }}
             accessibilityLabel={isExpanded ? 'Hide reasoning' : 'Show reasoning'}
           >
-            {option.confidence != null && (
-              <Text style={[styles.badgeText, { color: colors.textSecondary }]}>
-                {Math.round(option.confidence * 100)}%
-              </Text>
-            )}
+            <Text style={[styles.whyText, { color: colors.primary }]}>Why?</Text>
             <Feather
               name={isExpanded ? 'chevron-down' : 'chevron-right'}
-              size={14}
-              color={colors.textSecondary}
+              size={16}
+              color={colors.primary}
             />
           </Pressable>
-        )}
-        {!option.reasoning && option.confidence != null && (
-          <View style={[styles.badgeOnly, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }]}>
-            <Text style={[styles.badgeText, { color: colors.textSecondary }]}>
-              {Math.round(option.confidence * 100)}%
-            </Text>
-          </View>
         )}
       </View>
       {option.reasoning && (
@@ -165,7 +162,7 @@ const SingleSelectItem = memo(function SingleSelectItem({
           {option.reasoning}
         </CollapsibleReasoning>
       )}
-    </Pressable>
+    </View>
   );
 });
 
@@ -245,6 +242,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  // Tap area for selecting the option — radio + label only, takes the row's
+  // free width so the confidence box stays pinned to the right.
+  selectTarget: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   radio: {
     width: 20,
     height: 20,
@@ -265,22 +270,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
-  detailsTap: {
+  // Reasoning disclosure control: an accent, underlined link on the right of the
+  // row (where the confidence badge was). hitSlop gives it a 44pt touch target.
+  whyToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    alignSelf: 'flex-start',
+    gap: 4,
+    paddingVertical: 6,
   },
-  badgeOnly: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  badgeText: {
-    fontSize: 12,
+  whyText: {
+    fontSize: 13,
     fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  pressed: {
+    opacity: 0.6,
   },
   collapsibleContainer: {
     overflow: 'hidden' as const,

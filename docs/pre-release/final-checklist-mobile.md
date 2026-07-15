@@ -125,9 +125,9 @@ Clear these (with legal input) before launch.
 - [x] **MOB-056** [N/A] Not applicable — decided 2026-07-14.
 
 ### Entry-type classification & confidence
-- [ ] **MOB-040** [FIX] Remove confidence percentages at the classification step (they don't sum to 100; retain confidence for capability tagging).
-- [ ] **MOB-041** [FIX] Enlarge/label the "why this type" reasoning expander; keep the first item expanded.
-- [ ] **MOB-042** [FIX] Show the top 3 type suggestions + "see more", not 5.
+- [x] **MOB-040** [WON'T DO] Decided 2026-07-15 — not doing.
+- [x] **MOB-041** [DONE] Done 2026-07-15 — reworked the reasoning disclosure in the shared `SingleSelect` (classification) and `MultiSelect` (capabilities): the bare chevron/`%` chip became an **accent, underlined "Why?" link + chevron** (clear "tappable" signifier), enlarged to a 44pt touch target via `hitSlop`. Also: confidence `%` badge dropped entirely (uninformative — every value was ~90%; also satisfies the MOB-040 direction), selection tap confined to the radio/checkbox + label, and pressed-state + `accessibilityRole="button"`/`expanded` added. **"Keep first item expanded" was deliberately reversed** → all rows collapsed by default (product decision, 2026-07-15). Separately fixed a free-text follow-up bug found in review: the question text clipped mid-sentence (overflowed the bubble) — resolved with `flexShrink: 1` on `promptText` in `FreeTextPrompts`.
+- [x] **MOB-042** [WON'T DO] Decided 2026-07-15 — not doing.
 
 ### Loading / progress feedback
 - [x] **MOB-044** [DONE] Done 2026-07-14 — removed the pipeline-leaking step-label "reason" line entirely (`ActionBar` status mode + `reason` type field + `THINKING_STEP_LABELS`/`thinkingStepLabel`), leaving a single generic rotating word. Expanded `THINKING_WORDS` to a 15-word interchangeable, entry-focused, non-clinical set. Loading feedback is now generic and exposes nothing about the analysis pipeline.
@@ -146,12 +146,12 @@ Clear these (with legal input) before launch.
 - [x] **MOB-050** [DONE] Done 2026-07-14 — removed `fontStyle: 'italic'` from both the always-visible example and the expanded examples in `HintCard.tsx`.
 - [x] **MOB-051** [DONE] Done 2026-07-14 — visible example labelled "Example answer"; further examples behind a "See more examples" / "Hide examples" accordion; examples bulleted. Note: per product decision the toggle is styled as an **underlined text link** (background/chevron removed) — a deliberate reversal of the original "looks like a hyperlink" concern.
 - [ ] **MOB-052** [FIX/ANALYTICS] Track "More examples" clicks (high reliance may signal poorly framed questions). *(needs analytics tooling)*
-- [ ] **MOB-053** [FIX] Gate examples to the first ~5 entries (by entry count, not training year).
+- [ ] **MOB-053** [LATER] Deferred 2026-07-15 — will be done later. Gate examples to the first ~5 entries (by entry count, not training year). Needs the user's entry count plumbed to the client so `HintCard` can hide examples past entry ~5.
 
 ### Capability tagging
 - [ ] **MOB-058** [FIX] Group confidence + reasoning under "Why I suggested this" (below, left-aligned, first expanded) — here confidence *is* important.
-- [ ] **MOB-059** [FIX] Left-align actionable controls (heavy screen-magnification users miss right-hand controls).
-- [ ] **MOB-061** [FIX] Bigger thumb/touch targets on capability rows.
+- [x] **MOB-059** [WON'T DO] Decided 2026-07-15 — not doing. The in-conversation capability-verification card (the actual target) isn't built yet, so there are no controls to re-align; and on the one surface that does render capabilities (artefact detail, shared `EditableReflectionSection`), the `space-between` header keeps the edit/expand controls right-aligned by design. Left-alignment will be handled natively when/if the verification card is built (059 folded into that build), not as a standalone patch.
+- [ ] **MOB-061** [DEFERRED] Deferred 2026-07-15 — belongs to the in-conversation capability-verification card, which isn't built yet. Fix the touch targets (≥44pt/48dp, `minHeight` + adequate `hitSlop`, ≥8pt gap between adjacent controls) as part of that card's build, not as a standalone patch to the shared `EditableReflectionSection` on the entry-detail screen.
 - **MOB-077** [RISK] Capability-mapping hallucination is ~1/10 and can't be fully eliminated — track error rate; rely on user verification (constraint, not a fix).
 
 ### Entry review screen

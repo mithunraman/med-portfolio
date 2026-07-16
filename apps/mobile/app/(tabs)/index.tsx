@@ -138,7 +138,6 @@ function RecentCaseRow({ item, onPress }: { item: Artefact; onPress: () => void 
           </Text>
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
     </TouchableOpacity>
   );
 }
@@ -176,7 +175,7 @@ function RecentEntriesModule({
     <View style={styles.moduleContainer}>
       <SectionHeader
         title="Recent cases"
-        actionLabel={hasMore ? `See all (${total})` : undefined}
+        actionLabel={hasMore ? 'See all' : undefined}
         onAction={hasMore ? onSeeAll : undefined}
       />
       <View style={styles.recentList}>
@@ -284,9 +283,8 @@ function PdpDueSoonModule({
             accessibilityRole="button"
             accessibilityLabel={`PDP goal: ${goal.goal}`}
           >
-            <Ionicons name="flag-outline" size={18} color={colors.primary} />
             <View style={styles.pdpActionContent}>
-              <Text style={[styles.pdpActionText, { color: colors.text }]} numberOfLines={2}>
+              <Text style={[styles.pdpActionText, { color: colors.text }]} numberOfLines={1}>
                 {goal.goal}
               </Text>
               <View style={styles.pdpActionMetaRow}>
@@ -295,10 +293,7 @@ function PdpDueSoonModule({
                 </Text>
                 {dueInfo && (
                   <>
-                    <Text style={[styles.pdpActionMetaDot, { color: colors.textSecondary }]}>
-                      {' '}
-                      ·{' '}
-                    </Text>
+                    <View style={[styles.statDot, { backgroundColor: colors.textSecondary }]} />
                     <Text
                       style={[
                         styles.pdpActionMeta,
@@ -311,7 +306,6 @@ function PdpDueSoonModule({
                 )}
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
           </TouchableOpacity>
         );
       })}
@@ -733,12 +727,9 @@ const styles = StyleSheet.create({
   pdpActionMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 6,
   },
   pdpActionMeta: {
-    fontSize: 12,
-  },
-  pdpActionMetaDot: {
     fontSize: 12,
   },
 

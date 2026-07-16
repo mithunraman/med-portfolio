@@ -26,7 +26,6 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router/react-navigation';
 import { useCallback, useMemo, useState } from 'react';
 import {
-  FlatList,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -109,27 +108,37 @@ function StartNewEntryCard({
   );
 }
 
-// ─── Module B: Recent Entries ─────────────────────────────────────────────────
+// ─── Module B: Recent Cases ───────────────────────────────────────────────────
 
-function RecentEntryCard({ item, onPress }: { item: Artefact; onPress: () => void }) {
+// Number of recent cases shown before "See all". Kept small so the section stays
+// compact alongside the PDP-goals module below it.
+const RECENT_LIMIT = 3;
+
+function RecentCaseRow({ item, onPress }: { item: Artefact; onPress: () => void }) {
   const { colors } = useTheme();
-  const statusDisplay = getArtefactStatusDisplay(item.status);
+  const { label, variant } = getArtefactStatusDisplay(item.status);
 
   return (
     <TouchableOpacity
-      style={[styles.recentCard, { backgroundColor: colors.surface }]}
+      style={[styles.recentRow, { backgroundColor: colors.surface }]}
       onPress={onPress}
       activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityLabel={`Resume case: ${item.title || 'Untitled'}`}
     >
-      <Text style={[styles.recentTitle, { color: colors.text }]} numberOfLines={2}>
-        {item.title || 'Untitled case'}
-      </Text>
-      <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />
-      <Text style={[styles.recentMeta, { color: colors.textSecondary }]}>
-        {formatTimeAgo(item.updatedAt)}
-      </Text>
+      <View style={styles.recentRowText}>
+        {/* Single-line title (truncates); meta sits directly under it. */}
+        <Text style={[styles.recentTitle, { color: colors.text }]} numberOfLines={1}>
+          {item.title || 'Untitled case'}
+        </Text>
+        <View style={styles.recentMetaRow}>
+          <StatusPill label={label} variant={variant} compact />
+          <Text style={[styles.recentMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+            {formatTimeAgo(item.updatedAt)}
+          </Text>
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
     </TouchableOpacity>
   );
 }
@@ -151,32 +160,30 @@ function RecentEntriesModule({
         <SectionHeader title="Recent cases" />
         <View style={styles.emptyModuleContainer}>
           <Text style={styles.emptyModuleText}>
-            No cases yet. After your next clinic, tap the mic and talk through what happened.
+            No cases yet. After your next clinic, talk it through and we’ll turn it into portfolio
+            evidence.
           </Text>
         </View>
       </View>
     );
   }
 
+  // Only offer "See all" when there are more cases than we show inline —
+  // otherwise it's a no-op detour to the same rows (the Entries tab still exists).
+  const hasMore = total > RECENT_LIMIT;
+
   return (
     <View style={styles.moduleContainer}>
       <SectionHeader
         title="Recent cases"
-        actionLabel={total > items.length ? `See all (${total})` : 'See all'}
-        onAction={onSeeAll}
+        actionLabel={hasMore ? `See all (${total})` : undefined}
+        onAction={hasMore ? onSeeAll : undefined}
       />
-      <FlatList
-        horizontal
-        data={items}
-        keyExtractor={(item) => item.id}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.recentListContent}
-        snapToInterval={152}
-        decelerationRate="fast"
-        renderItem={({ item }) => (
-          <RecentEntryCard item={item} onPress={() => onEntryPress(item)} />
-        )}
-      />
+      <View style={styles.recentList}>
+        {items.slice(0, RECENT_LIMIT).map((item) => (
+          <RecentCaseRow key={item.id} item={item} onPress={() => onEntryPress(item)} />
+        ))}
+      </View>
     </View>
   );
 }
@@ -665,17 +672,26 @@ const styles = StyleSheet.create({
   moduleContainer: {
     marginTop: 8,
   },
-  recentListContent: {
+  recentList: {
     paddingHorizontal: 20,
-    gap: 12,
-  },
-  recentCard: {
-    width: 140,
-    padding: 14,
-    borderRadius: 12,
     gap: 8,
-    justifyContent: 'space-between',
-    minHeight: 120,
+  },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  recentRowText: {
+    flex: 1,
+    gap: 6,
+  },
+  recentMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   recentTitle: {
     fontSize: 14,
@@ -684,6 +700,7 @@ const styles = StyleSheet.create({
   },
   recentMeta: {
     fontSize: 12,
+    lineHeight: 16,
   },
   emptyModuleContainer: {
     paddingHorizontal: 20,

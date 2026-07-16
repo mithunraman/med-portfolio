@@ -32,15 +32,22 @@ const VARIANT_COLORS: Record<
 interface StatusPillProps {
   label: string;
   variant?: StatusVariant;
+  /** Tighter padding + smaller text, for dense contexts like list rows. */
+  compact?: boolean;
 }
 
-export function StatusPill({ label, variant = 'default' }: StatusPillProps) {
+export function StatusPill({ label, variant = 'default', compact = false }: StatusPillProps) {
   const { isDark } = useTheme();
   const scheme = isDark ? VARIANT_COLORS[variant].dark : VARIANT_COLORS[variant].light;
 
   return (
-    <View style={[styles.pill, { backgroundColor: scheme.bg }]} accessibilityRole="text">
-      <Text style={[styles.label, { color: scheme.text }]}>{label}</Text>
+    <View
+      style={[styles.pill, compact && styles.pillCompact, { backgroundColor: scheme.bg }]}
+      accessibilityRole="text"
+    >
+      <Text style={[styles.label, compact && styles.labelCompact, { color: scheme.text }]}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -52,8 +59,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
   },
+  pillCompact: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
   label: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  labelCompact: {
+    fontSize: 11,
   },
 });

@@ -30,6 +30,7 @@ import {
 } from '@/store/slices/messages/selectors';
 import { type RenderableMessage, toRenderableMessage } from '@/store/slices/messages/slice';
 import { useTheme } from '@/theme';
+import { getCompletionMessage } from '@/utils/completionMessages';
 import { generateIdempotencyKey } from '@/utils/idempotency';
 import { logger } from '@/utils/logger';
 import {
@@ -440,6 +441,8 @@ export default function ChatScreen() {
   const canStartAnalysis = context?.actions.startAnalysis.allowed ?? false;
   const canResumeAnalysis = context?.actions.resumeAnalysis.allowed ?? false;
   const phase = context?.phase;
+  // MOB-063: vary the completion copy, keyed deterministically off the entry id.
+  const completionMessage = getCompletionMessage(artefactId);
   // Edit/delete availability is composed on the client from message facts +
   // artefact status; unavailable while the AI is actively analysing.
   const isAnalysing = phase === 'analysing' || pendingAnalysis;
@@ -735,10 +738,10 @@ export default function ChatScreen() {
         {phase === 'completed' ? (
           <CompletionCard
             icon={<MaterialCommunityIcons name="party-popper" size={20} color="#ffffff" />}
-            heading="All Done!"
-            supportText="Your portfolio entry is ready for review"
+            heading={completionMessage.heading}
+            supportText={completionMessage.supportText}
             buttonIcon={<Feather name="file-text" size={18} color="#ffffff" />}
-            buttonLabel="View Your Entry"
+            buttonLabel="View Your Case"
             onPress={() => {
               if (artefactId) {
                 router.replace(`/(entry)/${artefactId}`);

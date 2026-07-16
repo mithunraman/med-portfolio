@@ -112,7 +112,7 @@ Clear these (with legal input) before launch.
 - [x] **MOB-027** [DONE] Verified 2026-07-13 — already implemented in `WelcomeModule` (`setupLine`): a first-run GP user sees "You're set up for General Practice, GP Specialty Training Year 1." Renders only when specialty + stage are set (guaranteed post-MOB-022 onboarding). No code change needed; optional future copy trim of the verbose stage label.
 - [ ] **MOB-093** [LATER] Deferred 2026-07-16 — will be done later. Personalise the dashboard with the user's name.
 - [x] **MOB-124** [DONE] Done 2026-07-16 — dashboard primary CTA (`StartNewEntryCard`) now uses Ionicons **`chatbubbles`** (two-bubble conversation glyph) instead of `mic`, distinguishing it from the composer's record mic; icon `24→26` and accent circle `36→40` for more weight (`ctaIconCircle`, renamed from `micCircle`). Disabled/guest state keeps `lock-closed`. Also removed the "Last case …" recency line from the card (no longer needed) — dropped the `lastEntryDate` prop.
-- [ ] **MOB-125** [FIX] Scannable "Recent entries" (list of ~5 + "See all") with richer cards. *(balance vs PDP-goals space — OPEN)*
+- [x] **MOB-125** [DONE] Done 2026-07-16 — replaced the horizontal "Recent cases" carousel with a **vertical list of the top 3** (`RECENT_LIMIT`) + gated **"See all"** (shown only when `total > 3`; count dropped per product). Rows are compact cards: single-line title + a meta line (compact coloured `StatusPill` + relative time) directly under it — symmetric for any title length, no snippet/type/chevron. Order stays pure recency; the pill carries status triage. Empty state reworded (no "mic"). Density chosen (3 rows) to coexist with PDP goals. Also unified the meta separator with the coverage card (shared round `statDot`). Follow-up (non-UI): AI title quality so near-duplicate titles don't collide under single-line truncation.
 - [ ] **MOB-126** [LATER] Deferred 2026-07-16 — will be done later. Add icons/imagery to entry cards for scannability (AI-picked per type/ARCP area). *(differentiation risk: most entries are the same type)*
 
 ### Chat / voice input
@@ -155,7 +155,7 @@ Clear these (with legal input) before launch.
 - **MOB-077** [RISK] Capability-mapping hallucination is ~1/10 and can't be fully eliminated — track error rate; rely on user verification (constraint, not a fix).
 
 ### Entry review screen
-- [ ] **MOB-062** [FIX] "You've selected" + bullet points (friendlier than "What you selected").
+- [x] **MOB-062** [WON'T DO] Decided 2026-07-16 — not doing. The answered select-card summary already collapses to the chosen option(s); the imperative-heading/disabled-control nuance isn't worth the shell + both-cards churn pre-launch.
 - [ ] **MOB-063** [FIX] Vary the completion message (currently "All done" every time). *(minor)*
 - [ ] **MOB-064** [FIX] Separate "Needs review" (an action → top) from "Clinical case review" (type/metadata tag).
 - [ ] **MOB-065** [FIX] Expand "Needs review" into a guidance info box ("Your draft is ready. Please check it manually").

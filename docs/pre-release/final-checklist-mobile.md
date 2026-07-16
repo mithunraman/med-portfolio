@@ -156,7 +156,7 @@ Clear these (with legal input) before launch.
 
 ### Entry review screen
 - [x] **MOB-062** [WON'T DO] Decided 2026-07-16 — not doing. The answered select-card summary already collapses to the chosen option(s); the imperative-heading/disabled-control nuance isn't worth the shell + both-cards churn pre-launch.
-- [ ] **MOB-063** [FIX] Vary the completion message (currently "All done" every time). *(minor)*
+- [x] **MOB-063** [DONE] Done 2026-07-16 — completion card copy now varies via a 5-message pool (`src/utils/completionMessages.ts`), picked deterministically off the artefact id so it's stable per entry.
 - [ ] **MOB-064** [FIX] Separate "Needs review" (an action → top) from "Clinical case review" (type/metadata tag).
 - [ ] **MOB-065** [FIX] Expand "Needs review" into a guidance info box ("Your draft is ready. Please check it manually").
 - [ ] **MOB-067** [FIX] Disable emoji input in entries (serious cases).

@@ -12,6 +12,12 @@ export interface ThemeColors {
   warning: string;
   warningBackground: string;
   warningBorder: string;
+  /** Positive/terminal-success accent (e.g. completed state, PDP goal done). */
+  success: string;
+  /** Informational accent — calm guidance, below warning on the severity ladder. */
+  info: string;
+  infoBackground: string;
+  infoBorder: string;
 }
 
 export type ThemeName = 'gmail' | 'linear' | 'spotify' | 'notion' | 'stripe' | 'forest' | 'sunset';
@@ -31,6 +37,10 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       warning: '#E65100',
       warningBackground: 'rgba(255, 152, 0, 0.10)',
       warningBorder: 'rgba(255, 152, 0, 0.40)',
+      success: '#1B7A3D',
+      info: '#1565C0',
+      infoBackground: 'rgba(33, 150, 243, 0.10)',
+      infoBorder: 'rgba(33, 150, 243, 0.40)',
     },
     dark: {
       background: '#202124',
@@ -45,6 +55,10 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       warning: '#FFB74D',
       warningBackground: 'rgba(255, 152, 0, 0.15)',
       warningBorder: 'rgba(255, 152, 0, 0.30)',
+      success: '#5CD48A',
+      info: '#64B5F6',
+      infoBackground: 'rgba(33, 150, 243, 0.15)',
+      infoBorder: 'rgba(33, 150, 243, 0.30)',
     },
   },
 
@@ -62,6 +76,10 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       warning: '#E65100',
       warningBackground: 'rgba(255, 152, 0, 0.10)',
       warningBorder: 'rgba(255, 152, 0, 0.40)',
+      success: '#1B7A3D',
+      info: '#1565C0',
+      infoBackground: 'rgba(33, 150, 243, 0.10)',
+      infoBorder: 'rgba(33, 150, 243, 0.40)',
     },
     dark: {
       background: '#0d0d0d',
@@ -76,6 +94,10 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       warning: '#FFB74D',
       warningBackground: 'rgba(255, 152, 0, 0.15)',
       warningBorder: 'rgba(255, 152, 0, 0.30)',
+      success: '#5CD48A',
+      info: '#64B5F6',
+      infoBackground: 'rgba(33, 150, 243, 0.15)',
+      infoBorder: 'rgba(33, 150, 243, 0.30)',
     },
   },
 
@@ -93,6 +115,10 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       warning: '#E65100',
       warningBackground: 'rgba(255, 152, 0, 0.10)',
       warningBorder: 'rgba(255, 152, 0, 0.40)',
+      success: '#1B7A3D',
+      info: '#1565C0',
+      infoBackground: 'rgba(33, 150, 243, 0.10)',
+      infoBorder: 'rgba(33, 150, 243, 0.40)',
     },
     dark: {
       background: '#121212',
@@ -107,6 +133,10 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       warning: '#FFB74D',
       warningBackground: 'rgba(255, 152, 0, 0.15)',
       warningBorder: 'rgba(255, 152, 0, 0.30)',
+      success: '#5CD48A',
+      info: '#64B5F6',
+      infoBackground: 'rgba(33, 150, 243, 0.15)',
+      infoBorder: 'rgba(33, 150, 243, 0.30)',
     },
   },
 
@@ -124,6 +154,10 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       warning: '#E65100',
       warningBackground: 'rgba(255, 152, 0, 0.10)',
       warningBorder: 'rgba(255, 152, 0, 0.40)',
+      success: '#1B7A3D',
+      info: '#1565C0',
+      infoBackground: 'rgba(33, 150, 243, 0.10)',
+      infoBorder: 'rgba(33, 150, 243, 0.40)',
     },
     dark: {
       background: '#191919',
@@ -138,6 +172,10 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       warning: '#FFB74D',
       warningBackground: 'rgba(255, 152, 0, 0.15)',
       warningBorder: 'rgba(255, 152, 0, 0.30)',
+      success: '#5CD48A',
+      info: '#64B5F6',
+      infoBackground: 'rgba(33, 150, 243, 0.15)',
+      infoBorder: 'rgba(33, 150, 243, 0.30)',
     },
   },
 
@@ -155,6 +193,10 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       warning: '#E65100',
       warningBackground: 'rgba(255, 152, 0, 0.10)',
       warningBorder: 'rgba(255, 152, 0, 0.40)',
+      success: '#1B7A3D',
+      info: '#1565C0',
+      infoBackground: 'rgba(33, 150, 243, 0.10)',
+      infoBorder: 'rgba(33, 150, 243, 0.40)',
     },
     dark: {
       background: '#0a2540',
@@ -169,6 +211,10 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       warning: '#FFB74D',
       warningBackground: 'rgba(255, 152, 0, 0.15)',
       warningBorder: 'rgba(255, 152, 0, 0.30)',
+      success: '#5CD48A',
+      info: '#64B5F6',
+      infoBackground: 'rgba(33, 150, 243, 0.15)',
+      infoBorder: 'rgba(33, 150, 243, 0.30)',
     },
   },
 
@@ -186,6 +232,10 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       warning: '#E65100',
       warningBackground: 'rgba(255, 152, 0, 0.10)',
       warningBorder: 'rgba(255, 152, 0, 0.40)',
+      success: '#1B7A3D',
+      info: '#1565C0',
+      infoBackground: 'rgba(33, 150, 243, 0.10)',
+      infoBorder: 'rgba(33, 150, 243, 0.40)',
     },
     dark: {
       background: '#1a1d1a',
@@ -200,6 +250,10 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       warning: '#FFB74D',
       warningBackground: 'rgba(255, 152, 0, 0.15)',
       warningBorder: 'rgba(255, 152, 0, 0.30)',
+      success: '#5CD48A',
+      info: '#64B5F6',
+      infoBackground: 'rgba(33, 150, 243, 0.15)',
+      infoBorder: 'rgba(33, 150, 243, 0.30)',
     },
   },
 
@@ -217,6 +271,10 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       warning: '#E65100',
       warningBackground: 'rgba(255, 152, 0, 0.10)',
       warningBorder: 'rgba(255, 152, 0, 0.40)',
+      success: '#1B7A3D',
+      info: '#1565C0',
+      infoBackground: 'rgba(33, 150, 243, 0.10)',
+      infoBorder: 'rgba(33, 150, 243, 0.40)',
     },
     dark: {
       background: '#1c1917',
@@ -231,6 +289,10 @@ const themes: Record<ThemeName, Record<'light' | 'dark', ThemeColors>> = {
       warning: '#FFB74D',
       warningBackground: 'rgba(255, 152, 0, 0.15)',
       warningBorder: 'rgba(255, 152, 0, 0.30)',
+      success: '#5CD48A',
+      info: '#64B5F6',
+      infoBackground: 'rgba(33, 150, 243, 0.15)',
+      infoBorder: 'rgba(33, 150, 243, 0.30)',
     },
   },
 };

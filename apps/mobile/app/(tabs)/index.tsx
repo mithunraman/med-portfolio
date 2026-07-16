@@ -124,7 +124,7 @@ function RecentCaseRow({ item, onPress }: { item: Artefact; onPress: () => void 
       onPress={onPress}
       activeOpacity={0.7}
       accessibilityRole="button"
-      accessibilityLabel={`Resume case: ${item.title || 'Untitled'}`}
+      accessibilityLabel={`Open case: ${item.title || 'Untitled case'}`}
     >
       <View style={styles.recentRowText}>
         {/* Single-line title (truncates); meta sits directly under it. */}

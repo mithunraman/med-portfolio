@@ -25,7 +25,7 @@ import {
   updateArtefactStatus,
 } from '@/store';
 import { useTheme } from '@/theme';
-import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
+import { getArtefactStatusMeta } from '@/utils/artefactStatus';
 import { formatTimeAgo } from '@/utils/formatTimeAgo';
 import type {
   Capability,
@@ -53,9 +53,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const AI_REASONING_COLOR = '#8B5CF6';
-const COMPLETED_ACCENT = '#28a745';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Compact date for the header metadata line, e.g. "12 Jul".
+function formatShortDate(isoDate: string): string {
+  const date = new Date(isoDate);
+  return `${date.getDate()} ${MONTHS[date.getMonth()]}`;
+}
 
 // Toggle a value's membership in a Set immutably (returns a new Set). Shared by
 // the section (keyed by index) and capability (keyed by code) expand toggles.
@@ -732,7 +737,7 @@ export default function EntryDetailScreen() {
     );
   }
 
-  const statusDisplay = getArtefactStatusDisplay(artefact.status);
+  const statusMeta = getArtefactStatusMeta(artefact.status);
   const canMarkAsFinal = artefact.status === ArtefactStatus.IN_REVIEW;
   const isArchivedEntry = artefact.status === ArtefactStatus.ARCHIVED;
 
@@ -749,16 +754,23 @@ export default function EntryDetailScreen() {
         {/* Header */}
         <View style={styles.section}>
           <EditableTitle value={displayTitle} onChange={handleTitleChange} editable={isEditable} />
-          <View style={styles.headerMeta}>
-            {artefact.artefactTypeLabel && (
-              <View style={[styles.typeBadge, { backgroundColor: colors.surface }]}>
-                <Text style={[styles.typeBadgeText, { color: colors.textSecondary }]}>
-                  {artefact.artefactTypeLabel}
-                </Text>
-              </View>
+          {/* Metadata line — type and date as quiet secondary text; the actionable
+              review state lives in the banner below, not here (MOB-064/065). A
+              terminal status word (Completed / Archived) is appended only when
+              there's no banner to carry it. */}
+          <Text style={[styles.metaLine, { color: colors.textSecondary }]}>
+            {artefact.artefactTypeLabel ? `${artefact.artefactTypeLabel} · ` : ''}
+            {`Created ${formatShortDate(artefact.createdAt)}`}
+            {statusMeta.word && (
+              <Text
+                style={statusMeta.tone === 'success' ? { color: colors.success } : undefined}
+              >
+                {statusMeta.tone === 'success'
+                  ? `  ·  ✓ ${statusMeta.word}`
+                  : `  ·  ${statusMeta.word}`}
+              </Text>
             )}
-            <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />
-          </View>
+          </Text>
         </View>
 
         {/* Soft "needs your input" advisory — shows only in review with unmet sections */}
@@ -860,7 +872,7 @@ export default function EntryDetailScreen() {
                           { backgroundColor: colors.surface },
                           isCompleted && {
                             borderLeftWidth: 4,
-                            borderLeftColor: COMPLETED_ACCENT,
+                            borderLeftColor: colors.success,
                             opacity: 0.55,
                           },
                         ]}
@@ -907,10 +919,10 @@ export default function EntryDetailScreen() {
                                       styles.pdpActionCheckbox,
                                       {
                                         borderColor: isCompleted
-                                          ? COMPLETED_ACCENT
+                                          ? colors.success
                                           : colors.primary,
                                         backgroundColor: isCompleted
-                                          ? COMPLETED_ACCENT
+                                          ? colors.success
                                           : colors.primary,
                                       },
                                     ]}
@@ -1155,19 +1167,10 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     gap: 10,
   },
-  headerMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  typeBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  typeBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+  metaLine: {
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
   },
   sectionTitle: {
     fontSize: 17,

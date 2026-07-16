@@ -12,30 +12,86 @@ interface Props {
   artefactId: string;
 }
 
+type IoniconName = keyof typeof Ionicons.glyphMap;
+
+interface AdvisoryCardProps {
+  /** Severity accent. `info` (blue) for calm guidance; `warning` (amber) for an
+   *  actionable gap. Both resolve to theme tokens, so they adapt light/dark. */
+  tone: 'info' | 'warning';
+  icon: IoniconName;
+  title: string;
+  body: string;
+  /**
+   * When true, the card is a polite live region — its appearance is gently
+   * announced by the screen reader. Use for cards that show conditionally (a
+   * nudge), NOT for persistent content that's read in normal order on every
+   * visit (announcing that on each mount/focus is noise). No `alert` role: these
+   * are guidance, not transient time-sensitive messages.
+   */
+  announce?: boolean;
+  /** When provided, the card shows a close button and is dismissible. */
+  onDismiss?: () => void;
+}
+
+/** One guidance card. Presentational — visibility is decided by the parent. */
+function AdvisoryCard({ tone, icon, title, body, announce, onDismiss }: AdvisoryCardProps) {
+  const { colors } = useTheme();
+  const accent = tone === 'info' ? colors.info : colors.warning;
+  const background = tone === 'info' ? colors.infoBackground : colors.warningBackground;
+  const border = tone === 'info' ? colors.infoBorder : colors.warningBorder;
+  return (
+    <View
+      style={[styles.banner, { backgroundColor: background, borderColor: border }]}
+      accessibilityLiveRegion={announce ? 'polite' : 'none'}
+    >
+      <Ionicons name={icon} size={18} color={accent} style={styles.icon} />
+      <View style={styles.textContainer}>
+        <Text style={[styles.title, { color: accent }]}>{title}</Text>
+        <Text style={[styles.body, { color: colors.text }]}>{body}</Text>
+      </View>
+      {onDismiss && (
+        <TouchableOpacity
+          onPress={onDismiss}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="Dismiss"
+        >
+          <Ionicons name="close" size={18} color={accent} />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
 /**
- * Soft, advisory banner shown on the artefact detail screen when the analysis left
- * required sections thin. It names the sections and points at the inline editing
- * already on screen. Self-contained: derives its own visibility from the artefact
- * (status + completeness) and session-scoped dismissal — the screen mounts it with
- * just the id. Renders nothing when not applicable.
+ * Guidance for the artefact detail screen while an entry is IN_REVIEW
+ * (MOB-064/065). Two independent, stackable cards:
+ *
+ *  1. "Needs review" — a calm, non-dismissible safety prompt to check the AI's
+ *     draft. Always shown in review; it's the primary purpose of the state.
+ *  2. "Some sections need more detail" — a dismissible nudge naming the thin
+ *     sections, shown only when required sections are still unmet.
+ *
+ * Self-contained: derives its own visibility from the artefact (status +
+ * completeness) and session-scoped dismissal. Renders nothing outside review.
  */
 export function ArtefactAdvisoryBanner({ artefactId }: Props) {
   const dispatch = useAppDispatch();
-  const { colors } = useTheme();
   const artefact = useAppSelector((state) => selectArtefactById(state, artefactId));
   const dismissed = useAppSelector((state) => selectIsAdvisoryDismissed(state, artefactId));
 
   if (!artefact) return null;
 
-  const { incomplete, labels } = getArtefactAdvisory(artefact);
-  if (!incomplete || dismissed) return null;
+  const { inReview, incomplete, labels } = getArtefactAdvisory(artefact);
+  if (!inReview) return null;
 
-  // Specific copy when we know which sections are thin; otherwise a generic nudge
-  // (e.g. the graded verdict fired but no per-section gaps were recorded).
-  const body =
+  // Specific copy when we know which sections are thin, else a generic nudge
+  // (the graded verdict fired but no per-section gaps were recorded).
+  const gapsBody =
     labels.length > 0
-      ? `${formatList(labels)} could use more detail. Tap a section below to add to it.`
+      ? `${formatList(labels)} could use more detail. Edit a section below to add to it.`
       : 'This entry isn’t ARCP-ready yet. Add more detail below before submitting.';
+
+  const showGaps = incomplete && !dismissed;
 
   const handleDismiss = () => {
     log.info('Advisory dismissed', { artefactId });
@@ -43,32 +99,24 @@ export function ArtefactAdvisoryBanner({ artefactId }: Props) {
   };
 
   return (
-    <View
-      style={[
-        styles.banner,
-        { backgroundColor: colors.warningBackground, borderColor: colors.warningBorder },
-      ]}
-      accessibilityRole="alert"
-      accessibilityLiveRegion="polite"
-    >
-      <Ionicons
-        name="information-circle-outline"
-        size={18}
-        color={colors.warning}
-        style={styles.icon}
+    <>
+      <AdvisoryCard
+        tone="info"
+        icon="information-circle-outline"
+        title="Needs review"
+        body="Your draft is ready. Please check each section is correct before you submit."
       />
-      <View style={styles.textContainer}>
-        <Text style={[styles.title, { color: colors.warning }]}>Before you submit</Text>
-        <Text style={[styles.body, { color: colors.text }]}>{body}</Text>
-      </View>
-      <TouchableOpacity
-        onPress={handleDismiss}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        accessibilityLabel="Dismiss"
-      >
-        <Ionicons name="close" size={18} color={colors.warning} />
-      </TouchableOpacity>
-    </View>
+      {showGaps && (
+        <AdvisoryCard
+          tone="warning"
+          icon="warning-outline"
+          title="Some sections need more detail"
+          body={gapsBody}
+          announce
+          onDismiss={handleDismiss}
+        />
+      )}
+    </>
   );
 }
 

@@ -46,7 +46,7 @@ These were explicitly agreed in-session. Build them as specified.
 - [ ] **MOB-089** [DECISION] Status mapping: Save for Later → "Needs review"; Mark as Done → "Completed".
 - [ ] **MOB-092 / MOB-111** [DECISION] After Save for Later / Mark as Done — and after completing a PDP goal — auto-return to the homepage/dashboard.
 - [x] **MOB-094** [DONE] Done 2026-07-13 — removed the date row from the home header (`(tabs)/index.tsx`), along with the now-unused `formatDate()` helper and `dateText` style. Date is retained on the individual entry view per MOB-095. *(Also hid the persistent "Start New Entry" capture card in the first-run/welcome state so new users get a single CTA via the WelcomeModule.)*
-- [ ] **MOB-095** [DECISION] Keep the date visible on the individual entry/record view.
+- [x] **MOB-095** [DONE] Done 2026-07-16 — entry detail header now shows `Created {date}` in the metadata line (`formatShortDate`), keeping the date visible on the record view.
 - [ ] **MOB-106** [DECISION] Rename PDP-goal status "Started" → "In progress"; unify status vocabulary across entry ↔ PDP goal.
 - [ ] **MOB-107** [DECISION] Split a PDP goal into a short (AI-generated) title + a description.
 - [ ] **MOB-110** [DECISION] Integrate voice input into every entry/text field (reflection included). *(account for usage/cost — MOB-114/115)*
@@ -157,11 +157,11 @@ Clear these (with legal input) before launch.
 ### Entry review screen
 - [x] **MOB-062** [WON'T DO] Decided 2026-07-16 — not doing. The answered select-card summary already collapses to the chosen option(s); the imperative-heading/disabled-control nuance isn't worth the shell + both-cards churn pre-launch.
 - [x] **MOB-063** [DONE] Done 2026-07-16 — completion card copy now varies via a 5-message pool (`src/utils/completionMessages.ts`), picked deterministically off the artefact id so it's stable per entry.
-- [ ] **MOB-064** [FIX] Separate "Needs review" (an action → top) from "Clinical case review" (type/metadata tag).
-- [ ] **MOB-065** [FIX] Expand "Needs review" into a guidance info box ("Your draft is ready. Please check it manually").
+- [x] **MOB-064** [DONE] Done 2026-07-16 — detail header reworked (Option A): type demoted to a quiet metadata line (`{type} · Created {date}`), status pill removed; the "Needs review" action is promoted into the guidance banner below (see MOB-065). Word "review" no longer collides in the metadata line.
+- [x] **MOB-065** [DONE] Done 2026-07-16 — `ArtefactAdvisoryBanner` now shows for the whole IN_REVIEW state as two stackable cards: a calm, non-dismissible **info/blue** "Needs review" ("Your draft is ready. Please check each section…") + a dismissible **warning/amber** "Some sections need more detail" (only when sections are thin). Colours evidence-backed (amber = review/attention per Jira/GitHub; blue reserved for the persistent guidance card).
 - [ ] **MOB-067** [FIX] Disable emoji input in entries (serious cases).
 - [ ] **MOB-068** [FIX/VERIFY] Verify bullets/formatting paste cleanly into FourteenFish.
-- [ ] **MOB-071** [FIX] Fix dark/light colour mapping (green reads "Batman-villain" in dark mode); define semantic colour tokens for both modes.
+- [ ] **MOB-071** [PARTIAL] In progress 2026-07-16 — added semantic `success` + `info` colour tokens (light/dark) across all themes; routed the detail screen's hard-coded greens (`COMPLETED_ACCENT`) + PDP accent through `colors.success`, fixing the "Batman-villain" green there. **Remaining:** `StatusPill`'s internal `VARIANT_COLORS` still hard-codes its own light/dark palette (used by list/PDP pills) — route those through tokens to close fully.
 
 ### Editing, saving & completion status
 - [ ] **MOB-083** [FIX] Add a discard-changes safety confirmation on the X/close control ("keep editing / discard").

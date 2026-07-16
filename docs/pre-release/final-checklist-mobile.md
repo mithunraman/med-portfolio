@@ -107,11 +107,11 @@ Clear these (with legal input) before launch.
 
 ### Home / dashboard
 - [x] **MOB-024** [WON'T DO] ~~Different home message for guest (action-first "Start your first…") vs logged-in (possessive welcome).~~ Decided against 2026-07-13 — the header instead reads "Home" for guests and "Welcome" for logged-in users (`(tabs)/index.tsx`); no separate action-first vs possessive copy.
-- [ ] **MOB-025 / MOB-103** [FIX] Adopt "case"-based primary CTA language ("Record a Case" / "Talk about your case") — Doctor: "case is the right word". Avoid FourteenFish-associated words.
-- [ ] **MOB-026** [FIX] Keep the primary CTA text fixed; rotate 10–15 sub-prompts underneath.
+- [x] **MOB-025 / MOB-103** [DONE] Done 2026-07-16 — returning-user dashboard CTA (`StartNewEntryCard`) is now a fixed **"Talk about your case"** (was a rotating reflective question). Renamed all user-facing "entry/entries" → "case/cases" across the home screen (`(tabs)/index.tsx`): section headers "Recent cases", empty states, recency "Last case", "Untitled case", ARCP/combined empty copy, and matching a11y labels. First-run `WelcomeModule` CTA kept as "Record your first case" (product choice). Copy-only — selectors/props/routes/DTOs untouched.
+- [ ] **MOB-026** [MOSTLY DONE] The structure is in place as of 2026-07-16 (MOB-025): the primary CTA is now fixed ("Talk about your case") with a **rotating helper sub-line** beneath it (`HELPERS` in `(tabs)/index.tsx`, re-randomised on focus). **Remaining:** the bank is only **5** helper lines — expand to the target **10–15 sub-prompts** (and finalise the copy).
 - [x] **MOB-027** [DONE] Verified 2026-07-13 — already implemented in `WelcomeModule` (`setupLine`): a first-run GP user sees "You're set up for General Practice, GP Specialty Training Year 1." Renders only when specialty + stage are set (guaranteed post-MOB-022 onboarding). No code change needed; optional future copy trim of the verbose stage label.
-- [ ] **MOB-093** [FIX] Personalise the dashboard with the user's name.
-- [ ] **MOB-124** [FIX] Primary CTA: use a conversation-bubble icon (not a mic) and give it more weight/size.
+- [ ] **MOB-093** [LATER] Deferred 2026-07-16 — will be done later. Personalise the dashboard with the user's name.
+- [x] **MOB-124** [DONE] Done 2026-07-16 — dashboard primary CTA (`StartNewEntryCard`) now uses Ionicons **`chatbubbles`** (two-bubble conversation glyph) instead of `mic`, distinguishing it from the composer's record mic; icon `24→26` and accent circle `36→40` for more weight (`ctaIconCircle`, renamed from `micCircle`). Disabled/guest state keeps `lock-closed`. Also removed the "Last case …" recency line from the card (no longer needed) — dropped the `lastEntryDate` prop.
 - [ ] **MOB-125** [FIX] Scannable "Recent entries" (list of ~5 + "See all") with richer cards. *(balance vs PDP-goals space — OPEN)*
 - [ ] **MOB-126** [FIX] Add icons/imagery to entry cards for scannability (AI-picked per type/ARCP area). *(differentiation risk: most entries are the same type)*
 

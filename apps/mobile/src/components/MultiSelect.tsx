@@ -129,7 +129,9 @@ const MultiSelectItem = memo(function MultiSelectItem({
           <Pressable
             onPress={handleChevronPress}
             style={({ pressed }) => [styles.whyToggle, pressed && styles.pressed]}
-            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+            // No left hitSlop: the left edge borders the selectTarget, so
+            // extending touch that way would risk overlapping the select area.
+            hitSlop={{ top: 10, bottom: 10, right: 8 }}
             accessibilityRole="button"
             accessibilityState={{ expanded: isExpanded }}
             accessibilityLabel={isExpanded ? 'Hide reasoning' : 'Show reasoning'}

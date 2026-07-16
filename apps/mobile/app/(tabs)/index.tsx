@@ -21,9 +21,9 @@ import {
   type PdpGoal,
 } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router/react-navigation';
 import { randomUUID } from 'expo-crypto';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router/react-navigation';
 import { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
@@ -37,43 +37,31 @@ import {
 
 // ─── Module A: Start New Entry ────────────────────────────────────────────────
 
-const PROMPTS = [
-  "What's worth keeping from today?",
-  'Anything surprise you this week?',
-  'Who did you help recently?',
-  'What went better than expected?',
-  'What would you do differently?',
-  'What did you learn this week?',
-  'Any difficult decisions lately?',
-  'What are you proud of today?',
-  'What challenged you recently?',
-  'Any feedback worth reflecting on?',
-];
+// Fixed primary CTA — a stable, predictable action (no rotation). The rotating
+// helper line below it carries the varied, conversational sub-prompts.
+const PRIMARY_CTA = 'Talk about your case';
 
 const HELPERS = [
   'Just talk - we handle the rest.',
-  'Tap the mic and talk it through.',
+  'Talk it through, we handle the write-up.',
   'Voice or text, your choice.',
   'A quick note now saves time later.',
-  'Two minutes now, evidence forever.',
+  'Five minutes now, evidence forever.',
 ];
 
 function StartNewEntryCard({
   onPress,
-  lastEntryDate,
-  prompt,
   helper,
   disabled = false,
 }: {
   onPress: () => void;
-  lastEntryDate?: string;
-  prompt: string;
   helper: string;
   disabled?: boolean;
 }) {
   const { colors } = useTheme();
-  const recency = lastEntryDate ? `Last entry ${formatTimeAgo(lastEntryDate)}` : ' ';
-  const displayPrompt = disabled ? 'Guest limit reached — upgrade to continue' : prompt;
+  // Disabled prompt is kept short so it never truncates in the single-row layout;
+  // the action ("Tap to upgrade your account") lives in the helper line below.
+  const displayPrompt = disabled ? 'Guest limit reached' : PRIMARY_CTA;
   const displayHelper = disabled ? 'Tap to upgrade your account' : helper;
 
   return (
@@ -86,24 +74,22 @@ function StartNewEntryCard({
       onPress={onPress}
       activeOpacity={0.75}
       accessibilityRole="button"
-      accessibilityLabel={disabled ? 'Upgrade to start new entries' : 'Start a new entry'}
+      accessibilityLabel={disabled ? 'Upgrade to start new cases' : 'Talk about your case'}
       accessibilityState={{ disabled }}
     >
-      <Text style={[styles.capturePrompt, { color: colors.text }]} numberOfLines={1}>
-        {displayPrompt}
-      </Text>
-      <View style={styles.captureBottomRow}>
-        <View style={styles.captureTextContent}>
-          <Text style={[styles.captureHelper, { color: colors.textSecondary }]}>
-            {displayHelper}
-          </Text>
-          {!disabled && recency ? (
-            <Text style={[styles.captureHelper, { color: colors.textSecondary }]}>{recency}</Text>
-          ) : null}
-        </View>
-        <View style={[styles.micCircle, { backgroundColor: colors.primary }]}>
-          <Ionicons name={disabled ? 'lock-closed' : 'mic'} size={24} color="#fff" />
-        </View>
+      <View style={styles.captureTextContent}>
+        <Text style={[styles.capturePrompt, { color: colors.text }]} numberOfLines={1}>
+          {displayPrompt}
+        </Text>
+        <Text
+          style={[styles.captureHelper, { color: colors.textSecondary }]}
+          numberOfLines={1}
+        >
+          {displayHelper}
+        </Text>
+      </View>
+      <View style={[styles.ctaIconCircle, { backgroundColor: colors.primary }]}>
+        <Ionicons name={disabled ? 'lock-closed' : 'chatbubbles'} size={26} color="#fff" />
       </View>
     </TouchableOpacity>
   );
@@ -121,10 +107,10 @@ function RecentEntryCard({ item, onPress }: { item: Artefact; onPress: () => voi
       onPress={onPress}
       activeOpacity={0.7}
       accessibilityRole="button"
-      accessibilityLabel={`Resume entry: ${item.title || 'Untitled'}`}
+      accessibilityLabel={`Resume case: ${item.title || 'Untitled'}`}
     >
       <Text style={[styles.recentTitle, { color: colors.text }]} numberOfLines={2}>
-        {item.title || 'Untitled entry'}
+        {item.title || 'Untitled case'}
       </Text>
       <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />
       <Text style={[styles.recentMeta, { color: colors.textSecondary }]}>
@@ -148,10 +134,10 @@ function RecentEntriesModule({
   if (items.length === 0) {
     return (
       <View style={styles.moduleContainer}>
-        <SectionHeader title="Recent entries" />
+        <SectionHeader title="Recent cases" />
         <View style={styles.emptyModuleContainer}>
           <Text style={styles.emptyModuleText}>
-            No entries yet. After your next clinic, tap the mic and talk through what happened.
+            No cases yet. After your next clinic, tap the mic and talk through what happened.
           </Text>
         </View>
       </View>
@@ -161,7 +147,7 @@ function RecentEntriesModule({
   return (
     <View style={styles.moduleContainer}>
       <SectionHeader
-        title="Recent entries"
+        title="Recent cases"
         actionLabel={total > items.length ? `See all (${total})` : 'See all'}
         onAction={onSeeAll}
       />
@@ -328,19 +314,18 @@ function ReviewPeriodCoverageModule({
   data,
   onPress,
   onSetup,
-  onSeeAll,
 }: {
   data: ActiveReviewPeriodSummary | null;
   onPress: () => void;
   onSetup: () => void;
-  onSeeAll: () => void;
 }) {
   const { colors } = useTheme();
 
   if (!data) {
     return (
       <View style={styles.moduleContainer}>
-        <SectionHeader title="Review period" />
+        {/* No section header: the card is self-describing ("Track your ARCP
+            coverage"), so a "Review period" label above it would double up. */}
         <TouchableOpacity
           style={[styles.coverageEmptyCard, { backgroundColor: colors.primary + '12' }]}
           onPress={onSetup}
@@ -356,7 +341,7 @@ function ReviewPeriodCoverageModule({
               Track your ARCP coverage
             </Text>
             <Text style={[styles.coverageEmptyDesc, { color: colors.textSecondary }]}>
-              Set up a review period to see which capabilities your entries cover.
+              Set up a review period to see which capabilities your cases cover.
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={colors.primary} />
@@ -369,7 +354,8 @@ function ReviewPeriodCoverageModule({
 
   return (
     <View style={styles.moduleContainer}>
-      <SectionHeader title="Review period" actionLabel="See all" onAction={onSeeAll} />
+      {/* No section header: the coverage card is self-describing (period name +
+          progress), so a "Review period" label above it would double up. */}
       <TouchableOpacity
         style={[styles.coverageCard, { backgroundColor: colors.surface }]}
         onPress={onPress}
@@ -377,17 +363,26 @@ function ReviewPeriodCoverageModule({
         accessibilityRole="button"
         accessibilityLabel={`Review period: ${period.name}, ${coverage.coveragePercent}% coverage`}
       >
-        <CoverageRing percent={coverage.coveragePercent} />
+        {/* Medium ring keeps the % (no separate %-text needed); the text block is
+            two lines — name, then count + deadline. Start date is deferred to the
+            detail screen. */}
+        <CoverageRing percent={coverage.coveragePercent} size={52} />
         <View style={styles.coverageCardContent}>
           <Text style={[styles.coverageCardName, { color: colors.text }]} numberOfLines={1}>
             {period.name}
           </Text>
-          <Text style={[styles.coverageCardStat, { color: colors.textSecondary }]}>
-            {coverage.coveredCount} of {coverage.totalCapabilities} capabilities covered
-          </Text>
-          <Text style={[styles.coverageCardDates, { color: colors.textSecondary }]}>
-            {formatPeriodDate(period.startDate)} - {formatPeriodDate(period.endDate)}
-          </Text>
+          <View style={styles.coverageStatRow}>
+            <Text style={[styles.coverageCardStat, { color: colors.textSecondary }]} numberOfLines={1}>
+              {coverage.coveredCount} / {coverage.totalCapabilities} covered
+            </Text>
+            <View style={[styles.statDot, { backgroundColor: colors.textSecondary }]} />
+            <Text
+              style={[styles.coverageCardStat, { color: colors.textSecondary, flexShrink: 1 }]}
+              numberOfLines={1}
+            >
+              ends {formatPeriodDate(period.endDate)}
+            </Text>
+          </View>
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
       </TouchableOpacity>
@@ -431,13 +426,12 @@ export default function HomeScreen() {
     [insets.bottom]
   );
 
-  // Randomise prompt and helper on each screen focus (not just mount)
-  const [prompt, setPrompt] = useState(() => PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
+  // Randomise the helper sub-line on each screen focus (not just mount). The
+  // primary CTA is fixed (PRIMARY_CTA) and does not rotate.
   const [helper, setHelper] = useState(() => HELPERS[Math.floor(Math.random() * HELPERS.length)]);
   const [refreshing, setRefreshing] = useState(false);
   useFocusEffect(
     useCallback(() => {
-      setPrompt(PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
       setHelper(HELPERS[Math.floor(Math.random() * HELPERS.length)]);
       if (dashboardStale) {
         dispatch(fetchInit());
@@ -504,10 +498,6 @@ export default function HomeScreen() {
     router.push('/(review-period)/create');
   }, [router]);
 
-  const handleSeeAllReviewPeriods = useCallback(() => {
-    router.push('/(review-period)/list');
-  }, [router]);
-
   return (
     <View
       style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}
@@ -527,13 +517,22 @@ export default function HomeScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>
-            {isGuest ? 'Home' : 'Welcome'}
-          </Text>
+          <Text style={[styles.title, { color: colors.text }]}>{isGuest ? 'Home' : 'Welcome'}</Text>
         </View>
 
         <NoticeBanner />
         <GuestLimitBanner />
+
+        {/* Review Period Coverage — placed first as a dashboard-style summary of
+            ARCP capability coverage. Returning, loaded users only (the welcome and
+            skeleton states render their own content instead). */}
+        {!showWelcome && !isInitialLoad && (
+          <ReviewPeriodCoverageModule
+            data={activeReviewPeriod ?? null}
+            onPress={handleReviewPeriodPress}
+            onSetup={handleSetupReviewPeriod}
+          />
+        )}
 
         {/* Module A: Start New Entry — hidden in the welcome (first-run) state,
             where the WelcomeModule provides the single "Record your first entry"
@@ -541,8 +540,6 @@ export default function HomeScreen() {
         {showWelcome ? null : (
           <StartNewEntryCard
             onPress={handleStartNew}
-            lastEntryDate={recentArtefacts[0]?.updatedAt}
-            prompt={prompt}
             helper={helper}
             disabled={!canCreate}
           />
@@ -559,21 +556,13 @@ export default function HomeScreen() {
           <HomeSkeleton />
         ) : (
           <>
-            {/* Module B: Review Period Coverage (high priority — ARCP tracking) */}
-            <ReviewPeriodCoverageModule
-              data={activeReviewPeriod ?? null}
-              onPress={handleReviewPeriodPress}
-              onSetup={handleSetupReviewPeriod}
-              onSeeAll={handleSeeAllReviewPeriods}
-            />
-
             {/* Modules C+D: combined empty card when both are empty, individual modules otherwise */}
             {recentArtefacts.length === 0 && pdpGoalsDueSoon.length === 0 ? (
               <View style={styles.moduleContainer}>
                 <View style={[styles.combinedEmptyCard, { backgroundColor: colors.surface }]}>
                   <Ionicons name="layers-outline" size={24} color={colors.textSecondary} />
                   <Text style={[styles.combinedEmptyText, { color: colors.textSecondary }]}>
-                    Your entries and PDP goals will appear here.
+                    Your cases and PDP goals will appear here.
                   </Text>
                 </View>
               </View>
@@ -623,11 +612,16 @@ const styles = StyleSheet.create({
 
   // Module A: Start New Entry
   captureCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    // marginTop matches the modules' marginTop so the gap above the CTA (8px
+    // scroll gap + 8px) equals the screen's section rhythm (~16px).
+    marginTop: 8,
     marginHorizontal: 20,
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 14,
-    gap: 4,
   },
   captureCardDisabled: {
     opacity: 0.6,
@@ -637,19 +631,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 18,
   },
-  captureBottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
   captureTextContent: {
     flex: 1,
-    gap: 3,
+    gap: 2,
   },
-  micCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  ctaIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -787,9 +776,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  coverageCardDates: {
-    fontSize: 12,
-    lineHeight: 16,
+  coverageStatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  // A real round separator dot — vertically centred by the row's alignItems,
+  // avoiding the baseline offset of an enlarged inline "•" glyph.
+  statDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
   },
 
   // Combined empty state (entries + PDP goals both empty)

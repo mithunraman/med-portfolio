@@ -41,12 +41,26 @@ import {
 // helper line below it carries the varied, conversational sub-prompts.
 const PRIMARY_CTA = 'Talk about your case';
 
+// Rotating sub-prompts under the fixed CTA (MOB-026). Kept mode-neutral (no
+// "mic" — the mic lives on the composer, MOB-124) so they fit voice or text.
 const HELPERS = [
-  'Just talk - we handle the rest.',
-  'Talk it through, we handle the write-up.',
-  'Voice or text, your choice.',
-  'A quick note now saves time later.',
+  // Ease / low-friction
+  'Just talk it through — we do the rest.',
+  'No forms, just describe what happened.',
+  'A few sentences is enough to start.',
+  // Value / outcome
   'Five minutes now, evidence forever.',
+  'We shape your words into a write-up.',
+  'Turn a quick note into portfolio evidence.',
+  // Time-saving
+  'A quick note now saves time later.',
+  'Capture it now, while it’s fresh.',
+  // Mode
+  'Voice or text — your choice.',
+  // Gentle nudges
+  'Had a tricky consultation lately?',
+  'Something you handled well today?',
+  'A case that made you think?',
 ];
 
 function StartNewEntryCard({

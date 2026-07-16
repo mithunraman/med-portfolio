@@ -190,7 +190,7 @@ Right, umm, last one of the day. So I saw a chap this afternoon, 58, came in wit
 
 So I told him to, umm, keep moving, don't take to his bed, regular paracetamol and ibuprofen with food.Gave him a leaflet on, ah, back exercises. And said give it a couple of weeks and it should settle down.
 
-Didn't need to see him again as far as I know, so, umm, I'm assuming it settled. He seemed reassured on the day anyway, ah, glad it wasn't anything serious.
+Didn't need to see him again as far as I know, so, umm, I'm assuming it settled. He seemed reassured on the day anyway, ah, I was very glad it wasn't anything serious.
 
 Reflection
 Handled it fine I think. Explanation and reassurance were good, he left happy. The thing I'd improve is, umm... I was a bit quick and didn't really spell out the safety-netting properly, you know, when to come back if it got worse or if he got any leg weakness or bladder problems. End of the day tiredness, honestly.

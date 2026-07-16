@@ -176,6 +176,90 @@ describe('GenerateFollowupNode', () => {
     });
   });
 
+  describe('covered-list excludes below-threshold sections (Phase 1)', () => {
+    // Regression: reflection graded 'adequate' but threshold 'strong' (meetsThreshold
+    // false) was previously listed BOTH as a missing section AND under "Already Covered
+    // Well" (which used a raw adequate/strong tier check). Rule 6 then suppressed the
+    // question and the LLM returned an empty array → generic backfill. It must now
+    // appear only as a live gap, never as covered.
+    it('does not list a below-threshold adequate section as covered, and still asks it', async () => {
+      const deps = makeDeps();
+      const mock = deps.llmService.invokeStructured as jest.Mock;
+      mock.mockResolvedValue({
+        data: { questions: [{ sectionId: 'reflection', question: 'q', hints: { examples: ['e'] } }] },
+      });
+
+      await createGenerateFollowupNode(deps)(
+        makeState({
+          missingSections: ['reflection'],
+          probeReadiness: {
+            // meets its own (adequate) threshold → genuinely covered
+            presentation: { score: 0.7, tier: 'adequate', meetsThreshold: true },
+            // adequate but Target is 'strong' → still a live gap, NOT covered
+            reflection: { score: 0.7, tier: 'adequate', meetsThreshold: false },
+          },
+        })
+      );
+
+      const context = String((mock.mock.calls[0][0] as Array<{ content: unknown }>)[1].content);
+      const coveredBlock = context.slice(
+        context.indexOf('## Already Covered Well'),
+        context.indexOf('## Questions Already Asked')
+      );
+
+      // Reflection must NOT be in the covered block…
+      expect(coveredBlock).not.toContain('Reflection');
+      // …a genuinely-met section still is…
+      expect(coveredBlock).toContain('Clinical Presentation');
+      // …and reflection is still presented as a live gap to ask about.
+      expect(context).toContain('### reflection —');
+    });
+
+    // Isolates the `meetsThreshold` clause specifically. With MAX_QUESTIONS_PER_ROUND=1
+    // and two below-threshold gaps, only the earlier narrative section (clinical_reasoning,
+    // rank 2) is selected into the ask set; reflection (rank 5) stays below-threshold but
+    // OUT of askSetIds. So the `!askSetIds.has` clause cannot exclude reflection here — only
+    // the `meetsThreshold === true` check can. If the filter reverted to a raw
+    // adequate/strong tier check (keeping askSetIds), reflection would wrongly appear as
+    // "covered" and a FUTURE round's Rule 6 would suppress it. This case fails on that revert.
+    it('excludes a below-threshold section that is NOT in this round’s ask set', async () => {
+      const deps = makeDeps();
+      const mock = deps.llmService.invokeStructured as jest.Mock;
+      mock.mockResolvedValue({
+        data: {
+          questions: [
+            { sectionId: 'clinical_reasoning', question: 'q', hints: { examples: ['e'] } },
+          ],
+        },
+      });
+
+      await createGenerateFollowupNode(deps)(
+        makeState({
+          missingSections: ['clinical_reasoning', 'reflection'],
+          probeReadiness: {
+            presentation: { score: 0.7, tier: 'adequate', meetsThreshold: true }, // genuinely covered
+            clinical_reasoning: { score: 0.7, tier: 'adequate', meetsThreshold: false }, // asked this round
+            reflection: { score: 0.7, tier: 'adequate', meetsThreshold: false }, // below-threshold, NOT asked
+          },
+        })
+      );
+
+      const context = String((mock.mock.calls[0][0] as Array<{ content: unknown }>)[1].content);
+      const coveredBlock = context.slice(
+        context.indexOf('## Already Covered Well'),
+        context.indexOf('## Questions Already Asked')
+      );
+
+      // The below-threshold, not-asked section must NOT be listed as covered (guards
+      // the meetsThreshold clause) …
+      expect(coveredBlock).not.toContain('Reflection');
+      // …nor the section being asked this round …
+      expect(coveredBlock).not.toContain('Clinical Reasoning');
+      // …while a genuinely threshold-meeting section still is.
+      expect(coveredBlock).toContain('Clinical Presentation');
+    });
+  });
+
   describe('no entry type', () => {
     it('should return empty questions and increment round when entryType is null', async () => {
       const node = createGenerateFollowupNode(makeDeps());
@@ -375,6 +459,29 @@ describe('GenerateFollowupNode', () => {
     });
   });
 
+  describe('always asks the selected section (never omits)', () => {
+    // A section reaches the LLM only if the grader selected it (below threshold, not
+    // exhausted). If the model omits it anyway (returns []), the backfill must still
+    // produce a question — the "stop asking" decision is deterministic (selection), not
+    // the model's. Guards against re-introducing the ERMJ omit→generic-default failure.
+    it('backfills a question when the LLM omits the selected section (returns [])', async () => {
+      const deps = makeDeps();
+      (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({
+        data: { questions: [] }, // model omitted the sole selected gap
+      });
+
+      const node = createGenerateFollowupNode(deps);
+      const state = makeState({ missingSections: ['reflection'] });
+      const result = await node(state);
+
+      expect(result.pendingFollowupQuestions).toHaveLength(1);
+      expect(result.pendingFollowupQuestions![0].sectionId).toBe('reflection');
+      expect(result.pendingFollowupQuestions![0].question).toBe(
+        'Looking back, what would you maintain, improve, or stop, and why?'
+      );
+    });
+  });
+
   describe('LLM failure fallback', () => {
     it('should use default questions when LLM call throws', async () => {
       const deps = makeDeps();
@@ -387,12 +494,15 @@ describe('GenerateFollowupNode', () => {
       // One question per round, backfilled from the template default on LLM failure.
       expect(result.pendingFollowupQuestions).toHaveLength(1);
 
-      // Should use the default extraction question from template
+      // Should use the default extraction question + generic depth hints. The fallback
+      // must NOT surface promptHint (a renderer directive) as an example response.
       const reflectionQ = result.pendingFollowupQuestions!.find((q) => q.sectionId === 'reflection');
       expect(reflectionQ!.question).toBe(
         'Looking back, what would you maintain, improve, or stop, and why?'
       );
-      expect(reflectionQ!.hints.examples).toEqual(['A couple of sentences with specific details is ideal.']);
+      expect(reflectionQ!.hints.examples).toEqual([
+        'A couple of sentences with specific details is ideal.',
+      ]);
     });
   });
 

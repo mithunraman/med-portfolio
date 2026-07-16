@@ -22,6 +22,19 @@ const MAX_QUESTIONS_PER_ROUND = 1;
 
 const contextualisedQuestionSchema = z.object({
   sectionId: z.string().describe('The section ID this question is for'),
+  coverageState: z
+    .enum(['absent', 'shallow', 'met'])
+    .describe(
+      "FIRST, classify this section's current coverage against its Target depth: " +
+        '"absent" = no content in the transcript; "shallow" = content present but ' +
+        'BELOW Target depth (the usual case for a section listed here); "met" = ' +
+        'you judge it already reaches Target depth. Commit to this before writing the ' +
+        'question. Every section you are shown is a live gap the grader selected, so you ' +
+        'MUST ALWAYS produce a question for it — being mentioned is not the same as ' +
+        'reaching Target depth, and you will never be shown a section that can be skipped. ' +
+        'If you nonetheless judge it "met", still ask a deepening question and mark "met" ' +
+        'so the disagreement is recorded — do NOT omit.'
+    ),
   unmetDimension: z
     .string()
     .describe(
@@ -92,7 +105,8 @@ Anchor every question to the section's Depth rubric (shown in the context, with 
      for ONE concrete thing they learned or would do differently, via the angle above that fits best.
    - ALREADY asked a reflective question for this section and they still gave only a verdict: do
      NOT re-ask for a learning point and do NOT reword it. Rotate to a DIFFERENT angle from the
-     list above, or omit the section entirely (per rule 6). Never press the same point twice.
+     list above. Never press the same point twice. (You still ask — a section that has been asked
+     enough is filtered out before you see it, so you never decide to skip it yourself.)
 
 3. For factual sections (presentation, findings, management, outcome), ask directly for the missing information.
 
@@ -100,7 +114,14 @@ Anchor every question to the section's Depth rubric (shown in the context, with 
 
 5. Keep questions warm and professional. Use "you" language. 1-2 sentences maximum.
 
-6. Never repeat or reword a question from "Questions Already Asked", and never probe an area listed under "Already Covered Well". If the trainee already answered a point anywhere in the transcript, do not ask it again — pick a genuinely different angle, or omit a question for that section entirely if there is nothing new worth asking.
+6. Every section you are shown is a live gap the grader has already selected (below its Target depth, and still worth asking) — so ALWAYS produce a question for it. Never omit. Classify its coverage against its TARGET DEPTH (coverageState) and shape the question accordingly:
+   - **Absent** (no content) → ask the section's core question directly.
+   - **Shallow** (content present but BELOW Target depth — the common case) → ask for the SPECIFIC missing element that would lift it to Target depth, referencing what the trainee already said. Do NOT treat "the topic was mentioned" as done — being present is not the same as reaching Target depth.
+   You will never be shown a section that is already met or that has been asked enough — those are filtered out before you see them, so you never need to decide whether to skip. Never repeat or reword a question from "Questions Already Asked"; on a re-ask, rotate to a genuinely DIFFERENT angle rather than pressing the same point.
+
+Contrastive example — a reflection the trainee already gave, but only at "adequate" when Target depth is "strong" (i.e. coverageState = shallow):
+- BAD (omit because the topic was mentioned): return no question — "they already reflected." This wrongly leaves a required section below Target depth.
+- GOOD (probe the depth gap, referencing their own words): "You mentioned end-of-day tiredness made you rush the safety-netting — what specifically will you do differently next time so that doesn't happen?"
 
 7. Ask only about the trainee's own experience. Never instruct them to perform an external action to satisfy a question — do not tell them to check the records, look up the notes, or contact another service. If information genuinely isn't available to them, that is an acceptable answer: accept it and move on rather than pressing.
 
@@ -193,7 +214,27 @@ function formatMissingSectionBlock(
     .join('\n\n');
 }
 
-/** Default hints used when LLM contextualisation fails. */
+/**
+ * Last-resort question for a section the LLM dropped, or when the call fails.
+ * Uses the section's `extractionQuestion` and generic depth hints. It deliberately
+ * does NOT use `promptHint` for the hints: that field is a renderer directive
+ * ("Instruction for the renderer", specialty/types.ts), not an example response, so
+ * surfacing it in `hints.examples` (rendered to the trainee as "e.g." examples)
+ * would misrepresent a directive as an example. Rare in practice — the covered-list
+ * fix + the decision-table prompt keep the LLM from dropping a live gap — so this is
+ * a genuine floor, not the common path.
+ */
+function fallbackQuestion(
+  section: Probe & { extractionQuestion: string }
+): FollowupQuestion {
+  return {
+    sectionId: section.id,
+    question: section.extractionQuestion,
+    hints: DEFAULT_HINTS,
+  };
+}
+
+/** Generic depth hints used when the LLM omits a section or the call fails. */
 const DEFAULT_HINTS = {
   examples: ['A couple of sentences with specific details is ideal.'],
 };
@@ -280,13 +321,15 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
     }
 
     // ── Build "already covered well" + "already asked" context (anti-redundancy) ──
-    // Sections the trainee has covered adequately (covered and not shallow) should
-    // not be probed again; questions asked in prior rounds must not be repeated.
+    // "Covered well" means the section MEETS ITS OWN THRESHOLD — not merely that its
+    // tier is adequate/strong. An 'adequate' section whose threshold is 'strong' is
+    // still a live gap: listing it here (as the old raw-tier check did) put the SAME
+    // section in both "Missing or Shallow" and "Already Covered Well", so Rule 6
+    // suppressed the very question the gate asked for. Also exclude this round's ask
+    // set as belt-and-braces — a section being asked about is never "covered".
+    const askSetIds = new Set(missingSectionDefs.map((s) => s.id));
     const coveredSectionLabels = leafProbes(template)
-      .filter((s) => {
-        const tier = state.probeReadiness?.[s.id]?.tier;
-        return tier === 'adequate' || tier === 'strong';
-      })
+      .filter((s) => state.probeReadiness?.[s.id]?.meetsThreshold === true && !askSetIds.has(s.id))
       .map((s) => s.label);
     const coveredSections =
       coveredSectionLabels.length > 0
@@ -319,7 +362,7 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
       // Log the model's gap analysis (chain-of-thought) before it's mapped away —
       // makes the rubric calibration inspectable for eval, like check-completeness's tierReason.
       for (const q of response.questions) {
-        logger.log(`[${cid}]   gap → ${q.sectionId}: ${q.unmetDimension}`);
+        logger.log(`[${cid}]   gap → ${q.sectionId} [${q.coverageState}]: ${q.unmetDimension}`);
       }
 
       // Validate that returned sectionIds match what we asked for
@@ -337,23 +380,19 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
         return true;
       });
 
-      // Backfill any sections the LLM missed with default questions + hints
+      // Backfill any live gap the LLM dropped (it should not — a selected section is
+      // always a below-threshold, non-exhausted gap). Warn so the divergence is visible.
       for (const section of missingSectionDefs) {
         if (!questions.find((q) => q.sectionId === section.id)) {
-          questions.push({
-            sectionId: section.id,
-            question: section.extractionQuestion,
-            hints: DEFAULT_HINTS,
-          });
+          logger.warn(
+            `[${cid}] LLM omitted a live gap (${section.id}) — backfilling default question`
+          );
+          questions.push(fallbackQuestion(section));
         }
       }
     } catch (error) {
       logger.warn(`[${cid}] LLM contextualisation failed, using default questions: ${error}`);
-      questions = missingSectionDefs.map((s) => ({
-        sectionId: s.id,
-        question: s.extractionQuestion,
-        hints: DEFAULT_HINTS,
-      }));
+      questions = missingSectionDefs.map(fallbackQuestion);
     }
 
     // Log which sections are being asked about and the selected questions

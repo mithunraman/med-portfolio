@@ -24,6 +24,7 @@ Implementation requirements:
 - Follow established industry best practices and explain them briefly where relevant
 - Be specific and practical, not generic
 - Use clear headings and structured formatting
+- DO NOT edit any files until instructed.
 
 Output format:
 

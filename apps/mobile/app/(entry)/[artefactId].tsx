@@ -1,5 +1,6 @@
 import type { GoalSelectionState, LocalNote, StatusVariant } from '@/components';
 import {
+  AppDialog,
   ArtefactAdvisoryBanner,
   Button,
   EditableReflectionSection,
@@ -158,6 +159,9 @@ export default function EntryDetailScreen() {
   const [editingCapabilityCode, setEditingCapabilityCode] = useState<string | null>(null);
   const [exportSheetVisible, setExportSheetVisible] = useState(false);
   const [reviewSheetVisible, setReviewSheetVisible] = useState(false);
+  // MOB-097: shown when finalising with a selected PDP goal missing a review date.
+  const [reviewDateErrorVisible, setReviewDateErrorVisible] = useState(false);
+  const [finaliseConfirmVisible, setFinaliseConfirmVisible] = useState(false);
   // Seeds a first-time (create) review from the inline star tap. Ignored on the edit
   // path, where the sheet seeds from the existing review.
   const [reviewSeedRating, setReviewSeedRating] = useState<number | undefined>(undefined);
@@ -502,33 +506,32 @@ export default function EntryDetailScreen() {
     const missingDates = selectedGoals.some(([, sel]) => !sel.reviewDate);
 
     if (missingDates) {
-      Alert.alert('Review Date Required', 'Please set a review date for each selected goal.');
+      setReviewDateErrorVisible(true);
       return;
     }
 
-    Alert.alert('Finalise entry', 'Once finalised, this entry will be saved to your portfolio.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Finalise',
-        onPress: () => {
-          const pdpGoalSelections: PdpGoalSelection[] = Array.from(goalSelections.entries()).map(
-            ([goalId, sel]) => ({
-              goalId,
-              selected: sel.selected,
-              reviewDate: sel.selected && sel.reviewDate ? sel.reviewDate.toISOString() : null,
-              actions: sel.selected
-                ? Array.from(sel.actions.entries()).map(([actionId, selected]) => ({
-                    actionId,
-                    selected,
-                  }))
-                : undefined,
-            })
-          );
+    setFinaliseConfirmVisible(true);
+  }, [artefactId, goalSelections]);
 
-          dispatch(finaliseArtefact({ artefactId, pdpGoalSelections }));
-        },
-      },
-    ]);
+  const handleConfirmFinalise = useCallback(() => {
+    setFinaliseConfirmVisible(false);
+    if (!artefactId) return;
+
+    const pdpGoalSelections: PdpGoalSelection[] = Array.from(goalSelections.entries()).map(
+      ([goalId, sel]) => ({
+        goalId,
+        selected: sel.selected,
+        reviewDate: sel.selected && sel.reviewDate ? sel.reviewDate.toISOString() : null,
+        actions: sel.selected
+          ? Array.from(sel.actions.entries()).map(([actionId, selected]) => ({
+              actionId,
+              selected,
+            }))
+          : undefined,
+      })
+    );
+
+    dispatch(finaliseArtefact({ artefactId, pdpGoalSelections }));
   }, [artefactId, dispatch, goalSelections]);
 
   // ── Archive ──
@@ -1135,6 +1138,30 @@ export default function EntryDetailScreen() {
         onClose={() => setReviewSheetVisible(false)}
         artefact={artefact}
         initialRating={reviewSeedRating}
+      />
+      <AppDialog
+        visible={reviewDateErrorVisible}
+        tone="error"
+        icon="warning"
+        title="Add a review date"
+        message="Set a review date for each goal you're keeping before you complete this entry."
+        buttons={[{ label: 'Got it', onPress: () => setReviewDateErrorVisible(false) }]}
+        onRequestClose={() => setReviewDateErrorVisible(false)}
+      />
+      <AppDialog
+        visible={finaliseConfirmVisible}
+        icon={null}
+        title="Finalise entry"
+        message="Once finalised, this entry will be saved to your portfolio."
+        buttons={[
+          { label: 'Finalise', onPress: handleConfirmFinalise, variant: 'primary' },
+          {
+            label: 'Cancel',
+            onPress: () => setFinaliseConfirmVisible(false),
+            variant: 'secondary',
+          },
+        ]}
+        onRequestClose={() => setFinaliseConfirmVisible(false)}
       />
     </KeyboardAvoidingView>
   );

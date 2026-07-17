@@ -1,8 +1,15 @@
 /**
  * Converts a hex color string to rgba with the given alpha.
  * Handles #RGB, #RRGGBB, and #RRGGBBAA formats.
+ *
+ * If passed a string that is already `rgb(...)`/`rgba(...)`, it is returned
+ * unchanged rather than mangled into `rgba(NaN, …)` — a safe pass-through so
+ * callers that hand it a non-hex theme token degrade gracefully. (Note: the
+ * pass-through keeps the string's own alpha; it does not re-apply `alpha`.)
  */
 export function hexToRgba(hex: string, alpha: number): string {
+  if (/^rgba?\(/i.test(hex.trim())) return hex;
+
   const h = hex.replace('#', '');
   let r: number, g: number, b: number;
 

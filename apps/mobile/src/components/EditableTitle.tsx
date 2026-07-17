@@ -1,4 +1,5 @@
 import { useTheme } from '@/theme';
+import { stripEmoji } from '@/utils/stripEmoji';
 import { Feather } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -46,7 +47,7 @@ export function EditableTitle({ value, onChange, editable }: EditableTitleProps)
             },
           ]}
           value={value}
-          onChangeText={onChange}
+          onChangeText={(text) => onChange(stripEmoji(text))}
           onBlur={handleBlur}
           maxLength={200}
           returnKeyType="done"

@@ -1,4 +1,5 @@
 import { useTheme } from '@/theme';
+import { stripEmoji } from '@/utils/stripEmoji';
 import { Feather } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -99,7 +100,7 @@ export function FullScreenSectionEditor({
                   },
                 ]}
                 value={title}
-                onChangeText={setTitle}
+                onChangeText={(t) => setTitle(stripEmoji(t))}
                 placeholder="Section title"
                 placeholderTextColor={colors.textSecondary}
                 returnKeyType="next"
@@ -122,7 +123,7 @@ export function FullScreenSectionEditor({
                 },
               ]}
               value={text}
-              onChangeText={setText}
+              onChangeText={(t) => setText(stripEmoji(t))}
               multiline
               textAlignVertical="top"
               placeholder={contentPlaceholder}

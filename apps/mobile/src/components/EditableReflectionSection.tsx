@@ -26,22 +26,36 @@ export function EditableReflectionSection({
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
-      {/* Section Title */}
-      <Pressable onPress={onToggleExpand} style={styles.cardHeader}>
-        <Text style={[styles.cardTitle, { color: colors.text }]}>{section.title}</Text>
-        <View style={styles.titleIcons}>
-          {editable && (
-            <Pressable onPress={onEdit} hitSlop={8}>
-              <Feather name="edit-2" size={15} color={colors.primary} />
-            </Pressable>
-          )}
+      {/* Section header — NHS accordion layout: the whole heading (chevron on the
+          leading edge + title) is the expand toggle; the edit action is a separate,
+          isolated 44pt target on the far right so the two can't be mis-tapped. */}
+      <View style={styles.cardHeader}>
+        <Pressable
+          onPress={onToggleExpand}
+          style={styles.toggle}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          accessibilityLabel={section.title}
+        >
           <Ionicons
             name={expanded ? 'chevron-up' : 'chevron-down'}
             size={18}
             color={colors.textSecondary}
           />
-        </View>
-      </Pressable>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>{section.title}</Text>
+        </Pressable>
+        {editable && (
+          <Pressable
+            onPress={onEdit}
+            style={styles.editButton}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit ${section.title}`}
+          >
+            <Feather name="edit-2" size={16} color={colors.primary} />
+          </Pressable>
+        )}
+      </View>
 
       {/* Section Body */}
       {expanded && (
@@ -71,19 +85,28 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  // Whole-heading toggle: chevron (leading) + title. Kept compact; the wide row
+  // is still a comfortable expand target.
+  toggle: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 28,
   },
   cardTitle: {
     fontSize: 15,
     fontWeight: '600',
     flex: 1,
-    marginRight: 8,
   },
-  titleIcons: {
-    flexDirection: 'row',
+  // Compact edit icon; `hitSlop` extends the touch area to ≥44pt (WCAG 2.5.8 / HIG).
+  editButton: {
+    width: 28,
+    height: 28,
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
   },
   cardBody: {
     fontSize: 14,

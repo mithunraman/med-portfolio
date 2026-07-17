@@ -38,7 +38,7 @@ These were explicitly agreed in-session. Build them as specified.
 - [ ] **MOB-037** [DECISION] Use "Continue chat" instead of "analysis" wording. *(depends on finished-detection MOB-038)*
 - [ ] **MOB-039** [DECISION] Move entry-type selection to the start of the chat (type-first; don't auto-select).
 - [ ] **MOB-066** [DECISION] Section titles (Description / Reflection / Learning needs) are non-editable (fixed FourteenFish names).
-- [ ] **MOB-070** [DECISION] Move the accordion expander to the left per NHS design system (checkbox left, expander under the text).
+- [x] **MOB-070** [DONE] Done 2026-07-17 — `EditableReflectionSection` header restructured (shared by entry sections + capabilities): chevron moved to the leading edge inside a whole-heading toggle; edit isolated far-right. Done together with MOB-069.
 - [ ] **MOB-078** [DECISION] Remove the confusing slider/checkbox for adding a PDP goal; replace with one clear add control.
 - [ ] **MOB-079** [DECISION] Remove "Quick Pick" review-date shortcuts; keep a discoverable custom date picker.
 - [ ] **MOB-086** [DECISION] Provide two persisting save actions — "Save for Later" + "Complete Entry / Mark as Done" — both writing to profile. *(labels OPEN — MOB-088)*
@@ -58,7 +58,7 @@ These were explicitly agreed in-session. Build them as specified.
 
 ## 2. Bugs to fix
 
-- [ ] **MOB-069** [BUG] Pen (edit) and arrow (expand) icons on review/accordion rows are too close — mis-tap risk. Fix spacing.
+- [x] **MOB-069** [DONE] Done 2026-07-17 — de-nested the header (was button-in-button) into sibling controls; edit + expand now sit at opposite ends of the row (chevron left, edit far right), well past the 24px WCAG 2.5.8 spacing. Edit is a compact icon with `hitSlop` keeping a ≥44pt touch target. Fixed centrally in `EditableReflectionSection` (MOB-070 same change).
 - [ ] **MOB-096** [BUG] A saved / "In Progress" entry does not reflect correctly in the Entries list. Reproduce, diagnose, fix, add a regression check.
 - [ ] **MOB-135** [BUG / DEFERRED] Large device text sizes (Accessibility → Display) break the layout. Engineer deferred to "the next release," UX pushed back ("You need to"). *Treat as a launch-quality call: at minimum audit and prevent hard breakage.*
 
@@ -165,7 +165,7 @@ Clear these (with legal input) before launch.
 
 ### Editing, saving & completion status
 - [ ] **MOB-083** [FIX] Add a discard-changes safety confirmation on the X/close control ("keep editing / discard").
-- [ ] **MOB-084** [FIX] Clarify Version History (one-line description/tooltip explaining revert). **Decision (2026-07-17):** add a second `<Text>` subtitle in the nav row (`[artefactId].tsx`) + a small style. Copy: "See and restore previous versions".
+- [x] **MOB-084** [DONE] Done 2026-07-17 — Version History nav row now shows a subtitle "See and restore previous versions" (title/subtitle stack via `navRowText`/`navRowTitle`/`navRowSubtitle`).
 - [ ] **MOB-085** [FIX] Simplify the two-level "edit-saved vs completed" status model (drives MOB-086/087/088/089); user-test the mental model.
 - [ ] **MOB-098** [FIX] Don't silently disable "Mark as Done" — surface why (validate on tap or add helper text).
 - [x] **MOB-097** [DONE] Done 2026-07-17 — replaced the native `Alert` with a themed **error dialog** (new reusable `AppDialog`, `tone="error"` + ⚠ icon): "Add a review date" / "Set a review date for each goal you're keeping…". *Scope note:* shipped the **simplified dialog** variant, not the full NHS inline pattern (per-field red highlight + scroll-to-field) — that's deferred if we want the field-level treatment later. Also migrated the finalise-confirm to `AppDialog` for same-flow consistency.
@@ -183,7 +183,7 @@ Clear these (with legal input) before launch.
 
 ### Entries list & export
 - [ ] **MOB-099** [FIX/VERIFY] Confirm portfolio copy/export as text or PDF (entry points + formats).
-- [ ] **MOB-100** [FIX] Clarify Archive vs Delete (labels, help text, placement). *(Delete-must-truly-remove is a §3 gate.)* **Decision (2026-07-17, FINAL copy):**
+- [x] **MOB-100** [DONE] Done 2026-07-17 — Archive/Delete migrated to themed `AppDialog`s with differentiated copy; menu labels shortened to `Archive`/`Delete`; Delete uses `destructive` variant (red, not filled), Archive neutral/reversible. *(Delete-must-truly-remove is a separate §3 legal gate — line 78 — still open.)* **FINAL copy:**
 - Menu **Archive** → body: "This entry will be hidden. You can restore it anytime from your archive."
 - Menu **Delete** → body: "This permanently deletes the entry, its conversation and linked goals. This can't be undone." (red destructive)
 

@@ -26,7 +26,10 @@ interface AppDialogProps {
   icon?: IoniconName | null;
   title: string;
   message?: string;
-  /** 1–2 actions. Defaults to a single primary "OK" that calls `onRequestClose`. */
+  /**
+   * Actions (typically 1–3), rendered as a vertical stack. Defaults to a single
+   * primary "OK" that calls `onRequestClose`.
+   */
   buttons?: DialogButton[];
   /** Backdrop tap / Android hardware back. */
   onRequestClose: () => void;

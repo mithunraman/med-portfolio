@@ -42,6 +42,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  InteractionManager,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -162,6 +163,8 @@ export default function EntryDetailScreen() {
   // MOB-097: shown when finalising with a selected PDP goal missing a review date.
   const [reviewDateErrorVisible, setReviewDateErrorVisible] = useState(false);
   const [finaliseConfirmVisible, setFinaliseConfirmVisible] = useState(false);
+  const [archiveDialogVisible, setArchiveDialogVisible] = useState(false);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   // Seeds a first-time (create) review from the inline star tap. Ignored on the edit
   // path, where the sheet seeds from the existing review.
   const [reviewSeedRating, setReviewSeedRating] = useState<number | undefined>(undefined);
@@ -545,80 +548,37 @@ export default function EntryDetailScreen() {
 
   const handleArchive = useCallback(() => {
     if (!artefactId) return;
+    // Opened from the action-sheet callback: defer until the sheet's dismissal
+    // animation finishes, so the RN Modal doesn't race the native dismissal on iOS.
+    InteractionManager.runAfterInteractions(() => setArchiveDialogVisible(true));
+  }, [artefactId]);
 
-    if (hasActivePdpGoals) {
-      Alert.alert(
-        'Archive Entry',
-        'This entry has active PDP goals. What would you like to do with them?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Keep Goals',
-            onPress: () => {
-              dispatch(
-                updateArtefactStatus({
-                  artefactId,
-                  status: ArtefactStatus.ARCHIVED,
-                  archivePdpGoals: false,
-                })
-              );
-            },
-          },
-          {
-            text: 'Archive All',
-            style: 'destructive',
-            onPress: () => {
-              dispatch(
-                updateArtefactStatus({
-                  artefactId,
-                  status: ArtefactStatus.ARCHIVED,
-                  archivePdpGoals: true,
-                })
-              );
-            },
-          },
-        ]
+  const handleConfirmArchive = useCallback(
+    (archivePdpGoals: boolean) => {
+      setArchiveDialogVisible(false);
+      if (!artefactId) return;
+      dispatch(
+        updateArtefactStatus({ artefactId, status: ArtefactStatus.ARCHIVED, archivePdpGoals })
       );
-    } else {
-      Alert.alert('Archive Entry', 'Are you sure you want to archive this entry?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Archive',
-          style: 'destructive',
-          onPress: () => {
-            dispatch(
-              updateArtefactStatus({
-                artefactId,
-                status: ArtefactStatus.ARCHIVED,
-              })
-            );
-          },
-        },
-      ]);
-    }
-  }, [artefactId, dispatch, hasActivePdpGoals]);
+    },
+    [artefactId, dispatch]
+  );
 
   // ── Delete Entry ──
 
   const handleDelete = useCallback(() => {
     if (!artefactId) return;
-    Alert.alert(
-      'Delete Entry',
-      'This will permanently delete this entry, its conversation, and all linked goals. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            dispatch(deleteArtefact({ artefactId }))
-              .unwrap()
-              .then(() => router.back())
-              .catch(() => Alert.alert('Error', 'Failed to delete entry. Please try again.'));
-          },
-        },
-      ]
-    );
+    // Deferred for the same iOS action-sheet → Modal race as handleArchive.
+    InteractionManager.runAfterInteractions(() => setDeleteDialogVisible(true));
+  }, [artefactId]);
+
+  const handleConfirmDelete = useCallback(() => {
+    setDeleteDialogVisible(false);
+    if (!artefactId) return;
+    dispatch(deleteArtefact({ artefactId }))
+      .unwrap()
+      .then(() => router.back())
+      .catch(() => Alert.alert('Error', 'Failed to delete entry. Please try again.'));
   }, [artefactId, dispatch, router]);
 
   // ── Duplicate to Review ──
@@ -652,7 +612,7 @@ export default function EntryDetailScreen() {
     if (artefact?.status === ArtefactStatus.COMPLETED) {
       showActionSheetWithOptions(
         {
-          options: ['Archive entry', 'Duplicate entry', 'Delete entry', 'Cancel'],
+          options: ['Archive', 'Duplicate', 'Delete', 'Cancel'],
           destructiveButtonIndex: 2,
           cancelButtonIndex: 3,
         },
@@ -665,7 +625,7 @@ export default function EntryDetailScreen() {
     } else if (artefact?.status === ArtefactStatus.ARCHIVED) {
       showActionSheetWithOptions(
         {
-          options: ['Delete entry', 'Cancel'],
+          options: ['Delete', 'Cancel'],
           destructiveButtonIndex: 0,
           cancelButtonIndex: 1,
         },
@@ -676,7 +636,7 @@ export default function EntryDetailScreen() {
     } else if (artefact?.status !== undefined) {
       showActionSheetWithOptions(
         {
-          options: ['Archive entry', 'Delete entry', 'Cancel'],
+          options: ['Archive', 'Delete', 'Cancel'],
           destructiveButtonIndex: 1,
           cancelButtonIndex: 2,
         },
@@ -1067,9 +1027,14 @@ export default function EntryDetailScreen() {
                       style={styles.navRow}
                     >
                       <Feather name="clock" size={18} color={colors.textSecondary} />
-                      <Text style={[styles.navRowLabel, { color: colors.text }]}>
-                        Version history
-                      </Text>
+                      <View style={styles.navRowText}>
+                        <Text style={[styles.navRowTitle, { color: colors.text }]}>
+                          Version history
+                        </Text>
+                        <Text style={[styles.navRowSubtitle, { color: colors.textSecondary }]}>
+                          See and restore previous versions
+                        </Text>
+                      </View>
                       <View style={styles.navRowRight}>
                         <Text style={[styles.navBadge, { color: colors.textSecondary }]}>
                           {artefact.versionCount}
@@ -1162,6 +1127,46 @@ export default function EntryDetailScreen() {
           },
         ]}
         onRequestClose={() => setFinaliseConfirmVisible(false)}
+      />
+      <AppDialog
+        visible={archiveDialogVisible}
+        tone="info"
+        icon="archive-outline"
+        title="Archive entry"
+        message={
+          hasActivePdpGoals
+            ? 'This entry will be hidden — you can restore it anytime. It has active PDP goals: keep them, or archive them too?'
+            : 'This entry will be hidden. You can restore it anytime from your archive.'
+        }
+        buttons={
+          hasActivePdpGoals
+            ? [
+                { label: 'Keep goals', onPress: () => handleConfirmArchive(false), variant: 'primary' },
+                {
+                  label: 'Archive & remove goals',
+                  onPress: () => handleConfirmArchive(true),
+                  variant: 'destructive',
+                },
+                { label: 'Cancel', onPress: () => setArchiveDialogVisible(false), variant: 'secondary' },
+              ]
+            : [
+                { label: 'Archive', onPress: () => handleConfirmArchive(false), variant: 'primary' },
+                { label: 'Cancel', onPress: () => setArchiveDialogVisible(false), variant: 'secondary' },
+              ]
+        }
+        onRequestClose={() => setArchiveDialogVisible(false)}
+      />
+      <AppDialog
+        visible={deleteDialogVisible}
+        tone="error"
+        icon="trash-outline"
+        title="Delete entry"
+        message="This permanently deletes the entry, its conversation and linked goals. This can't be undone."
+        buttons={[
+          { label: 'Delete', onPress: handleConfirmDelete, variant: 'destructive' },
+          { label: 'Cancel', onPress: () => setDeleteDialogVisible(false), variant: 'secondary' },
+        ]}
+        onRequestClose={() => setDeleteDialogVisible(false)}
       />
     </KeyboardAvoidingView>
   );
@@ -1313,6 +1318,17 @@ const styles = StyleSheet.create({
   navRowLabel: {
     fontSize: 15,
     flex: 1,
+  },
+  // Version-history row uses a title + subtitle stack instead of a single label.
+  navRowText: {
+    flex: 1,
+    gap: 2,
+  },
+  navRowTitle: {
+    fontSize: 15,
+  },
+  navRowSubtitle: {
+    fontSize: 12,
   },
   navRowRight: {
     flexDirection: 'row',

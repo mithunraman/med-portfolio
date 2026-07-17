@@ -161,14 +161,14 @@ Clear these (with legal input) before launch.
 - [x] **MOB-065** [DONE] Done 2026-07-16 — `ArtefactAdvisoryBanner` now shows for the whole IN_REVIEW state as two stackable cards: a calm, non-dismissible **info/blue** "Needs review" ("Your draft is ready. Please check each section…") + a dismissible **warning/amber** "Some sections need more detail" (only when sections are thin). Colours evidence-backed (amber = review/attention per Jira/GitHub; blue reserved for the persistent guidance card).
 - [ ] **MOB-067** [FIX] Disable emoji input in entries (serious cases).
 - [ ] **MOB-068** [FIX/VERIFY] Verify bullets/formatting paste cleanly into FourteenFish.
-- [ ] **MOB-071** [PARTIAL] In progress 2026-07-16 — added semantic `success` + `info` colour tokens (light/dark) across all themes; routed the detail screen's hard-coded greens (`COMPLETED_ACCENT`) + PDP accent through `colors.success`, fixing the "Batman-villain" green there. **Remaining:** `StatusPill`'s internal `VARIANT_COLORS` still hard-codes its own light/dark palette (used by list/PDP pills) — route those through tokens to close fully.
+- [ ] **MOB-071** [PARTIAL] In progress 2026-07-16 — added semantic `success` + `info` colour tokens (light/dark) across all themes; routed the detail screen's hard-coded greens (`COMPLETED_ACCENT`) + PDP accent through `colors.success`, fixing the "Batman-villain" green there. **Remaining:** `StatusPill`'s internal `VARIANT_COLORS` still hard-codes its own light/dark palette (used by list/PDP pills) — route those through tokens to close fully. **Decision (2026-07-17):** apply layered semantic tokens — extend the theme with a `{surface, text}` **pair per intent** for all five variants (default/processing/warning/success/info) × light/dark × 7 themes (currently only `warning`/`info` have surface tokens; `success`/`default`/`processing` don't). Hand-pick each mode (don't invert — that's the "Batman green" cause); guarantee AA contrast once, centrally. Then delete `VARIANT_COLORS` and map each variant to the tokens. Token expansion is the real work; pill refactor is mechanical.
 
 ### Editing, saving & completion status
 - [ ] **MOB-083** [FIX] Add a discard-changes safety confirmation on the X/close control ("keep editing / discard").
-- [ ] **MOB-084** [FIX] Clarify Version History (one-line description/tooltip explaining revert).
+- [ ] **MOB-084** [FIX] Clarify Version History (one-line description/tooltip explaining revert). **Decision (2026-07-17):** add a second `<Text>` subtitle in the nav row (`[artefactId].tsx`) + a small style. Copy: "See and restore previous versions".
 - [ ] **MOB-085** [FIX] Simplify the two-level "edit-saved vs completed" status model (drives MOB-086/087/088/089); user-test the mental model.
 - [ ] **MOB-098** [FIX] Don't silently disable "Mark as Done" — surface why (validate on tap or add helper text).
-- [ ] **MOB-097** [FIX/A11Y] Missing-review-date error: MVP NHS-style pattern — red highlight + message ("You must enter a review date to continue") + scroll to field. *(empty section = warning, not error; full NHS error summary deferred)*
+- [x] **MOB-097** [DONE] Done 2026-07-17 — replaced the native `Alert` with a themed **error dialog** (new reusable `AppDialog`, `tone="error"` + ⚠ icon): "Add a review date" / "Set a review date for each goal you're keeping…". *Scope note:* shipped the **simplified dialog** variant, not the full NHS inline pattern (per-field red highlight + scroll-to-field) — that's deferred if we want the field-level treatment later. Also migrated the finalise-confirm to `AppDialog` for same-flow consistency.
 
 ### PDP goals (this-version fixes)
 - [ ] **MOB-073** [FIX] Reframe the current PDP screen: "Goal 1/2" structure; present the goal then "Do you want to add this goal? Yes/No"; allow a review date; remove the on/off toggle; frame "PDP goals based on this case".
@@ -183,7 +183,11 @@ Clear these (with legal input) before launch.
 
 ### Entries list & export
 - [ ] **MOB-099** [FIX/VERIFY] Confirm portfolio copy/export as text or PDF (entry points + formats).
-- [ ] **MOB-100** [FIX] Clarify Archive vs Delete (labels, help text, placement). *(Delete-must-truly-remove is a §3 gate.)*
+- [ ] **MOB-100** [FIX] Clarify Archive vs Delete (labels, help text, placement). *(Delete-must-truly-remove is a §3 gate.)* **Decision (2026-07-17, FINAL copy):**
+- Menu **Archive** → body: "This entry will be hidden. You can restore it anytime from your archive."
+- Menu **Delete** → body: "This permanently deletes the entry, its conversation and linked goals. This can't be undone." (red destructive)
+
+Friction ladder scaled to reversibility (Archive light; Delete explicit-consequence). Verb+noun buttons (`Archive`/`Cancel`, red `Delete`/`Cancel`), no Yes/No, serious-not-alarming tone.
 - [ ] **MOB-101** [FIX] Show created/updated timestamps on entry rows ("Updated 1 minute ago", "Created 12/7").
 
 ### Profile / account creation
@@ -241,6 +245,7 @@ Explicitly deferred by the participants. Kept here so they aren't lost.
 - **MOB-138** [DEFERRED] Social-proof / peer-comparison nudges — opt-in only, careful tone (anxiety risk flagged).
 - **MOB-139** [DEFERRED] Gamification module (points/stars) as an optional unlockable.
 - **MOB-140** [DEFERRED] Communication/content calendar aligned to the UK training year & deanery. *(depends on MOB-142)*
+- **MOB-143** [TODO/LATER] Migrate native `Alert.alert` → themed `AppDialog` app-wide for brand consistency (**53 call sites / 13 files**, surveyed 2026-07-17). **Not a hand-wire job:** `Alert.alert` is imperative but `AppDialog` is declarative, and **8 calls live in hooks/utils** (`useOtpFlow.ts` ×5, `utils/export/exportArtefact.ts` ×3) with no render surface. **Prereq:** build a `DialogProvider` + `useDialog()` imperative bridge (plus a non-hook singleton handle for utils) so any code can `show({tone,title,message,buttons})`; also add a lightweight **`Toast`** (none exists today). **Then:** ~38 confirmations/errors → `AppDialog`; ~7 success/acks ("Saved"/"Copied"/"Code Sent") → **Toast, not a modal**; ~6 "coming soon"/hints optional. Reusable `AppDialog` already built (`src/components/AppDialog.tsx`); entry-screen review-date error + finalise confirm already migrated (MOB-097).
 
 ---
 

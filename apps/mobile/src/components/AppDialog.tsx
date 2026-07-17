@@ -79,6 +79,16 @@ export function AppDialog({
       ? buttons
       : [{ label: 'OK', onPress: onRequestClose, variant: 'primary' }];
 
+  // Layout: ≤2 buttons side-by-side, 3+ stacked (matches iOS/Material defaults).
+  // Horizontal convention is dismissive-left / affirmative-right; callers pass the
+  // affirmative action first, so reverse for the row (a no-op for a single button).
+  // TODO: make this fully adaptive later — auto-stack even 2 buttons when their
+  // labels are too long to fit on one line (Material measures text and reverses
+  // order when it stacks), and expose a `layout?: 'auto' | 'stacked' | 'horizontal'`
+  // override for borderline cases. Count-based is enough for today's dialogs.
+  const horizontal = resolvedButtons.length <= 2;
+  const orderedButtons = horizontal ? [...resolvedButtons].reverse() : resolvedButtons;
+
   return (
     <Modal
       visible={visible}
@@ -107,8 +117,8 @@ export function AppDialog({
             <Text style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>
           )}
 
-          <View style={styles.buttons}>
-            {resolvedButtons.map((button, index) => {
+          <View style={[styles.buttons, horizontal && styles.buttonsRow]}>
+            {orderedButtons.map((button, index) => {
               const variant = button.variant ?? 'primary';
               const isPrimary = variant === 'primary';
               return (
@@ -118,6 +128,7 @@ export function AppDialog({
                   accessibilityRole="button"
                   style={({ pressed }) => [
                     styles.button,
+                    horizontal && styles.buttonFlex,
                     isPrimary
                       ? { backgroundColor: accent }
                       : { backgroundColor: 'transparent' },
@@ -186,10 +197,16 @@ const styles = StyleSheet.create({
     marginTop: 14,
     gap: 8,
   },
+  buttonsRow: {
+    flexDirection: 'row',
+  },
   button: {
     paddingVertical: 13,
     borderRadius: 10,
     alignItems: 'center',
+  },
+  buttonFlex: {
+    flex: 1,
   },
   buttonPressed: {
     opacity: 0.8,

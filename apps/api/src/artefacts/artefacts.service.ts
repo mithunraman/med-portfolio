@@ -68,6 +68,12 @@ function generateDefaultTitle(): string {
   return `Log Entry - ${format(new Date(), 'dd/MM')}`;
 }
 
+// States in which an artefact's body (title / sections / capabilities) may be
+// edited or version-restored. COMPLETED is editable because completion is a
+// filter, not a lock (MOB-087) — IN_CONVERSATION (not yet composed), ARCHIVED,
+// and DELETED remain read-only.
+const EDITABLE_STATUSES = [ArtefactStatus.IN_REVIEW, ArtefactStatus.COMPLETED];
+
 @Injectable()
 export class ArtefactsService {
   constructor(
@@ -465,8 +471,10 @@ export class ArtefactsService {
       async (session) => {
         const artefactDoc = await this.findOrThrow(xid, new Types.ObjectId(userId), session);
 
-        if (artefactDoc.status !== ArtefactStatus.IN_REVIEW) {
-          throw new BadRequestException('Artefact can only be edited in IN_REVIEW status');
+        if (!EDITABLE_STATUSES.includes(artefactDoc.status)) {
+          throw new BadRequestException(
+            'Artefact can only be edited in review or completed state'
+          );
         }
 
         const editData: UpdateArtefactData = {};
@@ -633,8 +641,10 @@ export class ArtefactsService {
       async (session) => {
         const artefactDoc = await this.findOrThrow(xid, new Types.ObjectId(userId), session);
 
-        if (artefactDoc.status !== ArtefactStatus.IN_REVIEW) {
-          throw new BadRequestException('Artefact can only be restored in IN_REVIEW status');
+        if (!EDITABLE_STATUSES.includes(artefactDoc.status)) {
+          throw new BadRequestException(
+            'Artefact can only be restored in review or completed state'
+          );
         }
 
         const targetVersion = await this.versionHistoryService.getVersion(

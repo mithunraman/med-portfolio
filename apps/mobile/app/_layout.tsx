@@ -1,5 +1,5 @@
 import { setOnQuotaUpdate, setOnUnauthorized } from '@/api/client';
-import { Button, ErrorBoundary, LoadingProvider } from '@/components';
+import { Button, ErrorBoundary, LoadingProvider, ToastProvider } from '@/components';
 import { ActiveBanner } from '@/components/ActiveBanner';
 import { ForceUpdateScreen } from '@/components/ForceUpdateScreen';
 import { NoticeModal } from '@/components/NoticeModal';
@@ -275,7 +275,9 @@ function RootLayout() {
             <ThemeProvider>
               <ActionSheetProvider>
                 <LoadingProvider>
-                  <RootLayoutNav />
+                  <ToastProvider>
+                    <RootLayoutNav />
+                  </ToastProvider>
                 </LoadingProvider>
               </ActionSheetProvider>
             </ThemeProvider>

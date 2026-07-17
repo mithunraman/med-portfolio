@@ -9,6 +9,7 @@ export { StarRating } from './common/StarRating';
 export { CoverageRing } from './CoverageRing';
 export { EditableReflectionSection } from './EditableReflectionSection';
 export { EditableTitle } from './EditableTitle';
+export { EntryActionBar } from './EntryActionBar';
 export { EmptyState } from './EmptyState';
 export { ErrorBanner } from './ErrorBanner';
 export { ErrorBoundary } from './ErrorBoundary';
@@ -43,6 +44,7 @@ export { SpecialtyList, type SpecialtyListProps } from './specialty/SpecialtyLis
 export { StageList, type StageListProps } from './specialty/StageList';
 export { StatusPill, type StatusVariant } from './StatusPill';
 export { StepIndicator } from './StepIndicator';
+export { ToastProvider, useToast } from './Toast';
 export { useCollapsibleOptions } from './useCollapsibleOptions';
 export { WaveDots } from './WaveDots';
 export { WelcomeModule } from './WelcomeModule';

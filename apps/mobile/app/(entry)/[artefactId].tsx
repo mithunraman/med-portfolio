@@ -2,9 +2,9 @@ import type { GoalSelectionState, LocalNote, StatusVariant } from '@/components'
 import {
   AppDialog,
   ArtefactAdvisoryBanner,
-  Button,
   EditableReflectionSection,
   EditableTitle,
+  EntryActionBar,
   ExportSheet,
   FullScreenSectionEditor,
   NotesSection,
@@ -13,6 +13,7 @@ import {
   ReviewSheet,
   StarRating,
   StatusPill,
+  useToast,
 } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
@@ -125,6 +126,7 @@ export default function EntryDetailScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const router = useRouter();
+  const { showToast } = useToast();
   const { showActionSheetWithOptions } = useActionSheet();
 
   const artefact = useAppSelector((state) => selectArtefactById(state, artefactId ?? ''));
@@ -150,6 +152,12 @@ export default function EntryDetailScreen() {
   const [editingNoteKey, setEditingNoteKey] = useState<string | null>(null);
   // Monotonic source of client-side draft ids for the current screen session.
   const draftSeq = useRef(0);
+  // Set immediately before a programmatic leave (Save for later / Mark as done /
+  // Delete) so the beforeRemove guard lets that navigation through. Without it,
+  // router.back() runs before React has flushed the buffer-clearing re-render and
+  // unsubscribed the guard, so the just-saved user would see a spurious
+  // "Unsaved changes" prompt (passive-effect cleanup is deferred).
+  const bypassUnsavedPrompt = useRef(false);
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0]));
   // Capability edit/expand state is keyed by capability code (the API's natural
   // key), not list position — so a future display-time sort/filter can't misalign
@@ -168,7 +176,11 @@ export default function EntryDetailScreen() {
   // Seeds a first-time (create) review from the inline star tap. Ignored on the edit
   // path, where the sheet seeds from the existing review.
   const [reviewSeedRating, setReviewSeedRating] = useState<number | undefined>(undefined);
-  const isEditable = artefact?.status === ArtefactStatus.IN_REVIEW;
+  // Editable in review AND completed — completion is a filter, not a lock
+  // (MOB-087). Archived / in-conversation stay read-only.
+  const isEditable =
+    artefact?.status === ArtefactStatus.IN_REVIEW ||
+    artefact?.status === ArtefactStatus.COMPLETED;
   const canExport =
     artefact?.status === ArtefactStatus.IN_REVIEW || artefact?.status === ArtefactStatus.COMPLETED;
 
@@ -328,8 +340,35 @@ export default function EntryDetailScreen() {
 
   // ── Save Changes ──
 
-  const handleSaveChanges = useCallback(async () => {
-    if (!artefactId || !hasChanges) return;
+  // Reset every edit buffer back to the server state. Shared by the commit
+  // handlers (after a successful save) and the exit-time discard prompt.
+  const clearEditBuffers = useCallback(() => {
+    setEditedTitle(null);
+    setEditedDocument(null);
+    setEditedCapabilities(null);
+    setEditedNotes(null);
+    setEditingNoteKey(null);
+  }, []);
+
+  // Navigate back without re-triggering the unsaved-changes prompt for edits a
+  // commit handler has already dealt with. The bypass is scoped to this single
+  // navigation: beforeRemove fires synchronously inside back(), so the microtask
+  // reset lands after the guard has been honored on the success path (screen
+  // unmounts anyway) and re-arms the guard if back() is ever a no-op.
+  const leaveWithoutPrompt = useCallback(() => {
+    bypassUnsavedPrompt.current = true;
+    router.back();
+    queueMicrotask(() => {
+      bypassUnsavedPrompt.current = false;
+    });
+  }, [router]);
+
+  // Single save routine reused by every commit action (Save for later / Mark as
+  // done / completed Save). Persists body then notes sequentially; returns true
+  // on success and false (surfacing an error) otherwise. It does NOT navigate,
+  // toast, or change status — callers decide what happens after a clean save.
+  const persistEdits = useCallback(async (): Promise<boolean> => {
+    if (!artefactId) return false;
 
     const bodyChanged =
       editedTitle !== null || editedDocument !== null || editedCapabilities !== null;
@@ -357,7 +396,7 @@ export default function EntryDetailScreen() {
       const result = await dispatch(editArtefact(payload));
       if (!editArtefact.fulfilled.match(result)) {
         Alert.alert('Error', 'Failed to save changes. Please try again.');
-        return;
+        return false;
       }
       setEditedTitle(null);
       setEditedDocument(null);
@@ -377,65 +416,54 @@ export default function EntryDetailScreen() {
             ? "Your entry was saved, but your notes couldn't be saved. Please try again."
             : "Your notes couldn't be saved. Please try again."
         );
-        return;
+        return false;
       }
       setEditedNotes(null);
     }
 
-    Alert.alert('Saved', 'Your changes have been saved.');
-  }, [
-    artefactId,
-    hasChanges,
-    editedTitle,
-    editedDocument,
-    editedCapabilities,
-    editedNotes,
-    dispatch,
-  ]);
+    return true;
+  }, [artefactId, editedTitle, editedDocument, editedCapabilities, editedNotes, dispatch]);
 
-  const handleDiscardChanges = useCallback(() => {
-    Alert.alert('Discard changes?', 'All unsaved edits will be lost.', [
-      { text: 'Keep editing', style: 'cancel' },
-      {
-        text: 'Discard',
-        style: 'destructive',
-        onPress: () => {
-          setEditedTitle(null);
-          setEditedDocument(null);
-          setEditedCapabilities(null);
-          setEditedNotes(null);
-          setEditingNoteKey(null);
-        },
-      },
-    ]);
-  }, []);
+  // ── Unsaved-changes prompt on navigate away ──
 
-  // ── Discard on navigate away ──
-
+  // Leaving with unsaved edits is the single discard decision point (there's no
+  // standing discard control). Offer the full three-way choice — save and leave,
+  // drop the edits and leave, or stay — mirroring the canonical iOS unsaved-
+  // changes dialog. The save label matches the entry's commit vocabulary:
+  // "Save for later" in review, plain "Save" once completed.
   useEffect(() => {
     if (!hasChanges) return;
 
+    const saveLabel =
+      artefact?.status === ArtefactStatus.COMPLETED ? 'Save' : 'Save for later';
+
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      // A commit handler is navigating away deliberately after saving — let it
+      // through instead of re-prompting for edits it has already persisted.
+      if (bypassUnsavedPrompt.current) return;
       e.preventDefault();
-      Alert.alert('Discard changes?', 'You have unsaved edits. Discard them?', [
-        { text: 'Keep editing', style: 'cancel' },
+      Alert.alert('Unsaved changes', 'Keep your edits before leaving?', [
+        {
+          text: saveLabel,
+          onPress: async () => {
+            const ok = await persistEdits();
+            if (ok) navigation.dispatch(e.data.action);
+          },
+        },
         {
           text: 'Discard',
           style: 'destructive',
           onPress: () => {
-            setEditedTitle(null);
-            setEditedDocument(null);
-            setEditedCapabilities(null);
-            setEditedNotes(null);
-            setEditingNoteKey(null);
+            clearEditBuffers();
             navigation.dispatch(e.data.action);
           },
         },
+        { text: 'Keep editing', style: 'cancel' },
       ]);
     });
 
     return unsubscribe;
-  }, [hasChanges, navigation]);
+  }, [hasChanges, navigation, artefact?.status, persistEdits, clearEditBuffers]);
 
   // ── Existing handlers ──
 
@@ -500,25 +528,40 @@ export default function EntryDetailScreen() {
     });
   }, []);
 
-  // ── Finalise Entry ──
+  // ── Commit actions (Save for later / Mark as done / completed Save) ──
 
-  const handleMarkAsFinal = useCallback(() => {
-    if (!artefactId) return;
-
-    const selectedGoals = Array.from(goalSelections.entries()).filter(([, sel]) => sel.selected);
-    const missingDates = selectedGoals.some(([, sel]) => !sel.reviewDate);
-
-    if (missingDates) {
-      setReviewDateErrorVisible(true);
-      return;
+  // Save for later: persist edits (only if any) and return to the dashboard.
+  // The entry is already IN_REVIEW on the server, so there's no status call —
+  // and with nothing edited it's a pure navigation, no toast (a "Saved" with no
+  // write would be a lie).
+  const handleSaveForLater = useCallback(async () => {
+    if (hasChanges) {
+      const ok = await persistEdits();
+      if (!ok) return;
+      showToast('Saved');
     }
+    leaveWithoutPrompt();
+  }, [hasChanges, persistEdits, showToast, leaveWithoutPrompt]);
 
-    setFinaliseConfirmVisible(true);
-  }, [artefactId, goalSelections]);
+  // Completed entries stay editable; saving keeps them COMPLETED (no demotion)
+  // and stays in place with a toast — only ever shown while there are edits.
+  const handleSaveCompleted = useCallback(async () => {
+    const ok = await persistEdits();
+    if (ok) showToast('Saved');
+  }, [persistEdits, showToast]);
 
-  const handleConfirmFinalise = useCallback(() => {
+  // The actual completion: persist pending edits first, then finalise (activates
+  // PDP goals). Save-then-finalise is sequential — if the save fails the status
+  // is untouched and edits stay buffered for retry; navigation waits for a
+  // fulfilled finalise so a failure never strands the user on the dashboard.
+  const runMarkAsDone = useCallback(async () => {
     setFinaliseConfirmVisible(false);
     if (!artefactId) return;
+
+    if (hasChanges) {
+      const ok = await persistEdits();
+      if (!ok) return;
+    }
 
     const pdpGoalSelections: PdpGoalSelection[] = Array.from(goalSelections.entries()).map(
       ([goalId, sel]) => ({
@@ -534,8 +577,40 @@ export default function EntryDetailScreen() {
       })
     );
 
-    dispatch(finaliseArtefact({ artefactId, pdpGoalSelections }));
-  }, [artefactId, dispatch, goalSelections]);
+    const result = await dispatch(finaliseArtefact({ artefactId, pdpGoalSelections }));
+    if (finaliseArtefact.fulfilled.match(result)) {
+      showToast('Marked as done');
+      leaveWithoutPrompt();
+    } else {
+      // persistEdits already committed, so any edits are safe — only the
+      // finalise failed. Say so, and leave the user on the (still IN_REVIEW)
+      // entry to retry.
+      Alert.alert(
+        'Error',
+        "Couldn't mark this entry as done. Your changes are saved — please try again."
+      );
+    }
+  }, [artefactId, hasChanges, persistEdits, dispatch, goalSelections, showToast, leaveWithoutPrompt]);
+
+  // Mark as done: validate first, then confirm only when there's a real side
+  // effect to review (PDP goals will activate); otherwise go straight through.
+  const handleMarkAsDone = useCallback(() => {
+    if (!artefactId) return;
+
+    const selectedGoals = Array.from(goalSelections.entries()).filter(([, sel]) => sel.selected);
+    const missingDates = selectedGoals.some(([, sel]) => !sel.reviewDate);
+    if (missingDates) {
+      setReviewDateErrorVisible(true);
+      return;
+    }
+
+    if (selectedGoals.length > 0) {
+      setFinaliseConfirmVisible(true);
+      return;
+    }
+
+    runMarkAsDone();
+  }, [artefactId, goalSelections, runMarkAsDone]);
 
   // ── Archive ──
 
@@ -577,9 +652,9 @@ export default function EntryDetailScreen() {
     if (!artefactId) return;
     dispatch(deleteArtefact({ artefactId }))
       .unwrap()
-      .then(() => router.back())
+      .then(() => leaveWithoutPrompt())
       .catch(() => Alert.alert('Error', 'Failed to delete entry. Please try again.'));
-  }, [artefactId, dispatch, router]);
+  }, [artefactId, dispatch, leaveWithoutPrompt]);
 
   // ── Duplicate to Review ──
 
@@ -1046,51 +1121,21 @@ export default function EntryDetailScreen() {
                 )}
               </View>
             </View>
-
-            {/* Finalise Entry */}
-            {canMarkAsFinal && (
-              <View style={styles.section}>
-                <Button
-                  label="Complete entry"
-                  onPress={handleMarkAsFinal}
-                  loading={updatingStatus}
-                  icon={(color) => <Ionicons name="checkmark-circle" size={20} color={color} />}
-                />
-              </View>
-            )}
           </>
         )}
       </ScrollView>
 
-      {/* Sticky Save / Discard bar */}
-      {hasChanges && (
-        <View
-          style={[
-            styles.stickyBar,
-            {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.border,
-              paddingBottom: insets.bottom + 8,
-            },
-          ]}
-        >
-          <Pressable
-            onPress={handleDiscardChanges}
-            disabled={saving}
-            style={[styles.stickyDiscardButton, { borderColor: colors.border }]}
-          >
-            <Feather name="x" size={18} color={saving ? colors.textSecondary : '#dc3545'} />
-          </Pressable>
-          <View style={styles.stickySaveWrapper}>
-            <Button
-              label="Save changes"
-              onPress={handleSaveChanges}
-              loading={saving}
-              icon={(color) => <Feather name="save" size={18} color={color} />}
-            />
-          </View>
-        </View>
-      )}
+      {/* Status-driven commit bar — the single save affordance (MOB-086/087/089).
+          Renders nothing outside review/completed-with-edits. */}
+      <EntryActionBar
+        status={artefact.status}
+        hasChanges={hasChanges}
+        busy={saving || updatingStatus}
+        onSaveForLater={handleSaveForLater}
+        onMarkAsDone={handleMarkAsDone}
+        onSaveCompleted={handleSaveCompleted}
+      />
+
       {canExport && (
         <ExportSheet
           visible={exportSheetVisible}
@@ -1109,17 +1154,17 @@ export default function EntryDetailScreen() {
         tone="error"
         icon="warning"
         title="Add a review date"
-        message="Set a review date for each goal you're keeping before you complete this entry."
+        message="Set a review date for each goal you're keeping before you mark this entry as done."
         buttons={[{ label: 'Got it', onPress: () => setReviewDateErrorVisible(false) }]}
         onRequestClose={() => setReviewDateErrorVisible(false)}
       />
       <AppDialog
         visible={finaliseConfirmVisible}
         icon={null}
-        title="Finalise entry"
-        message="Once finalised, this entry will be saved to your portfolio."
+        title="Mark this entry as done?"
+        message="It'll move to your completed entries and set up the PDP goals you've kept. You can still edit it afterwards."
         buttons={[
-          { label: 'Finalise', onPress: handleConfirmFinalise, variant: 'primary' },
+          { label: 'Mark as done', onPress: runMarkAsDone, variant: 'primary' },
           {
             label: 'Cancel',
             onPress: () => setFinaliseConfirmVisible(false),
@@ -1341,24 +1386,5 @@ const styles = StyleSheet.create({
   navDivider: {
     height: StyleSheet.hairlineWidth,
     marginLeft: 42,
-  },
-  stickyBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    gap: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  stickyDiscardButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stickySaveWrapper: {
-    flex: 1,
   },
 });

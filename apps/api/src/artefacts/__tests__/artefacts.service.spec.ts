@@ -693,14 +693,25 @@ describe('ArtefactsService', () => {
       );
     });
 
-    it('throws BadRequestException when artefact is COMPLETED', async () => {
-      mockArtefactsRepo.findByXid.mockResolvedValue(
-        ok(makeArtefactDoc({ status: ArtefactStatus.COMPLETED })),
-      );
+    it('allows editing when artefact is COMPLETED (completion is a filter, not a lock)', async () => {
+      const artefact = makeArtefactDoc({ status: ArtefactStatus.COMPLETED });
+      const updatedArtefact = makeArtefactDoc({ title: 'Edited' });
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
+      mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
+      mockVersionHistoryService.countVersions.mockResolvedValue(1);
+      setupBuildArtefactDtoMocks();
 
-      await expect(
-        service.editArtefact(userIdStr, 'art_abc123', { title: 'Edited' }),
-      ).rejects.toThrow(BadRequestException);
+      await service.editArtefact(userIdStr, 'art_abc123', { title: 'Edited' });
+
+      // Editing a completed entry must NOT re-date the completion: the update
+      // payload carries only the edited fields, never completedAt or status.
+      expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
+        artefact._id,
+        userId,
+        { title: 'Edited' },
+        expect.anything(), // session
+      );
     });
 
     it('throws BadRequestException when no editable fields provided', async () => {
@@ -913,6 +924,26 @@ describe('ArtefactsService', () => {
       await expect(
         service.restoreVersion(userIdStr, 'art_abc123', { version: 999 }),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('allows restoring when artefact is COMPLETED (editable in review or completed)', async () => {
+      const artefact = makeArtefactDoc({ status: ArtefactStatus.COMPLETED });
+      const targetVersion = {
+        version: 1,
+        snapshot: { title: 'Old Title', composedDocument: [] },
+      };
+      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
+      mockVersionHistoryService.getVersion.mockResolvedValue(targetVersion);
+      mockVersionHistoryService.createVersion.mockResolvedValue(undefined);
+      mockVersionHistoryService.countVersions.mockResolvedValue(2);
+      mockArtefactsRepo.updateArtefactById.mockResolvedValue(
+        ok(makeArtefactDoc({ title: 'Old Title' })),
+      );
+      setupBuildArtefactDtoMocks();
+
+      await expect(
+        service.restoreVersion(userIdStr, 'art_abc123', { version: 1 }),
+      ).resolves.toBeDefined();
     });
 
     it('snapshots current state before restoring', async () => {

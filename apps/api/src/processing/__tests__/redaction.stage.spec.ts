@@ -1,9 +1,10 @@
-import { Types } from 'mongoose';
 import { Specialty } from '@acme/shared';
+import { Types } from 'mongoose';
+import type { PhiRedactionResult } from '../../language';
+import { LocalPiiService } from '../redaction/local-pii.service';
 import { RedactionStage } from '../stages/redaction.stage';
 import { StageContext } from '../stages/stage.interface';
-
-// ── Helpers ──
+import { UK_CLINICAL_FIXTURES } from './fixtures/uk-clinical';
 
 const context: StageContext = {
   messageId: new Types.ObjectId(),
@@ -12,113 +13,115 @@ const context: StageContext = {
   mediaType: null,
 };
 
-// ── Mocks ──
-
-const mockLlmService = {
-  invokeStructured: jest.fn(),
-};
-
-const mockModelConfig = {
-  resolve: jest.fn(() => ({ provider: 'openai', model: 'test-model' })),
-};
+/** A stub Azure service with a controllable redactPhi. */
+function azureStub(redactPhi: jest.Mock) {
+  return { redactPhi } as unknown as { redactPhi: jest.Mock };
+}
 
 describe('RedactionStage', () => {
-  let stage: RedactionStage;
+  describe('layering and ordering', () => {
+    it('runs Azure PHI first, then the local backstop on Azure output', async () => {
+      const order: string[] = [];
+      const redactPhi = jest.fn(async (): Promise<PhiRedactionResult> => {
+        order.push('azure');
+        return { redactedText: 'seen by [PERSON]', entities: [{ category: 'Person', confidenceScore: 0.9 }] };
+      });
+      const localPii = {
+        redactLocal: jest.fn(async (text: string) => {
+          order.push('local');
+          expect(text).toBe('seen by [PERSON]'); // local receives Azure's output
+          return { redactedText: text, entities: [] };
+        }),
+      };
+      const stage = new RedactionStage(azureStub(redactPhi) as never, localPii as never);
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    stage = new RedactionStage(mockLlmService as any, mockModelConfig as any);
-  });
+      const result = await stage.execute('seen by Dr Okafor', context);
 
-  it('should pass through text unchanged when LLM returns needsRedaction: false and no regex matches', async () => {
-    const input = 'The patient presented with chest pain and shortness of breath.';
-
-    mockLlmService.invokeStructured.mockResolvedValue({
-      data: { needsRedaction: false, redactedText: '', redactedEntities: [] },
-      model: 'gpt-5.4-nano',
-      tokensUsed: null,
+      expect(order).toEqual(['azure', 'local']);
+      expect(redactPhi).toHaveBeenCalledWith('seen by Dr Okafor');
+      expect(result.text).toBe('seen by [PERSON]');
     });
 
-    const result = await stage.execute(input, context);
+    it('reports both layers in metadata and never flags injection', async () => {
+      const redactPhi = jest.fn(
+        async (): Promise<PhiRedactionResult> => ({
+          redactedText: '[PERSON] on [PHONE_NUMBER]',
+          entities: [
+            { category: 'Person', confidenceScore: 0.9 },
+            { category: 'PhoneNumber', confidenceScore: 0.8 },
+          ],
+        })
+      );
+      const localPii = {
+        redactLocal: jest.fn(async (text: string) => ({
+          redactedText: text,
+          entities: [{ type: 'NHS_NUMBER' }],
+        })),
+      };
+      const stage = new RedactionStage(azureStub(redactPhi) as never, localPii as never);
 
-    expect(result.text).toBe(input);
-    expect(result.metadata?.needsLlmRedaction).toBe(false);
-    expect(result.metadata?.regexRedactedEntities).toEqual([]);
+      const result = await stage.execute('input', context);
+
+      expect(result.injectionDetected).toBe(false);
+      expect(result.metadata).toMatchObject({
+        phiEntityCount: 2,
+        phiEntityCategories: ['Person', 'PhoneNumber'],
+        structuredEntityCount: 1,
+        structuredEntityTypes: ['NHS_NUMBER'],
+      });
+    });
   });
 
-  it('should redact structured PII via regex even when LLM returns needsRedaction: false', async () => {
-    const input = 'Patient NHS number 943 476 5919 presented with chest pain.';
+  describe('fail-closed', () => {
+    it('propagates an Azure error and never invokes the local layer', async () => {
+      const redactPhi = jest.fn(async () => {
+        throw new Error('Azure PHI redaction failed for document 0: boom');
+      });
+      const localPii = { redactLocal: jest.fn() };
+      const stage = new RedactionStage(azureStub(redactPhi) as never, localPii as never);
 
-    mockLlmService.invokeStructured.mockResolvedValue({
-      data: { needsRedaction: false, redactedText: '', redactedEntities: [] },
-      model: 'gpt-5.4-nano',
-      tokensUsed: null,
+      await expect(stage.execute('some clinical text', context)).rejects.toThrow(
+        /Azure PHI redaction failed/
+      );
+      // Local layer must not run — nothing partially-redacted can be returned.
+      expect(localPii.redactLocal).not.toHaveBeenCalled();
     });
-
-    const result = await stage.execute(input, context);
-
-    expect(result.text).toBe('Patient NHS number [NHS-NUMBER] presented with chest pain.');
-    expect(result.metadata?.regexRedactedEntities).toContain('healthcare_number');
   });
 
-  it('should apply LLM redaction when needsRedaction: true', async () => {
-    const input = 'I saw Mrs Patel today at St Thomas Hospital.';
+  describe('golden clinical fixtures (real local backstop, stubbed Azure)', () => {
+    // Real LocalPiiService proves structured-ID removal offline; the Azure stub
+    // redacts the fixture's contextual names/places by simple token replacement.
+    const localPii = new LocalPiiService();
 
-    mockLlmService.invokeStructured.mockResolvedValue({
-      data: {
-        needsRedaction: true,
-        redactedText: 'I saw [NAME] today at [ORGANISATION].',
-        redactedEntities: ['person_name', 'organisation'],
-      },
-      model: 'gpt-5.4-nano',
-      tokensUsed: null,
-    });
+    for (const fixture of UK_CLINICAL_FIXTURES) {
+      it(`redacts PHI + structured identifiers: ${fixture.name}`, async () => {
+        const redactPhi = jest.fn(async (text: string): Promise<PhiRedactionResult> => {
+          let redacted = text;
+          for (const { token, category } of fixture.phi) {
+            redacted = redacted.split(token).join(`[${category.toUpperCase()}]`);
+          }
+          return {
+            redactedText: redacted,
+            entities: fixture.phi.map((p) => ({ category: p.category, confidenceScore: 0.95 })),
+          };
+        });
+        const stage = new RedactionStage(azureStub(redactPhi) as never, localPii);
 
-    const result = await stage.execute(input, context);
+        const { text } = await stage.execute(fixture.text, context);
 
-    expect(result.text).toBe('I saw [NAME] today at [ORGANISATION].');
-    expect(result.metadata?.llmRedactedEntities).toEqual(['person_name', 'organisation']);
-    expect(result.metadata?.needsLlmRedaction).toBe(true);
-  });
-
-  it('should combine regex and LLM redaction results', async () => {
-    const input = 'Mrs Patel, NHS 943 476 5919, phone 07700 900123, from Brixton.';
-
-    // After regex: 'Mrs Patel, NHS [NHS-NUMBER], phone [PHONE], from Brixton.'
-    mockLlmService.invokeStructured.mockResolvedValue({
-      data: {
-        needsRedaction: true,
-        redactedText: '[NAME], NHS [NHS-NUMBER], phone [PHONE], from [LOCATION].',
-        redactedEntities: ['person_name', 'location'],
-      },
-      model: 'gpt-5.4-nano',
-      tokensUsed: null,
-    });
-
-    const result = await stage.execute(input, context);
-
-    expect(result.text).toBe('[NAME], NHS [NHS-NUMBER], phone [PHONE], from [LOCATION].');
-    expect(result.metadata?.regexRedactedEntities).toContain('healthcare_number');
-    expect(result.metadata?.regexRedactedEntities).toContain('phone_number');
-    expect(result.metadata?.llmRedactedEntities).toContain('person_name');
-    expect(result.metadata?.llmRedactedEntities).toContain('location');
-  });
-
-  it('should call LLM with temperature 0 for maximum determinism', async () => {
-    const input = 'Some text.';
-
-    mockLlmService.invokeStructured.mockResolvedValue({
-      data: { needsRedaction: false, redactedText: '', redactedEntities: [] },
-      model: 'gpt-5.4-nano',
-      tokensUsed: null,
-    });
-
-    await stage.execute(input, context);
-
-    expect(mockLlmService.invokeStructured).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.objectContaining({ temperature: 0 })
-    );
+        // Contextual identifiers (names/places) gone via Azure layer.
+        for (const { token } of fixture.phi) {
+          expect(text).not.toContain(token);
+        }
+        // Structured UK identifiers gone via the offline backstop.
+        for (const identifier of fixture.structured) {
+          expect(text).not.toContain(identifier);
+        }
+        // Clinically meaningful content preserved (no over-redaction).
+        for (const kept of fixture.preserve) {
+          expect(text).toContain(kept);
+        }
+      });
+    }
   });
 });

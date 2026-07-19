@@ -1,0 +1,9 @@
+Reflective note — GP ST3, understanding the UK health system.
+
+Over this placement I have been mapping how the NHS (National Health Service) is governed. In England the Department of Health and Social Care (DHSC) oversees arm's-length bodies such as NHS England, NHS Improvement, NHS Digital, NHS Resolution, NHS Blood and Transplant (NHSBT), the NHS Business Services Authority (NHSBSA), Health Education England (HEE) and the NHS Confederation. Guidance comes from NICE, and in Scotland from SIGN; the other nations run NHS Scotland, NHS Wales, and Health and Social Care (HSC) in NHS Northern Ireland.
+
+Quality and safety are regulated by the CQC in England, Healthcare Inspectorate Wales (HIW), Healthcare Improvement Scotland (HIS) and the RQIA in Northern Ireland. Medicines and devices are regulated by the MHRA, health protection by UKHSA (formerly Public Health England, PHE), alongside Public Health Wales and Public Health Scotland. Research is overseen by the HRA, HFEA and HTA, and driving fitness by the DVLA.
+
+Professional practice is regulated by the GMC, NMC, GPhC, HCPC, GDC, GOC, GOsC and GCC, all overseen by the PSA. Training and membership sit with the royal colleges — the RCGP, RCP, RCS, RCPsych, RCOG, RCPCH, RCoA, RCEM, RCR, RCPath, RCN and RCM — and with the RPS and the BMA.
+
+For contrast, the only real identifiers here are the patient's NHS number 943 476 5919, my consultant Dr Sarah Bennett, and the fact that they were treated at St Mary's Hospital — everything else above is a national body, not a person or a place.

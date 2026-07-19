@@ -43,7 +43,7 @@ import {
   type InterruptNode,
   PortfolioGraphService,
 } from '../portfolio-graph/portfolio-graph.service';
-import { redactStructuredPii } from '../processing/utils/pii-regex';
+import { LocalPiiService } from '../processing/redaction/local-pii.service';
 import { ConversationContextService } from './conversation-context.service';
 import {
   CONVERSATIONS_REPOSITORY,
@@ -69,7 +69,8 @@ export class ConversationsService {
     private readonly portfolioGraphService: PortfolioGraphService,
     private readonly analysisRunsService: AnalysisRunsService,
     private readonly outboxService: OutboxService,
-    private readonly contextService: ConversationContextService
+    private readonly contextService: ConversationContextService,
+    private readonly localPiiService: LocalPiiService
   ) {}
 
   /**
@@ -230,11 +231,14 @@ export class ConversationsService {
    * status COMPLETE).
    *
    * The edit does NOT re-run the processing pipeline. The new text is passed
-   * through the deterministic, regex-only PII redaction (no LLM) and written
-   * straight to the message content — the message stays COMPLETE throughout and
-   * is stamped with editedAt. Note: regex redaction catches structured
-   * identifiers (NHS number, email, phone, postcode, …) but not contextual PII
-   * (names, organisations) that the LLM stage catches on the original send path.
+   * through fully-offline regex redaction (no LLM, no Azure, no network — a
+   * network call has no place inside the Mongo transaction below) and written
+   * straight to the message content; the message stays COMPLETE throughout and
+   * is stamped with editedAt. Offline redaction catches structured identifiers
+   * (NHS number, NINO, sort code, postcode) AND contact PII (email, phone, card,
+   * DOB, absolute dates), but NOT contextual PII (patient / clinician names,
+   * organisations) — those are only caught by Azure on the original send path, a
+   * known and accepted limitation of editing.
    */
   async editMessage(
     userId: string,
@@ -250,18 +254,23 @@ export class ConversationsService {
           userId,
           conversationXid,
           messageXid,
-          // COMPLETE only — REJECTED is intentionally excluded. Edit runs regex-only
-          // redaction with no injection check, so editing a flagged message would let
-          // it re-enter the transcript as COMPLETE and bypass the injection gate.
+          // COMPLETE only — REJECTED is intentionally excluded. Edit runs redaction
+          // with no injection check (the cleaning stage owns that, and edit skips
+          // cleaning), so editing a flagged message would let it re-enter the
+          // transcript as COMPLETE and bypass the injection gate.
           [MessageStatus.COMPLETE],
           'edit',
           session
         );
 
-        // Regex-only PII redaction (no LLM, no pipeline re-run). The message
-        // stays COMPLETE — we write the raw input and the redacted output so the
-        // three-stage content invariant stays consistent, and stamp editedAt.
-        const { redactedText } = redactStructuredPii(content);
+        // Fully-offline PII redaction (regex only — no Azure, no LLM, no pipeline
+        // re-run). This executes inside a Mongo transaction, where an external
+        // network call has no place, so we use the standalone offline redactor:
+        // it covers contact PII (email, phone, card, DOB, dates) on top of the
+        // structured identifiers. The message stays COMPLETE — we write the raw
+        // input and the redacted output so the three-stage content invariant stays
+        // consistent, and stamp editedAt.
+        const { redactedText } = await this.localPiiService.redactStandalone(content);
 
         const updateResult = await this.conversationsRepository.updateMessage(
           message._id,

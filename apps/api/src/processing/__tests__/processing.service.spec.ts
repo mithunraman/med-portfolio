@@ -169,4 +169,23 @@ describe('ProcessingService injection gate', () => {
     expect(statuses).not.toContain(MessageStatus.REJECTED);
     expect(redactionStage.execute).toHaveBeenCalled();
   });
+
+  it('FAILS CLOSED: marks FAILED and never writes content when redaction throws', async () => {
+    // A redaction-layer failure (e.g. Azure PHI down after retries) must not leak
+    // un-redacted text: processMessage catches the throw and marks the message
+    // FAILED, with no COMPLETE status and no `content` ever persisted.
+    const { service, updateMessage, redactionStage } = makeFullPathService({
+      text: 'cleaned text',
+      injectionDetected: false,
+    });
+    redactionStage.execute.mockRejectedValue(new Error('Azure PHI redaction failed'));
+
+    await service.processMessage(new Types.ObjectId());
+
+    const statuses = updateMessage.mock.calls.map((c) => c[1].status);
+    expect(statuses).toContain(MessageStatus.FAILED);
+    expect(statuses).not.toContain(MessageStatus.COMPLETE);
+    const wroteContent = updateMessage.mock.calls.some((c) => c[1].content);
+    expect(wroteContent).toBe(false);
+  });
 });

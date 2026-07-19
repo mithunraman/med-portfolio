@@ -7,7 +7,6 @@ import { OpenAIModels, type ModelTarget, type ThinkMode } from './llm.service';
  */
 export const Stage = {
   Cleaning: 'cleaning',
-  Redaction: 'redaction',
   Classify: 'classify',
   CheckCompleteness: 'check_completeness',
   GenerateFollowup: 'generate_followup',
@@ -90,7 +89,6 @@ const foundry = (model: string, thinkMode: ThinkMode): ModelTarget => ({
 export const VARIANTS = {
   A: {
     cleaning: openai(OpenAIModels.GPT_5_4_NANO),
-    redaction: openai(OpenAIModels.GPT_5_4_NANO),
     classify: openai(OpenAIModels.GPT_4_1_MINI),
     check_completeness: openai(OpenAIModels.GPT_4_1_MINI),
     generate_followup: openai(OpenAIModels.GPT_4_1),
@@ -102,7 +100,6 @@ export const VARIANTS = {
   },
   B: {
     cleaning: deepseek(DEEPSEEK_FLASH, 'off'),
-    redaction: deepseek(DEEPSEEK_FLASH, 'off'),
     classify: deepseek(DEEPSEEK_FLASH, 'off'),
     check_completeness: deepseek(DEEPSEEK_FLASH, 'off'),
     generate_followup: deepseek(DEEPSEEK_FLASH, 'off'),
@@ -114,7 +111,6 @@ export const VARIANTS = {
   },
   C: {
     cleaning: deepseek(DEEPSEEK_PRO, 'off'),
-    redaction: deepseek(DEEPSEEK_PRO, 'off'),
     classify: deepseek(DEEPSEEK_PRO, 'off'),
     check_completeness: deepseek(DEEPSEEK_PRO, 'off'),
     generate_followup: deepseek(DEEPSEEK_PRO, 'off'),
@@ -128,7 +124,6 @@ export const VARIANTS = {
   // of OpenRouter. Enables a clean A/B of the two hosting paths for the same model.
   D: {
     cleaning: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
-    redaction: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
     classify: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
     check_completeness: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
     generate_followup: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),

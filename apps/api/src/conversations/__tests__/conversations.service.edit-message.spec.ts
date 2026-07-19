@@ -76,6 +76,19 @@ const mockTransactionService = {
   withTransaction: jest.fn((fn: (session: any) => Promise<any>) => fn(null)),
 };
 
+// The redaction patterns are covered by uk-pii-patterns / LocalPiiService specs;
+// here we only assert that the edit path routes content through the *standalone*
+// offline redactor (redactStandalone, which covers contact PII), so a simple
+// email+phone-masking stub keeps the wiring test meaningful.
+const maskContactPii = (text: string) =>
+  text.replace(/[^\s@]+@[^\s@]+/g, '[EMAIL]').replace(/\b07\d{3}\s?\d{6}\b/g, '[PHONE]');
+const mockLocalPiiService = {
+  redactStandalone: jest.fn(async (text: string) => ({
+    redactedText: maskContactPii(text),
+    entities: [],
+  })),
+};
+
 function createService(): ConversationsService {
   return new ConversationsService(
     mockConversationsRepo as any,
@@ -87,6 +100,7 @@ function createService(): ConversationsService {
     mockAnalysisRunsService as any,
     noopService, // outboxService
     noopService, // contextService
+    mockLocalPiiService as any, // localPiiService
   );
 }
 
@@ -108,25 +122,36 @@ describe('ConversationsService.editMessage', () => {
     mockTransactionService.withTransaction.mockImplementation(
       (fn: (session: any) => Promise<any>) => fn(null),
     );
+    // resetAllMocks wipes inline implementations — re-apply the redaction stub.
+    mockLocalPiiService.redactStandalone.mockImplementation(async (text: string) => ({
+      redactedText: maskContactPii(text),
+      entities: [],
+    }));
     service = createService();
   });
 
-  it('redacts structured PII, writes the new content, and stamps editedAt', async () => {
+  it('redacts contact PII (email + phone), writes the new content, and stamps editedAt', async () => {
+    // Regression guard: the edit path must run the standalone offline redactor,
+    // which covers email/phone/etc — not the narrow post-Azure backstop that
+    // defers those to Azure (which edit never invokes).
     primeHappyPath();
 
     const result = await service.editMessage(
       userIdStr,
       'conv_abc',
       'msg_abc',
-      'Call me at test@example.com',
+      'call 07700 900123 or test@example.com',
     );
 
+    expect(mockLocalPiiService.redactStandalone).toHaveBeenCalledWith(
+      'call 07700 900123 or test@example.com',
+    );
     expect(mockConversationsRepo.updateMessage).toHaveBeenCalledWith(
       messageOid,
       {
-        rawContent: 'Call me at test@example.com',
-        cleanedContent: 'Call me at [EMAIL]',
-        content: 'Call me at [EMAIL]',
+        rawContent: 'call 07700 900123 or test@example.com',
+        cleanedContent: 'call [PHONE] or [EMAIL]',
+        content: 'call [PHONE] or [EMAIL]',
         editedAt: expect.any(Date),
       },
       null,
@@ -267,8 +292,8 @@ describe('ConversationsService.editMessage', () => {
   });
 
   // Injection-gate guard: a REJECTED message is deletable (see delete-message spec)
-  // but must NOT be editable — edit runs regex-only redaction with no injection check,
-  // so editing it back to COMPLETE would smuggle flagged content into the transcript.
+  // but must NOT be editable — edit runs redaction with no injection check, so
+  // editing it back to COMPLETE would smuggle flagged content into the transcript.
   it('throws ConflictException for a REJECTED (injection-flagged) message', async () => {
     primeHappyPath();
     mockConversationsRepo.findMessagesByXids.mockResolvedValue(

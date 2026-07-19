@@ -91,6 +91,7 @@ function createService(): ConversationsService {
     mockAnalysisRunsService as any,
     noopService, // outboxService
     noopService, // contextService
+    noopService, // localPiiService (unused on the delete path)
   );
 }
 

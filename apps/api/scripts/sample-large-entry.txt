@@ -1,0 +1,9 @@
+Reflective log entry — acute care, GP ST2.
+
+Today I want to reflect on a case from last Tuesday during my on-call shift. I reviewed Mrs Margaret Patel, an 82-year-old woman registered at the Whitfield Road Surgery, who was brought in by her daughter Aisha after a fall at home. Her NHS number is 943 476 5919 and her date of birth is 12/05/1943. She lives at 42 Beaumont Gardens, Sheffield, S10 2QL, and her daughter's mobile is 07700 900123. I emailed a short summary to her usual GP at margaret.gp@nhs.net afterwards.
+
+On examination her lying and standing blood pressure was 148/92 dropping to 118/70 after standing, heart rate 82, oxygen saturations 97% on air, and her eGFR was 58. I had started her on tamsulosin 400mcg three weeks earlier for urinary symptoms, and on reflection I should have considered the postural drop at that point, given she was already on ramipril 5mg once daily. Bloods taken on 14 March 2026 were unremarkable apart from a mildly raised creatinine.
+
+Looking back, the thing I did well was actually bothering to do the lying and standing BP at the end of a very busy shift — it would have been easy to just call it a mechanical trip and move on. What I would change is that when I first prescribed the tamsulosin, back when she first registered with us in 1985, I should have weighed the falls risk more carefully in someone her age already on an antihypertensive. Her National Insurance number AB123456C and the practice bank details (sort code 12-34-56 account 87654321) had been copied onto the referral form, which I have since flagged should not be shared.
+
+Recently I have been trying to slow down at the end of shifts. The following morning I discussed the case with my supervisor, Dr James Okafor, who agreed the real learning point was the prescribing decision, not the fall itself.

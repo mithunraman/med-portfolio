@@ -70,6 +70,34 @@ export const envSchema = z.object({
   AZURE_FOUNDRY_API_KEY: z.string().optional(),
   AZURE_FOUNDRY_BASE_URL: z.string().url().optional(),
 
+  // Azure AI Language — PII/PHI redaction. Authenticated with a Microsoft Entra
+  // service principal (no static key), so `disableLocalAuth` can be enforced on
+  // the resource. All four are required for the redaction pipeline;
+  // AzureLanguageService asserts their presence at startup and fails fast if any
+  // is missing. Kept optional in the schema so unrelated tooling can still parse
+  // config without provisioning Azure creds.
+  AZURE_LANGUAGE_ENDPOINT: z.string().url().optional(),
+  AZURE_TENANT_ID: z.string().optional(),
+  AZURE_CLIENT_ID: z.string().optional(),
+  AZURE_CLIENT_SECRET: z.string().optional(),
+
+  // How the PHI layer treats DateTime entities. 'keep-relative' (default) keeps
+  // non-identifying relative temporal expressions ("today", "three weeks ago")
+  // for reflective narrative while still redacting absolute dates (DOB,
+  // "12/05/1980"). 'redact-all' removes every date for maximum de-identification
+  // strictness. A DPIA-level policy switch — see AzureLanguageService.
+  REDACTION_DATE_POLICY: z.enum(['keep-relative', 'redact-all']).default('keep-relative'),
+
+  // Whether the PHI layer keeps `PersonType` entities (job roles / relationship
+  // nouns like "supervisor", "GP", "daughter"). These are NOT HIPAA/ICO
+  // identifiers, so keeping them (default) preserves reflective narrative without
+  // leaking PII. Set to 'false' for maximum strictness. Explicit enum→boolean so
+  // the string 'false' is honoured (z.coerce.boolean would treat it as true).
+  REDACTION_KEEP_PERSON_TYPE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+
   // AssemblyAI
   ASSEMBLYAI_API_KEY: z
     .string({ required_error: 'ASSEMBLYAI_API_KEY is required' })
@@ -204,6 +232,14 @@ export const appConfig = registerAs('app', () => {
     azureFoundry: {
       apiKey: env.AZURE_FOUNDRY_API_KEY,
       baseUrl: env.AZURE_FOUNDRY_BASE_URL,
+    },
+    azureLanguage: {
+      endpoint: env.AZURE_LANGUAGE_ENDPOINT,
+      tenantId: env.AZURE_TENANT_ID,
+      clientId: env.AZURE_CLIENT_ID,
+      clientSecret: env.AZURE_CLIENT_SECRET,
+      datePolicy: env.REDACTION_DATE_POLICY,
+      keepPersonType: env.REDACTION_KEEP_PERSON_TYPE,
     },
     assemblyai: {
       apiKey: env.ASSEMBLYAI_API_KEY,

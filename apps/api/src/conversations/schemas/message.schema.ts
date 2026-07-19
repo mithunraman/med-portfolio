@@ -47,7 +47,7 @@ export class Message {
   rawContent!: string | null; // Original text input OR raw transcript from audio
 
   @Prop({ type: String, default: null })
-  cleanedContent!: string | null; // After cleaning stage
+  redactedContent!: string | null; // PII-redacted text (send-path: pre-cleaning intermediate; final text is in `content`)
 
   @Prop({ type: String, default: null })
   content!: string | null; // Final processed content (displayed to user)

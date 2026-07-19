@@ -103,6 +103,25 @@ describe('ConversationsRepository — deleted message filtering', () => {
       expect(result.ok).toBe(true);
       expect(result.value).toBe(true);
     });
+
+    it('returns true for a DEIDENTIFYING message (ordinal > CLEANING, still processing)', async () => {
+      // Guards the reorder: DEIDENTIFYING must count as processing even though its
+      // ordinal (400) is above CLEANING (300). Membership, not an ordinal range.
+      await insertMessage({ status: MessageStatus.DEIDENTIFYING });
+
+      const result = await repo.hasProcessingMessages(conversationId);
+      expect(result.ok).toBe(true);
+      expect(result.value).toBe(true);
+    });
+
+    it('returns false for non-COMPLETE terminal statuses (FAILED, REJECTED)', async () => {
+      await insertMessage({ status: MessageStatus.FAILED });
+      await insertMessage({ status: MessageStatus.REJECTED });
+
+      const result = await repo.hasProcessingMessages(conversationId);
+      expect(result.ok).toBe(true);
+      expect(result.value).toBe(false);
+    });
   });
 
   describe('getLastMessageRole', () => {

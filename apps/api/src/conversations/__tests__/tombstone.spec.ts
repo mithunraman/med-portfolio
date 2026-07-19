@@ -18,7 +18,7 @@ describe('messageTombstoneUpdate', () => {
     const update = messageTombstoneUpdate();
 
     expect(update.$set.rawContent).toBe('[deleted]');
-    expect(update.$set.cleanedContent).toBe('[deleted]');
+    expect(update.$set.redactedContent).toBe('[deleted]');
     expect(update.$set.content).toBe('[deleted]');
     expect(update.$set.status).toBe(MessageStatus.DELETED);
   });

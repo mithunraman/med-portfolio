@@ -48,7 +48,7 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
     generated: false,
     content: 'Hello world',
     rawContent: 'Hello world',
-    cleanedContent: 'Hello world',
+    redactedContent: 'Hello world',
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -150,7 +150,7 @@ describe('ConversationsService.editMessage', () => {
       messageOid,
       {
         rawContent: 'call 07700 900123 or test@example.com',
-        cleanedContent: 'call [PHONE] or [EMAIL]',
+        redactedContent: 'call [PHONE] or [EMAIL]',
         content: 'call [PHONE] or [EMAIL]',
         editedAt: expect.any(Date),
       },
@@ -297,7 +297,7 @@ describe('ConversationsService.editMessage', () => {
   it('throws ConflictException for a REJECTED (injection-flagged) message', async () => {
     primeHappyPath();
     mockConversationsRepo.findMessagesByXids.mockResolvedValue(
-      ok([makeMessage({ status: MessageStatus.REJECTED, content: null, cleanedContent: null })]),
+      ok([makeMessage({ status: MessageStatus.REJECTED, content: null, redactedContent: null })]),
     );
 
     await expect(service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'new')).rejects.toThrow(

@@ -110,7 +110,7 @@ export class ProcessingService {
   }
 
   /**
-   * Process audio message: Transcribe → Clean → Redact PII
+   * Process audio message: Transcribe → Redact PII → Clean
    */
   private async processAudioMessage(message: Message, context: StageContext): Promise<void> {
     const messageId = message._id;
@@ -129,72 +129,81 @@ export class ProcessingService {
       context
     );
 
-    // Update with raw transcript and transcription metadata
-    const cleaningAlive = await this.applyUpdate(messageId, {
+    // Update with raw transcript and transcription metadata. Redaction runs
+    // next, so the message enters DEIDENTIFYING.
+    const stillAlive = await this.applyUpdate(messageId, {
       rawContent: transcriptionResult.text,
-      status: MessageStatus.CLEANING,
+      status: MessageStatus.DEIDENTIFYING,
       transcription: transcriptionResult.transcription,
     });
-    if (!cleaningAlive) return;
+    if (!stillAlive) return;
 
-    // Stages 2-3: Clean → Redact → COMPLETE (or REJECTED on injection)
-    await this.cleanRedactAndComplete(messageId, transcriptionResult.text, context);
+    // Stages 2-3: Redact → Clean → COMPLETE (or REJECTED on injection)
+    await this.redactCleanAndComplete(messageId, transcriptionResult.text, context);
   }
 
   /**
-   * Process text message: Clean → Redact PII
+   * Process text message: Redact PII → Clean
    */
   private async processTextMessage(message: Message, context: StageContext): Promise<void> {
     const messageId = message._id;
 
-    // Update status to CLEANING
-    if (!(await this.applyUpdate(messageId, { status: MessageStatus.CLEANING }))) return;
-
-    // Stage 1: Cleaning
-    this.logger.info(`Cleaning text for message ${message.xid}`);
     if (!message.rawContent) {
-      await this.markFailed(messageId, 'No raw content to clean');
+      await this.markFailed(messageId, 'No raw content to process');
       return;
     }
-    // Stages 1-2: Clean → Redact → COMPLETE (or REJECTED on injection)
-    await this.cleanRedactAndComplete(messageId, message.rawContent, context);
+
+    // Redaction runs first, so the message enters DEIDENTIFYING.
+    if (!(await this.applyUpdate(messageId, { status: MessageStatus.DEIDENTIFYING }))) return;
+
+    // Stages 1-2: Redact → Clean → COMPLETE (or REJECTED on injection)
+    await this.redactCleanAndComplete(messageId, message.rawContent, context);
   }
 
   /**
-   * Shared tail for both processing paths: Clean → Redact → COMPLETE.
+   * Shared tail for both processing paths: Redact → Clean → COMPLETE.
    *
-   * Single enforcement point for the injection gate — if either stage flags the
-   * input as a prompt-injection attempt, the message is marked REJECTED and no
-   * cleaned/redacted content survives (markRejected nulls content/cleanedContent, so
-   * even a cleanedContent persisted by a successful cleaning stage before the redaction
-   * stage flagged it is cleared; rawContent is preserved). This keeps the flagged turn
-   * out of the AI transcript (gather-context filters status===COMPLETE) without ever
-   * substituting a sentinel string into the content.
+   * Redaction runs FIRST so the only text the (US-hosted) cleaning LLM ever sees
+   * is already Azure-PHI-redacted — raw PHI never crosses the residency boundary.
+   * The redacted output is persisted to `redactedContent` (a redacted-at-rest
+   * intermediate, consistent with how the edit path uses that field); the cleaning
+   * stage then produces the final display `content`.
+   *
+   * Injection gate: detection lives on the cleaning stage, which now runs LAST.
+   * If it flags the (already-redacted) input, the message is marked REJECTED and
+   * no cleaned/redacted content survives — markRejected nulls both content and the
+   * redactedContent that redaction persisted a moment earlier; rawContent is kept.
+   * This keeps the flagged turn out of the AI transcript (gather-context filters
+   * status===COMPLETE) without substituting a sentinel string into content.
+   *
+   * Fail-closed: the redaction stage throws on an Azure failure; the processMessage
+   * catch marks the message FAILED, before any cleaning spend, so un-redacted text
+   * can never reach `content`.
    */
-  private async cleanRedactAndComplete(
+  private async redactCleanAndComplete(
     messageId: Types.ObjectId,
     input: string,
     context: StageContext
   ): Promise<void> {
-    // Stage: Cleaning
-    this.logger.info(`Cleaning text for message ${messageId}`);
-    const cleaningResult = await this.cleaningStage.execute(input, context);
-    if (cleaningResult.injectionDetected) return this.markRejected(messageId);
+    // Stage: PII Redaction (Azure PHI + offline backstop). Runs on raw text.
+    this.logger.info(`Redacting PII for message ${messageId}`);
+    const redaction = await this.redactionStage.execute(input, context);
     if (
       !(await this.applyUpdate(messageId, {
-        cleanedContent: cleaningResult.text,
-        status: MessageStatus.DEIDENTIFYING,
+        redactedContent: redaction.text,
+        status: MessageStatus.CLEANING,
       }))
     )
       return;
 
-    // Stage: PII Redaction (regex + LLM)
-    this.logger.info(`Redacting PII for message ${messageId}`);
-    const redaction = await this.redactionStage.execute(cleaningResult.text, context);
-    if (redaction.injectionDetected) return this.markRejected(messageId);
+    // Stage: Cleaning — runs on redacted text (only ever sees placeholders, never
+    // raw PHI). Also the injection gate and the last writer to `content`.
+    this.logger.info(`Cleaning text for message ${messageId}`);
+    const cleaningResult = await this.cleaningStage.execute(redaction.text, context);
+    if (cleaningResult.injectionDetected) return this.markRejected(messageId);
     if (
       !(await this.applyUpdate(messageId, {
-        content: redaction.text,
+        content: cleaningResult.text,
         status: MessageStatus.COMPLETE,
       }))
     )
@@ -227,10 +236,10 @@ export class ProcessingService {
 
   /**
    * Terminal REJECTED: the content was flagged as a prompt-injection attempt.
-   * rawContent is preserved but content and cleanedContent are explicitly cleared —
-   * the cleaning stage may already have persisted cleanedContent before the redaction
-   * stage flagged the injection, so nulling both here makes the "no cleaned/redacted
-   * content survives" invariant hold regardless of which stage caught it. That keeps
+   * rawContent is preserved but content and redactedContent are explicitly cleared —
+   * the redaction stage has already persisted redactedContent (the redacted text)
+   * before the cleaning stage flags the injection, so nulling both here makes the
+   * "no cleaned/redacted content survives" invariant hold. That keeps
    * the message out of the AI transcript (gather-context filters COMPLETE only) and
    * makes the DTO fall back to rawContent uniformly, so the UI shows the trainee's own
    * words on both rejection paths and renders "not added". Unlike markFailed this is a
@@ -242,7 +251,7 @@ export class ProcessingService {
     const result = await this.conversationsRepository.updateMessage(messageId, {
       status: MessageStatus.REJECTED,
       content: null,
-      cleanedContent: null,
+      redactedContent: null,
     });
     if (isErr(result)) {
       throw new Error(

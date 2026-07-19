@@ -312,7 +312,18 @@ function applyEntityMask(
   const toRedact = entities.filter((e) =>
     shouldRedactEntity(e.category, e.text, policy, e.subCategory)
   );
-  const spans = mergeOverlaps(toRedact).sort((a, b) => b.start - a.start);
+  // Relabel ages for masking only; the reported category below stays the true
+  // 'Quantity' so metadata is honest. Any age reaching redaction is either a
+  // confirmed 90+ (→ HIPAA "90 or older" aggregate) or unreadable (→ typed [AGE]);
+  // sub-90 ages are kept upstream and never arrive here.
+  const forMasking = toRedact.map((e) => {
+    if (e.category === 'Quantity' && isAgeQuantity(e.text, e.subCategory)) {
+      const category = isAgeOver90(e.text) ? AGE_90_PLUS_CATEGORY : REDACTED_AGE_CATEGORY;
+      return { ...e, category } as Entity;
+    }
+    return e;
+  });
+  const spans = mergeOverlaps(forMasking).sort((a, b) => b.start - a.start);
 
   let out = text;
   for (const span of spans) {
@@ -417,6 +428,24 @@ export function isNationalBody(text: string): boolean {
 // like "82-year-old". We keep an age only when it is below this ceiling.
 const HIPAA_AGE_CEILING = 90;
 
+// HIPAA aggregates every age 90+ into a single "90 or older" bucket rather than
+// deleting it, so the (non-identifying) fact that the patient is very elderly
+// survives for clinical context. We therefore mask an identifying age with this
+// literal instead of a bare [QUANTITY] placeholder — "who's 93" → "who's 90 or older".
+// The synthetic category is internal-only: it never comes from Azure, and
+// toPlaceholder maps it to the literal. A non-age Quantity still becomes [QUANTITY].
+const AGE_90_PLUS_LABEL = '90 or older';
+const AGE_90_PLUS_CATEGORY = '__AgeOver90__';
+
+// A redacted age we could NOT read (unparseable → fail-closed) is masked with a
+// typed [AGE] placeholder rather than the vaguer [QUANTITY]: it tells the
+// downstream analysis LLM an age was present without asserting a value. 'Age' is
+// not a real Azure top-level category (Age is only ever a subCategory), so using
+// it as the synthetic masking category is collision-free and snake-cases to [AGE]
+// through toPlaceholder — no special-case needed. Non-age quantities keep
+// [QUANTITY].
+const REDACTED_AGE_CATEGORY = 'Age';
+
 // Age-like phrasing — a fallback used only when Azure omits the `Age`
 // subcategory. It is consulted solely for text Azure already tagged `Quantity`,
 // so it cannot misfire on clinical numbers elsewhere in the narrative.
@@ -427,15 +456,93 @@ function isAgeQuantity(text: string, subCategory?: string): boolean {
   return subCategory === 'Age' || AGE_PHRASING.test(text);
 }
 
+// Worded-age vocabulary. Ages are a closed set (units 0–19, tens 20–90), so a
+// small deterministic parser beats a general word-to-number dependency — leaner,
+// dependency-free, and (critically on a redaction path) it never guesses: an
+// unrecognised token yields null, which the gates fail-close on.
+const AGE_WORD_UNITS: Readonly<Record<string, number>> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+  ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
+  seventeen: 17, eighteen: 18, nineteen: 19,
+};
+const AGE_WORD_TENS: Readonly<Record<string, number>> = {
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+};
+
 /**
- * Whether an age is identifying under HIPAA Safe Harbor: 90+ is (kept only as
- * "90 or older"), 89 and under is not. An age we cannot parse to a number is
- * treated as identifying (fail-closed).
+ * Parse a spelled-out age ("eighty-two", "forty") to a number, or null if it is
+ * not a recognised age word. Tokenises on spaces and any Unicode dash (so an
+ * en-dash "eighty–two" parses too) and ignores non-number words ("year-old",
+ * "aged") so it can read the number out of a whole age span.
+ *
+ * Scope is human ages. These all return null so the caller fails closed:
+ *  - thousand/million/billion — not an age;
+ *  - a repeated tens or units word ("eighty ninety", "one two");
+ *  - a tens word paired with a teen ("eighty fifteen" is impossible — a tens word
+ *    only ever combines with a 1–9 unit; without this it would sum to 95 and
+ *    assert a false "90 or older");
+ *  - a total over 120.
+ * A "hundred" age is a centenarian (100+), so it resolves to ≥90 and surfaces the
+ * "90 or older" aggregate rather than the vaguer [AGE] (this also avoids reading
+ * "a hundred and two" as 2 from a stray units word).
  */
+export function parseWordedAge(text: string): number | null {
+  const lower = text.toLowerCase();
+  if (/\b(thousand|million|billion)\b/.test(lower)) return null; // never an age
+  if (/\bhundred\b/.test(lower)) return 100; // centenarian → ≥90 → "90 or older"
+
+  const tokens = lower
+    .split(/[\s\p{Pd}]+/u)
+    .filter((t) => t in AGE_WORD_UNITS || t in AGE_WORD_TENS);
+  if (tokens.length === 0) return null;
+
+  let tensSum = 0;
+  let unitsSum = 0;
+  let tensCount = 0;
+  let unitsCount = 0;
+  for (const token of tokens) {
+    if (token in AGE_WORD_TENS) {
+      tensSum += AGE_WORD_TENS[token];
+      tensCount++;
+    } else {
+      unitsSum += AGE_WORD_UNITS[token];
+      unitsCount++;
+    }
+  }
+  if (tensCount > 1 || unitsCount > 1) return null; // "eighty ninety" / "one two"
+  if (tensCount === 1 && unitsSum >= 10) return null; // "eighty fifteen" — impossible
+
+  const age = tensSum + unitsSum;
+  return age <= 120 ? age : null;
+}
+
+/**
+ * Read an age from a span as a number, digits first ("94") then spelled-out
+ * words ("ninety-four"). Null when neither yields a value — the single source of
+ * truth both age gates below derive from, so they can never disagree.
+ */
+function ageValue(text: string): number | null {
+  const digits = text.match(/\d{1,3}/);
+  return digits ? Number(digits[0]) : parseWordedAge(text);
+}
+
+// Two age gates that deliberately fail in OPPOSITE directions — do not merge:
+//  - redact gate (isIdentifyingAge): the danger is LEAKING a real 90+ age, so an
+//    age we can't read fails CLOSED → redact.
+//  - label gate (isAgeOver90): the danger is FABRICATING a false "90 or older"
+//    claim, so an age we can't read fails NEUTRAL → don't assert the band (the
+//    entity still redacts via the gate above, just to a neutral [QUANTITY]).
+
+/** Redact gate: is this age identifying (90+ or unreadable)? Fail-closed. */
 function isIdentifyingAge(text: string): boolean {
-  const match = text.match(/\d{1,3}/);
-  const age = match ? Number(match[0]) : NaN;
-  return Number.isNaN(age) || age >= HIPAA_AGE_CEILING;
+  const age = ageValue(text);
+  return age === null || age >= HIPAA_AGE_CEILING;
+}
+
+/** Label gate: is this a *confirmed* 90+ age worth the "90 or older" bucket? */
+function isAgeOver90(text: string): boolean {
+  const age = ageValue(text);
+  return age !== null && age >= HIPAA_AGE_CEILING;
 }
 
 /**
@@ -477,7 +584,8 @@ export function shouldRedactEntity(
 }
 
 /** "PhoneNumber" → "[PHONE_NUMBER]", "Person" → "[PERSON]". */
-function toPlaceholder(category: string): string {
+export function toPlaceholder(category: string): string {
+  if (category === AGE_90_PLUS_CATEGORY) return AGE_90_PLUS_LABEL;
   const snake = category
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
     .replace(/[^A-Za-z0-9]+/g, '_')

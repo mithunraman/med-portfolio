@@ -1,4 +1,10 @@
-import { ArtefactStatus, ConversationStatus, MessageStatus, MessageRole } from '@acme/shared';
+import {
+  ArtefactStatus,
+  ConversationStatus,
+  MessageStatus,
+  MessageRole,
+  PROCESSING_MESSAGE_STATUSES,
+} from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
@@ -43,7 +49,7 @@ export function messageTombstoneUpdate() {
   return {
     $set: {
       rawContent: '[deleted]',
-      cleanedContent: '[deleted]',
+      redactedContent: '[deleted]',
       content: '[deleted]',
       status: MessageStatus.DELETED,
     },
@@ -296,7 +302,9 @@ export class ConversationsRepository implements IConversationsRepository {
         .countDocuments({
           conversation: conversationId,
           role: MessageRole.USER,
-          status: { $gt: MessageStatus.DELETED, $lt: MessageStatus.COMPLETE },
+          // Explicit membership, not an ordinal range: correct regardless of the
+          // pipeline's execution order (see PROCESSING_MESSAGE_STATUSES).
+          status: { $in: [...PROCESSING_MESSAGE_STATUSES] },
         })
         .limit(1)
         .session(session || null);

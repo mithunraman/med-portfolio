@@ -18,11 +18,12 @@ export class RedactionStage implements IProcessingStage {
    *
    * 1. Azure PHI (ML/NER) — the semantic layer that catches contextual
    *    identifiers (patient names, places, organisations) that regex cannot. It
-   *    runs FIRST, on the clean input, so the context-sensitive model sees
-   *    natural text; pre-masking would strip the surrounding tokens it relies on
-   *    and lower its recall. Fail-closed by contract: any error throws, and the
-   *    processing service marks the message FAILED — un-redacted text never
-   *    reaches `content`.
+   *    runs FIRST — before the regex layer, and (in the pipeline) before cleaning
+   *    — so the context-sensitive model sees the natural, un-masked transcript;
+   *    pre-masking with regex placeholders would strip the surrounding tokens it
+   *    relies on and lower its recall. Fail-closed by contract: any error throws,
+   *    and the processing service marks the message FAILED — un-redacted text
+   *    never reaches `content`.
    *
    * 2. OpenRedaction (offline regex) — a deterministic backstop for structured
    *    UK identifiers (NHS number, sort code, postcode, DOB) the model may have

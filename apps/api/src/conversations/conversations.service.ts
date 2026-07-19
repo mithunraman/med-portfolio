@@ -276,7 +276,7 @@ export class ConversationsService {
           message._id,
           {
             rawContent: content,
-            cleanedContent: redactedText,
+            redactedContent: redactedText,
             content: redactedText,
             editedAt,
           },

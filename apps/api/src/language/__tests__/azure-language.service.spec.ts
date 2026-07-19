@@ -4,6 +4,7 @@ import {
   isAbsoluteDate,
   isNationalBody,
   mergeOverlaps,
+  parseWordedAge,
   shouldRedactEntity,
 } from '../azure-language.service';
 import type { RedactionPolicy } from '../azure-language.service';
@@ -322,12 +323,77 @@ describe('AzureLanguageService', () => {
       expect(result.entities).toHaveLength(0); // kept → excluded from redactions
     });
 
-    it('redacts an identifying age of 90 or over', async () => {
-      const service = buildService(analyzeForAge('94-year-old'));
+    it('aggregates an identifying age of 90 or over to "90 or older" (HIPAA bucket)', async () => {
+      // The exact age is replaced by the aggregate, not deleted, so the clinical
+      // fact of advanced age survives: "The patient is 94." → "... is 90 or older."
+      const service = buildService(analyzeForAge('94'));
 
-      const result = await service.redactPhi('A 94-year-old woman was reviewed.');
+      const result = await service.redactPhi('The patient is 94.');
 
-      expect(result.redactedText).toBe('A [QUANTITY] woman was reviewed.');
+      expect(result.redactedText).toBe('The patient is 90 or older.');
+    });
+
+    it('masks a non-age Quantity as [QUANTITY], not the age bucket', async () => {
+      const service = buildService(
+        fakeAnalyze((text) => [
+          {
+            text: '500',
+            category: 'Quantity',
+            offset: text.indexOf('500'),
+            length: 3,
+            confidenceScore: 0.9,
+          },
+        ])
+      );
+
+      const result = await service.redactPhi('The prize was 500 in total.');
+
+      expect(result.redactedText).toBe('The prize was [QUANTITY] in total.');
+    });
+
+    it('keeps a spelled-out age under 90 verbatim (parsed, not over-redacted)', async () => {
+      const service = buildService(analyzeForAge('eighty-two-year-old'));
+
+      const result = await service.redactPhi('An eighty-two-year-old man was reviewed.');
+
+      expect(result.redactedText).toBe('An eighty-two-year-old man was reviewed.');
+      expect(result.entities).toHaveLength(0);
+    });
+
+    it('aggregates a spelled-out age of 90 or over to "90 or older"', async () => {
+      const service = buildService(analyzeForAge('ninety-four-year-old'));
+
+      const result = await service.redactPhi('A ninety-four-year-old woman was reviewed.');
+
+      expect(result.redactedText).toBe('A 90 or older woman was reviewed.');
+    });
+
+    it('masks an unparseable age as typed [AGE], never a false "90 or older"', async () => {
+      // The critical regression guard: an age we cannot read must be withheld
+      // (as a typed [AGE], not the vaguer [QUANTITY]), not asserted into a band.
+      const service = buildService(analyzeForAge('geriatric'));
+
+      const result = await service.redactPhi('A geriatric patient was reviewed.');
+
+      expect(result.redactedText).toBe('A [AGE] patient was reviewed.');
+    });
+
+    it('aggregates a worded centenarian to "90 or older" (not the vaguer [AGE])', async () => {
+      const service = buildService(analyzeForAge('a hundred and three'));
+
+      const result = await service.redactPhi('The patient is a hundred and three.');
+
+      expect(result.redactedText).toBe('The patient is 90 or older.');
+    });
+
+    it('does NOT assert "90 or older" for an impossible age ("eighty fifteen")', async () => {
+      // "eighty fifteen" would sum to 95 without the tens+teen guard — must fall to
+      // [AGE], never a fabricated band.
+      const service = buildService(analyzeForAge('eighty fifteen'));
+
+      const result = await service.redactPhi('The patient is eighty fifteen.');
+
+      expect(result.redactedText).toBe('The patient is [AGE].');
     });
   });
 
@@ -455,14 +521,54 @@ describe('date classifier', () => {
       expect(shouldRedactEntity('Quantity', '102-year-old', keep)).toBe(true);
     });
 
-    it('redacts an age it cannot parse (fail-closed)', () => {
-      expect(shouldRedactEntity('Quantity', 'ninety-two years old', keep, 'Age')).toBe(true);
+    it('parses a spelled-out age and applies the same ceiling', () => {
+      expect(shouldRedactEntity('Quantity', 'eighty-two-year-old', keep, 'Age')).toBe(false); // 82
+      expect(shouldRedactEntity('Quantity', 'ninety-two years old', keep, 'Age')).toBe(true); // 92
+    });
+
+    it('redacts an age it cannot parse at all (fail-closed)', () => {
+      expect(shouldRedactEntity('Quantity', 'geriatric', keep, 'Age')).toBe(true);
     });
 
     it('does not treat a non-age Quantity as an age (falls through to redact)', () => {
       // No Age subcategory and no age phrasing → default behaviour, unchanged.
       expect(shouldRedactEntity('Quantity', '£4,500', keep)).toBe(true);
     });
+  });
+});
+
+describe('parseWordedAge', () => {
+  it('parses tens+units, tens-only, and units-only', () => {
+    expect(parseWordedAge('eighty-two')).toBe(82);
+    expect(parseWordedAge('eighty two')).toBe(82); // space separator
+    expect(parseWordedAge('ninety-four')).toBe(94);
+    expect(parseWordedAge('forty')).toBe(40);
+    expect(parseWordedAge('fifteen')).toBe(15);
+    expect(parseWordedAge('seven')).toBe(7);
+  });
+
+  it('reads the number out of a whole age span, ignoring non-number words', () => {
+    expect(parseWordedAge('eighty-two-year-old')).toBe(82);
+    expect(parseWordedAge('aged ninety')).toBe(90);
+  });
+
+  it('parses across a Unicode dash (en-dash), not just ASCII hyphen', () => {
+    expect(parseWordedAge('eighty–two')).toBe(82); // en-dash
+    expect(parseWordedAge('ninety—four')).toBe(94); // em-dash
+  });
+
+  it('resolves a centenarian ("hundred") age to 100 so it aggregates to 90+', () => {
+    expect(parseWordedAge('a hundred and three')).toBe(100);
+    expect(parseWordedAge('one hundred')).toBe(100);
+  });
+
+  it('returns null for anything it cannot safely read (caller fails closed)', () => {
+    expect(parseWordedAge('geriatric')).toBeNull();
+    expect(parseWordedAge('two thousand')).toBeNull(); // magnitude, not an age
+    expect(parseWordedAge('eighty ninety')).toBeNull(); // two tens
+    expect(parseWordedAge('one two')).toBeNull(); // two units
+    expect(parseWordedAge('eighty fifteen')).toBeNull(); // tens + teen — impossible
+    expect(parseWordedAge('')).toBeNull();
   });
 });
 

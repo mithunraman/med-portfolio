@@ -43,7 +43,8 @@ export function createGatherContextNode(deps: GraphDeps) {
     }
 
     // Include both USER and ASSISTANT messages to preserve Q&A context.
-    // Skips messages still being processed (PENDING, TRANSCRIBING, CLEANING).
+    // Keeps only COMPLETE messages — excludes anything still processing
+    // (PROCESSING_MESSAGE_STATUSES) and the non-COMPLETE terminals (FAILED/REJECTED).
     const allMessages = result.value.messages.filter(
       (msg) =>
         msg.status === MessageStatus.COMPLETE &&

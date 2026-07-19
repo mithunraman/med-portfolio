@@ -101,7 +101,7 @@ export async function createTestMessage(
     role: MessageRole;
     messageType: MessageType;
     rawContent: string | null;
-    cleanedContent: string | null;
+    redactedContent: string | null;
     content: string | null;
     status: MessageStatus;
     question: Question | null;
@@ -115,7 +115,7 @@ export async function createTestMessage(
       role: overrides.role ?? MessageRole.USER,
       messageType: overrides.messageType ?? MessageType.TEXT,
       rawContent: overrides.rawContent ?? 'I saw a patient today with type 2 diabetes.',
-      cleanedContent: overrides.cleanedContent ?? null,
+      redactedContent: overrides.redactedContent ?? null,
       content: overrides.content ?? 'I saw a patient today with type 2 diabetes.',
       status: overrides.status ?? MessageStatus.COMPLETE,
       question: overrides.question ?? null,
@@ -161,7 +161,7 @@ export async function markMessageComplete(
       $set: {
         status: MessageStatus.COMPLETE,
         content,
-        cleanedContent: content,
+        redactedContent: content,
       },
     }
   );

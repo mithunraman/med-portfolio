@@ -32,7 +32,7 @@ export interface CreateMessageData {
 
 export interface UpdateMessageData {
   rawContent?: string | null;
-  cleanedContent?: string | null;
+  redactedContent?: string | null;
   content?: string | null;
   status?: MessageStatus;
   processingError?: string | null;
@@ -121,8 +121,10 @@ export interface IConversationsRepository {
   ): Promise<Result<ListMessagesResult, DBError>>;
 
   /**
-   * Check if any USER messages in a conversation are still being processed
-   * (status < COMPLETE, i.e. PENDING, TRANSCRIBING, CLEANING, DEIDENTIFYING).
+   * Check if any USER messages in a conversation are still being processed — i.e.
+   * in any PROCESSING_MESSAGE_STATUSES (PENDING, TRANSCRIBING, CLEANING,
+   * DEIDENTIFYING). Listed by phase, not execution order (redaction runs before
+   * cleaning); membership is what matters, not the ordinal.
    */
   hasProcessingMessages(
     conversationId: Types.ObjectId,

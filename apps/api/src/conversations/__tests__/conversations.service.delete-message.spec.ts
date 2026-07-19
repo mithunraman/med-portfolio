@@ -48,7 +48,7 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
     generated: false,
     content: 'Hello world',
     rawContent: 'Hello world',
-    cleanedContent: 'Hello world',
+    redactedContent: 'Hello world',
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -139,7 +139,7 @@ describe('ConversationsService.deleteMessage', () => {
   it('allows deleting a REJECTED (injection-flagged) message', async () => {
     primeHappyPath();
     mockConversationsRepo.findMessagesByXids.mockResolvedValue(
-      ok([makeMessage({ status: MessageStatus.REJECTED, content: null, cleanedContent: null })]),
+      ok([makeMessage({ status: MessageStatus.REJECTED, content: null, redactedContent: null })]),
     );
 
     await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).resolves.toBeUndefined();

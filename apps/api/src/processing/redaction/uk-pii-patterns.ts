@@ -184,6 +184,17 @@ const CONTACT_PATTERNS: UkPiiPattern[] = [
 ];
 
 /**
+ * Every placeholder the offline redactor can emit. Exposed so a conformance test
+ * can assert each one matches the shared placeholder shape the cleaning guard
+ * relies on (see redaction/placeholders.ts) — a hand-written literal that breaks
+ * the convention then fails CI instead of silently escaping the guard.
+ */
+export const OFFLINE_PLACEHOLDERS: readonly string[] = [
+  ...STRUCTURED_PATTERNS,
+  ...CONTACT_PATTERNS,
+].map((p) => p.placeholder);
+
+/**
  * Run an ordered pattern list over the text. Each pattern does a global replace,
  * substituting its placeholder only when the (optional) validator accepts the
  * candidate. Running sequentially over the mutating string lets a more specific

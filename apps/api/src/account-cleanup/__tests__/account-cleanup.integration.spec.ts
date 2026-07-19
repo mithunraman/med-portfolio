@@ -211,7 +211,7 @@ describe('AccountCleanupService (integration)', () => {
       role: MessageRole.USER,
       messageType: MessageType.TEXT,
       rawContent: `Raw content for ${userId}`,
-      cleanedContent: `Cleaned content for ${userId}`,
+      redactedContent: `Redacted content for ${userId}`,
       content: `Content for ${userId}`,
       status: MessageStatus.COMPLETE,
       idempotencyKey: `idem_${userId}`,
@@ -323,7 +323,7 @@ describe('AccountCleanupService (integration)', () => {
 
     const msgA = await messageModel.findOne({ userId: userAId }).lean();
     expect(msgA!.rawContent).toBe('[deleted]');
-    expect(msgA!.cleanedContent).toBe('[deleted]');
+    expect(msgA!.redactedContent).toBe('[deleted]');
     expect(msgA!.content).toBe('[deleted]');
     expect(msgA!.status).toBe(MessageStatus.DELETED);
     expect(msgA!.question).toBeUndefined();

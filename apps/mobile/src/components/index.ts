@@ -23,7 +23,7 @@ export { LoadingProvider, useLoading } from './LoadingHUD';
 export { MultiSelect, type MultiSelectOption } from './MultiSelect';
 export { NotesSection, noteKey, type LocalNote } from './NotesSection';
 export { OfflineBanner } from './OfflineBanner';
-export { PdpGoalSelector, type GoalSelectionState } from './PdpGoalSelector';
+export { initGoalSelections, PdpGoalSelector, type GoalSelectionState } from './PdpGoalSelector';
 export {
   DraftStatusPill,
   ReadinessBar,

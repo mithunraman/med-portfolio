@@ -35,7 +35,7 @@ import {
 
 const STATUS_FILTERS: { label: string; value: PdpGoalStatus | null }[] = [
   { label: 'All', value: null },
-  { label: 'Started', value: PdpGoalStatus.STARTED },
+  { label: 'In progress', value: PdpGoalStatus.STARTED },
   { label: 'Completed', value: PdpGoalStatus.COMPLETED },
   { label: 'Archived', value: PdpGoalStatus.ARCHIVED },
 ];

@@ -3,7 +3,7 @@ import { hexToRgba } from '@/utils/color';
 import type { PdpGoal } from '@acme/shared';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useCallback, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -54,11 +54,15 @@ function addMonths(date: Date, months: number): Date {
   return d;
 }
 
-function initSelections(goals: PdpGoal[]): Map<string, GoalSelectionState> {
+// Single source of truth for the initial selection state (owned here alongside
+// GoalSelectionState). Callers ask the component for defaults rather than
+// re-implementing the shape.
+export function initGoalSelections(goals: PdpGoal[]): Map<string, GoalSelectionState> {
   const map = new Map<string, GoalSelectionState>();
   for (const goal of goals) {
     map.set(goal.id, {
-      selected: true,
+      // Opt-in default (MOB-078): untracked until the user taps "Track this goal".
+      selected: false,
       reviewDate: null,
       actions: new Map(goal.actions.map((a) => [a.id, true])),
     });
@@ -276,109 +280,120 @@ export function PdpGoalSelector({
         const sel = selections.get(goal.id);
         if (!sel) return null;
 
+        // Untracked (opt-in default): a dashed "ghost" card that reads as
+        // addable — full-opacity text + a Track affordance, the whole card
+        // tappable for a large target. Deliberately NOT dimmed (that would read
+        // as disabled).
+        if (!sel.selected) {
+          return (
+            <Pressable
+              key={goal.id}
+              onPress={() => onToggleGoal(goal.id)}
+              disabled={disabled}
+              accessibilityRole="button"
+              accessibilityLabel={`Track goal: ${goal.goal}`}
+              style={[styles.goalCard, styles.ghostCard, { borderColor: colors.border }]}
+            >
+              <Text style={[styles.goalText, { color: colors.text }]}>{goal.goal}</Text>
+              <View style={[styles.trackButton, { borderColor: colors.primary }]}>
+                <Ionicons name="add" size={18} color={colors.primary} />
+                <Text style={[styles.trackButtonText, { color: colors.primary }]}>
+                  Track this goal
+                </Text>
+              </View>
+            </Pressable>
+          );
+        }
+
+        // Tracked: solid card that discloses the review date + actions, with a
+        // tertiary Untrack at the foot. The date chip warns (amber) while unset —
+        // it's required at finalise — and calms to primary once a date is chosen
+        // (attention, not error: no red before the user tries to finalise).
+        const hasDate = sel.reviewDate != null;
+        const dateAccent = hasDate ? colors.primary : colors.warning;
+        const dateBg = hasDate ? hexToRgba(colors.primary, 0.1) : colors.warningBackground;
+        const dateBorder = hasDate ? hexToRgba(colors.primary, 0.2) : colors.warningBorder;
         return (
           <View
             key={goal.id}
             style={[
               styles.goalCard,
-              {
-                backgroundColor: colors.surface,
-                borderWidth: 1,
-                borderColor: sel.selected ? colors.primary : colors.border,
-                opacity: sel.selected ? 1 : 0.5,
-              },
+              { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primary },
             ]}
           >
-            {/* Goal header with toggle */}
-            <View style={styles.goalHeader}>
-              <Switch
-                value={sel.selected}
-                onValueChange={() => onToggleGoal(goal.id)}
-                trackColor={{ true: colors.primary }}
-                disabled={disabled}
-              />
-              <Text
-                style={[
-                  styles.goalText,
-                  { color: colors.text },
-                  !sel.selected && styles.dimmedText,
-                ]}
-              >
-                {goal.goal}
+            {/* No leading badge: the solid border, disclosed content, and Untrack
+                already signal "tracked", and omitting it keeps the title aligned
+                with the untracked ghost card (no layout shift on toggle). */}
+            <Text style={[styles.goalText, { color: colors.text }]}>{goal.goal}</Text>
+
+            {/* Review date chip — disclosed on track; required at finalise */}
+            <Pressable
+              onPress={() => setDatePickerGoalId(goal.id)}
+              disabled={disabled}
+              style={[
+                styles.dateRow,
+                { backgroundColor: dateBg, borderColor: dateBorder, borderWidth: 1 },
+              ]}
+            >
+              <Ionicons name="calendar-outline" size={18} color={dateAccent} />
+              <Text style={[styles.dateText, { color: dateAccent }]}>
+                {sel.reviewDate ? `Review by ${formatDate(sel.reviewDate)}` : 'Set review date'}
               </Text>
+            </Pressable>
+
+            {/* Actions label */}
+            <Text style={[styles.actionsLabel, { color: colors.textSecondary }]}>Actions</Text>
+
+            {/* Actions */}
+            <View style={styles.actionsContainer}>
+              {goal.actions.map((action, index) => {
+                const isChecked = sel.actions.get(action.id) ?? true;
+                return (
+                  <Pressable
+                    key={action.id}
+                    onPress={() => onToggleAction(goal.id, action.id)}
+                    disabled={disabled}
+                    style={[
+                      styles.actionRow,
+                      index === goal.actions.length - 1 && styles.actionRowLast,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.checkbox,
+                        {
+                          borderColor: isChecked ? colors.primary : colors.textSecondary,
+                          backgroundColor: isChecked ? colors.primary : 'transparent',
+                        },
+                      ]}
+                    >
+                      {isChecked && <Feather name="check" size={14} color="#ffffff" />}
+                    </View>
+                    <Text
+                      style={[
+                        styles.actionText,
+                        { color: isChecked ? colors.text : colors.textSecondary },
+                        !isChecked && styles.uncheckedActionText,
+                      ]}
+                    >
+                      {action.action}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
-            {sel.selected ? (
-              <>
-                {/* Review date chip */}
-                <Pressable
-                  onPress={() => setDatePickerGoalId(goal.id)}
-                  disabled={disabled}
-                  style={[
-                    styles.dateRow,
-                    {
-                      backgroundColor: hexToRgba(colors.primary, 0.1),
-                      borderColor: hexToRgba(colors.primary, 0.2),
-                      borderWidth: 1,
-                    },
-                  ]}
-                >
-                  <Ionicons name="calendar-outline" size={18} color={colors.primary} />
-                  <Text style={[styles.dateText, { color: colors.primary }]}>
-                    {sel.reviewDate ? `Review by ${formatDate(sel.reviewDate)}` : 'Set review date'}
-                  </Text>
-                </Pressable>
-
-                {/* Actions label */}
-                <Text style={[styles.actionsLabel, { color: colors.textSecondary }]}>Actions</Text>
-
-                {/* Actions */}
-                <View style={styles.actionsContainer}>
-                  {goal.actions.map((action, index) => {
-                    const isChecked = sel.actions.get(action.id) ?? true;
-                    return (
-                      <Pressable
-                        key={action.id}
-                        onPress={() => onToggleAction(goal.id, action.id)}
-                        disabled={disabled}
-                        style={[
-                          styles.actionRow,
-                          index === goal.actions.length - 1 && styles.actionRowLast,
-                        ]}
-                      >
-                        <View
-                          style={[
-                            styles.checkbox,
-                            {
-                              borderColor: isChecked ? colors.primary : colors.textSecondary,
-                              backgroundColor: isChecked ? colors.primary : 'transparent',
-                            },
-                          ]}
-                        >
-                          {isChecked && <Feather name="check" size={14} color="#ffffff" />}
-                        </View>
-                        <Text
-                          style={[
-                            styles.actionText,
-                            { color: isChecked ? colors.text : colors.textSecondary },
-                            !isChecked && styles.uncheckedActionText,
-                          ]}
-                        >
-                          {action.action}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </>
-            ) : (
-              <View style={styles.skippedContainer}>
-                <Ionicons name="close-circle-outline" size={16} color={colors.textSecondary} />
-                <Text style={[styles.skippedText, { color: colors.textSecondary }]}>
-                  Skipped - will be archived
-                </Text>
-              </View>
-            )}
+            {/* Untrack — tertiary, low-emphasis so it doesn't compete */}
+            <Pressable
+              onPress={() => onToggleGoal(goal.id)}
+              disabled={disabled}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`Untrack goal: ${goal.goal}`}
+              style={styles.untrackButton}
+            >
+              <Text style={[styles.untrackText, { color: colors.textSecondary }]}>Untrack</Text>
+            </Pressable>
           </View>
         );
       })}
@@ -399,9 +414,6 @@ export function PdpGoalSelector({
   );
 }
 
-// Re-export the helper for use in the entry detail screen
-PdpGoalSelector.initSelections = initSelections;
-
 const styles = StyleSheet.create({
   container: {
     gap: 10,
@@ -410,18 +422,42 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
   },
-  goalHeader: {
+  // Untracked ghost card: dashed, addable, never dimmed-to-disabled.
+  ghostCard: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    backgroundColor: 'transparent',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  trackButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-start',
+  },
+  trackButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  untrackButton: {
+    alignSelf: 'flex-end',
+    marginTop: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  untrackText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   goalText: {
     fontSize: 15,
     fontWeight: '600',
     flex: 1,
-  },
-  dimmedText: {
-    fontStyle: 'italic',
   },
   dateRow: {
     flexDirection: 'row',
@@ -475,16 +511,6 @@ const styles = StyleSheet.create({
   },
   uncheckedActionText: {
     textDecorationLine: 'line-through',
-  },
-  skippedContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-  },
-  skippedText: {
-    fontSize: 13,
-    fontStyle: 'italic',
   },
   // ── Sheet ──
   sheetOverlay: {

@@ -1,4 +1,4 @@
-import type { GoalSelectionState, LocalNote, StatusVariant } from '@/components';
+import type { GoalSelectionState, LocalNote } from '@/components';
 import {
   AppDialog,
   ArtefactAdvisoryBanner,
@@ -7,8 +7,9 @@ import {
   EntryActionBar,
   ExportSheet,
   FullScreenSectionEditor,
-  NotesSection,
+  initGoalSelections,
   noteKey,
+  NotesSection,
   PdpGoalSelector,
   ReviewSheet,
   StarRating,
@@ -29,6 +30,7 @@ import {
 import { useTheme } from '@/theme';
 import { getArtefactStatusMeta } from '@/utils/artefactStatus';
 import { formatTimeAgo } from '@/utils/formatTimeAgo';
+import { getPdpGoalStatusDisplay } from '@/utils/pdpGoalStatus';
 import type {
   Capability,
   ComposedDocumentField,
@@ -50,7 +52,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -102,21 +103,6 @@ function formatGoalDate(isoDate: string): string {
   const month = MONTHS[date.getMonth()];
   const year = date.getFullYear();
   return `${day} ${month} ${year}`;
-}
-
-function getPdpGoalStatusDisplay(status: PdpGoalStatus): { label: string; variant: StatusVariant } {
-  switch (status) {
-    case PdpGoalStatus.STARTED:
-      return { label: 'Started', variant: 'success' };
-    case PdpGoalStatus.COMPLETED:
-      return { label: 'Completed', variant: 'info' };
-    case PdpGoalStatus.ARCHIVED:
-      return { label: 'Archived', variant: 'default' };
-    case PdpGoalStatus.NOT_STARTED:
-      return { label: 'Not started', variant: 'processing' };
-    default:
-      return { label: 'Unknown', variant: 'default' };
-  }
 }
 
 export default function EntryDetailScreen() {
@@ -179,8 +165,7 @@ export default function EntryDetailScreen() {
   // Editable in review AND completed — completion is a filter, not a lock
   // (MOB-087). Archived / in-conversation stay read-only.
   const isEditable =
-    artefact?.status === ArtefactStatus.IN_REVIEW ||
-    artefact?.status === ArtefactStatus.COMPLETED;
+    artefact?.status === ArtefactStatus.IN_REVIEW || artefact?.status === ArtefactStatus.COMPLETED;
   const canExport =
     artefact?.status === ArtefactStatus.IN_REVIEW || artefact?.status === ArtefactStatus.COMPLETED;
 
@@ -202,10 +187,7 @@ export default function EntryDetailScreen() {
 
   // Notes — visible from review onward; editable in any non-archived state
   // (notes are post-creation addenda, unlike the body which locks at completion).
-  const serverNotes = useMemo(
-    () => sortNotesNewestFirst(artefact?.notes ?? []),
-    [artefact?.notes]
-  );
+  const serverNotes = useMemo(() => sortNotesNewestFirst(artefact?.notes ?? []), [artefact?.notes]);
   const displayNotes = editedNotes ?? serverNotes;
   const showNotes = !!artefact && artefact.status !== ArtefactStatus.IN_CONVERSATION;
   const notesEditable =
@@ -213,9 +195,7 @@ export default function EntryDetailScreen() {
     artefact.status !== ArtefactStatus.IN_CONVERSATION &&
     artefact.status !== ArtefactStatus.ARCHIVED;
   const editingNote =
-    editingNoteKey !== null
-      ? displayNotes.find((n) => noteKey(n) === editingNoteKey)
-      : undefined;
+    editingNoteKey !== null ? displayNotes.find((n) => noteKey(n) === editingNoteKey) : undefined;
 
   // ── Edit Handlers ──
 
@@ -311,9 +291,7 @@ export default function EntryDetailScreen() {
       }
 
       setEditedNotes((prev) =>
-        collapseNotes(
-          (prev ?? serverNotes).map((n) => (noteKey(n) === key ? { ...n, text } : n))
-        )
+        collapseNotes((prev ?? serverNotes).map((n) => (noteKey(n) === key ? { ...n, text } : n)))
       );
     },
     [editingNoteKey, displayNotes, serverNotes, collapseNotes, confirmDeleteNote]
@@ -434,8 +412,7 @@ export default function EntryDetailScreen() {
   useEffect(() => {
     if (!hasChanges) return;
 
-    const saveLabel =
-      artefact?.status === ArtefactStatus.COMPLETED ? 'Save' : 'Save for later';
+    const saveLabel = artefact?.status === ArtefactStatus.COMPLETED ? 'Save' : 'Save for later';
 
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
       // A commit handler is navigating away deliberately after saving — let it
@@ -478,18 +455,9 @@ export default function EntryDetailScreen() {
   // Initialise goal selections when artefact loads in IN_REVIEW status
   useEffect(() => {
     if (artefact?.status === ArtefactStatus.IN_REVIEW && artefact.pdpGoals?.length) {
-      setGoalSelections((prev) => {
-        if (prev.size > 0) return prev;
-        const initial = new Map<string, GoalSelectionState>();
-        for (const goal of artefact.pdpGoals!) {
-          initial.set(goal.id, {
-            selected: true,
-            reviewDate: null,
-            actions: new Map(goal.actions.map((a) => [a.id, true])),
-          });
-        }
-        return initial;
-      });
+      // Defaults (opt-in: all goals untracked) come from the component so the
+      // shape lives in one place next to GoalSelectionState.
+      setGoalSelections((prev) => (prev.size > 0 ? prev : initGoalSelections(artefact.pdpGoals!)));
     }
   }, [artefact?.status, artefact?.pdpGoals]);
 
@@ -590,7 +558,15 @@ export default function EntryDetailScreen() {
         "Couldn't mark this entry as done. Your changes are saved — please try again."
       );
     }
-  }, [artefactId, hasChanges, persistEdits, dispatch, goalSelections, showToast, leaveWithoutPrompt]);
+  }, [
+    artefactId,
+    hasChanges,
+    persistEdits,
+    dispatch,
+    goalSelections,
+    showToast,
+    leaveWithoutPrompt,
+  ]);
 
   // Mark as done: validate first, then confirm only when there's a real side
   // effect to review (PDP goals will activate); otherwise go straight through.
@@ -800,9 +776,7 @@ export default function EntryDetailScreen() {
             {artefact.artefactTypeLabel ? `${artefact.artefactTypeLabel} · ` : ''}
             {`Created ${formatShortDate(artefact.createdAt)}`}
             {statusMeta.word && (
-              <Text
-                style={statusMeta.tone === 'success' ? { color: colors.success } : undefined}
-              >
+              <Text style={statusMeta.tone === 'success' ? { color: colors.success } : undefined}>
                 {statusMeta.tone === 'success'
                   ? `  ·  ✓ ${statusMeta.word}`
                   : `  ·  ${statusMeta.word}`}
@@ -856,9 +830,7 @@ export default function EntryDetailScreen() {
         <FullScreenSectionEditor
           visible={editingSectionIndex !== null}
           sectionTitle={
-            editingSectionIndex !== null
-              ? (displayDocument[editingSectionIndex]?.label ?? '')
-              : ''
+            editingSectionIndex !== null ? (displayDocument[editingSectionIndex]?.label ?? '') : ''
           }
           sectionText={
             editingSectionIndex !== null ? (displayDocument[editingSectionIndex]?.text ?? '') : ''
@@ -884,14 +856,22 @@ export default function EntryDetailScreen() {
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>PDP Goals</Text>
               {canMarkAsFinal ? (
-                <PdpGoalSelector
-                  goals={artefact.pdpGoals}
-                  selections={goalSelections}
-                  onToggleGoal={handleToggleGoal}
-                  onToggleAction={handleToggleAction}
-                  onSetReviewDate={handleSetReviewDate}
-                  disabled={updatingStatus}
-                />
+                <>
+                  {/* Gentle, non-blocking nudge for the opt-in model (MOB-078):
+                      explains why goals start untracked and invites tracking,
+                      without gating "Mark as done". */}
+                  <Text style={[styles.pdpHint, { color: colors.textSecondary }]}>
+                    Optional — track any goals you&rsquo;d like to follow up later.
+                  </Text>
+                  <PdpGoalSelector
+                    goals={artefact.pdpGoals}
+                    selections={goalSelections}
+                    onToggleGoal={handleToggleGoal}
+                    onToggleAction={handleToggleAction}
+                    onSetReviewDate={handleSetReviewDate}
+                    disabled={updatingStatus}
+                  />
+                </>
               ) : (
                 artefact.pdpGoals
                   .filter((goal) => isArchivedEntry || goal.status !== PdpGoalStatus.ARCHIVED)
@@ -956,9 +936,7 @@ export default function EntryDetailScreen() {
                                     style={[
                                       styles.pdpActionCheckbox,
                                       {
-                                        borderColor: isCompleted
-                                          ? colors.success
-                                          : colors.primary,
+                                        borderColor: isCompleted ? colors.success : colors.primary,
                                         backgroundColor: isCompleted
                                           ? colors.success
                                           : colors.primary,
@@ -1154,7 +1132,7 @@ export default function EntryDetailScreen() {
         tone="error"
         icon="warning"
         title="Add a review date"
-        message="Set a review date for each goal you're keeping before you mark this entry as done."
+        message="Set a review date for each goal you're tracking before you mark this entry as done."
         buttons={[{ label: 'Got it', onPress: () => setReviewDateErrorVisible(false) }]}
         onRequestClose={() => setReviewDateErrorVisible(false)}
       />
@@ -1186,17 +1164,33 @@ export default function EntryDetailScreen() {
         buttons={
           hasActivePdpGoals
             ? [
-                { label: 'Keep goals', onPress: () => handleConfirmArchive(false), variant: 'primary' },
+                {
+                  label: 'Keep goals',
+                  onPress: () => handleConfirmArchive(false),
+                  variant: 'primary',
+                },
                 {
                   label: 'Archive & remove goals',
                   onPress: () => handleConfirmArchive(true),
                   variant: 'destructive',
                 },
-                { label: 'Cancel', onPress: () => setArchiveDialogVisible(false), variant: 'secondary' },
+                {
+                  label: 'Cancel',
+                  onPress: () => setArchiveDialogVisible(false),
+                  variant: 'secondary',
+                },
               ]
             : [
-                { label: 'Archive', onPress: () => handleConfirmArchive(false), variant: 'primary' },
-                { label: 'Cancel', onPress: () => setArchiveDialogVisible(false), variant: 'secondary' },
+                {
+                  label: 'Archive',
+                  onPress: () => handleConfirmArchive(false),
+                  variant: 'primary',
+                },
+                {
+                  label: 'Cancel',
+                  onPress: () => setArchiveDialogVisible(false),
+                  variant: 'secondary',
+                },
               ]
         }
         onRequestClose={() => setArchiveDialogVisible(false)}
@@ -1253,6 +1247,12 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     marginBottom: 2,
+  },
+  pdpHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: -2,
+    marginBottom: 4,
   },
   cardTitle: {
     fontSize: 15,

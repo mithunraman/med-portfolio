@@ -24,6 +24,7 @@ export { MultiSelect, type MultiSelectOption } from './MultiSelect';
 export { NotesSection, noteKey, type LocalNote } from './NotesSection';
 export { OfflineBanner } from './OfflineBanner';
 export { initGoalSelections, PdpGoalSelector, type GoalSelectionState } from './PdpGoalSelector';
+export { ReviewDatePickerSheet } from './ReviewDatePickerSheet';
 export {
   DraftStatusPill,
   ReadinessBar,

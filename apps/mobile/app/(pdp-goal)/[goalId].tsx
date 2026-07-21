@@ -1,4 +1,10 @@
-import { Button, EmptyState, SkeletonBone, StatusPill } from '@/components';
+import {
+  Button,
+  EmptyState,
+  ReviewDatePickerSheet,
+  SkeletonBone,
+  StatusPill,
+} from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
   addPdpGoalAction,
@@ -31,78 +37,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Calendar } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 const WARNING_COLOR = '#f59e0b';
-
-function toCalendarString(date: Date): string {
-  const y = date.getFullYear();
-  const m = (date.getMonth() + 1).toString().padStart(2, '0');
-  const d = date.getDate().toString().padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-// ── Date Picker Modal ──────────────────────────────────────────────────────
-
-function DatePickerModal({
-  visible,
-  currentDate,
-  onSelect,
-  onClose,
-}: {
-  visible: boolean;
-  currentDate: string | null;
-  onSelect: (isoDate: string) => void;
-  onClose: () => void;
-}) {
-  const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
-  const today = toCalendarString(new Date());
-  const selected = currentDate ? toCalendarString(new Date(currentDate)) : today;
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View
-          style={[
-            styles.modalContainer,
-            { backgroundColor: colors.background, paddingBottom: insets.bottom + 16 },
-          ]}
-        >
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Set review date</Text>
-            <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          <Calendar
-            minDate={today}
-            markedDates={{ [selected]: { selected: true, selectedColor: colors.primary } }}
-            onDayPress={(day: { dateString: string }) => {
-              onSelect(new Date(day.dateString).toISOString());
-              onClose();
-            }}
-            theme={{
-              backgroundColor: colors.background,
-              calendarBackground: colors.background,
-              textSectionTitleColor: colors.textSecondary,
-              selectedDayBackgroundColor: colors.primary,
-              selectedDayTextColor: '#fff',
-              todayTextColor: colors.primary,
-              dayTextColor: colors.text,
-              textDisabledColor: colors.textSecondary,
-              arrowColor: colors.primary,
-              monthTextColor: colors.text,
-            }}
-          />
-        </View>
-      </View>
-    </Modal>
-  );
-}
 
 // ── Add Action Modal ───────────────────────────────────────────────────────
 
@@ -745,11 +684,11 @@ export default function PdpGoalDetailScreen() {
         )}
       </ScrollView>
 
-      <DatePickerModal
+      <ReviewDatePickerSheet
         visible={showDatePicker}
-        currentDate={goal.reviewDate}
-        onSelect={handleSetReviewDate}
-        onClose={() => setShowDatePicker(false)}
+        currentDate={goal.reviewDate ? new Date(goal.reviewDate) : null}
+        onSelect={(date) => handleSetReviewDate(date.toISOString())}
+        onDismiss={() => setShowDatePicker(false)}
       />
 
       <AddActionModal

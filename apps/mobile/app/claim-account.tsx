@@ -54,7 +54,7 @@ export default function ClaimAccountScreen() {
         </Text>
         <Text style={[s.subtitle, { color: colors.textSecondary }]}>
           {flow.step === 'email'
-            ? 'Verify your email to save your data and access it from any device.'
+            ? 'Enter your email to save your entries and access them from any device.'
             : `We sent a 6-digit code to ${flow.email}`}
         </Text>
 

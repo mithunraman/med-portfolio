@@ -25,14 +25,7 @@ import { randomUUID } from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router/react-navigation';
 import { useCallback, useMemo, useState } from 'react';
-import {
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // ─── Module A: Start New Entry ────────────────────────────────────────────────
 
@@ -382,7 +375,10 @@ function ReviewPeriodCoverageModule({
       {/* No section header: the coverage card is self-describing (period name +
           progress), so a "Review period" label above it would double up. */}
       <TouchableOpacity
-        style={[styles.coverageCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        style={[
+          styles.coverageCard,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
         onPress={onPress}
         activeOpacity={0.7}
         accessibilityRole="button"
@@ -397,7 +393,10 @@ function ReviewPeriodCoverageModule({
             {period.name}
           </Text>
           <View style={styles.coverageStatRow}>
-            <Text style={[styles.coverageCardStat, { color: colors.textSecondary }]} numberOfLines={1}>
+            <Text
+              style={[styles.coverageCardStat, { color: colors.textSecondary }]}
+              numberOfLines={1}
+            >
               {coverage.coveredCount} / {coverage.totalCapabilities} covered
             </Text>
             <View style={[styles.statDot, { backgroundColor: colors.textSecondary }]} />
@@ -563,11 +562,7 @@ export default function HomeScreen() {
             where the WelcomeModule provides the single "Record your first entry"
             CTA. Shown for returning users and during the initial-load skeleton. */}
         {showWelcome ? null : (
-          <StartNewEntryCard
-            onPress={handleStartNew}
-            helper={helper}
-            disabled={!canCreate}
-          />
+          <StartNewEntryCard onPress={handleStartNew} helper={helper} disabled={!canCreate} />
         )}
 
         {/* First-run: welcome explainer only. Returning: full dashboard modules. */}
@@ -671,6 +666,10 @@ const styles = StyleSheet.create({
   captureHelper: {
     fontSize: 14,
     lineHeight: 19,
+    // Always reserve two lines (2 × lineHeight) so the card height stays fixed as
+    // the rotating HELPERS cycle between 1- and 2-line strings. numberOfLines={2}
+    // caps the max; this reserves the min so short prompts don't shrink the card.
+    minHeight: 38,
   },
 
   // Module B: Recent Entries

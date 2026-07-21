@@ -35,7 +35,7 @@ These were explicitly agreed in-session. Build them as specified.
 - [ ] **MOB-011** [LATER] Deferred 2026-07-21 — will be done later. Keep guest mode for the first 100–1,000 users; document the removal trigger.
 - [x] **MOB-023** [DECISION] "Portfolio" is banned as the home-screen name. *(DONE — home screen is titled "Home"/"Welcome" (`apps/mobile/app/(tabs)/index.tsx:535`, tab "Home" in `_layout.tsx:23`); not named "Portfolio". The remaining collection-noun standardisation in prose is tracked as the §5 open question.)*
 - [ ] **MOB-034** [DECISION] Remove the pause button (at least for first messages).
-- [ ] **MOB-037** [DECISION] Use "Continue chat" instead of "analysis" wording. *(depends on finished-detection MOB-038)*
+- [x] **MOB-037** [DECISION] Replace "analysis" wording. *(DONE — `apps/mobile/src/components/ActionBar.tsx`: both the first ("start") and follow-up ("continue") hand-off buttons now read "Continue" with a `brain` (think) icon, replacing "Start Analysis"/"Continue Analysis". Chosen as a model-agnostic label that stays truthful whether the AI then asks a question or finishes, so it survives whichever way MOB-038 (finished-vs-still-adding) resolves. `variant` retained in `ActionBarState` but no longer drives the label/icon.)*
 - [ ] **MOB-039** [DECISION] Move entry-type selection to the start of the chat (type-first; don't auto-select).
 - [ ] **MOB-066** [DECISION] Section titles (Description / Reflection / Learning needs) are non-editable (fixed FourteenFish names).
 - [x] **MOB-070** [DONE] Done 2026-07-17 — `EditableReflectionSection` header restructured (shared by entry sections + capabilities): chevron moved to the leading edge inside a whole-heading toggle; edit isolated far-right. Done together with MOB-069.
@@ -99,7 +99,7 @@ Clear these (with legal input) before launch.
 - [ ] **MOB-008** [LATER] Deferred 2026-07-21 — will be done later. Make login a proper sign-in screen: "Sign in to save your progress" primary, "Continue as guest" secondary (note it won't save; state it's free).
 - [ ] **MOB-009** [FIX] Persistent guest data-loss banner + inline Sign-in CTA.
 - [ ] **MOB-013** [LATER] Deferred 2026-07-21 — will be done later. Create a content guide / key-message doc so app copy matches the website's one-sentence description (credibility). *(Cross-functional.)*
-- [ ] **MOB-119** [FIX] Replace "Verify your email to save it" → "Enter your email to save your entries in progress".
+- [x] **MOB-119** [FIX] Replace "Verify your email…" copy. *(DONE — `apps/mobile/app/claim-account.tsx:57` email-step subtitle now reads "Enter your email to save your entries and access them from any device." Fixes the wrong verb ("Verify" before anything is entered) and keeps the multi-device benefit.)*
 - [x] **MOB-113** [FIX] Reword guest-session messaging in user language. *(DONE — `apps/mobile/app/(tabs)/profile/index.tsx:131-136`: "Your data isn't being saved" + "Guest sessions are temporary. Create an account to keep your reflections, cases and goals and track your progress.")*
 - [ ] **MOB-116** [LATER] Deferred 2026-07-21 — will be done later. On the upgrade page, lead with the concrete benefit — more entries ("10 entries a week vs 5"). *(Entangled with the credits→entries reframe MOB-114/115; do together.)*
 - [ ] **MOB-015** [LATER] Deferred 2026-07-21 — will be done later. Add a policy/ToS TL;DR summary — on the **website** privacy page, not in-app. *(nice-to-have)*

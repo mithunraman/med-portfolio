@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { memo, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme';
@@ -73,7 +73,7 @@ export const ActionBar = memo(function ActionBar({ state }: ActionBarProps) {
       ) : state.mode === 'progress' ? (
         <ProgressBar wordCount={state.wordCount} threshold={state.threshold} colors={colors} />
       ) : (
-        <ActionButton variant={state.variant} onPress={state.onPress} colors={colors} />
+        <ActionButton onPress={state.onPress} colors={colors} />
       )}
     </View>
   );
@@ -124,16 +124,17 @@ function ProgressBar({
 // --- Action mode ---
 
 function ActionButton({
-  variant,
   onPress,
   colors,
 }: {
-  variant: 'start' | 'continue';
   onPress: () => void;
   colors: { accent: string };
 }) {
-  const label = variant === 'start' ? 'Start Analysis' : 'Continue Analysis';
-  const icon = variant === 'start' ? 'play-circle' : 'arrow-right-circle';
+  // Single, model-agnostic label for both the first ("start") and follow-up
+  // ("continue") hand-offs to the AI — see MOB-037. "Continue" stays truthful
+  // whether the AI then asks a question or finishes, so it survives whichever
+  // way the finished-vs-still-adding model (MOB-038) is resolved.
+  const label = 'Continue';
 
   return (
     <Pressable
@@ -145,7 +146,7 @@ function ActionButton({
       accessibilityLabel={label}
       accessibilityRole="button"
     >
-      <Feather name={icon} size={18} color="#ffffff" />
+      <Ionicons name="sparkles" size={18} color="#ffffff" />
       <Text style={styles.buttonLabel}>{label}</Text>
     </Pressable>
   );

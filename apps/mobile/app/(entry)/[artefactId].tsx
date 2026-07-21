@@ -159,6 +159,10 @@ export default function EntryDetailScreen() {
   const [finaliseConfirmVisible, setFinaliseConfirmVisible] = useState(false);
   const [archiveDialogVisible, setArchiveDialogVisible] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  // Key of the note awaiting delete confirmation (null = dialog closed). Holds the
+  // key rather than a boolean so both the trash icon and the "edited to blank" path
+  // can target the right note.
+  const [deleteNoteKey, setDeleteNoteKey] = useState<string | null>(null);
   // Seeds a first-time (create) review from the inline star tap. Ignored on the edit
   // path, where the sheet seeds from the existing review.
   const [reviewSeedRating, setReviewSeedRating] = useState<number | undefined>(undefined);
@@ -256,24 +260,22 @@ export default function EntryDetailScreen() {
     setEditingNoteKey(key);
   }, []);
 
-  // Single deletion path — used by both the trash icon and the "edited to blank"
-  // case below, so removing a note always goes through the same confirmation.
-  const confirmDeleteNote = useCallback(
-    (key: string) => {
-      Alert.alert('Delete note?', 'This note will be removed when you save.', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () =>
-            setEditedNotes((prev) =>
-              collapseNotes((prev ?? serverNotes).filter((n) => noteKey(n) !== key))
-            ),
-        },
-      ]);
-    },
-    [serverNotes, collapseNotes]
-  );
+  // Opens the delete-confirm dialog (actual removal runs in handleConfirmDeleteNote).
+  // Safe to call synchronously from the trash icon, where no other modal is on
+  // screen. The "edited to blank" path in handleNoteSave must NOT call this
+  // synchronously — it defers past the editor Modal's dismissal (see there).
+  const confirmDeleteNote = useCallback((key: string) => {
+    setDeleteNoteKey(key);
+  }, []);
+
+  const handleConfirmDeleteNote = useCallback(() => {
+    const key = deleteNoteKey;
+    if (key === null) return;
+    setEditedNotes((prev) =>
+      collapseNotes((prev ?? serverNotes).filter((n) => noteKey(n) !== key))
+    );
+    setDeleteNoteKey(null);
+  }, [deleteNoteKey, serverNotes, collapseNotes]);
 
   const handleNoteSave = useCallback(
     (_title: string, text: string) => {
@@ -286,7 +288,13 @@ export default function EntryDetailScreen() {
       // The blank text is NOT applied, so the note is untouched unless confirmed.
       const target = displayNotes.find((n) => noteKey(n) === key);
       if (text.trim().length === 0 && target?.xid !== undefined) {
-        confirmDeleteNote(key);
+        // The editor's Done handler fires onSave (this) then onClose in the SAME
+        // commit, so opening the confirm dialog here would present AppDialog's RN
+        // Modal while the editor's RN Modal is mid-dismiss — the iOS
+        // present-while-dismissing race (deferred the same way in handleDelete/
+        // handleArchive). Defer past the dismissal so the dialog actually appears.
+        // Do NOT collapse this back into a synchronous confirmDeleteNote(key).
+        InteractionManager.runAfterInteractions(() => setDeleteNoteKey(key));
         return;
       }
 
@@ -294,7 +302,7 @@ export default function EntryDetailScreen() {
         collapseNotes((prev ?? serverNotes).map((n) => (noteKey(n) === key ? { ...n, text } : n)))
       );
     },
-    [editingNoteKey, displayNotes, serverNotes, collapseNotes, confirmDeleteNote]
+    [editingNoteKey, displayNotes, serverNotes, collapseNotes]
   );
 
   // On close, drop a never-saved DRAFT left blank (added but never typed). An
@@ -1206,6 +1214,18 @@ export default function EntryDetailScreen() {
           { label: 'Cancel', onPress: () => setDeleteDialogVisible(false), variant: 'secondary' },
         ]}
         onRequestClose={() => setDeleteDialogVisible(false)}
+      />
+      <AppDialog
+        visible={deleteNoteKey !== null}
+        tone="warning"
+        icon="trash-outline"
+        title="Delete note?"
+        message="This note will be removed when you save."
+        buttons={[
+          { label: 'Delete', onPress: handleConfirmDeleteNote, variant: 'destructive' },
+          { label: 'Cancel', onPress: () => setDeleteNoteKey(null), variant: 'secondary' },
+        ]}
+        onRequestClose={() => setDeleteNoteKey(null)}
       />
     </KeyboardAvoidingView>
   );

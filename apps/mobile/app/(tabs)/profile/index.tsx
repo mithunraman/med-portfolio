@@ -132,8 +132,8 @@ export default function ProfileScreen() {
                 </Text>
               </View>
               <Text style={[styles.ctaText, { color: colors.textSecondary }]}>
-                Guest sessions are temporary. Create an account to keep your portfolio entries and
-                track your progress.
+                Guest sessions are temporary. Create an account to keep your reflections, cases and
+                goals and track your progress.
               </Text>
               <TouchableOpacity
                 style={[styles.ctaButton, { backgroundColor: colors.primary }]}

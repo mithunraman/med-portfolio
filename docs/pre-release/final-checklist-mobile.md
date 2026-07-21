@@ -31,9 +31,9 @@ This is a de-duplicated, action-oriented roll-up of all 142 findings across the 
 These were explicitly agreed in-session. Build them as specified.
 
 - [x] **MOB-002** [WON'T DO] ~~Mirror the device light/dark theme (OS preference).~~ Decided against 2026-07-13 — keep the manual in-app Dark Mode toggle instead. *(colour-token work MOB-071 still stands on its own.)*
-- [ ] **MOB-005** [DECISION] Remove the duplicate "Skip" on intro step 3.
-- [ ] **MOB-011** [DECISION] Keep guest mode for the first 100–1,000 users; document the removal trigger.
-- [ ] **MOB-023** [DECISION] "Portfolio" is banned as the home-screen name. *(replacement term still OPEN — see §5)*
+- [x] **MOB-005** [DECISION] Remove the duplicate "Skip" on intro step 3. *(DONE — `apps/mobile/app/(auth)/intro.tsx:138-144`: header "Skip" is hidden on the last slide (spacer); step 3's only bottom control is the "Let's Go" CTA. No duplicate Skip.)*
+- [ ] **MOB-011** [LATER] Deferred 2026-07-21 — will be done later. Keep guest mode for the first 100–1,000 users; document the removal trigger.
+- [x] **MOB-023** [DECISION] "Portfolio" is banned as the home-screen name. *(DONE — home screen is titled "Home"/"Welcome" (`apps/mobile/app/(tabs)/index.tsx:535`, tab "Home" in `_layout.tsx:23`); not named "Portfolio". The remaining collection-noun standardisation in prose is tracked as the §5 open question.)*
 - [ ] **MOB-034** [DECISION] Remove the pause button (at least for first messages).
 - [ ] **MOB-037** [DECISION] Use "Continue chat" instead of "analysis" wording. *(depends on finished-detection MOB-038)*
 - [ ] **MOB-039** [DECISION] Move entry-type selection to the start of the chat (type-first; don't auto-select).
@@ -83,11 +83,11 @@ Clear these (with legal input) before launch.
 ## 4. Pre-launch UX / UI / content fixes (by area)
 
 ### Onboarding — intro / welcome
-- [ ] **MOB-001** [FIX] Remove the stray desktop-only button; make the start CTA unambiguous ("Just Talk" was mistaken for the CTA).
+- [x] **MOB-001** [FIX] Remove the stray desktop-only button; make the start CTA unambiguous ("Just Talk" was mistaken for the CTA). *(DONE — single primary CTA per onboarding screen; welcome screen = one "Continue as guest" button; intro carousel visual zone non-interactive; no "Just Talk" button remains.)*
 - [x] **MOB-003a** [DONE] Add a first-run welcome message — done 2026-07-13 (👋 welcome slide as slide 1 of the intro carousel).
 - [x] **MOB-003b** [WON'T DO] ~~Persist run-once so the intro doesn't repeat every launch.~~ Decided against 2026-07-13 — the carousel may re-show on launch; no `hasSeenIntro` flag / navigation gating will be built.
-- [ ] **MOB-004** [FIX] Rewrite the 3-step carousel copy (replace "We'll do the paperwork" with "We'll ask you some questions", etc.).
-- [ ] **MOB-006** [FIX] Reword "Your portfolio simplified" → "Building your portfolio, simplified" (it's the *process* that's simplified).
+- [x] **MOB-004** [FIX] Rewrite the 3-step carousel copy (replace "We'll do the paperwork" with "We'll ask you some questions", etc.). *(DONE — carousel rewritten in `apps/mobile/app/(auth)/intro.tsx`: "Building your portfolio, simplified" / "Talk it through" / "Stay ARCP-ready"; no "paperwork" copy remains repo-wide.)*
+- [x] **MOB-006** [FIX] Reword "Your portfolio simplified" → "Building your portfolio, simplified" (it's the *process* that's simplified). *(DONE — `apps/mobile/app/(auth)/intro.tsx:34`, verbatim.)*
 
 ### Onboarding — training year & step fatigue
 - [x] **MOB-020** [DONE] Verified 2026-07-13 — GP stages are already GP-specific (`ST1/ST2/ST3` → "GP Specialty Training Year 1/2/3" in `apps/api/src/specialties/gp/gp.training-stages.ts`); inactive IM/Psychiatry configs kept as the generic templates for later specialties. No code change needed.
@@ -95,14 +95,14 @@ Clear these (with legal input) before launch.
 - [x] **MOB-022** [DONE] Done 2026-07-13 — onboarding auto-selects GP and opens on the training-year question. Gate redirect repointed `select-specialty` → `select-stage` (`decide-onboarding-route.ts`, single-line reversal marked in a comment); `select-stage` defaults to GP, self-fetches specialties, and hides the back button when reached without a specialty param. The `select-specialty` route/`SpecialtyList` stay intact (dormant) for settings + future multi-specialty; the back button auto-restores when a specialty param is passed again. Hardening (code review P1): `select-stage` now owns the only `fetchSpecialties` dispatch on the GP path, so it models an explicit `loading/error/ready` state and surfaces fetch failures via `ErrorBanner` + Retry (no unrecoverable spinner); warm-path condition-abort guarded.
 
 ### Registration / login / guest mode
-- [ ] **MOB-007** [FIX] Rename "Try the app" → "Continue as guest".
-- [ ] **MOB-008** [FIX] Make login a proper sign-in screen: "Sign in to save your progress" primary, "Continue as guest" secondary (note it won't save; state it's free).
+- [x] **MOB-007** [FIX] Rename "Try the app" → "Continue as guest". *(DONE — `apps/mobile/app/(auth)/welcome.tsx:67`; no "Try the app" copy remains repo-wide.)*
+- [ ] **MOB-008** [LATER] Deferred 2026-07-21 — will be done later. Make login a proper sign-in screen: "Sign in to save your progress" primary, "Continue as guest" secondary (note it won't save; state it's free).
 - [ ] **MOB-009** [FIX] Persistent guest data-loss banner + inline Sign-in CTA.
-- [ ] **MOB-013** [FIX] Create a content guide / key-message doc so app copy matches the website's one-sentence description (credibility). *(Cross-functional.)*
+- [ ] **MOB-013** [LATER] Deferred 2026-07-21 — will be done later. Create a content guide / key-message doc so app copy matches the website's one-sentence description (credibility). *(Cross-functional.)*
 - [ ] **MOB-119** [FIX] Replace "Verify your email to save it" → "Enter your email to save your entries in progress".
-- [ ] **MOB-113** [FIX] Reword guest-session messaging in user language: "You're currently in a temporary session. Create an account to keep your cases and track your progress"; specify "your reflections, cases and goals aren't being saved".
-- [ ] **MOB-116** [FIX] On the upgrade page, lead with the concrete benefit — more entries ("10 entries a week vs 5").
-- [ ] **MOB-015** [FIX] Add a policy/ToS TL;DR summary — on the **website** privacy page, not in-app. *(nice-to-have)*
+- [x] **MOB-113** [FIX] Reword guest-session messaging in user language. *(DONE — `apps/mobile/app/(tabs)/profile/index.tsx:131-136`: "Your data isn't being saved" + "Guest sessions are temporary. Create an account to keep your reflections, cases and goals and track your progress.")*
+- [ ] **MOB-116** [LATER] Deferred 2026-07-21 — will be done later. On the upgrade page, lead with the concrete benefit — more entries ("10 entries a week vs 5"). *(Entangled with the credits→entries reframe MOB-114/115; do together.)*
+- [ ] **MOB-015** [LATER] Deferred 2026-07-21 — will be done later. Add a policy/ToS TL;DR summary — on the **website** privacy page, not in-app. *(nice-to-have)*
 - [x] **MOB-018** [WON'T DO] ~~Remove the flashing text on the consent screen.~~ Decided against 2026-07-13 — the data-driven consent screen has no flashing/animated text in the current implementation (the flashing was on the old pre-rewrite screen); nothing to remove.
 - [x] **MOB-019** [DONE] Done 2026-07-13 — bumped the consent disclaimer from 12px → 13px (lineHeight 18 → 20); the rest of the screen's type hierarchy (28 title / 16 body & links / 15 checkbox) was already coherent.
 
@@ -134,7 +134,7 @@ Clear these (with legal input) before launch.
 - [x] **MOB-044** [DONE] Done 2026-07-14 — removed the pipeline-leaking step-label "reason" line entirely (`ActionBar` status mode + `reason` type field + `THINKING_STEP_LABELS`/`thinkingStepLabel`), leaving a single generic rotating word. Expanded `THINKING_WORDS` to a 15-word interchangeable, entry-focused, non-clinical set. Loading feedback is now generic and exposes nothing about the analysis pipeline.
 
 ### Follow-up questions & copy
-- [ ] **MOB-045** [KEEP] One follow-up question at a time — validated as good; retain.
+- [x] **MOB-045** [DONE] One follow-up question at a time — validated as good; retained. *(One-question-per-round behaviour is live; nothing to change.)*
 - [x] **MOB-046** [DONE] Done 2026-07-14 — no exact count is shown anywhere: one-question-per-round (MOB-045) plus the count-free tiered follow-up copy (MOB-047) removed the old "a few more questions" count claim. No "X of Y" display exists in the question UI.
 - [x] **MOB-047** [DONE] Done 2026-07-14 — replaced the random two-bucket follow-up copy with a readiness-tiered system (`apps/api/src/portfolio-graph/followup-copy.ts`): 4 tone tiers driven by `readinessScore` + an honest terminal signal, monotonic (never regresses), no back-to-back repeats, and "final" only on the genuinely-last round. Old `FOLLOWUP_PROMPTS` removed; 8 new unit tests. Copy wording still to be finalised with UX — see MOB-047a.
 - [ ] **MOB-047a** [TODO/COPY] Revisit, evaluate and finalise the follow-up intro copy after seeing it on real journeys. The readiness-tiered mechanism is built (`apps/api/src/portfolio-graph/followup-copy.ts`), but the four `FOLLOWUP_LINES` banks are **placeholder wording pending UX sign-off**. Also tune the two knobs against real runs: the readiness band cut-points (`3.0` / `5.5`) and the tier-4 terminal signal (`askedRound >= maxFollowupRounds`).
@@ -146,7 +146,7 @@ Clear these (with legal input) before launch.
 - [x] **MOB-049** [DONE] Done 2026-07-14 — confirmed the hint failed WCAG AA on 4 of 7 themes (theme `textSecondary` on the fixed bubble bg). Fixed with a fixed, AA-compliant `BUBBLE_MUTED_TEXT` token (`#5c5c5c` / `#a9b0b5`, ≥6:1 on the bubble), applied to all hint text in `HintCard`.
 - [x] **MOB-050** [DONE] Done 2026-07-14 — removed `fontStyle: 'italic'` from both the always-visible example and the expanded examples in `HintCard.tsx`.
 - [x] **MOB-051** [DONE] Done 2026-07-14 — visible example labelled "Example answer"; further examples behind a "See more examples" / "Hide examples" accordion; examples bulleted. Note: per product decision the toggle is styled as an **underlined text link** (background/chevron removed) — a deliberate reversal of the original "looks like a hyperlink" concern.
-- [ ] **MOB-052** [FIX/ANALYTICS] Track "More examples" clicks (high reliance may signal poorly framed questions). *(needs analytics tooling)*
+- [ ] **MOB-052** [LATER] Deferred 2026-07-21 — will be done later. Track "More examples" clicks (high reliance may signal poorly framed questions). *(needs analytics tooling)*
 - [ ] **MOB-053** [LATER] Deferred 2026-07-15 — will be done later. Gate examples to the first ~5 entries (by entry count, not training year). Needs the user's entry count plumbed to the client so `HintCard` can hide examples past entry ~5.
 
 ### Capability tagging
@@ -175,7 +175,7 @@ Clear these (with legal input) before launch.
 - [ ] **MOB-073** [FIX] Reframe the current PDP screen: "Goal 1/2" structure; present the goal then "Do you want to add this goal? Yes/No"; allow a review date; remove the on/off toggle; frame "PDP goals based on this case".
 - [ ] **MOB-080** [FIX] Add a tick/"Confirm" affordance when a date is set.
 - [ ] **MOB-081** [FIX] Consolidate the duplicate "Add" buttons for goal actions/notes into one control, positioned below the list.
-- [ ] **MOB-082** [FIX] Simplify note-deletion copy ("This note will be removed"). *(low priority)*
+- [x] **MOB-082** [FIX] Simplify note-deletion copy ("This note will be removed"). *(DONE — copy was already simplified; also migrated the imperative `Alert.alert` to the themed `AppDialog` (warning tone, trash icon) in `apps/mobile/app/(entry)/[artefactId].tsx` for consistency with the other 5 dialogs on the screen. iOS modal-race fix: the edit-to-blank path defers opening the confirm dialog via `InteractionManager.runAfterInteractions` (mirrors handleDelete/handleArchive) so AppDialog's Modal isn't presented in the same commit the editor Modal dismisses. Typecheck passes. **Device QA:** empty an existing note → tap Done → confirm the delete dialog appears on a physical iPhone.)*
 - [ ] **MOB-104** [FIX] Make the disabled "Complete goal" button unmistakably read as disabled (not secondary).
 - [ ] **MOB-105 / MOB-133** [FIX] Build one reusable "Change dates / extend" control shared by PDP goals and review periods (users usually push deadlines back).
 - [ ] **MOB-108** [FIX] Give PDP-goal reflection its own screen (currently squeezed inline; feels skippable).
@@ -193,16 +193,20 @@ Friction ladder scaled to reversibility (Archive light; Delete explicit-conseque
 
 ### Profile / account creation
 - [ ] **MOB-118** [FIX] Settings surface: use off-white/off-grey even in light mode (currently "really hard to read"). *(settings are dummy screens for now)*
-- [ ] **MOB-120** [FIX/OPEN] Split name and OTP onto separate screens (name first). *(reuse-vs-split for returning users is OPEN — see §5)*
-- [ ] **MOB-122** [FIX] Interim profile avatar: drop the initial "M" circle (show full name left-aligned) or offer selectable avatars.
+- [ ] **MOB-120** [LATER] Deferred 2026-07-21 — will be done later. Split name and OTP onto separate screens (name first). *(reuse-vs-split for returning users is OPEN — see §5)*
+- [ ] **MOB-122** [LATER] Deferred 2026-07-21 — will be done later. Interim profile avatar: drop the initial "M" circle (show full name left-aligned) or offer selectable avatars.
 
 ### Review-period (ARCP capability-coverage) tracker
 - [ ] **MOB-123** [FIX/BUILD] Build/complete the ARCP capability-coverage tracker on the homepage (% covered).
-- [ ] **MOB-128** [FIX] Make capability tiles clickable — show meaning + linked entries. *(needs entry↔capability linking, MOB-134)*
+- [ ] **MOB-128** [LATER] Deferred 2026-07-21 — will be done later. Make capability tiles clickable — show meaning + linked entries. *(needs entry↔capability linking, MOB-134)*
 - [ ] **MOB-129** [FIX] Celebratory animation at 100% coverage.
 - [ ] **MOB-132** [FIX] Explain what a review period is; rewrite the setup copy ("See what capabilities your entries cover" reads as "very weird").
 - [ ] **MOB-133** [FIX] Review-period management: "Change dates" + a clearer "I'm done with this period / start next review period" CTA, both at the bottom. *(shares control with MOB-105)*
-- [ ] **MOB-134** [FIX] Link each entry to its review period; add a period drop-down to filter entries by current/past period.
+- [ ] **MOB-134** [LATER] Deferred 2026-07-21 — will be done later. Link each entry to its review period; add a period drop-down to filter entries by current/past period.
+
+### Analytics
+- [ ] **MOB-144** [BUILD] Investigate the events that must be captured for the MVP release (define the minimum event taxonomy: onboarding funnel, entry created/completed, follow-up interactions, upgrade/limit hits, etc.).
+- [ ] **MOB-145** [BUILD] Integrate analytics with PostHog. *(depends on MOB-144's event list)*
 
 ---
 

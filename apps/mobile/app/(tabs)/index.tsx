@@ -81,29 +81,34 @@ function StartNewEntryCard({
     <TouchableOpacity
       style={[
         styles.captureCard,
-        { backgroundColor: colors.primary + '12' },
+        // Dark surface card with a subtle border. The button-ness comes from the
+        // solid mint icon chip + green chevron, not a filled background — which
+        // also lets the title/helper sit on dark (white text passes WCAG easily).
+        { backgroundColor: colors.surface, borderColor: colors.border },
         disabled && styles.captureCardDisabled,
       ]}
       onPress={onPress}
-      activeOpacity={0.75}
+      activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityLabel={disabled ? 'Upgrade to start new cases' : 'Talk about your case'}
       accessibilityState={{ disabled }}
     >
+      {/* Rounded-square mint chip with a white glyph — the primary-color accent
+          that signals "action" against the neutral card. */}
+      <View style={[styles.ctaIconChip, { backgroundColor: colors.primary }]}>
+        <Ionicons name={disabled ? 'lock-closed' : 'chatbubbles'} size={26} color="#fff" />
+      </View>
       <View style={styles.captureTextContent}>
         <Text style={[styles.capturePrompt, { color: colors.text }]} numberOfLines={1}>
           {displayPrompt}
         </Text>
-        <Text
-          style={[styles.captureHelper, { color: colors.textSecondary }]}
-          numberOfLines={1}
-        >
+        <Text style={[styles.captureHelper, { color: colors.textSecondary }]} numberOfLines={2}>
           {displayHelper}
         </Text>
       </View>
-      <View style={[styles.ctaIconCircle, { backgroundColor: colors.primary }]}>
-        <Ionicons name={disabled ? 'lock-closed' : 'chatbubbles'} size={26} color="#fff" />
-      </View>
+      {/* Trailing green chevron: a directional "go" signifier in the accent
+          color. Hidden when disabled, where the leading lock carries the state. */}
+      {!disabled && <Ionicons name="chevron-forward" size={22} color={colors.primary} />}
     </TouchableOpacity>
   );
 }
@@ -342,14 +347,19 @@ function ReviewPeriodCoverageModule({
         {/* No section header: the card is self-describing ("Track your ARCP
             coverage"), so a "Review period" label above it would double up. */}
         <TouchableOpacity
-          style={[styles.coverageEmptyCard, { backgroundColor: colors.primary + '12' }]}
+          style={[
+            styles.coverageEmptyCard,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
           onPress={onSetup}
-          activeOpacity={0.75}
+          activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel="Set up a review period"
         >
-          <View style={[styles.coverageEmptyIcon, { backgroundColor: colors.primary + '20' }]}>
-            <Ionicons name="calendar-outline" size={24} color={colors.primary} />
+          {/* Same rounded-square mint chip as the CTA, so the two cards read as
+              siblings. */}
+          <View style={[styles.ctaIconChip, { backgroundColor: colors.primary }]}>
+            <Ionicons name="calendar-outline" size={26} color="#fff" />
           </View>
           <View style={styles.coverageEmptyContent}>
             <Text style={[styles.coverageEmptyTitle, { color: colors.text }]}>
@@ -359,7 +369,7 @@ function ReviewPeriodCoverageModule({
               Set up a review period to see which capabilities your cases cover.
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+          <Ionicons name="chevron-forward" size={20} color={colors.primary} />
         </TouchableOpacity>
       </View>
     );
@@ -372,7 +382,7 @@ function ReviewPeriodCoverageModule({
       {/* No section header: the coverage card is self-describing (period name +
           progress), so a "Review period" label above it would double up. */}
       <TouchableOpacity
-        style={[styles.coverageCard, { backgroundColor: colors.surface }]}
+        style={[styles.coverageCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
         onPress={onPress}
         activeOpacity={0.7}
         accessibilityRole="button"
@@ -399,7 +409,7 @@ function ReviewPeriodCoverageModule({
             </Text>
           </View>
         </View>
-        <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+        <Ionicons name="chevron-forward" size={20} color={colors.primary} />
       </TouchableOpacity>
     </View>
   );
@@ -629,37 +639,38 @@ const styles = StyleSheet.create({
   captureCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
     // marginTop matches the modules' marginTop so the gap above the CTA (8px
     // scroll gap + 8px) equals the screen's section rhythm (~16px).
     marginTop: 8,
     marginHorizontal: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
   },
   captureCardDisabled: {
     opacity: 0.6,
   },
   capturePrompt: {
-    fontSize: 14,
-    fontWeight: '600',
-    lineHeight: 18,
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
   },
   captureTextContent: {
     flex: 1,
     gap: 2,
   },
-  ctaIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  ctaIconChip: {
+    width: 52,
+    height: 52,
+    // Rounded square (squircle), not a circle — matches the icon-chip layout.
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
   captureHelper: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 14,
+    lineHeight: 19,
   },
 
   // Module B: Recent Entries
@@ -748,51 +759,47 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Review Period Coverage
+  // Review Period Coverage — shares the CTA's card shell (surface + 1px border,
+  // radius 18, padding 16, gap 14, 52px leading chip) so the two read as siblings.
   coverageEmptyCard: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 20,
-    padding: 14,
-    borderRadius: 14,
-    gap: 12,
-  },
-  coverageEmptyIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 14,
   },
   coverageEmptyContent: {
     flex: 1,
     gap: 2,
   },
   coverageEmptyTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    lineHeight: 20,
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
   },
   coverageEmptyDesc: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 14,
+    lineHeight: 19,
   },
   coverageCard: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 20,
-    padding: 14,
-    borderRadius: 12,
-    gap: 12,
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 14,
   },
   coverageCardContent: {
     flex: 1,
     gap: 2,
   },
   coverageCardName: {
-    fontSize: 15,
-    fontWeight: '600',
-    lineHeight: 20,
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
   },
   coverageCardStat: {
     fontSize: 13,

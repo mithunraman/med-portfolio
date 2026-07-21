@@ -22,6 +22,9 @@ interface CircularButtonProps {
   borderColor?: string;
   /** Border width (default: 0) */
   borderWidth?: number;
+  /** Extra touch area beyond the visual bounds (default: 4). Raise it for small
+   * buttons so the touch target stays ≥44pt even when the circle is tiny. */
+  hitSlop?: number;
 }
 
 // ============================================================================
@@ -43,6 +46,7 @@ export const CircularButton = memo(function CircularButton({
   size = DEFAULT_SIZE,
   borderColor,
   borderWidth = 0,
+  hitSlop = 4,
 }: CircularButtonProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -87,7 +91,7 @@ export const CircularButton = memo(function CircularButton({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       testID={testID}
-      hitSlop={4}
+      hitSlop={hitSlop}
     >
       <Animated.View style={buttonStyle}>{icon}</Animated.View>
     </Pressable>

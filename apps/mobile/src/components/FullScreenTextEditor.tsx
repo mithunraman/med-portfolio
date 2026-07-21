@@ -72,7 +72,7 @@ export function FullScreenSectionEditor({
           <Pressable onPress={onClose} hitSlop={8}>
             <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
           </Pressable>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
+          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
             {hideTitle ? sectionTitle : 'Edit Section'}
           </Text>
           <Pressable onPress={handleDone} style={styles.doneButton} hitSlop={8}>
@@ -150,6 +150,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerTitle: {
+    // flex:1 + numberOfLines keeps a long title (e.g. a capability name) from
+    // pushing the Done button off-screen — it takes only the space between Cancel
+    // and Done and truncates with an ellipsis rather than overflowing the row.
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 12,
     fontSize: 16,
     fontWeight: '600',
   },

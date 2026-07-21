@@ -29,7 +29,6 @@ const COLORS = {
   pauseButton: '#ef4444', // Red
   sendButton: '#22c55e', // Green
   iconWhite: '#ffffff',
-  dottedLine: 'rgba(255, 255, 255, 0.3)',
   warningText: '#f59e0b',
 } as const;
 
@@ -37,8 +36,12 @@ const SPACING = {
   containerPadding: 16,
   buttonSize: 48,
   iconSize: 22,
-  dotSize: 4,
-  dotGap: 8,
+  // Pause is a secondary control — sized to match the delete icon (22) rather than
+  // the primary Send (48). The small circle keeps a 48pt touch target via a raised
+  // hitSlop on the button (24 + 12pt each side = 48pt — meets Android Material 48dp
+  // as well as iOS HIG 44pt).
+  pauseButtonSize: 24,
+  pauseIconSize: 14,
 } as const;
 
 // ============================================================================
@@ -59,22 +62,6 @@ interface VoiceNoteRecorderBarProps {
   /** Optional container style */
   style?: StyleProp<ViewStyle>;
 }
-
-// ============================================================================
-// DOTTED LINE COMPONENT
-// ============================================================================
-
-const DottedLine = memo(function DottedLine({ dotCount = 30 }: { dotCount?: number }) {
-  const dots = useMemo(() => Array.from({ length: dotCount }, (_, i) => i), [dotCount]);
-
-  return (
-    <View style={styles.dottedLineContainer}>
-      {dots.map((i) => (
-        <View key={i} style={styles.dot} />
-      ))}
-    </View>
-  );
-});
 
 // ============================================================================
 // PERMISSION DENIED VIEW
@@ -264,7 +251,7 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
     () => (
       <Ionicons
         name={isPaused ? 'play' : 'pause'}
-        size={SPACING.iconSize}
+        size={SPACING.pauseIconSize}
         color={COLORS.pauseButton}
       />
     ),
@@ -307,7 +294,7 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
 
   return (
     <View style={containerStyle}>
-      {/* Top row: Timer and dotted line */}
+      {/* Top row: centred timer */}
       <View style={styles.topRow}>
         <Text
           style={timerTextStyle}
@@ -320,7 +307,6 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
             {` / ${formatSeconds(MAX_RECORDING_DURATION)}`}
           </Text>
         </Text>
-        <DottedLine dotCount={35} />
       </View>
 
       {/* Max duration warning */}
@@ -343,6 +329,8 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
         {!maxDurationReached && (
           <CircularButton
             icon={pauseIcon}
+            size={SPACING.pauseButtonSize}
+            hitSlop={12}
             backgroundColor="transparent"
             borderColor={COLORS.pauseButton}
             borderWidth={2}
@@ -376,32 +364,19 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   topRow: {
-    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
-    gap: 12,
   },
   timerText: {
     fontSize: 18,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
     minWidth: 110,
+    textAlign: 'center',
   },
   timerMaxText: {
     fontSize: 14,
     fontWeight: '500',
-  },
-  dottedLineContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-  },
-  dot: {
-    width: SPACING.dotSize,
-    height: SPACING.dotSize,
-    borderRadius: SPACING.dotSize / 2,
-    backgroundColor: COLORS.dottedLine,
   },
   controlsRow: {
     flexDirection: 'row',

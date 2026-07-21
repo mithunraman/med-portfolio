@@ -834,9 +834,14 @@ export default function EntryDetailScreen() {
           </View>
         )}
 
-        {/* Full Screen Section Editor — entry sections */}
+        {/* Full Screen Section Editor — entry sections. hideTitle: the section names
+            are fixed FourteenFish fields (Description / Reflection / Learning needs) and
+            must not be renamed (MOB-066) — the title was already discarded on save, so
+            this removes the misleading editable field and labels the editor with the
+            section name. */}
         <FullScreenSectionEditor
           visible={editingSectionIndex !== null}
+          hideTitle
           sectionTitle={
             editingSectionIndex !== null ? (displayDocument[editingSectionIndex]?.label ?? '') : ''
           }
@@ -847,9 +852,13 @@ export default function EntryDetailScreen() {
           onClose={() => setEditingSectionIndex(null)}
         />
 
-        {/* Full Screen Section Editor — capability justifications */}
+        {/* Full Screen Section Editor — capability justifications. hideTitle: the
+            capability name is fixed taxonomy (not user-editable, same as MOB-066 for
+            sections); the name was already discarded on save, so only the justification
+            text is editable here. */}
         <FullScreenSectionEditor
           visible={editingCapabilityCode !== null}
+          hideTitle
           sectionTitle={editingCapability?.name ?? ''}
           sectionText={editingCapability?.justification ?? ''}
           onSave={handleCapabilitySave}

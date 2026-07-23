@@ -1,4 +1,5 @@
 import { CoverageRing, HomeSkeleton, SectionHeader, StatusPill, WelcomeModule } from '@/components';
+import { GuestDataBanner } from '@/components/GuestDataBanner';
 import { GuestLimitBanner } from '@/components/GuestLimitBanner';
 import { NoticeBanner } from '@/components/NoticeBanner';
 import { useAppDispatch, useAppSelector, useCanCreateArtefact } from '@/hooks';
@@ -564,6 +565,10 @@ export default function HomeScreen() {
         {showWelcome ? null : (
           <StartNewEntryCard onPress={handleStartNew} helper={helper} disabled={!canCreate} />
         )}
+
+        {/* Guest data-loss nudge — self-gating (guest + has entries + not dismissed +
+            not at limit). Sits between the capture CTA and Recent cases. */}
+        <GuestDataBanner />
 
         {/* First-run: welcome explainer only. Returning: full dashboard modules. */}
         {showWelcome ? (

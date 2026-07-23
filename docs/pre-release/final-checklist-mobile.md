@@ -45,15 +45,15 @@ These were explicitly agreed in-session. Build them as specified.
 - [x] **MOB-087** [DONE] Done 2026-07-17 — edit-lock removed. Backend `editArtefact` + `restoreVersion` gates widened to `{IN_REVIEW, COMPLETED}` (ARCHIVED/IN_CONVERSATION still blocked; editing never touches `completedAt`); client `isEditable` includes COMPLETED. A completed entry shows an edit-conditional single **Save** that keeps it COMPLETED (no demotion) and stays in place with a toast. `duplicateToReview`/clone is now redundant — left in place, flagged for later removal.
 - [x] **MOB-089** [DONE] Done 2026-07-17 — Save for later → "Needs review", Mark as done → "Completed" (`STATUS_MAP` already carried these; the two commits now drive the mapping).
 - [x] **MOB-092** [DONE] Done 2026-07-17 (entry half) — Save for later / Mark as done `router.back()` to the dashboard after a fulfilled save/finalise, with a toast ("Saved" / "Marked as done"). **MOB-111** (auto-return after completing a PDP *goal*, a different screen) still open — see below.
-- [ ] **MOB-111** [DECISION] After completing a PDP goal, auto-return to the homepage/dashboard. *(PDP-goal screen — not the entry screen; entry half shipped as MOB-092.)*
+- [x] **MOB-111** [WON'T DO] ~~After completing a PDP goal, auto-return to the homepage/dashboard.~~ Decided against 2026-07-21 — the user should **stay on the goal screen** after marking it complete (the screen transitions inline to the completed state: status pill → "Completed", completion date, reflection CTA). Unlike the entry half (MOB-092), a PDP goal is reached from the PDP list as often as from home, so a forced jump to home would be disorienting. On-screen success feedback is used instead of navigation.
 - [x] **MOB-094** [DONE] Done 2026-07-13 — removed the date row from the home header (`(tabs)/index.tsx`), along with the now-unused `formatDate()` helper and `dateText` style. Date is retained on the individual entry view per MOB-095. *(Also hid the persistent "Start New Entry" capture card in the first-run/welcome state so new users get a single CTA via the WelcomeModule.)*
 - [x] **MOB-095** [DONE] Done 2026-07-16 — entry detail header now shows `Created {date}` in the metadata line (`formatShortDate`), keeping the date visible on the record view.
 - [x] **MOB-106** [DONE] Done 2026-07-20 — PDP-goal status "Started" → "In progress" in the canonical mapper (`utils/pdpGoalStatus.ts`), so the PDP tab, goal detail, and export all update; also renamed the hardcoded PDP-tab filter chip. Removed the entry screen's verbatim duplicate `getPdpGoalStatusDisplay` and pointed it at the shared util (unify + dedupe). Enum name (`STARTED`) and colours unchanged — display-only. *(Noted but not changed: PDP `Completed` is `info`/blue vs entry `Completed` `success`/green — a colour-unification question separate from this vocabulary rename.)*
 - [ ] **MOB-107** [DECISION] Split a PDP goal into a short (AI-generated) title + a description.
 - [ ] **MOB-110** [DECISION] Integrate voice input into every entry/text field (reflection included). *(account for usage/cost — MOB-114/115)*
-- [ ] **MOB-114** [DECISION] Stop showing "AI credits"; express usage as entries ("X of 10 entries created"); keep credits internal.
+- [ ] **MOB-114** [LATER] Deferred 2026-07-21 — will be done later. Stop showing "AI credits"; express usage as entries ("X of 10 entries created"); keep credits internal. *(Bundle with MOB-115 limit-model rework + MOB-116 upgrade copy — spans ~4 credit surfaces.)*
 - [ ] **MOB-115** [DECISION] Simplify limits to hard entry caps (guest 5, user 10, pay for the 11th); drop session limits and the weekly-credit model; weekly limits only on the paid tier. *(exact numbers OPEN)*
-- [ ] **MOB-121** [DECISION] Add a resend-code time expectation to the OTP "Didn't receive a code?" state; consider a resend throttle.
+- [x] **MOB-121** Done 2026-07-22 — helper "It can take up to a minute to arrive." under the code input + 30s client-side resend cooldown ("Resend in Ns") in shared `useOtpFlow`; applies to both login & claim-account. Backend already caps sends 3/window per email.
 
 ---
 
@@ -97,7 +97,7 @@ Clear these (with legal input) before launch.
 ### Registration / login / guest mode
 - [x] **MOB-007** [FIX] Rename "Try the app" → "Continue as guest". *(DONE — `apps/mobile/app/(auth)/welcome.tsx:67`; no "Try the app" copy remains repo-wide.)*
 - [ ] **MOB-008** [LATER] Deferred 2026-07-21 — will be done later. Make login a proper sign-in screen: "Sign in to save your progress" primary, "Continue as guest" secondary (note it won't save; state it's free).
-- [ ] **MOB-009** [FIX] Persistent guest data-loss banner + inline Sign-in CTA.
+- [x] **MOB-009** [FIX] Done 2026-07-23 — guest "entries aren't saved" nudge as an **inline Home card** (not a top system banner). Reasoning: a chronic conversion promo shouldn't compete for the single top `ActiveBanner` slot — as a system banner it was lowest-priority and got crowded out exactly when a quota/credits banner appeared. Moved to content, sibling to `GuestLimitBanner`, placed between "Talk about your case" (`StartNewEntryCard`) and "Recent cases". New self-gating `GuestDataBanner` — a lean one-line text notice (no title/icon/accent stripe): "Your cases, reflections, and goals are not being saved. **See why**" with an inline `See why` link + subtle dismiss ×. Gates: `status==='guest'` + `recentEntriesTotal>0` + `!guestBannerDismissed` + `!guestArtefactLimitReached` (limit card wins ⇒ never two guest cards). Dismissible per session (`dismissGuestBanner` on `authSlice`, unpersisted ⇒ returns next launch). **CTA → Profile hub** (`/(tabs)/profile`), **not** sign-in — for a guest, login uses a different userId and strands guest entries. **Home-only** by decision. Now coexists with a top quota banner (different real estate). Files: `authSlice.ts` + `slices/index.ts` (dismiss state), `GuestDataBanner.tsx` (new inline card), `(tabs)/index.tsx` (mount). The earlier system-banner wiring (`bannerMetrics.ts`, `useBannerVisibility.ts`, `ActiveBanner.tsx`) was reverted. *Optional follow-up: unit test for the self-gate — not yet added.*
 - [ ] **MOB-013** [LATER] Deferred 2026-07-21 — will be done later. Create a content guide / key-message doc so app copy matches the website's one-sentence description (credibility). *(Cross-functional.)*
 - [x] **MOB-119** [FIX] Replace "Verify your email…" copy. *(DONE — `apps/mobile/app/claim-account.tsx:57` email-step subtitle now reads "Enter your email to save your entries and access them from any device." Fixes the wrong verb ("Verify" before anything is entered) and keeps the multi-device benefit.)*
 - [x] **MOB-113** [FIX] Reword guest-session messaging in user language. *(DONE — `apps/mobile/app/(tabs)/profile/index.tsx:131-136`: "Your data isn't being saved" + "Guest sessions are temporary. Create an account to keep your reflections, cases and goals and track your progress.")*
@@ -180,10 +180,10 @@ Clear these (with legal input) before launch.
 - [ ] **MOB-105 / MOB-133** [FIX] Build one reusable "Change dates / extend" control shared by PDP goals and review periods (users usually push deadlines back).
 - [ ] **MOB-108** [FIX] Give PDP-goal reflection its own screen (currently squeezed inline; feels skippable).
 - [ ] **MOB-109** [FIX] Add celebratory framing before reflection ("Amazing, well done. Now let's start your reflection"); keep skippable.
-- [ ] **MOB-075** [FIX/VERIFY] Confirm PDP goals also upload/export to FourteenFish.
+- [x] **MOB-075** [FIX/VERIFY] Confirm PDP goals also upload/export to FourteenFish. *(VERIFIED 2026-07-21 — PDP goals + actions are emitted in export output: text export `src/utils/export/exportArtefact.ts:75-86` ("PDP GOALS" + per-goal/action lines) and HTML/PDF via `buildExportHtml.ts:20-25`.)*
 
 ### Entries list & export
-- [ ] **MOB-099** [FIX/VERIFY] Confirm portfolio copy/export as text or PDF (entry points + formats).
+- [x] **MOB-099** [FIX/VERIFY] Confirm portfolio copy/export as text or PDF (entry points + formats). *(VERIFIED 2026-07-21 — `ExportSheet.tsx:20-76` offers "Share as PDF" (`shareAsPdf`) and "Copy as text" (`copyAsText`); both formats work.)*
 - [x] **MOB-100** [DONE] Done 2026-07-17 — Archive/Delete migrated to themed `AppDialog`s with differentiated copy; menu labels shortened to `Archive`/`Delete`; Delete uses `destructive` variant (red, not filled), Archive neutral/reversible. *(Delete-must-truly-remove is a separate §3 legal gate — line 78 — still open.)* **FINAL copy:**
 - Menu **Archive** → body: "This entry will be hidden. You can restore it anytime from your archive."
 - Menu **Delete** → body: "This permanently deletes the entry, its conversation and linked goals. This can't be undone." (red destructive)
@@ -192,12 +192,12 @@ Friction ladder scaled to reversibility (Archive light; Delete explicit-conseque
 - [ ] **MOB-101** [FIX] Show created/updated timestamps on entry rows ("Updated 1 minute ago", "Created 12/7").
 
 ### Profile / account creation
-- [ ] **MOB-118** [FIX] Settings surface: use off-white/off-grey even in light mode (currently "really hard to read"). *(settings are dummy screens for now)*
+- [x] **MOB-118** [FIX] Settings surface: use off-white/off-grey even in light mode (currently "really hard to read"). *(DONE — `SettingsSection` content uses `colors.surface` = off-white `#f6f8fc` on `#ffffff` background in light mode (`SettingsSection.tsx:15`, `theme/colors.ts:28-29`). Settings are still dummy screens.)*
 - [ ] **MOB-120** [LATER] Deferred 2026-07-21 — will be done later. Split name and OTP onto separate screens (name first). *(reuse-vs-split for returning users is OPEN — see §5)*
 - [ ] **MOB-122** [LATER] Deferred 2026-07-21 — will be done later. Interim profile avatar: drop the initial "M" circle (show full name left-aligned) or offer selectable avatars.
 
 ### Review-period (ARCP capability-coverage) tracker
-- [ ] **MOB-123** [FIX/BUILD] Build/complete the ARCP capability-coverage tracker on the homepage (% covered).
+- [x] **MOB-123** [FIX/BUILD] Build/complete the ARCP capability-coverage tracker on the homepage (% covered). *(DONE — home renders `<CoverageRing percent={coverage.coveragePercent} />` with real data (`coveredCount / totalCapabilities`) in `app/(tabs)/index.tsx:371-400`; ring math in `CoverageRing.tsx:32-63`.)*
 - [ ] **MOB-128** [LATER] Deferred 2026-07-21 — will be done later. Make capability tiles clickable — show meaning + linked entries. *(needs entry↔capability linking, MOB-134)*
 - [ ] **MOB-129** [FIX] Celebratory animation at 100% coverage.
 - [ ] **MOB-132** [FIX] Explain what a review period is; rewrite the setup copy ("See what capabilities your entries cover" reads as "very weird").

@@ -12,7 +12,7 @@ export const otpFlowStyles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   title: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 8,
@@ -49,6 +49,11 @@ export const otpFlowStyles = StyleSheet.create({
   errorText: {
     fontSize: 12,
     marginTop: 4,
+  },
+  helperText: {
+    fontSize: 13,
+    marginTop: 8,
+    lineHeight: 18,
   },
   button: {
     padding: 16,

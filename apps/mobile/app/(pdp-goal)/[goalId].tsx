@@ -1,9 +1,11 @@
 import {
+  AppDialog,
   Button,
   EmptyState,
   ReviewDatePickerSheet,
   SkeletonBone,
   StatusPill,
+  useToast,
 } from '@/components';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 import {
@@ -25,7 +27,6 @@ import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -189,6 +190,7 @@ export default function PdpGoalDetailScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { showActionSheetWithOptions } = useActionSheet();
+  const { showToast } = useToast();
 
   const goal = useAppSelector((state) => selectPdpGoalById(state, goalId ?? ''));
   const entityStatus = useAppSelector(
@@ -208,6 +210,12 @@ export default function PdpGoalDetailScreen() {
   const [showCompletionReview, setShowCompletionReview] = useState(false);
   const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, PdpGoalStatus>>({});
   const [pendingActionIds, setPendingActionIds] = useState<Set<string>>(new Set());
+  // Confirm dialogs (complete / archive / delete) + the "actions still incomplete"
+  // guard, all via the themed AppDialog (replacing native Alert.alert).
+  const [completeConfirmVisible, setCompleteConfirmVisible] = useState(false);
+  const [actionsIncompleteVisible, setActionsIncompleteVisible] = useState(false);
+  const [archiveConfirmVisible, setArchiveConfirmVisible] = useState(false);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
   const isGoalArchived = goal?.status === PdpGoalStatus.ARCHIVED;
   const visibleActions = useMemo(
@@ -234,56 +242,50 @@ export default function PdpGoalDetailScreen() {
       (a) => (optimisticStatuses[a.id] ?? a.status) !== PdpGoalStatus.COMPLETED
     );
     if (pendingActions.length > 0) {
-      Alert.alert(
-        'Actions incomplete',
-        'Complete all actions before marking this goal as complete.',
-        [{ text: 'OK' }]
-      );
+      setActionsIncompleteVisible(true);
       return;
     }
-    Alert.alert('Mark goal as complete', 'Are you sure you want to mark this goal as completed?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Mark complete',
-        onPress: () =>
-          dispatch(updatePdpGoal({ goalId, data: { status: PdpGoalStatus.COMPLETED } })),
-      },
-    ]);
-  }, [goalId, dispatch, visibleActions, optimisticStatuses]);
+    setCompleteConfirmVisible(true);
+  }, [goalId, visibleActions, optimisticStatuses]);
+
+  const confirmMarkComplete = useCallback(() => {
+    setCompleteConfirmVisible(false);
+    if (!goalId) return;
+    // Toast on the fulfilled update (not on tap) so we only confirm a completion
+    // the server actually accepted; on failure the slice reverts and we say so.
+    dispatch(updatePdpGoal({ goalId, data: { status: PdpGoalStatus.COMPLETED } }))
+      .unwrap()
+      .then(() => showToast('Goal completed'))
+      .catch(() => showToast("Couldn't complete the goal. Please try again."));
+  }, [goalId, dispatch, showToast]);
 
   const handleArchive = useCallback(() => {
     if (!goalId) return;
-    Alert.alert('Archive goal', 'Are you sure you want to archive this goal?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Archive',
-        style: 'destructive',
-        onPress: () =>
-          dispatch(updatePdpGoal({ goalId, data: { status: PdpGoalStatus.ARCHIVED } })),
-      },
-    ]);
-  }, [goalId, dispatch]);
+    setArchiveConfirmVisible(true);
+  }, [goalId]);
+
+  const confirmArchive = useCallback(() => {
+    setArchiveConfirmVisible(false);
+    if (!goalId) return;
+    dispatch(updatePdpGoal({ goalId, data: { status: PdpGoalStatus.ARCHIVED } }))
+      .unwrap()
+      .then(() => showToast('Goal archived'))
+      .catch(() => showToast("Couldn't archive the goal. Please try again."));
+  }, [goalId, dispatch, showToast]);
 
   const handleDelete = useCallback(() => {
     if (!goalId) return;
-    Alert.alert(
-      'Delete Goal',
-      'This will permanently delete this goal and all its actions. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            dispatch(deletePdpGoal({ goalId }))
-              .unwrap()
-              .then(() => router.back())
-              .catch(() => Alert.alert('Error', 'Failed to delete goal. Please try again.'));
-          },
-        },
-      ]
-    );
-  }, [goalId, dispatch, router]);
+    setDeleteConfirmVisible(true);
+  }, [goalId]);
+
+  const confirmDelete = useCallback(() => {
+    setDeleteConfirmVisible(false);
+    if (!goalId) return;
+    dispatch(deletePdpGoal({ goalId }))
+      .unwrap()
+      .then(() => router.back())
+      .catch(() => showToast("Couldn't delete the goal. Please try again."));
+  }, [goalId, dispatch, router, showToast]);
 
   const handleShowMenu = useCallback(() => {
     showActionSheetWithOptions(
@@ -342,7 +344,7 @@ export default function PdpGoalDetailScreen() {
                   delete next[actionId];
                   return next;
                 });
-                Alert.alert('Failed to remove action', 'Please try again.');
+                showToast("Couldn't remove the action. Please try again.");
               })
               .finally(() => {
                 setPendingActionIds((prev) => {
@@ -395,7 +397,7 @@ export default function PdpGoalDetailScreen() {
             delete next[actionId];
             return next;
           });
-          Alert.alert('Failed to update action', 'Please try again.');
+          showToast("Couldn't update the action. Please try again.");
         })
         .finally(() => {
           setPendingActionIds((prev) => {
@@ -553,9 +555,7 @@ export default function PdpGoalDetailScreen() {
             {isActive && visibleActions.length > 0 && (
               <Pressable
                 hitSlop={8}
-                onPress={() =>
-                  Alert.alert('Remove an action', 'Long press any action to remove it.')
-                }
+                onPress={() => showToast('Long press any action to remove it.')}
               >
                 <Ionicons
                   name="information-circle-outline"
@@ -704,6 +704,65 @@ export default function PdpGoalDetailScreen() {
         onSubmit={handleSaveCompletionReview}
         onClose={() => setShowCompletionReview(false)}
         submitting={mutating}
+      />
+
+      <AppDialog
+        visible={completeConfirmVisible}
+        icon={null}
+        title="Mark goal as complete?"
+        message="This marks the goal as completed. You can still reflect on it afterwards."
+        buttons={[
+          { label: 'Mark complete', onPress: confirmMarkComplete, variant: 'primary' },
+          {
+            label: 'Cancel',
+            onPress: () => setCompleteConfirmVisible(false),
+            variant: 'secondary',
+          },
+        ]}
+        onRequestClose={() => setCompleteConfirmVisible(false)}
+      />
+
+      <AppDialog
+        visible={actionsIncompleteVisible}
+        tone="warning"
+        title="Actions incomplete"
+        message="Complete all actions before marking this goal as complete."
+        buttons={[{ label: 'Got it', onPress: () => setActionsIncompleteVisible(false) }]}
+        onRequestClose={() => setActionsIncompleteVisible(false)}
+      />
+
+      <AppDialog
+        visible={archiveConfirmVisible}
+        tone="info"
+        icon="archive-outline"
+        title="Archive goal"
+        message="This hides the goal. You can find it later under the Archived filter."
+        buttons={[
+          { label: 'Archive', onPress: confirmArchive, variant: 'primary' },
+          {
+            label: 'Cancel',
+            onPress: () => setArchiveConfirmVisible(false),
+            variant: 'secondary',
+          },
+        ]}
+        onRequestClose={() => setArchiveConfirmVisible(false)}
+      />
+
+      <AppDialog
+        visible={deleteConfirmVisible}
+        tone="error"
+        icon="trash-outline"
+        title="Delete goal"
+        message="This permanently deletes this goal and all its actions. This can't be undone."
+        buttons={[
+          { label: 'Delete', onPress: confirmDelete, variant: 'destructive' },
+          {
+            label: 'Cancel',
+            onPress: () => setDeleteConfirmVisible(false),
+            variant: 'secondary',
+          },
+        ]}
+        onRequestClose={() => setDeleteConfirmVisible(false)}
       />
     </>
   );

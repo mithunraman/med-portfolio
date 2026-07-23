@@ -99,6 +99,12 @@ export interface AuthState {
   isNewUser: boolean | null;
   specialties: SpecialtyOption[];
   guestArtefactLimitReached: boolean;
+  /**
+   * Per-session dismissal of the guest "entries aren't saved" banner (MOB-009).
+   * Not persisted — the store is rebuilt on each cold start, so the banner
+   * naturally reappears next launch while a guest still has unsaved entries.
+   */
+  guestBannerDismissed: boolean;
 }
 
 const initialState: AuthState = {
@@ -109,6 +115,7 @@ const initialState: AuthState = {
   isNewUser: null,
   specialties: [],
   guestArtefactLimitReached: false,
+  guestBannerDismissed: false,
 };
 
 /**
@@ -365,6 +372,9 @@ const authSlice = createSlice({
     markGuestArtefactLimitReached(state) {
       state.guestArtefactLimitReached = true;
     },
+    dismissGuestBanner(state) {
+      state.guestBannerDismissed = true;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -480,5 +490,6 @@ export const {
   setUnauthenticated,
   updateQuota,
   markGuestArtefactLimitReached,
+  dismissGuestBanner,
 } = authSlice.actions;
 export default authSlice.reducer;

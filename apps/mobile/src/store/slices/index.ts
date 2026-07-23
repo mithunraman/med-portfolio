@@ -51,6 +51,7 @@ export {
   clearError,
   setUnauthenticated,
   updateQuota,
+  dismissGuestBanner,
 } from './authSlice';
 export type { AuthStatus, AuthState } from './authSlice';
 

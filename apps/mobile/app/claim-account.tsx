@@ -142,6 +142,9 @@ export default function ClaimAccountScreen() {
                 onChangeText={flow.setCode}
                 editable={!flow.isLoading}
               />
+              <Text style={[s.helperText, { color: colors.textSecondary }]}>
+                It can take up to a minute to arrive.
+              </Text>
             </View>
 
             <TouchableOpacity
@@ -165,9 +168,15 @@ export default function ClaimAccountScreen() {
               <Text style={[s.resendText, { color: colors.textSecondary }]}>
                 Didn't receive a code?{' '}
               </Text>
-              <TouchableOpacity onPress={flow.handleResend} disabled={flow.isSending}>
-                <Text style={[s.resendLink, { color: colors.primary }]}>Resend</Text>
-              </TouchableOpacity>
+              {flow.resendCooldown > 0 ? (
+                <Text style={[s.resendText, { color: colors.textSecondary }]}>
+                  Resend in {flow.resendCooldown}s
+                </Text>
+              ) : (
+                <TouchableOpacity onPress={flow.handleResend} disabled={flow.isSending}>
+                  <Text style={[s.resendLink, { color: colors.primary }]}>Resend</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={s.linkRow}>

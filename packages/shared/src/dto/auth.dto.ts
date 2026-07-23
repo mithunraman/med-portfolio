@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { singleLineText } from '../utils';
 import { Specialty } from '../enums/specialty.enum';
 import { UserRole } from '../enums/user-role.enum';
 
@@ -33,7 +34,7 @@ export type AuthUser = z.infer<typeof AuthUserSchema>;
 export const UpdateProfileRequestSchema = z.object({
   specialty: z.nativeEnum(Specialty),
   trainingStage: z.string(),
-  name: z.string().min(2, 'Name must be at least 2 characters').optional(),
+  name: singleLineText({ min: 2, minMessage: 'Name must be at least 2 characters' }).optional(),
 });
 
 export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequestSchema>;
@@ -98,7 +99,7 @@ export type OtpSendResponse = z.infer<typeof OtpSendResponseSchema>;
 export const OtpVerifyRequestSchema = z.object({
   email: z.string().email('Invalid email address'),
   code: z.string().length(6, 'OTP must be exactly 6 digits'),
-  name: z.string().min(2, 'Name must be at least 2 characters').optional(),
+  name: singleLineText({ min: 2, minMessage: 'Name must be at least 2 characters' }).optional(),
 });
 
 export type OtpVerifyRequest = z.infer<typeof OtpVerifyRequestSchema>;
@@ -106,7 +107,7 @@ export type OtpVerifyRequest = z.infer<typeof OtpVerifyRequestSchema>;
 export const OtpClaimRequestSchema = z.object({
   email: z.string().email('Invalid email address'),
   code: z.string().length(6, 'OTP must be exactly 6 digits'),
-  name: z.string().min(2, 'Name must be at least 2 characters'),
+  name: singleLineText({ min: 2, minMessage: 'Name must be at least 2 characters' }),
 });
 
 export type OtpClaimRequest = z.infer<typeof OtpClaimRequestSchema>;

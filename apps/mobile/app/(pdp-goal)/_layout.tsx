@@ -28,6 +28,17 @@ export default function PdpGoalLayout() {
           ),
         }}
       />
+      <Stack.Screen
+        name="reflect"
+        options={{
+          title: 'Reflection',
+          headerLeft: () => (
+            <Pressable onPress={() => router.back()} hitSlop={8}>
+              <Feather name="arrow-left" size={24} color={colors.text} />
+            </Pressable>
+          ),
+        }}
+      />
     </Stack>
   );
 }

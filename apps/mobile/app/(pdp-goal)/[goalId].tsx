@@ -115,71 +115,6 @@ function AddActionModal({
   );
 }
 
-// ── Completion Review Modal ────────────────────────────────────────────────
-
-function CompletionReviewModal({
-  visible,
-  currentReview,
-  onSubmit,
-  onClose,
-  submitting,
-}: {
-  visible: boolean;
-  currentReview: string | null;
-  onSubmit: (review: string) => void;
-  onClose: () => void;
-  submitting: boolean;
-}) {
-  const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
-  const [text, setText] = useState(currentReview ?? '');
-
-  useEffect(() => {
-    setText(currentReview ?? '');
-  }, [currentReview, visible]);
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalOverlay}
-      >
-        <View
-          style={[
-            styles.modalContainer,
-            { backgroundColor: colors.background, paddingBottom: insets.bottom + 16 },
-          ]}
-        >
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Completion review</Text>
-            <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          <TextInput
-            style={[
-              styles.textInput,
-              { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-            placeholder="Write your reflection on completing this goal…"
-            placeholderTextColor={colors.textSecondary}
-            value={text}
-            onChangeText={setText}
-            multiline
-            autoFocus
-          />
-          <Button
-            label="Save review"
-            onPress={() => onSubmit(text.trim())}
-            loading={submitting}
-            disabled={!text.trim()}
-          />
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
 // ── Detail Screen ──────────────────────────────────────────────────────────
 
 export default function PdpGoalDetailScreen() {
@@ -193,9 +128,7 @@ export default function PdpGoalDetailScreen() {
   const { showToast } = useToast();
 
   const goal = useAppSelector((state) => selectPdpGoalById(state, goalId ?? ''));
-  const entityStatus = useAppSelector(
-    (state) => state.pdpGoals.statusById[goalId ?? '']
-  );
+  const entityStatus = useAppSelector((state) => state.pdpGoals.statusById[goalId ?? '']);
   const fetching = entityStatus === 'loading';
   const mutating = entityStatus === 'updating';
 
@@ -207,7 +140,6 @@ export default function PdpGoalDetailScreen() {
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showAddAction, setShowAddAction] = useState(false);
-  const [showCompletionReview, setShowCompletionReview] = useState(false);
   const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, PdpGoalStatus>>({});
   const [pendingActionIds, setPendingActionIds] = useState<Set<string>>(new Set());
   // Confirm dialogs (complete / archive / delete) + the "actions still incomplete"
@@ -221,10 +153,10 @@ export default function PdpGoalDetailScreen() {
   const visibleActions = useMemo(
     () =>
       isGoalArchived
-        ? goal?.actions ?? []
-        : goal?.actions.filter(
+        ? (goal?.actions ?? [])
+        : (goal?.actions.filter(
             (a) => (optimisticStatuses[a.id] ?? a.status) !== PdpGoalStatus.ARCHIVED
-          ) ?? [],
+          ) ?? []),
     [goal?.actions, optimisticStatuses, isGoalArchived]
   );
 
@@ -251,13 +183,19 @@ export default function PdpGoalDetailScreen() {
   const confirmMarkComplete = useCallback(() => {
     setCompleteConfirmVisible(false);
     if (!goalId) return;
-    // Toast on the fulfilled update (not on tap) so we only confirm a completion
-    // the server actually accepted; on failure the slice reverts and we say so.
+    // Commit the completion first, then carry the user into the reflection screen
+    // (MOB-108). Navigating only on the fulfilled update means a failed save never
+    // strands them mid-reflection. The reflect screen is a lean composer and not a
+    // confirmation, so we toast the completion here — otherwise a user who taps
+    // "Maybe later" would get no success signal. On failure the slice reverts.
     dispatch(updatePdpGoal({ goalId, data: { status: PdpGoalStatus.COMPLETED } }))
       .unwrap()
-      .then(() => showToast('Goal completed'))
+      .then(() => {
+        showToast('Goal completed');
+        router.push(`/(pdp-goal)/reflect?goalId=${goalId}`);
+      })
       .catch(() => showToast("Couldn't complete the goal. Please try again."));
-  }, [goalId, dispatch, showToast]);
+  }, [goalId, dispatch, router, showToast]);
 
   const handleArchive = useCallback(() => {
     if (!goalId) return;
@@ -410,16 +348,6 @@ export default function PdpGoalDetailScreen() {
     [goalId, dispatch]
   );
 
-  const handleSaveCompletionReview = useCallback(
-    (review: string) => {
-      if (!goalId) return;
-      dispatch(updatePdpGoal({ goalId, data: { completionReview: review } })).then(() => {
-        setShowCompletionReview(false);
-      });
-    },
-    [goalId, dispatch]
-  );
-
   const handleViewEntry = useCallback(() => {
     if (!goal?.artefactId) return;
     router.push(`/(entry)/${goal.artefactId}`);
@@ -442,6 +370,7 @@ export default function PdpGoalDetailScreen() {
   ).length;
   const allActionsDone =
     visibleActions.length === 0 || completedActionCount === visibleActions.length;
+  const remainingActionCount = visibleActions.length - completedActionCount;
   const isOverdue = isActive && !!goal.reviewDate && new Date(goal.reviewDate) < new Date();
 
   return (
@@ -640,44 +569,64 @@ export default function PdpGoalDetailScreen() {
         {/* Completion review */}
         {(isCompleted || goal.completionReview) && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Completion review</Text>
             {goal.completionReview ? (
-              <Pressable
-                style={[styles.reviewCard, { backgroundColor: colors.surface }]}
-                onPress={() => !isArchived && setShowCompletionReview(true)}
-              >
-                <Text style={[styles.reviewText, { color: colors.text }]}>
-                  {goal.completionReview}
-                </Text>
-                {!isArchived && (
-                  <Ionicons
-                    name="pencil-outline"
-                    size={16}
-                    color={colors.textSecondary}
-                    style={styles.reviewEditIcon}
-                  />
-                )}
-              </Pressable>
+              <>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Completion review</Text>
+                <Pressable
+                  style={[styles.reviewCard, { backgroundColor: colors.surface }]}
+                  onPress={() => !isArchived && router.push(`/(pdp-goal)/reflect?goalId=${goalId}`)}
+                >
+                  <Text style={[styles.reviewText, { color: colors.text }]}>
+                    {goal.completionReview}
+                  </Text>
+                  {!isArchived && (
+                    <Ionicons
+                      name="pencil-outline"
+                      size={16}
+                      color={colors.textSecondary}
+                      style={styles.reviewEditIcon}
+                    />
+                  )}
+                </Pressable>
+              </>
             ) : (
               <EmptyState
                 icon="create-outline"
                 title="How did it go?"
                 description="Reflect on what you achieved and what you learned."
                 actionLabel="Write reflection"
-                onAction={() => setShowCompletionReview(true)}
+                onAction={() => router.push(`/(pdp-goal)/reflect?goalId=${goalId}`)}
               />
             )}
           </View>
         )}
 
-        {/* Mark as complete */}
+        {/* Mark as complete. The button stays full-strength primary and always
+            tappable (validate-on-tap, per MOB-097/098) — a grey/disabled look would
+            be a dead-end. A live precondition hint carries the "not ready yet"
+            meaning in text (not colour alone), so users see the gate before tapping
+            and the incomplete-actions dialog is only a fallback (MOB-104). */}
         {isActive && (
           <View style={styles.section}>
+            <View style={styles.completeHint}>
+              <Ionicons
+                name={allActionsDone ? 'checkmark-circle-outline' : 'ellipse-outline'}
+                size={16}
+                color={allActionsDone ? colors.primary : colors.textSecondary}
+              />
+              <Text style={[styles.completeHintText, { color: colors.textSecondary }]}>
+                {visibleActions.length === 0
+                  ? 'Ready to complete'
+                  : allActionsDone
+                    ? 'All actions done — ready to complete'
+                    : `${remainingActionCount} action${remainingActionCount === 1 ? '' : 's'} left to complete this goal`}
+              </Text>
+            </View>
             <Button
               label="Mark as complete"
               onPress={handleMarkComplete}
               loading={mutating}
-              color={allActionsDone ? colors.primary : colors.textSecondary}
+              color={colors.primary}
               icon={(color) => <Ionicons name="checkmark-circle" size={20} color={color} />}
             />
           </View>
@@ -695,14 +644,6 @@ export default function PdpGoalDetailScreen() {
         visible={showAddAction}
         onSubmit={handleAddAction}
         onClose={() => setShowAddAction(false)}
-        submitting={mutating}
-      />
-
-      <CompletionReviewModal
-        visible={showCompletionReview}
-        currentReview={goal.completionReview}
-        onSubmit={handleSaveCompletionReview}
-        onClose={() => setShowCompletionReview(false)}
         submitting={mutating}
       />
 
@@ -781,6 +722,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 20,
     gap: 10,
+  },
+  completeHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  completeHintText: {
+    fontSize: 13,
   },
   goalText: {
     fontSize: 20,

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { multilineText, nullableMultilineText, singleLineText } from '../utils';
 import { ArtefactStatus } from '../enums/artefact-status.enum';
 import { ConversationStatus } from '../enums/conversation-status.enum';
 import { PdpGoalStatus } from '../enums/pdp-goal-status.enum';
@@ -103,6 +104,10 @@ export type ArtefactReview = z.infer<typeof ArtefactReviewSchema>;
 export const NOTE_MAX_LENGTH = 5000;
 export const NOTES_MAX_COUNT = 100;
 
+// Upper bound for an edited entry section's body — the rendered reflective prose.
+// Bounded (like notes/justification) so the field can't grow without limit.
+export const ARTEFACT_SECTION_TEXT_MAX_LENGTH = 5000;
+
 // A freeform note the author attaches to an artefact after creation (embedded in
 // the artefact response). Each note carries a server-minted xid so individual
 // notes keep their identity (and createdAt) across the array-replace save contract.
@@ -199,7 +204,7 @@ export type FinaliseArtefactRequest = z.infer<typeof FinaliseArtefactRequestSche
 // targets a section by id and overwrites its text; the label is server-owned.
 export const EditArtefactSectionSchema = z.object({
   sectionId: z.string(),
-  text: z.string(),
+  text: multilineText({ max: ARTEFACT_SECTION_TEXT_MAX_LENGTH }),
 });
 
 export type EditArtefactSection = z.infer<typeof EditArtefactSectionSchema>;
@@ -208,13 +213,13 @@ export type EditArtefactSection = z.infer<typeof EditArtefactSectionSchema>;
 // code, name and evidence are server-owned. Mirrors the section edit contract.
 export const EditArtefactCapabilitySchema = z.object({
   code: z.string(),
-  justification: z.string().max(5000),
+  justification: multilineText({ max: 5000 }),
 });
 
 export type EditArtefactCapability = z.infer<typeof EditArtefactCapabilitySchema>;
 
 export const EditArtefactRequestSchema = z.object({
-  title: z.string().max(200).optional(),
+  title: singleLineText({ max: 200 }).optional(),
   composedDocument: z.array(EditArtefactSectionSchema).optional(),
   capabilities: z.array(EditArtefactCapabilitySchema).optional(),
 });
@@ -224,7 +229,7 @@ export type EditArtefactRequest = z.infer<typeof EditArtefactRequestSchema>;
 // Review request schema — upsert (create or overwrite) the author's review.
 export const UpsertArtefactReviewRequestSchema = z.object({
   rating: z.number().int().min(ARTEFACT_RATING_MIN).max(ARTEFACT_RATING_MAX),
-  comment: z.string().max(ARTEFACT_REVIEW_COMMENT_MAX_LENGTH).nullable().optional(),
+  comment: nullableMultilineText({ max: ARTEFACT_REVIEW_COMMENT_MAX_LENGTH }).optional(),
 });
 
 export type UpsertArtefactReviewRequest = z.infer<typeof UpsertArtefactReviewRequestSchema>;
@@ -238,7 +243,7 @@ export const UpdateNotesRequestSchema = z.object({
     .array(
       z.object({
         xid: z.string().optional(),
-        text: z.string().trim().min(1).max(NOTE_MAX_LENGTH),
+        text: multilineText({ min: 1, max: NOTE_MAX_LENGTH }),
       })
     )
     .max(NOTES_MAX_COUNT)

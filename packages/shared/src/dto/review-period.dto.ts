@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { singleLineText } from '../utils';
 import { ReviewPeriodStatus } from '../enums/review-period-status.enum';
 
 // Review Period schemas
@@ -16,7 +17,12 @@ export type ReviewPeriod = z.infer<typeof ReviewPeriodSchema>;
 
 // Request schemas
 export const CreateReviewPeriodRequestSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100, 'Name must not exceed 100 characters'),
+  name: singleLineText({
+    min: 1,
+    max: 100,
+    minMessage: 'Name is required',
+    maxMessage: 'Name must not exceed 100 characters',
+  }),
   startDate: z.string().datetime(),
   endDate: z.string().datetime(),
 });
@@ -24,7 +30,7 @@ export const CreateReviewPeriodRequestSchema = z.object({
 export type CreateReviewPeriodRequest = z.infer<typeof CreateReviewPeriodRequestSchema>;
 
 export const UpdateReviewPeriodRequestSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
+  name: singleLineText({ min: 1, max: 100 }).optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
 });

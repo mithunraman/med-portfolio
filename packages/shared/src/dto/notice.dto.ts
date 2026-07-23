@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { multilineText, singleLineText } from '../utils';
 import { AudienceType } from '../enums/audience-type.enum';
 import { NoticeSeverity } from '../enums/notice-severity.enum';
 import { NoticeType } from '../enums/notice-type.enum';
@@ -23,10 +24,10 @@ export const CreateNoticeSchema = z
   .object({
     type: z.nativeEnum(NoticeType),
     severity: z.nativeEnum(NoticeSeverity),
-    title: z.string().min(1).max(200),
-    body: z.string().max(1000).optional(),
+    title: singleLineText({ min: 1, max: 200 }),
+    body: multilineText({ max: 1000 }).optional(),
     actionUrl: z.string().url().optional(),
-    actionLabel: z.string().max(50).optional(),
+    actionLabel: singleLineText({ max: 50 }).optional(),
     dismissible: z.boolean(),
     startsAt: z.string().datetime(),
     expiresAt: z.string().datetime().optional(),
@@ -66,10 +67,10 @@ export const UpdateNoticeSchema = z
   .object({
     type: z.nativeEnum(NoticeType).optional(),
     severity: z.nativeEnum(NoticeSeverity).optional(),
-    title: z.string().min(1).max(200).optional(),
-    body: z.string().max(1000).optional(),
+    title: singleLineText({ min: 1, max: 200 }).optional(),
+    body: multilineText({ max: 1000 }).optional(),
     actionUrl: z.string().url().optional(),
-    actionLabel: z.string().max(50).optional(),
+    actionLabel: singleLineText({ max: 50 }).optional(),
     dismissible: z.boolean().optional(),
     startsAt: z.string().datetime().optional(),
     expiresAt: z.string().datetime().nullable().optional(),

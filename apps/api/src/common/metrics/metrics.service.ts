@@ -14,6 +14,9 @@ export class MetricsService {
   // --- LLM metrics ---
   private readonly llmRequestDuration: Histogram;
   private readonly llmRequestRetries: Counter;
+  private readonly llmQueueDepth: Histogram;
+  private readonly llmRateLimited: Counter;
+  private readonly llmWaitDuration: Histogram;
 
   constructor() {
     this.outboxJobsActive = this.meter.createUpDownCounter('outbox.jobs.active', {
@@ -40,6 +43,19 @@ export class MetricsService {
 
     this.llmRequestRetries = this.meter.createCounter('llm.request.retries_total', {
       description: 'Total number of LLM API retry attempts',
+    });
+
+    this.llmQueueDepth = this.meter.createHistogram('llm.ratelimit.queue.depth', {
+      description: 'Number of LLM calls waiting on the rate limiter',
+    });
+
+    this.llmRateLimited = this.meter.createCounter('llm.request.rate_limited_total', {
+      description: 'Total number of LLM API 429 (provider quota) responses observed',
+    });
+
+    this.llmWaitDuration = this.meter.createHistogram('llm.ratelimit.wait_ms', {
+      description: 'Time an LLM call spent waiting on the rate limiter before executing',
+      unit: 'ms',
     });
   }
 
@@ -70,5 +86,17 @@ export class MetricsService {
 
   recordLLMRetry(operation: string): void {
     this.llmRequestRetries.add(1, { operation });
+  }
+
+  recordLLMQueueDepth(depth: number): void {
+    this.llmQueueDepth.record(depth);
+  }
+
+  recordLLMRateLimited(operation: string): void {
+    this.llmRateLimited.add(1, { operation });
+  }
+
+  recordLLMWait(operation: string, waitMs: number): void {
+    this.llmWaitDuration.record(waitMs, { operation });
   }
 }

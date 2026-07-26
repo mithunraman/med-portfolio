@@ -8,6 +8,7 @@ import { AssemblyAI, SpeechModel } from 'assemblyai';
 import { backOff } from 'exponential-backoff';
 import { z } from 'zod';
 import { MetricsService } from '../common/metrics';
+import { LlmRateLimiterService } from './llm-rate-limiter.service';
 import { LlmTraceContext, traceLlmCall } from './llm-trace.util';
 import { MEDICAL_KEYTERMS, TRANSCRIPTION_TIMEOUT_MS } from './medical-keyterms';
 
@@ -144,7 +145,8 @@ export class LLMService {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly metricsService: MetricsService
+    private readonly metricsService: MetricsService,
+    private readonly rateLimiter: LlmRateLimiterService
   ) {
     const openaiApiKey = this.configService.get<string>('app.openai.apiKey');
     if (!openaiApiKey) throw new Error('Missing config: app.openai.apiKey');
@@ -211,7 +213,32 @@ export class LLMService {
             target.structuredMethod ? { method: target.structuredMethod } : undefined
           );
 
-          const data = (await structuredModel.invoke(messages)) as T;
+          // Gate each attempt on the rate limiter. Wrapping the per-attempt call
+          // (not the whole backOff) means a 429-triggered retry consumes its own
+          // reservoir slot — a retry is a real API call against the quota. This
+          // holds only because createChatModel sets maxRetries: 0; otherwise
+          // LangChain's AsyncCaller would retry up to 6× inside this single slot,
+          // firing multiple provider requests the limiter never sees.
+          //
+          // Timing is split so the SLI stays honest: the time spent queued/paced
+          // by the limiter is recorded as `llm.ratelimit.wait_ms`, and only the
+          // actual provider round-trip counts toward `llm.request.duration`.
+          // Measuring end-to-end (before schedule) would let minTime pacing +
+          // queue wait dominate the "provider latency" metric under concurrency.
+          const scheduledAt = Date.now();
+          const data = (await this.rateLimiter.schedule(async () => {
+            const callStart = Date.now();
+            this.metricsService.recordLLMWait('invokeStructured', callStart - scheduledAt);
+            try {
+              return await structuredModel.invoke(messages);
+            } finally {
+              this.metricsService.recordLLMDuration(
+                'invokeStructured',
+                modelLabel,
+                Date.now() - callStart
+              );
+            }
+          })) as T;
 
           return { data, model: modelLabel, tokensUsed: null };
         },
@@ -221,6 +248,14 @@ export class LLMService {
           timeMultiple: 2,
           jitter: 'full',
           retry: (error) => {
+            // Ground-truth quota signal: a 429 means the rate limiter did NOT
+            // keep us under the provider's cap. Record it distinctly from generic
+            // retries so it can be alerted on directly (see recordLLMRateLimited).
+            if (this.isRateLimitError(error)) {
+              this.metricsService.recordLLMRateLimited('invokeStructured');
+              this.logger.warn('LLM provider rate limit (429) — limiter did not prevent it', error);
+            }
+
             const retryable = this.isRetryableApiError(error);
             if (retryable) {
               this.metricsService.recordLLMRetry('invokeStructured');
@@ -260,18 +295,34 @@ export class LLMService {
       });
 
       Sentry.captureException(error, {
-        tags: { operation: 'invokeStructured', provider: target.provider, model: modelLabel },
+        tags: {
+          operation: 'invokeStructured',
+          provider: target.provider,
+          model: modelLabel,
+          // Distinguishes a quota breach (retries exhausted on 429s) from other
+          // failures, so "limiter insufficient" can be alerted on directly.
+          rateLimited: this.isRateLimitError(error),
+        },
         extra: { messageCount: messages.length, maxRetries: 3 },
       });
       throw error;
-    } finally {
-      this.metricsService.recordLLMDuration('invokeStructured', modelLabel, Date.now() - startTime);
     }
+    // NB: llm.request.duration is recorded inside the schedule callback (provider
+    // round-trip only) — deliberately NOT here, which would include queue/pacing
+    // wait. `startTime` remains only for the dev-only LLM_TRACE end-to-end dump.
   }
 
   /**
    * Build the LangChain chat client for a resolved target. This is the only
    * place provider vocabulary lives — callers pass a target, never wire a client.
+   *
+   * `maxRetries: 0` on every instance is load-bearing: LangChain's AsyncCaller
+   * otherwise retries a failed request up to 6 times (429 included) *inside* a
+   * single call to `invoke()` — i.e. inside one rate-limiter slot — which would
+   * fire up to 7 provider requests per slot and undercount our 429 signal. We
+   * disable it so `invokeStructured`'s `backOff` is the sole retry authority:
+   * every attempt then goes through `rateLimiter.schedule()` (consuming a slot,
+   * minTime-paced) and every 429 reaches `recordLLMRateLimited`.
    */
   private createChatModel(
     target: ModelTarget,
@@ -285,6 +336,7 @@ export class LLMService {
           model: target.model,
           temperature,
           maxTokens,
+          maxRetries: 0, // see method doc — our backOff is the only retry layer
         });
       case 'openrouter': {
         if (!this.openrouterApiKey) throw new Error('Missing config: app.openrouter.apiKey');
@@ -303,6 +355,7 @@ export class LLMService {
           maxTokens: maxTokens + reasoningHeadroom(target.thinkMode),
           modelKwargs: this.openrouterKwargs(target),
           configuration: { baseURL: 'https://openrouter.ai/api/v1' },
+          maxRetries: 0, // see createChatModel doc — our backOff is the only retry layer
         });
       }
       case 'azure-foundry': {
@@ -321,6 +374,7 @@ export class LLMService {
           maxTokens: maxTokens + reasoningHeadroom(target.thinkMode),
           modelKwargs: azureFoundryKwargs(target),
           configuration: { baseURL: this.azureFoundryBaseUrl },
+          maxRetries: 0, // see createChatModel doc — our backOff is the only retry layer
         });
       }
     }
@@ -382,14 +436,23 @@ export class LLMService {
             keyterms_prompt: MEDICAL_KEYTERMS,
           });
 
-          // Apply timeout (2 minutes for max 5-minute audio)
+          // Apply timeout (2 minutes for max 5-minute audio). Capture the timer
+          // handle so it can be cleared once the race settles — otherwise the
+          // pending timer keeps the event loop alive for the full timeout after
+          // every successful transcription.
+          let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
           const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => {
+            timeoutHandle = setTimeout(() => {
               reject(new Error(`Transcription timed out after ${TRANSCRIPTION_TIMEOUT_MS}ms`));
             }, TRANSCRIPTION_TIMEOUT_MS);
           });
 
-          const transcript = await Promise.race([transcriptPromise, timeoutPromise]);
+          let transcript;
+          try {
+            transcript = await Promise.race([transcriptPromise, timeoutPromise]);
+          } finally {
+            clearTimeout(timeoutHandle);
+          }
 
           if (transcript.status === 'error') {
             this.logger.error(`Transcription failed: ${transcript.error}`);
@@ -468,23 +531,42 @@ export class LLMService {
     }
   }
 
+  /**
+   * Whether an error is a provider rate-limit (429). Single source of truth for
+   * 429 detection — used both to record the quota signal and (via
+   * isRetryableApiError) to decide retries.
+   */
+  private isRateLimitError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+
+    // Structured status is authoritative when present — a 400 whose message
+    // happens to contain "429" (e.g. "…you requested 8429 tokens") must NOT
+    // count as a rate limit.
+    const status = (error as any).status ?? (error as any).statusCode;
+    if (typeof status === 'number') return status === 429;
+
+    // Fallback for errors carrying no status. Word-boundary match so digit
+    // substrings like "8429" don't false-positive.
+    return /\b429\b/.test(error.message) || /rate limit/i.test(error.message);
+  }
+
   private isRetryableApiError(error: unknown): boolean {
     if (!(error instanceof Error)) return false;
 
-    const message = error.message.toLowerCase();
+    // Rate limits are retryable
+    if (this.isRateLimitError(error)) return true;
 
-    // Rate limits, server errors, network issues
-    if (message.includes('429') || message.includes('rate limit')) return true;
-    if (message.includes('500') || message.includes('502') || message.includes('503')) return true;
-    if (message.includes('504') || message.includes('gateway')) return true;
+    // Structured status is authoritative when present — trust it and do not
+    // message-match (avoids "…1500 tokens" matching a 5xx substring).
+    const status = (error as any).status ?? (error as any).statusCode;
+    if (typeof status === 'number') return status >= 500;
+
+    // Fallback for errors carrying no status. Word-boundary match on 5xx so
+    // digit substrings in a 4xx message don't false-positive.
+    const message = error.message.toLowerCase();
+    if (/\b50[0-4]\b/.test(error.message) || message.includes('gateway')) return true;
     if (message.includes('econnreset') || message.includes('econnrefused')) return true;
     if (message.includes('etimedout') || message.includes('network')) return true;
-
-    // Check for status code on error object (common in API client errors)
-    const status = (error as any).status ?? (error as any).statusCode;
-    if (typeof status === 'number') {
-      return status === 429 || status >= 500;
-    }
 
     return false;
   }

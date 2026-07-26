@@ -60,6 +60,28 @@ export const envSchema = z.object({
   // VARIANTS (see llm/model-variants.ts).
   LLM_VARIANT: z.enum(['A', 'B', 'C', 'D']).default('A'),
 
+  // LLM request rate limit. Caps outbound structured LLM calls to protect the
+  // provider quota (e.g. Azure Foundry RPM). Overflow calls queue in-process and
+  // drain as the window refreshes — see LlmRateLimiterService. Transcription
+  // (AssemblyAI) is a separate quota and is NOT gated by this.
+  //
+  // Default 36 = 10% headroom under DeepSeek's strict 40 req/min. Paired with
+  // LLM_MIN_TIME_MS below so the 36 are evenly spaced rather than bursted.
+  LLM_MAX_REQUESTS_PER_MINUTE: z
+    .string()
+    .default('36')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().int().min(1).max(10000)),
+  // Smoothing: minimum ms between calls. Default 1667 ≈ 60000 / 36, which paces
+  // the calls evenly and bounds the worst case in any rolling minute at ~the
+  // average — without it, the fixed-window reservoir permits up to 2× the cap at
+  // a window boundary. Set 0 to allow full bursts up to the per-minute cap.
+  LLM_MIN_TIME_MS: z
+    .string()
+    .default('1667')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().int().min(0).max(60000)),
+
   // OpenRouter — required only when the active variant routes any stage to it
   // (ModelConfigService enforces this at startup).
   OPENROUTER_API_KEY: z.string().optional(),
@@ -225,6 +247,10 @@ export const appConfig = registerAs('app', () => {
     },
     llm: {
       variant: env.LLM_VARIANT,
+      rateLimit: {
+        maxRequestsPerMinute: env.LLM_MAX_REQUESTS_PER_MINUTE,
+        minTimeMs: env.LLM_MIN_TIME_MS,
+      },
     },
     openrouter: {
       apiKey: env.OPENROUTER_API_KEY,

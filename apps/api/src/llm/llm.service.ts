@@ -427,31 +427,48 @@ export class LLMService {
     try {
       const result = await backOff(
         async () => {
-          // Create transcription with timeout
-          const transcriptPromise = this.assemblyai.transcripts.transcribe({
-            audio_url: audioUrl,
-            speech_models: ['universal-3-pro'] as unknown as SpeechModel[],
-            language_code: 'en_uk',
-            // Medical keyterms for improved accuracy
-            keyterms_prompt: MEDICAL_KEYTERMS,
-          });
-
-          // Apply timeout (2 minutes for max 5-minute audio). Capture the timer
-          // handle so it can be cleared once the race settles — otherwise the
-          // pending timer keeps the event loop alive for the full timeout after
-          // every successful transcription.
-          let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            timeoutHandle = setTimeout(() => {
-              reject(new Error(`Transcription timed out after ${TRANSCRIPTION_TIMEOUT_MS}ms`));
-            }, TRANSCRIPTION_TIMEOUT_MS);
-          });
-
+          // Submit + poll via the SDK's own bounded wait. Using `pollingTimeout`
+          // (rather than a Promise.race against a setTimeout) means the SDK stops
+          // its polling loop on timeout instead of us abandoning it — a race only
+          // discards the losing promise, leaving the SDK polling in the background
+          // until the job reaches a terminal status.
+          //
+          // TODO(transcription-timeout): `pollingTimeout` is NOT an end-to-end
+          // deadline. It's measured from AFTER submit() and only checked BETWEEN
+          // polls, and the SDK (v4.23.1) passes no AbortSignal on submit()/get()
+          // (only LeMUR does). So a stalled submit POST or a single poll GET is
+          // bounded only by undici's per-request default (~300s, version-dependent),
+          // not the intended 120s — and TranscriptionStage has no outer timeout, so
+          // the message stays "processing" that whole time (and the outbox may
+          // re-claim it after the 30s stale-lock reset → duplicate submits).
+          // FIX: restore a wall-clock cap alongside pollingTimeout — wrap this call
+          // in `Promise.race([transcribe(...), timeoutPromise(TRANSCRIPTION_TIMEOUT_MS)])`
+          // with `clearTimeout` in a `finally` (keep pollingTimeout so the abandoned
+          // poll loop still self-terminates). AbortSignal isn't an option until the
+          // SDK plumbs one through the transcribe path. Add a fake-timer test that a
+          // never-settling transcribe rejects at the cap.
           let transcript;
           try {
-            transcript = await Promise.race([transcriptPromise, timeoutPromise]);
-          } finally {
-            clearTimeout(timeoutHandle);
+            transcript = await this.assemblyai.transcripts.transcribe(
+              {
+                audio_url: audioUrl,
+                speech_models: ['universal-3-pro'] as unknown as SpeechModel[],
+                language_code: 'en_uk',
+                // Medical keyterms for improved accuracy
+                keyterms_prompt: MEDICAL_KEYTERMS,
+              },
+              { pollingTimeout: TRANSCRIPTION_TIMEOUT_MS }
+            );
+          } catch (err) {
+            // Normalize the SDK's terse "Polling timeout" into our descriptive
+            // message so logs stay informative AND the backOff "don't retry
+            // timeouts" guard (which matches "timed out") keeps working. Match
+            // case-insensitively via includes() rather than `===` — the SDK string
+            // is an undocumented internal, so tolerate casing/wrapping changes.
+            if (err instanceof Error && err.message.toLowerCase().includes('polling timeout')) {
+              throw new Error(`Transcription timed out after ${TRANSCRIPTION_TIMEOUT_MS}ms`);
+            }
+            throw err;
           }
 
           if (transcript.status === 'error') {

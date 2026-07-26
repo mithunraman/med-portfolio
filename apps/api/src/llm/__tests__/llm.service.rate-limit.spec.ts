@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { MetricsService } from '../../common/metrics';
 import type { LlmRateLimiterService } from '../llm-rate-limiter.service';
 import { LLMService } from '../llm.service';
+import { TRANSCRIPTION_TIMEOUT_MS } from '../medical-keyterms';
 
 // Shared invoke mock so individual tests can make the model resolve or reject.
 // (Prefixed `mock*` so jest.mock's factory may reference it.)
@@ -19,14 +20,9 @@ jest.mock('@langchain/openai', () => ({
 
 jest.mock('@sentry/nestjs', () => ({ captureException: jest.fn() }));
 
-// Fake AssemblyAI client so transcribeAudio resolves without a network call.
-const transcribeMock = jest.fn().mockResolvedValue({
-  status: 'completed',
-  text: 'hello',
-  words: [{ text: 'hello' }],
-  confidence: 0.9,
-  audio_duration: 1,
-});
+// Fake AssemblyAI client. The default (completed) response is (re)set in
+// beforeEach so a test that overrides it (e.g. a timeout) can't leak into others.
+const transcribeMock = jest.fn();
 jest.mock('assemblyai', () => ({
   AssemblyAI: jest.fn().mockImplementation(() => ({
     transcripts: { transcribe: transcribeMock },
@@ -69,6 +65,13 @@ describe('LLMService rate-limit wiring', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockInvoke.mockResolvedValue({ ok: true });
+    transcribeMock.mockReset().mockResolvedValue({
+      status: 'completed',
+      text: 'hello',
+      words: [{ text: 'hello' }],
+      confidence: 0.9,
+      audio_duration: 1,
+    });
     // Transparent limiter: run the job immediately but record that it was gated.
     scheduleSpy = jest.fn((fn: () => Promise<unknown>) => fn());
     const rateLimiter = { schedule: scheduleSpy } as unknown as LlmRateLimiterService;
@@ -134,6 +137,33 @@ describe('LLMService rate-limit wiring', () => {
     expect(transcribeMock).toHaveBeenCalledTimes(1);
     expect(scheduleSpy).not.toHaveBeenCalled();
   });
+
+  it('delegates the timeout to the SDK via its pollingTimeout budget', async () => {
+    await service.transcribeAudio('https://example.com/audio.mp3');
+
+    // The SDK bounds its own polling loop — no manual setTimeout/Promise.race.
+    expect(transcribeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ audio_url: 'https://example.com/audio.mp3' }),
+      { pollingTimeout: TRANSCRIPTION_TIMEOUT_MS }
+    );
+  });
+
+  // Case/wrapping variants pin the case-insensitive includes() matcher so it
+  // survives minor SDK message changes. (A full rename would still degrade — an
+  // inherent limit of matching an undocumented SDK string; see the TODO in
+  // llm.service.ts on de-coupling this via the wall-clock race.)
+  it.each(['Polling timeout', 'polling timeout', 'Error: Polling timeout after 120000ms'])(
+    'normalizes SDK timeout message %p to a descriptive error and does not retry it',
+    async (sdkMessage) => {
+      transcribeMock.mockReset().mockRejectedValue(new Error(sdkMessage));
+
+      await expect(service.transcribeAudio('https://example.com/audio.mp3')).rejects.toThrow(
+        /Transcription timed out after \d+ms/
+      );
+
+      expect(transcribeMock).toHaveBeenCalledTimes(1); // a timeout is non-retryable
+    }
+  );
 
   it('records a distinct 429 signal and tags Sentry when the provider rate-limits', async () => {
     jest.useFakeTimers();

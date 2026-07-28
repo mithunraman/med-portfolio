@@ -3,6 +3,7 @@ import type { ConfigService } from '@nestjs/config';
 import * as Sentry from '@sentry/nestjs';
 import { z } from 'zod';
 import type { MetricsService } from '../../common/metrics';
+import type { LlmEndpointResolver } from '../llm-endpoint.resolver';
 import type { LlmRateLimiterService } from '../llm-rate-limiter.service';
 import { LLMService } from '../llm.service';
 import { TRANSCRIPTION_TIMEOUT_MS } from '../medical-keyterms';
@@ -73,10 +74,23 @@ describe('LLMService rate-limit wiring', () => {
       audio_duration: 1,
     });
     // Transparent limiter: run the job immediately but record that it was gated.
-    scheduleSpy = jest.fn((fn: () => Promise<unknown>) => fn());
+    // Signature mirrors the real schedule(index, fn) — the index is ignored here.
+    scheduleSpy = jest.fn((_index: number, fn: () => Promise<unknown>) => fn());
     const rateLimiter = { schedule: scheduleSpy } as unknown as LlmRateLimiterService;
+    // Single-endpoint resolver: every call routes to endpoint 0. The routing/spread
+    // logic itself is covered in llm-endpoint.resolver.spec.ts.
+    const resolver = {
+      indexFor: jest.fn(() => 0),
+      endpoints: [{ apiKey: 'az-key', baseURL: 'https://res.services.ai.azure.com/openai/v1/' }],
+      count: () => 1,
+    } as unknown as LlmEndpointResolver;
     metrics = metricsStub();
-    service = new LLMService(configStub(), metrics as unknown as MetricsService, rateLimiter);
+    service = new LLMService(
+      configStub(),
+      metrics as unknown as MetricsService,
+      rateLimiter,
+      resolver
+    );
   });
 
   afterEach(() => {
@@ -97,7 +111,7 @@ describe('LLMService rate-limit wiring', () => {
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     // Limiter that delays ~50ms before running the provider call — simulates
     // queue/pacing wait. The provider call itself (mockInvoke) is ~instant.
-    scheduleSpy.mockImplementation(async (fn: () => Promise<unknown>) => {
+    scheduleSpy.mockImplementation(async (_index: number, fn: () => Promise<unknown>) => {
       await sleep(50);
       return fn();
     });

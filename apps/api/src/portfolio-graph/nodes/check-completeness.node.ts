@@ -413,7 +413,12 @@ export function createCheckCompletenessNode(deps: GraphDeps) {
       const { data: response } = await deps.llmService.invokeStructured(
         messages,
         responseSchema,
-        { ...deps.modelConfig.resolve(Stage.CheckCompleteness), temperature: 0.1, maxTokens: 2000 }
+        {
+          ...deps.modelConfig.resolve(Stage.CheckCompleteness),
+          temperature: 0.1,
+          maxTokens: 2000,
+          routingKey: cid,
+        }
       );
 
       // ── Tiers: LLM grades quality vs rubric, code applies structural floors ──

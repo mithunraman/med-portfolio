@@ -310,7 +310,7 @@ export function createReflectNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       reflectResponseSchema,
-      { ...deps.modelConfig.resolve(Stage.Reflect), temperature: 0.3, maxTokens }
+      { ...deps.modelConfig.resolve(Stage.Reflect), temperature: 0.3, maxTokens, routingKey: cid }
     );
 
     const { composedDocument, reflectTrace } = assembleSections(template, response.sections, cid);

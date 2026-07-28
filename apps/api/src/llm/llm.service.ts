@@ -8,28 +8,28 @@ import { AssemblyAI, SpeechModel } from 'assemblyai';
 import { backOff } from 'exponential-backoff';
 import { z } from 'zod';
 import { MetricsService } from '../common/metrics';
+import { LlmEndpointResolver } from './llm-endpoint.resolver';
 import { LlmRateLimiterService } from './llm-rate-limiter.service';
 import { LlmTraceContext, traceLlmCall } from './llm-trace.util';
 import { MEDICAL_KEYTERMS, TRANSCRIPTION_TIMEOUT_MS } from './medical-keyterms';
 
-export const OpenAIModels = {
-  GPT_5_4: 'gpt-5.4',
-  GPT_5_4_NANO: 'gpt-5.4-nano',
-  GPT_4_1: 'gpt-4.1',
-  GPT_4_1_MINI: 'gpt-4.1-mini',
-} as const;
-
-export type OpenAIModel = (typeof OpenAIModels)[keyof typeof OpenAIModels];
+// Re-exported from a leaf module to avoid an import cycle with model-variants.ts
+// (see openai-models.ts). Kept exported here so existing `../llm` imports resolve.
+export { OpenAIModels, type OpenAIModel } from './openai-models';
 
 /** Structured-output strategy passed to LangChain's withStructuredOutput(). */
 export type StructuredMethod = 'functionCalling' | 'jsonSchema' | 'jsonMode';
 
 /**
  * Reasoning ("think") mode for hybrid models (DeepSeek V4). `off` = non-thinking;
- * `high`/`max` set reasoning effort. Semantic here; LLMService translates it into
- * the provider's request params.
+ * `low`/`high`/`max` set reasoning effort. Semantic here; LLMService translates it
+ * into the provider's request params.
+ *
+ * `off` is not universal: reasoning-native models (gpt-oss-120b) reject it with
+ * "Reasoning is mandatory for this endpoint and cannot be disabled", so `low` is
+ * their floor.
  */
-export type ThinkMode = 'off' | 'high' | 'max';
+export type ThinkMode = 'off' | 'low' | 'high' | 'max';
 
 /**
  * A concrete, resolved model target: which provider to call and which model
@@ -60,6 +60,12 @@ export type ModelTarget =
 export type LLMOptions = ModelTarget & {
   temperature?: number;
   maxTokens?: number;
+  /**
+   * Stable key (the conversationId) used to shard the call across API keys/
+   * endpoints. All calls sharing a routingKey deterministically hit the same key
+   * and its rate limiter. Omitted → endpoint 0. See LlmEndpointResolver.
+   */
+  routingKey?: string;
   /** Dev-only: optional correlation (stage/conversationId) attached to LLM_TRACE output. */
   traceContext?: LlmTraceContext;
 };
@@ -137,25 +143,22 @@ export class LLMService {
   // Optional — only required when the active variant routes a stage to OpenRouter.
   // Presence is enforced up front by ModelConfigService's credential guard.
   private readonly openrouterApiKey: string | undefined;
-  // Optional — only required when the active variant routes a stage to Azure
-  // Foundry. Presence is enforced up front by ModelConfigService's guard.
-  private readonly azureFoundryApiKey: string | undefined;
-  private readonly azureFoundryBaseUrl: string | undefined;
   private readonly assemblyai: AssemblyAI;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly metricsService: MetricsService,
-    private readonly rateLimiter: LlmRateLimiterService
+    private readonly rateLimiter: LlmRateLimiterService,
+    // Owns the routingKey → endpoint index mapping AND the per-key Foundry
+    // credentials. Both the limiter bucket and the credentials are selected by the
+    // same index (computed once per call), so they can never disagree.
+    private readonly endpointResolver: LlmEndpointResolver
   ) {
     const openaiApiKey = this.configService.get<string>('app.openai.apiKey');
     if (!openaiApiKey) throw new Error('Missing config: app.openai.apiKey');
     this.openaiApiKey = openaiApiKey;
 
     this.openrouterApiKey = this.configService.get<string>('app.openrouter.apiKey');
-
-    this.azureFoundryApiKey = this.configService.get<string>('app.azureFoundry.apiKey');
-    this.azureFoundryBaseUrl = this.configService.get<string>('app.azureFoundry.baseUrl');
 
     const assemblyaiApiKey = this.configService.get<string>('app.assemblyai.apiKey');
     if (!assemblyaiApiKey) throw new Error('Missing config: app.assemblyai.apiKey');
@@ -188,8 +191,13 @@ export class LLMService {
     schema: z.ZodType<T>,
     options: LLMOptions
   ): Promise<StructuredResponse<T>> {
-    const { temperature = 0.1, maxTokens = 2000, traceContext, ...target } = options;
+    const { temperature = 0.1, maxTokens = 2000, traceContext, routingKey, ...target } = options;
     const modelLabel = target.model;
+
+    // Compute the endpoint index ONCE and use it for BOTH the credentials
+    // (createChatModel) and the rate-limiter bucket (schedule) — this single
+    // shared value is what guarantees the key that gates a call also sends it.
+    const endpointIndex = this.endpointResolver.indexFor(routingKey ?? '');
 
     this.logger.debug(
       `invokeStructured [${target.provider}:${modelLabel}] messages:\n${messages.map((m) => `[${m.type}] ${m.content}`).join('\n')}`
@@ -202,7 +210,7 @@ export class LLMService {
     try {
       const result = await backOff(
         async () => {
-          const chatModel = this.createChatModel(target, temperature, maxTokens);
+          const chatModel = this.createChatModel(target, temperature, maxTokens, endpointIndex);
 
           // Cast to `any` to avoid TS2589 (excessive type depth) from LangChain's
           // heavily overloaded withStructuredOutput generics. Caller-side type
@@ -226,7 +234,7 @@ export class LLMService {
           // Measuring end-to-end (before schedule) would let minTime pacing +
           // queue wait dominate the "provider latency" metric under concurrency.
           const scheduledAt = Date.now();
-          const data = (await this.rateLimiter.schedule(async () => {
+          const data = (await this.rateLimiter.schedule(endpointIndex, async () => {
             const callStart = Date.now();
             this.metricsService.recordLLMWait('invokeStructured', callStart - scheduledAt);
             try {
@@ -248,18 +256,32 @@ export class LLMService {
           timeMultiple: 2,
           jitter: 'full',
           retry: (error) => {
+            const detail = this.providerErrorDetail(error);
+
             // Ground-truth quota signal: a 429 means the rate limiter did NOT
             // keep us under the provider's cap. Record it distinctly from generic
             // retries so it can be alerted on directly (see recordLLMRateLimited).
             if (this.isRateLimitError(error)) {
               this.metricsService.recordLLMRateLimited('invokeStructured');
-              this.logger.warn('LLM provider rate limit (429) — limiter did not prevent it', error);
+              this.logger.warn(
+                `LLM provider rate limit (429) — limiter did not prevent it${detail}`,
+                error
+              );
             }
 
             const retryable = this.isRetryableApiError(error);
             if (retryable) {
               this.metricsService.recordLLMRetry('invokeStructured');
-              this.logger.warn(`Retryable OpenAI error, retrying...`, error);
+              this.logger.warn(`Retryable OpenAI error, retrying...${detail}`, error);
+            } else {
+              // Non-retryable (4xx) used to return false with no log at all, so a
+              // rejected parameter or schema was invisible outside Sentry. This is
+              // the branch where the provider's own message actually explains the
+              // failure, so it's the one that most needs the decoded detail.
+              this.logger.warn(
+                `Non-retryable [${target.provider}:${modelLabel}] error, not retrying${detail}`,
+                error
+              );
             }
             return retryable;
           },
@@ -281,6 +303,16 @@ export class LLMService {
 
       return result;
     } catch (error) {
+      const detail = this.providerErrorDetail(error);
+
+      // Log before rethrowing. Without this the only record of a failed LLM call
+      // was the Sentry event — in local dev (no DSN) a 4xx vanished entirely and
+      // surfaced only as the caller's downstream fallback.
+      this.logger.error(
+        `invokeStructured failed [${target.provider}:${modelLabel}]${detail}: ` +
+          `${error instanceof Error ? error.message : String(error)}`
+      );
+
       traceLlmCall({
         op: 'invokeStructured',
         provider: target.provider,
@@ -290,7 +322,7 @@ export class LLMService {
         durationMs: Date.now() - startTime,
         ok: false,
         input: traceInput,
-        error: error instanceof Error ? error.message : String(error),
+        error: `${error instanceof Error ? error.message : String(error)}${detail}`,
         context: traceContext,
       });
 
@@ -303,7 +335,10 @@ export class LLMService {
           // failures, so "limiter insufficient" can be alerted on directly.
           rateLimited: this.isRateLimitError(error),
         },
-        extra: { messageCount: messages.length, maxRetries: 3 },
+        // `providerDetail` carries the provider's own message/metadata, which the
+        // Error's `message` often flattens away (LangChain wraps some provider
+        // bodies) — it's usually the only field that names the rejected param.
+        extra: { messageCount: messages.length, maxRetries: 3, providerDetail: detail },
       });
       throw error;
     }
@@ -327,7 +362,8 @@ export class LLMService {
   private createChatModel(
     target: ModelTarget,
     temperature: number,
-    maxTokens: number
+    maxTokens: number,
+    endpointIndex: number
   ): BaseChatModel {
     switch (target.provider) {
       case 'openai':
@@ -359,8 +395,11 @@ export class LLMService {
         });
       }
       case 'azure-foundry': {
-        if (!this.azureFoundryApiKey) throw new Error('Missing config: app.azureFoundry.apiKey');
-        if (!this.azureFoundryBaseUrl) throw new Error('Missing config: app.azureFoundry.baseUrl');
+        // Pick the endpoint the resolver routed this call to. `endpointIndex` is
+        // the SAME value that selected the rate-limiter bucket in invokeStructured,
+        // so this key's credentials are always paced by this key's limiter.
+        const endpoint = this.endpointResolver.endpoints[endpointIndex];
+        if (!endpoint) throw new Error('Missing config: app.azureFoundry.endpoints');
         // Azure AI Foundry serves DeepSeek through its OpenAI-compatible `/openai/v1`
         // surface, so — like OpenRouter — we reuse ChatOpenAI and just repoint the
         // base URL. The API key rides as a Bearer token, which ChatOpenAI does for us.
@@ -368,12 +407,12 @@ export class LLMService {
         // Same reasoning-token headroom rule as OpenRouter: thinking shares the
         // completion budget, so add overhead on top of the caller's answer budget.
         return new ChatOpenAI({
-          apiKey: this.azureFoundryApiKey,
+          apiKey: endpoint.apiKey,
           model: target.model,
           temperature,
           maxTokens: maxTokens + reasoningHeadroom(target.thinkMode),
           modelKwargs: azureFoundryKwargs(target),
-          configuration: { baseURL: this.azureFoundryBaseUrl },
+          configuration: { baseURL: endpoint.baseURL },
           maxRetries: 0, // see createChatModel doc — our backOff is the only retry layer
         });
       }
@@ -400,6 +439,8 @@ export class LLMService {
       kwargs.reasoning = { effort: 'xhigh' };
     } else if (target.thinkMode === 'high') {
       kwargs.reasoning = { effort: 'high' };
+    } else if (target.thinkMode === 'low') {
+      kwargs.reasoning = { effort: 'low' };
     }
 
     // `only` hard-pins to the chosen upstream provider(s) — no fallback to any
@@ -505,7 +546,10 @@ export class LLMService {
             const retryable = this.isRetryableApiError(error);
             if (retryable) {
               this.metricsService.recordLLMRetry('transcribeAudio');
-              this.logger.warn(`Retryable AssemblyAI error, retrying...`, error);
+              this.logger.warn(
+                `Retryable AssemblyAI error, retrying...${this.providerErrorDetail(error)}`,
+                error
+              );
             }
             return retryable;
           },
@@ -545,6 +589,49 @@ export class LLMService {
         'assemblyai',
         Date.now() - startTime
       );
+    }
+  }
+
+  /**
+   * Decode the provider's own error body into a short, log-safe suffix.
+   *
+   * Why this exists: the thrown Error's `message` is often the least informative
+   * part of a provider failure. OpenAI puts the actionable text in `error.error`
+   * ({ message, type, param, code } — e.g. "Unsupported parameter: 'temperature'"),
+   * while OpenRouter nests the upstream provider's verbatim response under
+   * `error.metadata.raw`/`.reasons` — so a Cloudflare/DeepInfra rejection reaches us
+   * as a generic 400 whose real cause is only in `metadata`. Reading those fields
+   * turns "Request failed with status code 400" into something diagnosable, and
+   * `upstream=` identifies WHICH provider rejected it on a multi-route variant.
+   *
+   * Returns '' (never throws) so it is always safe to interpolate into a log line
+   * or a Sentry field — an error shape we didn't anticipate must not become a
+   * second error inside the handler for the first one. Truncated to 500 chars
+   * because some providers echo the entire request body back.
+   */
+  private providerErrorDetail(error: unknown): string {
+    try {
+      // Provider error bodies are untyped by nature — every provider nests them
+      // differently, which is the whole reason this probing exists.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const e = error as any;
+      const body = e?.error ?? e?.response?.data?.error ?? e?.response?.data;
+      const meta = body?.metadata ?? e?.metadata;
+      const parts: string[] = [];
+
+      const status = e?.status ?? e?.statusCode ?? body?.code;
+      if (status !== undefined) parts.push(`status=${status}`);
+      if (meta?.provider_name) parts.push(`upstream=${meta.provider_name}`);
+
+      const raw = meta?.raw ?? meta?.reasons ?? body?.message;
+      if (raw) {
+        const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
+        parts.push(`raw=${text.slice(0, 500)}`);
+      }
+
+      return parts.length > 0 ? ` [${parts.join(' ')}]` : '';
+    } catch {
+      return '';
     }
   }
 

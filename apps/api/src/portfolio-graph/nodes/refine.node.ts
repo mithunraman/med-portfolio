@@ -187,7 +187,7 @@ export function createRefineNode(deps: GraphDeps) {
       const { data: response } = await deps.llmService.invokeStructured(
         messages,
         refineResponseSchema,
-        { ...deps.modelConfig.resolve(Stage.Refine), temperature: 0, maxTokens }
+        { ...deps.modelConfig.resolve(Stage.Refine), temperature: 0, maxTokens, routingKey: cid }
       );
 
       // Reassemble over the FULL document so empty sections pass through unchanged:

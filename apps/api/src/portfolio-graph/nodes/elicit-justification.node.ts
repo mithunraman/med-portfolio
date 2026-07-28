@@ -170,7 +170,12 @@ export function createElicitJustificationNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       elicitJustificationResponseSchema,
-      { ...deps.modelConfig.resolve(Stage.ElicitJustification), temperature: 0.3, maxTokens: 1500 }
+      {
+        ...deps.modelConfig.resolve(Stage.ElicitJustification),
+        temperature: 0.3,
+        maxTokens: 1500,
+        routingKey: cid,
+      }
     );
 
     const byCode = new Map(response.justifications.map((j) => [j.code, j]));

@@ -222,7 +222,7 @@ export function createGeneratePdpNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       generatePdpResponseSchema,
-      { ...deps.modelConfig.resolve(Stage.GeneratePdp), temperature: 0.3, maxTokens: 1000 }
+      { ...deps.modelConfig.resolve(Stage.GeneratePdp), temperature: 0.3, maxTokens: 1000, routingKey: cid }
     );
 
     const pdpGoals = validateGoals(response.goals);

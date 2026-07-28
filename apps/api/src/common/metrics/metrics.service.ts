@@ -88,8 +88,8 @@ export class MetricsService {
     this.llmRequestRetries.add(1, { operation });
   }
 
-  recordLLMQueueDepth(depth: number): void {
-    this.llmQueueDepth.record(depth);
+  recordLLMQueueDepth(depth: number, endpoint?: number): void {
+    this.llmQueueDepth.record(depth, endpoint === undefined ? undefined : { endpoint });
   }
 
   recordLLMRateLimited(operation: string): void {

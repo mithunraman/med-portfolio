@@ -32,8 +32,9 @@ describe('ModelConfigService', () => {
       const service = new ModelConfigService(
         configStub({
           'app.llm.variant': 'D',
-          'app.azureFoundry.apiKey': 'az-key',
-          'app.azureFoundry.baseUrl': 'https://res.services.ai.azure.com/openai/v1/',
+          'app.azureFoundry.endpoints': [
+            { apiKey: 'az-key', baseURL: 'https://res.services.ai.azure.com/openai/v1/' },
+          ],
         })
       );
 
@@ -57,25 +58,19 @@ describe('ModelConfigService', () => {
       );
     });
 
-    it('throws when variant D lacks the Azure Foundry API key', () => {
+    it('throws when variant D has no Azure Foundry endpoints configured', () => {
+      // Missing entirely...
       expect(
-        () =>
-          new ModelConfigService(
-            configStub({
-              'app.llm.variant': 'D',
-              'app.azureFoundry.baseUrl': 'https://res.services.ai.azure.com/openai/v1/',
-            })
-          )
-      ).toThrow(/uses Azure Foundry but AZURE_FOUNDRY_API_KEY/);
-    });
+        () => new ModelConfigService(configStub({ 'app.llm.variant': 'D' }))
+      ).toThrow(/uses Azure Foundry but no endpoints are configured/);
 
-    it('throws when variant D lacks the Azure Foundry base URL', () => {
+      // ...and present-but-empty (all indexed pairs absent → []).
       expect(
         () =>
           new ModelConfigService(
-            configStub({ 'app.llm.variant': 'D', 'app.azureFoundry.apiKey': 'az-key' })
+            configStub({ 'app.llm.variant': 'D', 'app.azureFoundry.endpoints': [] })
           )
-      ).toThrow(/uses Azure Foundry but AZURE_FOUNDRY_API_KEY/);
+      ).toThrow(/uses Azure Foundry but no endpoints are configured/);
     });
 
     it('throws when variant B lacks the OpenRouter API key', () => {

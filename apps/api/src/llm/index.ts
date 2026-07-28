@@ -1,3 +1,4 @@
+export * from './llm-endpoint.resolver';
 export * from './llm-rate-limiter.service';
 export * from './llm.module';
 export * from './llm.service';

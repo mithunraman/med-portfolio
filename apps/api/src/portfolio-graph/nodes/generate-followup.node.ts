@@ -356,7 +356,7 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
       const { data: response } = await deps.llmService.invokeStructured(
         messages,
         followupQuestionsResponseSchema,
-        { ...deps.modelConfig.resolve(Stage.GenerateFollowup), temperature: 0.3, maxTokens: 1000 }
+        { ...deps.modelConfig.resolve(Stage.GenerateFollowup), temperature: 0.3, maxTokens: 1000, routingKey: cid }
       );
 
       // Log the model's gap analysis (chain-of-thought) before it's mapped away —
@@ -364,6 +364,16 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
       for (const q of response.questions) {
         logger.log(`[${cid}]   gap → ${q.sectionId} [${q.coverageState}]: ${q.unmetDimension}`);
       }
+
+      // Raw asked-vs-returned, logged BEFORE the filter/dedupe/backfill chain below
+      // rewrites `questions`. Without this, an omission warning is ambiguous between
+      // three different causes: the model returned nothing for the section, returned
+      // an id outside the ask set (dropped by the validIds filter), or returned a
+      // duplicate that the dedupe removed. Cheap, and it names which one.
+      logger.log(
+        `[${cid}] followup raw: asked=[${missingSectionDefs.map((s) => s.id).join(', ')}] ` +
+          `returned=[${response.questions.map((q) => q.sectionId).join(', ')}]`
+      );
 
       // Validate that returned sectionIds match what we asked for
       const validIds = new Set(missingSectionDefs.map((s) => s.id));
@@ -391,6 +401,8 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
         }
       }
     } catch (error) {
+      // LLMService now logs the decoded provider detail (status/upstream/raw) before
+      // rethrowing, so the cause is in the line above this one.
       logger.warn(`[${cid}] LLM contextualisation failed, using default questions: ${error}`);
       questions = missingSectionDefs.map(fallbackQuestion);
     }

@@ -52,6 +52,9 @@ export class CleaningStage implements IProcessingStage {
     const response = await this.llmService.invokeStructured(messages, cleaningResponseSchema, {
       ...this.modelConfig.resolve(Stage.Cleaning),
       temperature: 0.1,
+      // Shard by conversation so a conversation's cleaning shares the endpoint its
+      // graph stages will use (cleaning runs pre-artefact, so no artefactId yet).
+      routingKey: context.conversationId.toString(),
     });
 
     const injectionDetected = response.data.injectionDetected;

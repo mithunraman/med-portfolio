@@ -151,10 +151,12 @@ export const CCR_TEMPLATE: ArtefactTemplate = {
           id: 'learning_needs',
           label: 'Learning Needs',
           required: true,
+          requiresStatedIntent: true,
           descriptorCriteria:
-            'Strong = names a specific educational gap (DEN) the case revealed AND a concrete plan to address it (a topic to study, a skill to practise, or a linked learning entry). ' +
-            'Adequate = names a specific gap the case revealed AND a stated intent to act on it (a direction to read, learn, or change practice), even if the plan is not yet concrete. ' +
-            'Shallow = a retrospective EVALUATION of what went wrong or what they would have done differently, with NO stated intent to learn or address it (e.g. "the real gap was the prescribing decision", "I should have safety-netted better") — that is reflection, not a learning need; OR a vague, generic gap ("read more around the topic") with no specific need.',
+            'A learning need (a DEN — Doctor\'s Educational Need) is a knowledge or skill gap the case revealed, closed by a LEARNING ACTIVITY: reading, studying, looking it up, a course/module, asking or sitting in with a colleague, discussing with a trainer, or a PDP goal. A plan to do something differently in practice that the trainee already knew how to do (e.g. "I\'ll always ask about X", "I\'ll safety-net better") is a REFLECTION action, not a learning need. ' +
+            'Strong = names a specific knowledge/skill gap AND a concrete learning activity to close it (a specific resource, course, or linked learning entry). ' +
+            'Adequate = names a specific gap AND an explicitly STATED intent to LEARN — a forward-looking direction to read, study, look up, discuss, or otherwise acquire the missing knowledge/skill — even if the plan is not yet concrete. ' +
+            'Shallow = a retrospective EVALUATION with no plan to learn ("the real gap was the prescribing decision", "I should have safety-netted better"); OR only a BEHAVIOURAL practice change with no learning activity ("I\'ll always ask about access to means from now on") — that is reflection, not a learning need; OR a vague, generic gap ("read more around the topic") with no specific need.',
           description:
             'A specific educational gap (DEN) the case revealed, and how it will be addressed — e.g. a topic to read up on or a follow-up learning entry.',
           promptHint:

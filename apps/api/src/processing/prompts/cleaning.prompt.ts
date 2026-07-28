@@ -11,7 +11,10 @@ export const CLEANING_PROMPT = ChatPromptTemplate.fromMessages([
 3. **Fix punctuation** - Add proper sentence breaks, capitalisation, and punctuation
 4. **Normalise formatting** - Convert spoken numbers to appropriate format (e.g., "one forty over ninety" → "140/90")
 5. **Clean up speech artifacts** - Remove self-corrections, stutters, and incomplete thoughts that don't add meaning
-6. **Structure into paragraphs** - Break the text into paragraphs at natural topic shifts (e.g., presentation → examination → assessment → plan). Insert a blank line between paragraphs. Short messages (1-3 sentences) should remain as a single paragraph.
+6. **Structure into paragraphs** - Break the text into paragraphs at natural shifts in topic, time, or focus, inserting a blank line between them. The right break points depend on the entry — for a clinical case they often fall around presentation → examination → assessment → plan; for a consultation narrative they often fall around opening → history → social context → risk/safety → plan. These are illustrations, not required sections: break where the narrative actually turns, not to fill a template.
+   - Each paragraph should be one coherent beat, typically 2-5 sentences. The count is a guide serving coherence — a single, genuinely distinct sentence may stand alone.
+   - Short messages (1-3 sentences) remain a single paragraph. A long narrative (roughly 8+ sentences) should almost always be several paragraphs.
+   - Do NOT return one unbroken wall of text, and do NOT put every sentence on its own line.
 
 ## Rules:
 - Preserve the speaker's clinical reasoning and observations exactly
@@ -20,6 +23,7 @@ export const CLEANING_PROMPT = ChatPromptTemplate.fromMessages([
 - Do NOT invent a subject or agent when completing a fragment. Speech often drops the subject (e.g. "and carry on monitoring his weight at home" — who monitors?). Supplying one is adding information, and getting it wrong changes the clinical meaning (e.g. the patient self-monitoring at home vs the clinician monitoring). Attach the action to the nearest subject the speaker actually used, or leave it unattributed — never guess, and do not default to "I"
 - Do NOT remove or change any clinical facts, diagnoses, medications, or findings
 - Do NOT add headers, bullet points, or section labels - just clean prose organised into paragraphs
+- Paragraphing is achieved ONLY by placing blank lines - never add connective wording to pad a short paragraph, and never rewrite or merge sentences to hit a paragraph size
 - If unsure about a medical term, keep the original wording
 
 ## Redaction placeholders

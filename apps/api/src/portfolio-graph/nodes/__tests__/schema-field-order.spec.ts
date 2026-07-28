@@ -94,9 +94,11 @@ describe('structured-output schema field order', () => {
     ]);
   });
 
-  it('completeness section grade emits tierReason before the tier verdict', () => {
+  it('completeness section grade emits the intent quote + type (evidence) then tierReason before the tier verdict', () => {
     expect(Object.keys(completenessResponseSchema.shape.sectionGrades.element.shape)).toEqual([
       'sectionId',
+      'statedIntentQuote',
+      'intentType',
       'tierReason',
       'tier',
     ]);

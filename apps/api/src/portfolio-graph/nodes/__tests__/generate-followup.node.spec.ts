@@ -260,6 +260,71 @@ describe('GenerateFollowupNode', () => {
     });
   });
 
+  describe('confirmatory ask for a borderline adequate pass (coverage floor)', () => {
+    // Case 8 shape: learning_needs met ONLY at 'adequate' (bled in from the reflection
+    // answer), never asked, and no below-threshold gaps remain. It is NOT in
+    // missingSections, so the old candidate filter would skip it. The guard must still
+    // pick it so the trainee gets one direct learning-needs question.
+    it('asks a met-at-adequate, never-asked section even though it is not in missingSections', async () => {
+      const deps = makeDeps();
+      (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({
+        data: {
+          questions: [
+            { sectionId: 'learning_needs', question: 'What will you do to close the gap?', hints: { examples: ['e'] } },
+          ],
+        },
+      });
+
+      const node = createGenerateFollowupNode(deps);
+      const state = makeState({
+        missingSections: [], // nothing below threshold
+        probeReadiness: {
+          learning_needs: { score: 0.7, tier: 'adequate', meetsThreshold: true },
+        },
+      });
+      const result = await node(state);
+
+      expect(result.pendingFollowupQuestions).toHaveLength(1);
+      expect(result.pendingFollowupQuestions![0].sectionId).toBe('learning_needs');
+      // The forced ask records an attempt, so it converges (won't be forced again).
+      expect(result.sectionAttempts!['learning_needs'].count).toBe(1);
+    });
+
+    it('does NOT force-ask a section that passed at strong (unambiguous)', async () => {
+      const deps = makeDeps();
+      (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({ data: { questions: [] } });
+
+      const node = createGenerateFollowupNode(deps);
+      const state = makeState({
+        missingSections: [],
+        probeReadiness: {
+          learning_needs: { score: 1, tier: 'strong', meetsThreshold: true },
+        },
+      });
+      const result = await node(state);
+
+      // No gaps and no borderline pass → nothing askable.
+      expect(result.pendingFollowupQuestions).toEqual([]);
+    });
+
+    it('does NOT re-force a met-at-adequate section that was already asked once', async () => {
+      const deps = makeDeps();
+      (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({ data: { questions: [] } });
+
+      const node = createGenerateFollowupNode(deps);
+      const state = makeState({
+        missingSections: [],
+        probeReadiness: {
+          learning_needs: { score: 0.7, tier: 'adequate', meetsThreshold: true },
+        },
+        sectionAttempts: { learning_needs: { count: 1, tierAtLastAsk: 'adequate' } },
+      });
+      const result = await node(state);
+
+      expect(result.pendingFollowupQuestions).toEqual([]);
+    });
+  });
+
   describe('no entry type', () => {
     it('should return empty questions and increment round when entryType is null', async () => {
       const node = createGenerateFollowupNode(makeDeps());
@@ -275,7 +340,9 @@ describe('GenerateFollowupNode', () => {
   describe('no askable sections', () => {
     it('should return empty questions when missingSections has no match in template', async () => {
       const node = createGenerateFollowupNode(makeDeps());
-      const state = makeState({ missingSections: ['nonexistent_section'] });
+      // Nothing below threshold matches the template AND no section is a borderline
+      // (met-at-adequate) confirmatory candidate → genuinely nothing to ask.
+      const state = makeState({ missingSections: ['nonexistent_section'], probeReadiness: {} });
 
       const result = await node(state);
 

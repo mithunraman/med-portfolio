@@ -6,7 +6,7 @@ import { Stage } from '../../llm';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
-import { hasBeenAsked, isSectionExhausted } from '../elicitation.util';
+import { hasBeenAsked, isSectionExhausted, unconfirmedSections } from '../elicitation.util';
 import { pickFollowupLine, resolveFollowupTier } from '../followup-copy';
 import { PortfolioStateType, ReadinessEntry, SectionAttempt } from '../portfolio-graph.state';
 
@@ -300,17 +300,28 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
     const orderRank = (id: string): number =>
       narrativeOrder.get(id) ?? Number.MAX_SAFE_INTEGER;
 
+    // Askable = below-threshold gaps PLUS sections that only just met their bar at
+    // 'adequate' and haven't been asked yet (the coverage-floor guard). Sharing the
+    // helper with shouldContinueElicitation keeps "should we loop" and "what to ask" in
+    // agreement — a section the router keeps looping for is always one we can pick here.
+    const unconfirmed = unconfirmedSections(state);
+    const askableIds = new Set([...state.missingSections, ...unconfirmed]);
     const missingSectionDefs = leafProbes(template)
       .filter(
         (s): s is Probe & { extractionQuestion: string } =>
-          state.missingSections.includes(s.id) && s.extractionQuestion !== null
+          askableIds.has(s.id) && s.extractionQuestion !== null
       )
       // Skip sections the exhaustion cap has retired — asked enough without improving.
       .filter((s) => !isSectionExhausted(state, s.id))
       .sort((a, b) => {
+        // Below-threshold gaps outrank confirmatory asks: a section that only just met
+        // its bar at 'adequate' still needs its one ask, but never ahead of a section
+        // that is genuinely short of the rubric.
+        const aGap = state.missingSections.includes(a.id) ? 0 : 1;
+        const bGap = state.missingSections.includes(b.id) ? 0 : 1;
         const aAsked = hasBeenAsked(state, a.id) ? 1 : 0;
         const bAsked = hasBeenAsked(state, b.id) ? 1 : 0;
-        return aAsked - bAsked || orderRank(a.id) - orderRank(b.id);
+        return aGap - bGap || aAsked - bAsked || orderRank(a.id) - orderRank(b.id);
       })
       .slice(0, MAX_QUESTIONS_PER_ROUND);
 
@@ -318,6 +329,15 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
     if (missingSectionDefs.length === 0) {
       logger.warn(`[${cid}] No askable missing sections — skipping follow-up`);
       return { followUpRound: state.followUpRound + 1, pendingFollowupQuestions: [] };
+    }
+
+    // Observability: sections asked purely to confirm a borderline 'adequate' pass
+    // (not below-threshold gaps) — surfaces a forced first ask in the trace.
+    const forcedIds = missingSectionDefs
+      .filter((s) => unconfirmed.includes(s.id) && !state.missingSections.includes(s.id))
+      .map((s) => s.id);
+    if (forcedIds.length > 0) {
+      logger.log(`[${cid}] Forcing confirmatory ask (adequate, not yet asked): [${forcedIds.join(', ')}]`);
     }
 
     // ── Build "already covered well" + "already asked" context (anti-redundancy) ──

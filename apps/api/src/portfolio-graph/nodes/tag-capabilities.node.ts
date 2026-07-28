@@ -269,7 +269,7 @@ export function createTagCapabilitiesNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       tagCapabilitiesResponseSchema,
-      { ...deps.modelConfig.resolve(Stage.TagCapabilities), temperature: 0.1, maxTokens: 2000 }
+      { ...deps.modelConfig.resolve(Stage.TagCapabilities), temperature: 0.1, maxTokens: 10000 }
     );
 
     // Verbatim-quote evidence must be the trainee's OWN words, so gate every quote

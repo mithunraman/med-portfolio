@@ -5,12 +5,15 @@ import {
   isGoodEnough,
   isSectionExhausted,
   shouldContinueElicitation,
+  unconfirmedSections,
 } from '../elicitation.util';
 import type { PortfolioStateType, ReadinessEntry, ReadinessTier } from '../portfolio-graph.state';
 
 const MAX = 8;
 
 const entry = (tier: ReadinessTier): ReadinessEntry => ({ tier, score: 0, meetsThreshold: false });
+/** A section that MEETS its threshold at the given tier (default 'adequate'). */
+const met = (tier: ReadinessTier = 'adequate'): ReadinessEntry => ({ tier, score: 0, meetsThreshold: true });
 
 function st(overrides: Partial<PortfolioStateType> = {}): PortfolioStateType {
   return {
@@ -140,6 +143,63 @@ describe('shouldContinueElicitation', () => {
         learning: { count: 1, tierAtLastAsk: 'shallow' },
       },
       probeReadiness: { outcome: entry('missing'), learning: entry('shallow') },
+    });
+    expect(shouldContinueElicitation(s, MAX)).toBe(false);
+  });
+});
+
+describe('unconfirmedSections', () => {
+  it('returns a section that met its bar at the adequate floor and was never asked', () => {
+    // Case 8 shape: learning_needs met at 'adequate' from reflection bleed, never asked.
+    const s = st({ probeReadiness: { learning_needs: met('adequate') } });
+    expect(unconfirmedSections(s)).toEqual(['learning_needs']);
+  });
+
+  it('excludes a strong pass (unambiguous — never force-asked)', () => {
+    const s = st({ probeReadiness: { learning_needs: met('strong') } });
+    expect(unconfirmedSections(s)).toEqual([]);
+  });
+
+  it('excludes a section already asked at least once', () => {
+    const s = st({
+      probeReadiness: { learning_needs: met('adequate') },
+      sectionAttempts: { learning_needs: { count: 1, tierAtLastAsk: 'adequate' } },
+    });
+    expect(unconfirmedSections(s)).toEqual([]);
+  });
+
+  it('excludes a below-threshold section (that is a gap in missingSections, not unconfirmed)', () => {
+    // adequate tier but threshold not met (e.g. reflection needs strong) → not "confirmed", it is a gap.
+    const s = st({ probeReadiness: { reflection: entry('adequate') } });
+    expect(unconfirmedSections(s)).toEqual([]);
+  });
+});
+
+describe('shouldContinueElicitation — confirmatory ask for a borderline adequate pass', () => {
+  it('keeps looping when thresholds are met but an adequate section was never asked', () => {
+    // hasEnoughInfo can be true (no below-threshold gaps) yet a section passed only at
+    // the adequate floor without its own question — force one ask before composing.
+    const s = st({
+      hasEnoughInfo: true,
+      probeReadiness: { learning_needs: met('adequate') },
+    });
+    expect(shouldContinueElicitation(s, MAX)).toBe(true);
+  });
+
+  it('stops once that adequate section has had its one confirmatory ask', () => {
+    const s = st({
+      hasEnoughInfo: true,
+      probeReadiness: { learning_needs: met('adequate') },
+      sectionAttempts: { learning_needs: { count: 1, tierAtLastAsk: 'adequate' } },
+    });
+    expect(shouldContinueElicitation(s, MAX)).toBe(false);
+  });
+
+  it('the round cap still wins over an unconfirmed section (termination backstop)', () => {
+    const s = st({
+      hasEnoughInfo: true,
+      followUpRound: MAX,
+      probeReadiness: { learning_needs: met('adequate') },
     });
     expect(shouldContinueElicitation(s, MAX)).toBe(false);
   });

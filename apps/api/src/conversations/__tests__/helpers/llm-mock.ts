@@ -132,12 +132,26 @@ export function completenessResponse(
     covered: boolean;
     depth?: 'rich' | 'adequate' | 'shallow';
     idea?: string;
+    /**
+     * Verbatim stated-intent quote for sections gated on intent (learning needs).
+     * Defaults to a non-empty placeholder so covered sections clear the gate; pass
+     * '' explicitly to exercise the no-quote downgrade.
+     */
+    intentQuote?: string;
+    /**
+     * Intent classification for intent-gated sections. Defaults to
+     * 'learning_activity' so covered learning-need sections clear the gate; pass
+     * 'behavioural_change'/'none' to exercise the discriminator downgrade.
+     */
+    intentType?: 'learning_activity' | 'behavioural_change' | 'none';
   }>
 ) {
   const TIER_BY_DEPTH = { rich: 'strong', adequate: 'adequate', shallow: 'shallow' } as const;
   const assignments: Array<{ idea: string; sectionId: string }> = [];
   const sectionGrades: Array<{
     sectionId: string;
+    statedIntentQuote: string;
+    intentType: 'learning_activity' | 'behavioural_change' | 'none';
     tierReason: string;
     tier: 'strong' | 'adequate' | 'shallow';
   }> = [];
@@ -149,6 +163,8 @@ export function completenessResponse(
     assignments.push({ idea: s.idea ?? 'Idea from transcript', sectionId: s.sectionId });
     sectionGrades.push({
       sectionId: s.sectionId,
+      statedIntentQuote: s.intentQuote ?? 'I will read the NICE guidance before my next similar case',
+      intentType: s.intentType ?? 'learning_activity',
       tierReason: `graded ${depth}`,
       tier: TIER_BY_DEPTH[depth],
     });

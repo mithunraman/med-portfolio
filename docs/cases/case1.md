@@ -218,3 +218,51 @@ Looking back, the thing I did well was actually bothering to do the lying and st
 
 Q[learning_needs] →
 The learning point for me is prescribing in older patients. I want to be more systematic about checking falls and postural BP risk before starting things like alpha-blockers in the elderly. I'm going to read up on the STOPP/START criteria, and I'll set myself a rule to do a lying-and-standing BP whenever I start or add an antihypertensive in anyone over 65.
+
+**_ [Case 7] _**
+
+Umm, so this afternoon I saw a young woman, she's 24, came in to a routine appointment saying she'd been feeling really low for a few months. And you could sort of tell straight away she was struggling — a bit teary, wasn't really making eye contact at first. So I, um, I made a point of not rushing it, gave her a bit of space and just asked her to tell me in her own words what had been going on. She said she'd lost interest in things she normally enjoys, she's not sleeping — waking at like four in the morning and not getting back off — her appetite's down and she's lost a bit of weight. It's been going on since she split up with her partner and started a stressful new job around the same time. No past mental health history, not on any medication, doesn't really drink, no recreational drugs.
+
+The bit I was most conscious of was asking about risk. I find that hard, honestly, but I made myself ask her directly whether she'd had any thoughts of harming herself, or thoughts that life wasn't worth living. She said she'd had a few fleeting thoughts a couple of weeks back but nothing now, no plans and no intent, and she said her little sister and her dog are the reason she'd never actually do anything. No self-harm. I asked about what support she had and she's got a good relationship with her family.
+
+I did a PHQ-9 with her and she scored 16, so that's moderately severe. We talked through what that meant. I was really trying to make it a two-way conversation rather than just telling her what to do — I laid out the options, so guided self-help, the talking therapies, and medication, and I asked her what she felt about each. She was quite keen to try talking therapy first and a bit wary of antidepressants, so we agreed to go down that route.
+
+Looking back, I think the thing I did well was the consultation itself — I didn't rush her, I let her tell her story, and I think she felt genuinely listened to, which for a first mental health appointment really matters. And I made myself ask the risk questions properly even though I find them uncomfortable. The thing that's stuck with me, though, is that I wasn't totally confident doing the suicide risk assessment — I got through it but I wasn't sure I was asking the right things in the right order, or what exactly I'd have done if she'd said yes to more of it. That's the bit that's been playing on my mind since.
+
+Q[clinical_reasoning] →
+Yeah, a few things went through my mind before I settled on it being a depressive episode. Because she was so tired and low, I did think about physical causes that can look like this — an underactive thyroid, or anaemia, that sort of thing — so I arranged some bloods, TFTs, full blood count, ferritin and B12, to rule those out. I also made a point of screening for bipolar before I got anywhere near talking about antidepressants — I asked whether she'd ever had spells of the opposite, feeling really high or wired or not needing much sleep, and she hadn't, so I was reassured it wasn't part of a bipolar picture.
+
+The other thing I weighed up was whether this was more of an adjustment reaction to the breakup and the new job rather than a depressive episode, because the triggers were so clear. But the fact it had been going on a few months, and she had the biological symptoms — the early morning waking, the weight loss, the loss of interest — plus the PHQ-9 of 16, made me think this was a genuine moderately severe depressive episode rather than just a short-lived reaction. I also asked about anxiety symptoms, which were there a bit alongside it, and I checked alcohol and drugs, which were minimal.
+
+Q[outcome] →
+She came back for the two-week review. She'd actually self-referred to the talking therapies service and had her first telephone assessment booked, so she'd taken that step, which was good. Mood-wise it was early days — she said maybe very slightly better, the sleep was still poor but she felt a bit more hopeful having a plan. I repeated the PHQ-9 and it was 14, so down a couple of points but still moderately severe. I re-checked risk and it was unchanged — still no active thoughts, no plans. So no real resolution yet, it's ongoing, but she's engaged and safe and heading the right way. Plan is to keep reviewing and revisit medication if the therapy isn't enough on its own.
+
+Q[reflection] (follow-up — one concrete change) →
+Yeah, the one concrete thing is that I'm going to stop leaving the risk assessment until the end and squeezing it in — next time I'll bring it in earlier and more openly, and use the same calm opening line each time so I'm not fumbling for how to phrase it. And the specific thing I'd change from this consultation is that I never actually asked about access to means — whether she had anything in mind or anything at home — and that's something I'll always include from now on, because looking back that was a real hole in how I did it.
+
+Q[management] →
+So in terms of what I actually did — we'd agreed on talking therapy, so I referred her to the local NHS Talking Therapies service, and I showed her the self-referral route as well so she could get the ball rolling herself. I gave her some written information about low mood and the therapy options to take away. We agreed to hold off on antidepressants for now, since she wasn't keen and she's engaging well, but I said the door's open if she changes her mind or things get worse. The big thing for me was the safety-netting — I made sure she knew to contact us or ring 111, gave her the number for the crisis line and Samaritans, and told her to go to A&E if she ever felt unsafe or those thoughts came back with any intent. And I booked her in for a review with me in two weeks.
+
+Q[learning_needs] →
+So the main learning need for me is around suicide risk assessment — I want to feel more confident and be more structured about it rather than muddling through. I'm going to read the NICE guidance on depression and on self-harm, and there's an e-learning module on suicide risk assessment on the RCGP site that I'm going to work through. I'm also going to ask if I can sit in on a few consultations with our practice's mental health practitioner to see how they structure the risk conversation. And going forward I want to use a proper framework so I cover intent, plans, protective factors and access to means every time, rather than relying on remembering.
+
+**_ [Case 8] _**
+
+last one of the day. 54 year old bloke, came in limping. left big toe, red hot and swollen since last night, said it was agony, couldnt get his sock on. no injury, no fall. had the same thing same toe about a year back. bit overweight, likes a drink, not on any meds. looked like textbook gout to me, first toe joint, hot swollen tender, so didnt do a lot else.
+
+Pretty much gout from the start. classic first toe, came on overnight, hot red swollen. did think about a septic joint for a second but he was well in himself, no fever, and hed had it before in the same spot so that fit. didnt tap it, just went on the clinical picture.
+
+Q[differentials] ->
+yeah septic joint was the one thing i wanted to be sure i wasnt missing, but he was completely well in himself, no fever, not unwell at all, just the one hot toe. and hed had the identical thing same joint a year ago, which points away from infection, plus no break in the skin for anything to get in. only other things that crossed my mind were pseudogout, but thats less classic in the big toe, and cellulitis, but it was the joint itself that was hot and painful to move rather than the skin spreading. so gout was the obvious fit and i treated on that.
+
+Q[management] →
+started him on naproxen 500 twice a day, take it with food, gave him a bit of omeprazole to cover his stomach. told him rest it, ice it, keep off it. come back or ring if it spreads or he gets a temperature. said id recheck his urate in a few weeks once the flare had settled and wed talk about whether he needs allopurinol.
+
+Q[outcome] →
+didnt see him back but he left a message with reception to say it settled after about 4 or 5 days and he was happy. urate bloods still to come.
+
+Q[reflection] →
+went fine, pretty straightforward. the bit im not sure on is whether i should be starting urate lowering after a first proper flare these days, i tend to wait but i think the guidance may have moved. and i didnt really get into the drink or his weight with him, which probably feeds the whole thing, just ran out of time at the end of the day.
+
+Q[learning_needs] →
+i want to get clear on when to actually start allopurinol now, think the advice has changed. going to read the nice cks on gout and check what the current urate target is. and id like to be better at the lifestyle side, the alcohol and diet bit, not just reaching for the tablets.

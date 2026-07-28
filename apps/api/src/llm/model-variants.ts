@@ -19,7 +19,7 @@ export const Stage = {
 export type Stage = (typeof Stage)[keyof typeof Stage];
 
 /** Known variants. */
-export type VariantKey = 'A' | 'B' | 'C' | 'D';
+export type VariantKey = 'A' | 'B' | 'C' | 'D' | 'E';
 
 /** A variant is a complete stage→target mapping — every stage must be present. */
 export type VariantProfile = Record<Stage, ModelTarget>;
@@ -35,6 +35,17 @@ const DEEPSEEK_PRO = 'deepseek/deepseek-v4-pro';
 
 // const ALIBABA_ROUTE = ['alibaba'];
 const ATLAS_CLOUD_ROUTE = ['atlas-cloud'];
+// Cloudflare (OpenRouter slug `cloudflare`). Serves V4 Flash at 384k context —
+// smaller than the 1M most providers offer, but far above anything this pipeline
+// sends. Verified live against the exact request shape this file produces
+// (provider.only + reasoning:{enabled:false} + response_format json_schema
+// strict, two system messages): 200, reasoning_tokens 0, schema + enum honoured.
+//
+// Verify per-provider rather than trusting OpenRouter's capability flags — they
+// are wrong in both directions. Atlas Cloud advertises `response_format` and
+// still 400s on json_schema for some models; Cloudflare does NOT advertise
+// `response_format` at all, yet honours it.
+const CLOUDFLARE_ROUTE = ['cloudflare'];
 
 /**
  * DeepSeek-on-OpenRouter target with a per-stage reasoning ("think") mode.
@@ -132,5 +143,16 @@ export const VARIANTS = {
     reflect: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
     refine: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
     generate_pdp: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
+  },
+  E: {
+    cleaning: deepseek(DEEPSEEK_FLASH, 'off', CLOUDFLARE_ROUTE),
+    classify: deepseek(DEEPSEEK_FLASH, 'off', CLOUDFLARE_ROUTE),
+    check_completeness: deepseek(DEEPSEEK_FLASH, 'off', CLOUDFLARE_ROUTE),
+    generate_followup: deepseek(DEEPSEEK_FLASH, 'off', CLOUDFLARE_ROUTE),
+    tag_capabilities: deepseek(DEEPSEEK_FLASH, 'off', CLOUDFLARE_ROUTE),
+    elicit_justification: deepseek(DEEPSEEK_FLASH, 'off', CLOUDFLARE_ROUTE),
+    reflect: deepseek(DEEPSEEK_FLASH, 'off', CLOUDFLARE_ROUTE),
+    refine: deepseek(DEEPSEEK_FLASH, 'off', CLOUDFLARE_ROUTE),
+    generate_pdp: deepseek(DEEPSEEK_FLASH, 'off', CLOUDFLARE_ROUTE),
   },
 } satisfies Record<VariantKey, VariantProfile>;

@@ -40,6 +40,16 @@ export interface Probe {
    * Defaults to 'adequate'; reflective/heavy probes set 'strong'.
    */
   threshold?: ReadinessTier;
+  /**
+   * When true, this probe may only be graded above `shallow` if the trainee
+   * STATED an explicit intent to act (a forward-looking plan to read, learn,
+   * practise, or change practice) in their own words. The grader must supply a
+   * verbatim quote of that phrase; the completeness node holds the tier at
+   * `shallow` when no quote is present, so an intent that was merely *implied*
+   * (e.g. "the real gap was X") does not silently satisfy the section. Used for
+   * learning-need probes, where the whole point is to elicit a real plan.
+   */
+  requiresStatedIntent?: boolean;
 }
 
 /**

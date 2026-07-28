@@ -66,7 +66,7 @@ describe('deriveTiers — LLM grade + structural floors', () => {
   it('passes the rubric grade straight through as the readiness tier', () => {
     const tiers = deriveTiers(
       [{ idea: 'reflected and changed practice', sectionId: 'reflection' }],
-      [{ sectionId: 'reflection', tierReason: 'learning + change', tier: 'strong' }],
+      [{ sectionId: 'reflection', statedIntentQuote: '', intentType: 'none', tierReason: 'learning + change', tier: 'strong' }],
       ccrIds
     );
     expect(tiers['reflection']).toBe('strong');
@@ -75,7 +75,7 @@ describe('deriveTiers — LLM grade + structural floors', () => {
   it('floors a section with NO assigned content to missing, even if graded', () => {
     const tiers = deriveTiers(
       [],
-      [{ sectionId: 'presentation', tierReason: 'x', tier: 'strong' }],
+      [{ sectionId: 'presentation', statedIntentQuote: '', intentType: 'none', tierReason: 'x', tier: 'strong' }],
       new Set(['presentation'])
     );
     expect(tiers['presentation']).toBe('missing');
@@ -88,6 +88,81 @@ describe('deriveTiers — LLM grade + structural floors', () => {
       new Set(['presentation'])
     );
     expect(tiers['presentation']).toBe('shallow');
+  });
+});
+
+describe('deriveTiers — learning-activity gate (learning needs)', () => {
+  const assignments = [{ idea: 'the real gap was the prescribing decision', sectionId: 'learning_needs' }];
+  const only = new Set(['learning_needs']);
+  const gate = (grade: {
+    statedIntentQuote: string;
+    intentType: 'learning_activity' | 'behavioural_change' | 'none';
+    tier: 'strong' | 'adequate' | 'shallow';
+  }) =>
+    deriveTiers(assignments, [{ sectionId: 'learning_needs', tierReason: 'r', ...grade }], only, only)[
+      'learning_needs'
+    ];
+
+  it('holds at shallow when the intent is IMPLIED (no quote, intentType none)', () => {
+    // B0T failure: an evaluation rounded up to adequate on an implied intent.
+    expect(gate({ statedIntentQuote: '', intentType: 'none', tier: 'adequate' })).toBe('shallow');
+  });
+
+  it('holds at shallow when the intent is a BEHAVIOURAL change, not a learning activity', () => {
+    // Case 7 (GUB1UPGbOH7ARColQZLij): a strong reflection's forward action
+    // ("I'll always ask about access to means") bled into learning_needs. It carries
+    // a real quote but is a reflection action, not a DEN — must stay a live gap.
+    expect(
+      gate({
+        statedIntentQuote: "I'll always ask about access to means from now on",
+        intentType: 'behavioural_change',
+        tier: 'adequate',
+      })
+    ).toBe('shallow');
+  });
+
+  it('lets the grade stand for a genuine LEARNING activity (DEN)', () => {
+    expect(
+      gate({
+        statedIntentQuote: 'I will read the NICE self-harm guidance and do the RCGP risk e-learning module',
+        intentType: 'learning_activity',
+        tier: 'adequate',
+      })
+    ).toBe('adequate');
+  });
+
+  it('does NOT over-reject a hybrid classified as learning_activity (both present)', () => {
+    // "I'll ask about access to means AND read the NICE guidance" → the model quotes
+    // the learning part and classifies learning_activity; must not be downgraded.
+    expect(
+      gate({
+        statedIntentQuote: 'I will read the NICE guidance',
+        intentType: 'learning_activity',
+        tier: 'strong',
+      })
+    ).toBe('strong');
+  });
+
+  it('does NOT gate sections that do not require a learning intent', () => {
+    const tiers = deriveTiers(
+      [{ idea: 'a reflective point', sectionId: 'reflection' }],
+      [
+        {
+          sectionId: 'reflection',
+          statedIntentQuote: '',
+          intentType: 'behavioural_change',
+          tierReason: 'genuine reflection',
+          tier: 'adequate',
+        },
+      ],
+      new Set(['reflection']),
+      only
+    );
+    expect(tiers['reflection']).toBe('adequate');
+  });
+
+  it('does not touch a grade already at shallow', () => {
+    expect(gate({ statedIntentQuote: '', intentType: 'none', tier: 'shallow' })).toBe('shallow');
   });
 });
 
@@ -131,7 +206,7 @@ describe('readiness regression — one deep reflection meets the strong threshol
     // 'rich'/'strong'; one excellent reflection scored 'adequate' and was flagged.
     const tiers = deriveTiers(
       [{ idea: 'I learned X and will now always do Y', sectionId: 'reflection' }],
-      [{ sectionId: 'reflection', tierReason: 'learning point AND change to practice', tier: 'strong' }],
+      [{ sectionId: 'reflection', statedIntentQuote: '', intentType: 'none', tierReason: 'learning point AND change to practice', tier: 'strong' }],
       ccrIds
     );
     const r = deriveReadiness(tiers, ccrAssessable, ccrTemplate);
@@ -160,7 +235,7 @@ describe('checkCompletenessNode — schema & resilience', () => {
     expect(
       schema.safeParse({
         assignments: [{ idea: 'x', sectionId: validId }],
-        sectionGrades: [{ sectionId: validId, tierReason: 'r', tier: 'adequate' }],
+        sectionGrades: [{ sectionId: validId, statedIntentQuote: '', intentType: 'none', tierReason: 'r', tier: 'adequate' }],
       }).success
     ).toBe(true);
 
@@ -176,7 +251,7 @@ describe('checkCompletenessNode — schema & resilience', () => {
     expect(
       schema.safeParse({
         assignments: [{ idea: 'x', sectionId: validId }],
-        sectionGrades: [{ sectionId: validId, tierReason: 'r', tier: 'amazing' }],
+        sectionGrades: [{ sectionId: validId, statedIntentQuote: '', intentType: 'none', tierReason: 'r', tier: 'amazing' }],
       }).success
     ).toBe(false);
   });

@@ -56,9 +56,9 @@ export const envSchema = z.object({
     .string({ required_error: 'OPENAI_API_KEY is required' })
     .min(1, 'OPENAI_API_KEY cannot be empty'),
 
-  // LLM A/B/C/D variant selector. Selects a complete stage→model profile from
+  // LLM A/B/C/D/E variant selector. Selects a complete stage→model profile from
   // VARIANTS (see llm/model-variants.ts).
-  LLM_VARIANT: z.enum(['A', 'B', 'C', 'D']).default('A'),
+  LLM_VARIANT: z.enum(['A', 'B', 'C', 'D', 'E']).default('A'),
 
   // LLM request rate limit. Caps outbound structured LLM calls to protect the
   // provider quota (e.g. Azure Foundry RPM). Overflow calls queue in-process and
@@ -69,7 +69,7 @@ export const envSchema = z.object({
   // LLM_MIN_TIME_MS below so the 36 are evenly spaced rather than bursted.
   LLM_MAX_REQUESTS_PER_MINUTE: z
     .string()
-    .default('36')
+    .default('30')
     .transform((val) => parseInt(val, 10))
     .pipe(z.number().int().min(1).max(10000)),
   // Smoothing: minimum ms between calls. Default 1667 ≈ 60000 / 36, which paces

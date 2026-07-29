@@ -52,6 +52,7 @@ export class CleaningStage implements IProcessingStage {
     const response = await this.llmService.invokeStructured(messages, cleaningResponseSchema, {
       ...this.modelConfig.resolve(Stage.Cleaning),
       temperature: 0.1,
+      maxTokens: 20000,
     });
 
     const injectionDetected = response.data.injectionDetected;

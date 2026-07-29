@@ -180,7 +180,9 @@ export function createRefineNode(deps: GraphDeps) {
       (sum, s) => sum + s.text.split(/\s+/).filter(Boolean).length,
       0
     );
-    const maxTokens = Math.max(Math.ceil(wordCount * 2), 1000);
+    // Floor at 20000; the 2× proportional term only exceeds it past ~10,000 words, so
+    // in practice this is a flat budget with the scaling kept as a long-document guard.
+    const maxTokens = Math.max(Math.ceil(wordCount * 2), 20000);
 
     try {
       const messages = await refinePrompt.formatMessages({ document: formatDocument(toRefine) });

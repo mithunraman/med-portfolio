@@ -214,6 +214,45 @@ describe('LLMService rate-limit wiring', () => {
     expect(mockInvoke).toHaveBeenCalledTimes(1);
   });
 
+  it('retries a transient structured-output parse failure and recovers on re-roll', async () => {
+    jest.useFakeTimers();
+    // LangChain tags a schema/parse failure with lc_error_code = OUTPUT_PARSING_FAILURE.
+    // It carries no HTTP status, so isRetryableApiError misses it — but it's transient
+    // (the model just emitted malformed tool arguments once), so it must be retried.
+    const parseErr = Object.assign(new Error('Unexpected token \'R\', "Right, las"... is not valid JSON'), {
+      lc_error_code: 'OUTPUT_PARSING_FAILURE',
+    });
+    mockInvoke.mockReset().mockRejectedValueOnce(parseErr).mockResolvedValueOnce({ ok: true });
+
+    const settled = service.invokeStructured([], z.object({ ok: z.boolean() }), {
+      provider: 'openai',
+      model: 'gpt-test',
+    });
+    await jest.advanceTimersByTimeAsync(10_000); // flush the backOff delay
+    const result = await settled;
+
+    expect(result.data).toEqual({ ok: true });
+    expect(mockInvoke).toHaveBeenCalledTimes(2); // failed once, retried, succeeded
+    expect(metrics.recordLLMRetry).toHaveBeenCalledWith('invokeStructured');
+  });
+
+  it('does NOT retry a 400 whose message contains "is not valid JSON" but has no lc_error_code', async () => {
+    // Guards the precise (code-based, not message-based) detection: a real request
+    // error whose body happens to mention JSON must stay terminal, not loop 3×.
+    const err = Object.assign(new Error('response is not valid JSON'), { status: 400 });
+    mockInvoke.mockReset().mockRejectedValue(err);
+
+    await expect(
+      service.invokeStructured([], z.object({ ok: z.boolean() }), {
+        provider: 'openai',
+        model: 'gpt-test',
+      })
+    ).rejects.toThrow('is not valid JSON');
+
+    expect(mockInvoke).toHaveBeenCalledTimes(1); // terminal, no retries
+    expect(metrics.recordLLMRetry).not.toHaveBeenCalled();
+  });
+
   it('does NOT flag a non-429 failure as rate-limited', async () => {
     jest.useFakeTimers();
     const err = Object.assign(new Error('Internal server error'), { status: 500 });

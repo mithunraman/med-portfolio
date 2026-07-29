@@ -48,6 +48,46 @@ describe('ModelConfigService', () => {
         });
       }
     });
+
+    it('resolves every stage to native Cloudflare gpt-oss (low reasoning) for variant G', () => {
+      const service = new ModelConfigService(
+        configStub({
+          'app.llm.variant': 'G',
+          'app.cloudflare.accountId': 'cf-acct',
+          'app.cloudflare.apiToken': 'cf-token',
+        })
+      );
+
+      expect(service.activeVariant).toBe('G');
+      for (const stage of ALL_STAGES) {
+        expect(service.resolve(stage)).toEqual({
+          provider: 'cloudflare',
+          model: '@cf/openai/gpt-oss-120b',
+          thinkMode: 'low',
+          structuredMethod: 'functionCalling',
+        });
+      }
+    });
+
+    it('resolves every stage to native Cloudflare GLM-4.7-Flash (low reasoning) for variant H', () => {
+      const service = new ModelConfigService(
+        configStub({
+          'app.llm.variant': 'H',
+          'app.cloudflare.accountId': 'cf-acct',
+          'app.cloudflare.apiToken': 'cf-token',
+        })
+      );
+
+      expect(service.activeVariant).toBe('H');
+      for (const stage of ALL_STAGES) {
+        expect(service.resolve(stage)).toEqual({
+          provider: 'cloudflare',
+          model: '@cf/zai-org/glm-4.7-flash',
+          thinkMode: 'low',
+          structuredMethod: 'functionCalling',
+        });
+      }
+    });
   });
 
   describe('startup validation', () => {
@@ -82,6 +122,24 @@ describe('ModelConfigService', () => {
       expect(() => new ModelConfigService(configStub({ 'app.llm.variant': 'B' }))).toThrow(
         /uses OpenRouter but OPENROUTER_API_KEY/
       );
+    });
+
+    it('throws when variant G lacks the Cloudflare account id', () => {
+      expect(
+        () =>
+          new ModelConfigService(
+            configStub({ 'app.llm.variant': 'G', 'app.cloudflare.apiToken': 'cf-token' })
+          )
+      ).toThrow(/uses Cloudflare but CLOUDFLARE_ACCOUNT_ID/);
+    });
+
+    it('throws when variant G lacks the Cloudflare API token', () => {
+      expect(
+        () =>
+          new ModelConfigService(
+            configStub({ 'app.llm.variant': 'G', 'app.cloudflare.accountId': 'cf-acct' })
+          )
+      ).toThrow(/uses Cloudflare but CLOUDFLARE_ACCOUNT_ID/);
     });
 
     it('does not require provider credentials for the OpenAI variant', () => {

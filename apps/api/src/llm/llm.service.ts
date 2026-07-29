@@ -29,7 +29,7 @@ export type StructuredMethod = 'functionCalling' | 'jsonSchema' | 'jsonMode';
  * `high`/`max` set reasoning effort. Semantic here; LLMService translates it into
  * the provider's request params.
  */
-export type ThinkMode = 'off' | 'high' | 'max';
+export type ThinkMode = 'off' | 'low' | 'high' | 'max';
 
 /**
  * A concrete, resolved model target: which provider to call and which model
@@ -53,6 +53,14 @@ export type ModelTarget =
       /** Foundry deployment name (used as the OpenAI `model` field). */
       model: string;
       /** Reasoning effort for hybrid models (DeepSeek V4). */
+      thinkMode?: ThinkMode;
+      structuredMethod?: StructuredMethod;
+    }
+  | {
+      provider: 'cloudflare';
+      /** Cloudflare Workers AI model id, e.g. `@cf/openai/gpt-oss-120b`. */
+      model: string;
+      /** Reasoning effort — mapped to `reasoning_effort` (low|high) for gpt-oss. */
       thinkMode?: ThinkMode;
       structuredMethod?: StructuredMethod;
     };
@@ -92,6 +100,8 @@ export interface TranscriptionResult {
  */
 function reasoningHeadroom(thinkMode?: ThinkMode): number {
   switch (thinkMode) {
+    case 'low':
+      return 4000;
     case 'high':
       return 8000;
     case 'max':
@@ -127,8 +137,66 @@ export function azureFoundryKwargs(
     return {};
   }
 
+  // DeepSeek's effort vocabulary is high|max — it has no 'low' tier. A 'low' request
+  // therefore has no faithful mapping here; it resolves to 'high' (the lowest tier
+  // that still thinks) rather than silently disabling reasoning. No Foundry variant
+  // sets 'low' today — 'low' exists for gpt-oss on OpenRouter (see openrouterKwargs).
   return { reasoning_effort: target.thinkMode === 'max' ? 'max' : 'high' };
 }
+
+/**
+ * Translate a Cloudflare target's semantic options into extra request-body params.
+ * Single point that owns the Cloudflare wire format — deliberately separate from
+ * openrouterKwargs so OpenRouter-only params (`reasoning`, `provider.only`) never leak
+ * here, and vice versa.
+ *
+ * Reasoning maps to the standard OpenAI `reasoning_effort` (low|medium|high) that
+ * gpt-oss uses — `off` sends nothing; `max` clamps to `high` (gpt-oss has no xhigh tier).
+ * `max_completion_tokens` carries the token budget (the field this endpoint honours;
+ * ChatOpenAI's own `maxTokens` sends the older `max_tokens`).
+ */
+export function cloudflareKwargs(
+  target: Extract<ModelTarget, { provider: 'cloudflare' }>,
+  maxCompletionTokens: number
+): Record<string, unknown> {
+  const kwargs: Record<string, unknown> = { max_completion_tokens: maxCompletionTokens };
+  if (target.thinkMode && target.thinkMode !== 'off') {
+    kwargs.reasoning_effort = target.thinkMode === 'max' ? 'high' : target.thinkMode;
+  }
+  return kwargs;
+}
+
+/**
+ * A `fetch` wrapper for the Cloudflare route that guarantees each function-calling tool has
+ * a string `description`. Cloudflare's gpt-oss endpoint validates `ToolDescription.description`
+ * as a REQUIRED string and 400s ("Input should be a valid string … input_value=None") when
+ * LangChain's `withStructuredOutput` emits a tool with no description. Injecting a default
+ * satisfies the validator at the transport edge, without adding a root `.describe()` to every
+ * domain schema. (Verified live 2026-07-29; Gemma's endpoint didn't enforce this, gpt-oss does.)
+ */
+const cloudflareToolDescriptionFetch = async (
+  input: Parameters<typeof fetch>[0],
+  init?: Parameters<typeof fetch>[1]
+): Promise<Response> => {
+  if (init?.body && typeof init.body === 'string') {
+    try {
+      const body = JSON.parse(init.body);
+      let changed = false;
+      if (Array.isArray(body.tools)) {
+        for (const t of body.tools) {
+          if (t?.function && typeof t.function.description !== 'string') {
+            t.function.description = t.function.name ?? 'Return the structured result.';
+            changed = true;
+          }
+        }
+      }
+      if (changed) init = { ...init, body: JSON.stringify(body) };
+    } catch {
+      // Non-JSON body — forward unchanged.
+    }
+  }
+  return fetch(input, init);
+};
 
 @Injectable()
 export class LLMService {
@@ -141,6 +209,10 @@ export class LLMService {
   // Foundry. Presence is enforced up front by ModelConfigService's guard.
   private readonly azureFoundryApiKey: string | undefined;
   private readonly azureFoundryBaseUrl: string | undefined;
+  // Optional — only required when the active variant routes a stage to Cloudflare
+  // Workers AI. Presence is enforced up front by ModelConfigService's guard.
+  private readonly cloudflareAccountId: string | undefined;
+  private readonly cloudflareApiToken: string | undefined;
   private readonly assemblyai: AssemblyAI;
 
   constructor(
@@ -156,6 +228,9 @@ export class LLMService {
 
     this.azureFoundryApiKey = this.configService.get<string>('app.azureFoundry.apiKey');
     this.azureFoundryBaseUrl = this.configService.get<string>('app.azureFoundry.baseUrl');
+
+    this.cloudflareAccountId = this.configService.get<string>('app.cloudflare.accountId');
+    this.cloudflareApiToken = this.configService.get<string>('app.cloudflare.apiToken');
 
     const assemblyaiApiKey = this.configService.get<string>('app.assemblyai.apiKey');
     if (!assemblyaiApiKey) throw new Error('Missing config: app.assemblyai.apiKey');
@@ -251,15 +326,36 @@ export class LLMService {
             // Ground-truth quota signal: a 429 means the rate limiter did NOT
             // keep us under the provider's cap. Record it distinctly from generic
             // retries so it can be alerted on directly (see recordLLMRateLimited).
+            const detail = this.providerErrorDetail(error);
+
             if (this.isRateLimitError(error)) {
               this.metricsService.recordLLMRateLimited('invokeStructured');
-              this.logger.warn('LLM provider rate limit (429) — limiter did not prevent it', error);
+              this.logger.warn(
+                `LLM provider rate limit (429) — limiter did not prevent it${detail}`,
+                error
+              );
             }
 
-            const retryable = this.isRetryableApiError(error);
+            // A structured-output parse failure is not an API error (no status),
+            // but it IS transient: `withStructuredOutput` responses are
+            // nondeterministic, so a model that occasionally emits malformed tool
+            // arguments (e.g. a bare string where the JSON object was required —
+            // seen with GLM-4.7-Flash on the large free-text cleaning schema) will
+            // almost always succeed on a re-roll. Treat it as retryable so one bad
+            // response doesn't hard-fail an otherwise-healthy message.
+            const retryable =
+              this.isRetryableApiError(error) || this.isTransientStructuredOutputFailure(error);
             if (retryable) {
               this.metricsService.recordLLMRetry('invokeStructured');
-              this.logger.warn(`Retryable OpenAI error, retrying...`, error);
+              this.logger.warn(`Retryable OpenAI error, retrying...${detail}`, error);
+            } else {
+              // Terminal, and the interesting case on a hard-pinned route: a gateway
+              // 400 wrapping an upstream refusal (bad param, capacity, model limit).
+              // Log the unwrapped detail — the caller only sees the generic message.
+              this.logger.warn(
+                `Non-retryable LLM error [${target.provider}:${modelLabel}]${detail}: ` +
+                  `${error instanceof Error ? error.message : String(error)}`
+              );
             }
             return retryable;
           },
@@ -290,7 +386,9 @@ export class LLMService {
         durationMs: Date.now() - startTime,
         ok: false,
         input: traceInput,
-        error: error instanceof Error ? error.message : String(error),
+        error:
+          (error instanceof Error ? error.message : String(error)) +
+          this.providerErrorDetail(error),
         context: traceContext,
       });
 
@@ -377,6 +475,30 @@ export class LLMService {
           maxRetries: 0, // see createChatModel doc — our backOff is the only retry layer
         });
       }
+      case 'cloudflare': {
+        if (!this.cloudflareAccountId) throw new Error('Missing config: app.cloudflare.accountId');
+        if (!this.cloudflareApiToken) throw new Error('Missing config: app.cloudflare.apiToken');
+        // Cloudflare Workers AI exposes an OpenAI-compatible surface at
+        // /accounts/{id}/ai/v1 — reuse ChatOpenAI and repoint the base URL, which is
+        // fixed except for the account id. The token rides as a Bearer.
+        //
+        // The token budget is sent as `max_completion_tokens` via modelKwargs (see
+        // cloudflareKwargs) rather than ChatOpenAI's `maxTokens` (which sends the older
+        // `max_tokens`). Reasoning shares the completion budget, so reasoningHeadroom is
+        // added on top of the caller's answer budget (same rule as OpenRouter/Foundry).
+        return new ChatOpenAI({
+          apiKey: this.cloudflareApiToken,
+          model: target.model,
+          temperature,
+          modelKwargs: cloudflareKwargs(target, maxTokens + reasoningHeadroom(target.thinkMode)),
+          configuration: {
+            baseURL: `https://api.cloudflare.com/client/v4/accounts/${this.cloudflareAccountId}/ai/v1`,
+            // gpt-oss's Cloudflare endpoint requires a string tool `description` or 400s.
+            fetch: cloudflareToolDescriptionFetch,
+          },
+          maxRetries: 0, // see createChatModel doc — our backOff is the only retry layer
+        });
+      }
     }
   }
 
@@ -400,6 +522,15 @@ export class LLMService {
       kwargs.reasoning = { effort: 'xhigh' };
     } else if (target.thinkMode === 'high') {
       kwargs.reasoning = { effort: 'high' };
+    } else if (target.thinkMode === 'low') {
+      // `low` exists for always-reasoning models (gpt-oss) where `off` is not a real
+      // option and `high` is actively harmful: reasoning tokens share the completion
+      // budget, so a high-effort think on a large nested schema (check_completeness's
+      // assignments[] + sectionGrades[], generate_followup's hints[]) consumes the
+      // budget before the JSON closes and the response truncates mid-object. That
+      // surfaces as "Could not parse response content as the length limit was
+      // reached" — a parse error, not a 400 — which is what makes it hard to place.
+      kwargs.reasoning = { effort: 'low' };
     }
 
     // `only` hard-pins to the chosen upstream provider(s) — no fallback to any
@@ -553,6 +684,42 @@ export class LLMService {
    * 429 detection — used both to record the quota signal and (via
    * isRetryableApiError) to decide retries.
    */
+  /**
+   * Pull the UPSTREAM provider's error detail out of a gateway error.
+   *
+   * OpenRouter wraps an upstream failure as a generic `400 Provider returned error`
+   * and puts the real cause in `error.metadata` (`raw` = the provider's own body,
+   * `provider_name` = who produced it). LangChain surfaces only the outer message, so
+   * without this the log says "Provider returned error" and nothing else — which is
+   * unactionable when a route is hard-pinned and every failure looks identical.
+   *
+   * Best-effort and defensive: an unparseable or differently-shaped error must never
+   * break the error path it is trying to describe.
+   */
+  private providerErrorDetail(error: unknown): string {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const e = error as any;
+      const body = e?.error ?? e?.response?.data?.error ?? e?.response?.data;
+      const meta = body?.metadata ?? e?.metadata;
+      const parts: string[] = [];
+
+      const status = e?.status ?? e?.statusCode ?? body?.code;
+      if (status !== undefined) parts.push(`status=${status}`);
+      if (meta?.provider_name) parts.push(`upstream=${meta.provider_name}`);
+
+      const raw = meta?.raw ?? meta?.reasons ?? body?.message;
+      if (raw) {
+        const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
+        parts.push(`raw=${text.slice(0, 500)}`);
+      }
+
+      return parts.length > 0 ? ` [${parts.join(' ')}]` : '';
+    } catch {
+      return '';
+    }
+  }
+
   private isRateLimitError(error: unknown): boolean {
     if (!(error instanceof Error)) return false;
 
@@ -586,5 +753,23 @@ export class LLMService {
     if (message.includes('etimedout') || message.includes('network')) return true;
 
     return false;
+  }
+
+  /**
+   * True for a transient structured-output parse failure — LangChain's
+   * `withStructuredOutput` threw because the model returned something that didn't
+   * match the schema (malformed tool arguments, a bare string where a JSON object
+   * was required, a dropped tool call). These are non-API errors (no HTTP status,
+   * so `isRetryableApiError` misses them) but genuinely transient: model responses
+   * are nondeterministic, so a re-roll almost always parses. LangChain tags the
+   * error with `lc_error_code = 'OUTPUT_PARSING_FAILURE'`; we match on that rather
+   * than the message so this stays precise (a 400 whose body happens to contain
+   * "is not valid JSON" must NOT be captured here — that's a real request error).
+   */
+  private isTransientStructuredOutputFailure(error: unknown): boolean {
+    return (
+      error instanceof Error &&
+      (error as { lc_error_code?: string }).lc_error_code === 'OUTPUT_PARSING_FAILURE'
+    );
   }
 }

@@ -46,6 +46,15 @@ export class ModelConfigService {
         `LLM_VARIANT '${this.variant}' uses Azure Foundry but AZURE_FOUNDRY_API_KEY / AZURE_FOUNDRY_BASE_URL is not set.`
       );
     }
+    if (
+      providers.has('cloudflare') &&
+      (!configService.get<string>('app.cloudflare.accountId') ||
+        !configService.get<string>('app.cloudflare.apiToken'))
+    ) {
+      throw new Error(
+        `LLM_VARIANT '${this.variant}' uses Cloudflare but CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN is not set.`
+      );
+    }
   }
 
   /** Resolve the provider+model target for a stage under the active variant. */

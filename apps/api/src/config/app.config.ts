@@ -58,7 +58,7 @@ export const envSchema = z.object({
 
   // LLM A/B/C/D/E variant selector. Selects a complete stage→model profile from
   // VARIANTS (see llm/model-variants.ts).
-  LLM_VARIANT: z.enum(['A', 'B', 'C', 'D', 'E']).default('A'),
+  LLM_VARIANT: z.enum(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']).default('A'),
 
   // LLM request rate limit. Caps outbound structured LLM calls to protect the
   // provider quota (e.g. Azure Foundry RPM). Overflow calls queue in-process and
@@ -91,6 +91,12 @@ export const envSchema = z.object({
   // OpenAI-compatible surface, e.g. https://<resource>.services.ai.azure.com/openai/v1/
   AZURE_FOUNDRY_API_KEY: z.string().optional(),
   AZURE_FOUNDRY_BASE_URL: z.string().url().optional(),
+
+  // Cloudflare Workers AI — required only when the active variant (G) routes any stage
+  // to it (ModelConfigService enforces this at startup). The base URL is derived from
+  // the account id; the token needs Workers AI Read+Edit.
+  CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
+  CLOUDFLARE_API_TOKEN: z.string().optional(),
 
   // Azure AI Language — PII/PHI redaction. Authenticated with a Microsoft Entra
   // service principal (no static key), so `disableLocalAuth` can be enforced on
@@ -258,6 +264,10 @@ export const appConfig = registerAs('app', () => {
     azureFoundry: {
       apiKey: env.AZURE_FOUNDRY_API_KEY,
       baseUrl: env.AZURE_FOUNDRY_BASE_URL,
+    },
+    cloudflare: {
+      accountId: env.CLOUDFLARE_ACCOUNT_ID,
+      apiToken: env.CLOUDFLARE_API_TOKEN,
     },
     azureLanguage: {
       endpoint: env.AZURE_LANGUAGE_ENDPOINT,

@@ -267,7 +267,7 @@ export function createClassifyNode(deps: GraphDeps) {
       const { data: classification } = await deps.llmService.invokeStructured(
         messages,
         responseSchema,
-        { ...deps.modelConfig.resolve(Stage.Classify), temperature: 0.1, maxTokens: 800 }
+        { ...deps.modelConfig.resolve(Stage.Classify), temperature: 0.1, maxTokens: 20000 }
       );
 
       // Belt-and-suspenders: the enum schema already guarantees a valid code,

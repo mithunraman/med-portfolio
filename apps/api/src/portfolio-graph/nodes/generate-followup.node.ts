@@ -376,7 +376,7 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
       const { data: response } = await deps.llmService.invokeStructured(
         messages,
         followupQuestionsResponseSchema,
-        { ...deps.modelConfig.resolve(Stage.GenerateFollowup), temperature: 0.3, maxTokens: 1000 }
+        { ...deps.modelConfig.resolve(Stage.GenerateFollowup), temperature: 0.3, maxTokens: 20000 }
       );
 
       // Log the model's gap analysis (chain-of-thought) before it's mapped away —

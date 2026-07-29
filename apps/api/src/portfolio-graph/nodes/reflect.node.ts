@@ -294,9 +294,12 @@ export function createReflectNode(deps: GraphDeps) {
     const template = getTemplateForEntryType(config, state.entryType);
 
     // ── Token budget proportional to transcript length ──
-    // 2× headroom for JSON overhead + section headings + narratives. Floor at 2000.
+    // 2× headroom for JSON overhead + section headings + narratives. Floor at 20000.
+    // The floor now dominates for any realistic transcript (the 2× term only exceeds
+    // it past ~10,000 words), so this is effectively a flat budget; the proportional
+    // term is kept so a pathologically long transcript still scales rather than clips.
     const transcriptWordCount = state.fullTranscript.split(/\s+/).filter(Boolean).length;
-    const maxTokens = Math.max(Math.ceil(transcriptWordCount * 2), 2000);
+    const maxTokens = Math.max(Math.ceil(transcriptWordCount * 2), 20000);
 
     // ── Build and send prompt ──
     const messages = await reflectPrompt.formatMessages({

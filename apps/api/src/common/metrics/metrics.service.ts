@@ -88,15 +88,21 @@ export class MetricsService {
     this.llmRequestRetries.add(1, { operation });
   }
 
-  recordLLMQueueDepth(depth: number, endpoint?: number): void {
-    this.llmQueueDepth.record(depth, endpoint === undefined ? undefined : { endpoint });
+  /**
+   * `pool` is not optional: buckets are identified by (pool, endpoint), so
+   * without it `interactive:0` and `analysis:0` collapse into one series and the
+   * gauge silently reports the wrong backlog for both.
+   */
+  recordLLMQueueDepth(depth: number, pool: string, endpoint: number): void {
+    this.llmQueueDepth.record(depth, { pool, endpoint });
   }
 
-  recordLLMRateLimited(operation: string): void {
-    this.llmRateLimited.add(1, { operation });
+  /** `pool` identifies WHICH quota was breached — pools have different caps. */
+  recordLLMRateLimited(operation: string, pool: string): void {
+    this.llmRateLimited.add(1, { operation, pool });
   }
 
-  recordLLMWait(operation: string, waitMs: number): void {
-    this.llmWaitDuration.record(waitMs, { operation });
+  recordLLMWait(operation: string, pool: string, waitMs: number): void {
+    this.llmWaitDuration.record(waitMs, { operation, pool });
   }
 }

@@ -114,8 +114,8 @@ Instead of immediately running the graph, the system queues work reliably:
 
 1. User taps "Continue Analysis".
 2. `OutboxService` creates a job atomically within the same transaction as the message.
-3. `OutboxConsumer` polls every 1s (batch size 5), locks the job, and invokes the appropriate handler (`AnalysisStartHandler` or `AnalysisResumeHandler`).
-4. Job is marked completed or failed (with retry). Stale locks reset after 30s.
+3. `OutboxConsumer` polls every `DEFAULT_POLL_INTERVAL_MS` (100ms), running at most `MAX_CONCURRENCY` (5) jobs concurrently, locks the job, and invokes the appropriate handler (`AnalysisStartHandler` or `AnalysisResumeHandler`).
+4. Job is marked completed or failed (with retry). A claimed job holds its lock for `DEFAULT_LOCK_DURATION_MS` (`outbox.service.ts`, currently 10 minutes); `resetStaleLocks()` frees only entries whose `lockedUntil` has passed, so the crash-recovery delay *is* the lock duration.
 
 This ensures no lost jobs on crash and safe retries via idempotency.
 

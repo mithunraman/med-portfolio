@@ -1,4 +1,5 @@
-import type { ModelTarget, ThinkMode } from './llm.service';
+import { Pool } from './llm-pools';
+import type { ModelTarget, StructuredMethod, ThinkMode } from './llm.service';
 import { OpenAIModels } from './openai-models';
 
 /**
@@ -20,7 +21,7 @@ export const Stage = {
 export type Stage = (typeof Stage)[keyof typeof Stage];
 
 /** Known variants. */
-export type VariantKey = 'A' | 'B' | 'C' | 'D' | 'E';
+export type VariantKey = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 
 /** A variant is a complete stage→target mapping — every stage must be present. */
 export type VariantProfile = Record<Stage, ModelTarget>;
@@ -105,20 +106,36 @@ const gptOss = (
 // value is the Foundry *deployment name*, not a catalog slug — set it to whatever
 // the deployment is called in your Foundry resource.
 const DEEPSEEK_FLASH_FOUNDRY = 'DeepSeek-V4-Flash';
+// Variant F: GPT-5.4-nano deployed on Azure Foundry, serving the cleaning stage
+// only. Also a Foundry *deployment name*. Unlike DeepSeek it normalizes into
+// OpenAI `tool_calls`, so it uses native function calling (see below).
+const GPT_NANO_FOUNDRY = 'gpt-5.4-nano';
 
 /**
- * DeepSeek-on-Azure-Foundry target with a per-stage reasoning ("think") mode.
+ * Azure-Foundry target, bound to a credential/quota pool.
  *
- * Like the OpenRouter helper, uses `jsonSchema` structured output rather than
- * tool-calling: DeepSeek's native tool-call format isn't normalized into OpenAI
- * `tool_calls`, so the function-calling parser chokes. Foundry advertises
- * `json_schema` structured outputs, which constrains the response to the schema.
+ * `structuredMethod` defaults to `jsonSchema` because that is what DeepSeek
+ * needs: its native tool-call format isn't normalized into OpenAI `tool_calls`,
+ * so the function-calling parser chokes. It is a DEFAULT rather than a hardcode
+ * because that constraint is DeepSeek's, not Foundry's — an OpenAI-family
+ * deployment on the same surface (gpt-5.4-nano) has no such problem and does
+ * better with native function calling.
+ *
+ * `pool` is what a stage draws its quota from and is independent of `model`: one
+ * Azure resource can host several deployments, and one deployment can be served
+ * from several resources. See llm-pools.ts.
  */
-const foundry = (model: string, thinkMode: ThinkMode): ModelTarget => ({
+const foundry = (
+  model: string,
+  pool: Pool,
+  thinkMode: ThinkMode = 'off',
+  structuredMethod: StructuredMethod = 'jsonSchema'
+): ModelTarget => ({
   provider: 'azure-foundry',
   model,
+  pool,
   thinkMode,
-  structuredMethod: 'jsonSchema',
+  structuredMethod,
 });
 
 /**
@@ -165,15 +182,15 @@ export const VARIANTS = {
   // Same model as B (DeepSeek V4 Flash), different route: Azure AI Foundry instead
   // of OpenRouter. Enables a clean A/B of the two hosting paths for the same model.
   D: {
-    cleaning: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
-    classify: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
-    check_completeness: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
-    generate_followup: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
-    tag_capabilities: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
-    elicit_justification: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
-    reflect: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
-    refine: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
-    generate_pdp: foundry(DEEPSEEK_FLASH_FOUNDRY, 'off'),
+    cleaning: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    classify: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    check_completeness: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    generate_followup: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    tag_capabilities: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    elicit_justification: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    reflect: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    refine: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    generate_pdp: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
   },
   // Same gateway as B (OpenRouter), different model and upstream provider:
   // gpt-oss-120b on DeepInfra instead of DeepSeek V4 Flash on Atlas Cloud.
@@ -191,5 +208,32 @@ export const VARIANTS = {
     reflect: gptOss(GPT_OSS_120B, 'low'),
     refine: gptOss(GPT_OSS_120B, 'low'),
     generate_pdp: gptOss(GPT_OSS_120B, 'low'),
+  },
+  // The first NON-UNIFORM profile — what the per-stage table was built for. Both
+  // models run on Azure Foundry, but each stage group draws from its own
+  // credential/quota pool:
+  //
+  //   cleaning  → GPT-5.4-nano, Pool.Interactive (1 key,  60 rpm)
+  //   the rest  → DeepSeek V4 Flash, Pool.Analysis (2+ keys, 35 rpm each)
+  //
+  // Two independent reasons for the split. QUOTA: the pools are distinct Azure
+  // resources with distinct caps, and a limiter can only honour a per-key cap if
+  // it is per-key. WORKLOAD: cleaning is user-paced and blocks the message
+  // appearing, while the other eight stages fire as a machine-paced ~9-call
+  // burst — separate pools mean a burst can never starve the interactive path.
+  // That second reason holds even if the caps later converge, so do NOT collapse
+  // these back into one pool on the grounds that the numbers match.
+  F: {
+    // Native function calling, not jsonSchema: the DSML workaround is DeepSeek's
+    // constraint and nano doesn't share it (see the `foundry` helper).
+    cleaning: foundry(GPT_NANO_FOUNDRY, Pool.Interactive, 'off', 'functionCalling'),
+    classify: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    check_completeness: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    generate_followup: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    tag_capabilities: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    elicit_justification: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    reflect: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    refine: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    generate_pdp: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
   },
 } satisfies Record<VariantKey, VariantProfile>;

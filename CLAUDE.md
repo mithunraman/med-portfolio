@@ -129,7 +129,9 @@ Messages have three content fields: `rawContent` (original input) → `cleanedCo
 
 ### Outbox pattern
 
-In-process polling (not a distributed queue). Services create outbox entries; a consumer polls every 1s in batches of 5. Used to trigger async portfolio graph analysis (`AnalysisStartHandler`, `AnalysisResumeHandler`). Stale locks reset after 30s.
+In-process polling (not a distributed queue). Services create outbox entries; a consumer polls every `DEFAULT_POLL_INTERVAL_MS` (100ms) and runs up to `MAX_CONCURRENCY` (5) jobs at once — a concurrency cap, not a batch size. Used to trigger async portfolio graph analysis (`AnalysisStartHandler`, `AnalysisResumeHandler`).
+
+Claimed jobs hold a lock for `DEFAULT_LOCK_DURATION_MS` (`outbox.service.ts`, currently 10 minutes). `resetStaleLocks()` runs each tick and frees only entries whose `lockedUntil` has already passed, so the recovery delay *is* the lock duration — there is no separate stale-lock timer. Prefer citing these constants by name: the previous values here (1s / 30s) had drifted from the code by 10–20×, and comments elsewhere had built risk arguments on the wrong numbers.
 
 ### Version history
 

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as Sentry from '@sentry/nestjs';
 import Bottleneck from 'bottleneck';
 import { MetricsService } from '../common/metrics';
+import type { RateLimitPolicy } from '../config/app.config';
 import { LlmEndpointResolver } from './llm-endpoint.resolver';
 
 /**
@@ -18,20 +19,26 @@ const REFRESH_INTERVAL_MS = 60_000;
 const DEFAULT_RPM = 18;
 
 /**
- * Owns the in-process rate limiters for outbound LLM calls — ONE limiter per key
- * (endpoint), so each key is paced independently under its own provider quota.
+ * Owns the in-process rate limiters for outbound LLM calls — ONE limiter per
+ * BUCKET, where a bucket is a (pool, key) pair, so each key is paced
+ * independently under its own provider quota at its own pool's cap.
  *
  * Per-key limiting (a bulkhead per resource) is not a convenience: because each
  * key has its own RPM cap, a single global limiter at the aggregate rate could
  * NOT prevent an imbalanced minute from pushing more than one key's cap onto that
  * key (→ 429). The only correct structure for per-key quotas is a limiter per key.
  *
- * Bottleneck's `reservoir` gives the semantics we want: at most
- * `maxRequestsPerMinute` calls run per key per rolling window; call N+1 does not
- * error — it queues and fires as the reservoir refills. Callers pass the endpoint
- * index (from LlmEndpointResolver) plus the work to `schedule()`; the index picks
- * the bucket. When only one key is configured the array has length 1, reproducing
- * the pre-rotation single-limiter behavior exactly.
+ * Pools add a second, independent reason to keep these separate: they isolate
+ * workloads, not just quotas. The interactive pool (cleaning) is user-paced and
+ * blocks a message appearing; the analysis pool fires ~9-call machine-paced
+ * bursts. Separate limiters mean a burst can never consume the slots interactive
+ * work needs — which stays true even if the two pools' caps later converge, so
+ * do NOT merge them on the grounds that the numbers match.
+ *
+ * Bottleneck's `reservoir` gives the semantics we want: at most that pool's rpm
+ * calls run per key per refresh window; call N+1 does not error — it queues and
+ * fires as the reservoir refills. Callers pass the bucket key (from
+ * LlmEndpointResolver.resolveBucket) plus the work to `schedule()`.
  *
  * `minTime` (derived from the cap in app.config as 60000 / rpm) spaces calls so a
  * key doesn't burst its whole reservoir at a window boundary.
@@ -51,72 +58,109 @@ const DEFAULT_RPM = 18;
 @Injectable()
 export class LlmRateLimiterService {
   private readonly logger = new Logger(LlmRateLimiterService.name);
-  /** One limiter per key/endpoint — indexed identically to LlmEndpointResolver. */
-  private readonly limiters: Bottleneck[];
+  /** One limiter per bucket, keyed identically to LlmEndpointResolver. */
+  private readonly limiters = new Map<string, Bottleneck>();
 
   constructor(
     configService: ConfigService,
     private readonly metricsService: MetricsService,
     resolver: LlmEndpointResolver
   ) {
-    // Per-key cap. Fallback mirrors the schema default (18 rpm) so a missing key
-    // degrades to the SAFE config, not full bursting. minTime is derived (in
-    // app.config) from the same cap; the fallback here derives it too.
-    const rpm = configService.get<number>('app.llm.rateLimit.maxRequestsPerMinute') ?? DEFAULT_RPM;
-    const minTime =
-      configService.get<number>('app.llm.rateLimit.minTimeMs') ??
-      Math.floor(REFRESH_INTERVAL_MS / rpm);
-    const count = resolver.count();
+    // Per-pool caps, with a default for pools that don't declare one (the
+    // implicit single-key openai/openrouter pools). The DEFAULT_RPM fallback
+    // mirrors the schema default so missing config degrades to the SAFE setting,
+    // not to full bursting.
+    const configured = configService.get<{
+      default?: RateLimitPolicy;
+      byPool?: Record<string, RateLimitPolicy>;
+    }>('app.llm.rateLimit');
+    const fallback = configured?.default ?? {
+      rpm: DEFAULT_RPM,
+      minTimeMs: Math.floor(REFRESH_INTERVAL_MS / DEFAULT_RPM),
+    };
 
-    this.limiters = Array.from({ length: count }, (_, index) =>
-      this.buildLimiter(index, rpm, minTime)
-    );
-
-    this.logger.log(
-      `LLM rate limiter active: ${count} key(s) × ${rpm} req/min` +
-        `${minTime > 0 ? `, minTime ${minTime}ms` : ''}`
-    );
+    for (const { bucketKey, pool, index } of resolver.buckets()) {
+      const { rpm, minTimeMs } = configured?.byPool?.[pool] ?? fallback;
+      this.limiters.set(bucketKey, this.buildLimiter(bucketKey, pool, index, rpm, minTimeMs));
+      this.logger.log(
+        `LLM rate limiter bucket ${bucketKey}: ${rpm} req/min` +
+          `${minTimeMs > 0 ? `, minTime ${minTimeMs}ms` : ''}`
+      );
+    }
   }
 
   /**
-   * Run `fn` under the rate limit for the given endpoint. Resolves/rejects with
-   * `fn`'s result; if that endpoint's reservoir is empty the call waits in its
+   * Run `fn` under the rate limit for the given bucket. Resolves/rejects with
+   * `fn`'s result; if that bucket's reservoir is empty the call waits in its
    * queue until a slot frees up.
+   *
+   * `async` is load-bearing, not decorative: without it `limiterFor`'s throw on an
+   * unknown bucket escapes SYNCHRONOUSLY, so a caller writing
+   * `schedule(k, fn).catch(h)` would have it blow straight past `h` — the `.catch`
+   * isn't attached until the expression has already thrown. A signature returning
+   * `Promise<T>` advertises exactly one error channel; this keeps that promise.
    */
-  schedule<T>(index: number, fn: () => Promise<T>): Promise<T> {
-    return this.limiters[index].schedule(fn);
+  async schedule<T>(bucketKey: string, fn: () => Promise<T>): Promise<T> {
+    return this.limiterFor(bucketKey).schedule(fn);
   }
 
-  /** Current job counts for one endpoint (RECEIVED/QUEUED/RUNNING/EXECUTING/DONE). */
-  counts(index: number): Bottleneck.Counts {
-    return this.limiters[index].counts();
+  /** Current job counts for one bucket (RECEIVED/QUEUED/RUNNING/EXECUTING/DONE). */
+  counts(bucketKey: string): Bottleneck.Counts {
+    return this.limiterFor(bucketKey).counts();
   }
 
-  private buildLimiter(index: number, rpm: number, minTime: number): Bottleneck {
+  /**
+   * Buckets are built from the same resolver that hands them out, so an unknown
+   * key means those two drifted. Fail loudly and name it — the alternative is a
+   * bare `Cannot read properties of undefined` from deep inside a retry.
+   */
+  private limiterFor(bucketKey: string): Bottleneck {
+    const limiter = this.limiters.get(bucketKey);
+    if (!limiter) {
+      throw new Error(
+        `No LLM rate limiter for bucket '${bucketKey}'. Known buckets: ` +
+          `${[...this.limiters.keys()].join(', ') || '(none)'}.`
+      );
+    }
+    return limiter;
+  }
+
+  private buildLimiter(
+    bucketKey: string,
+    pool: string,
+    index: number,
+    rpm: number,
+    minTime: number
+  ): Bottleneck {
     const limiter = new Bottleneck({
       reservoir: rpm,
       reservoirRefreshAmount: rpm,
       reservoirRefreshInterval: REFRESH_INTERVAL_MS, // refill to `rpm` every minute
       ...(minTime > 0 ? { minTime } : {}),
     });
-    this.registerObservability(limiter, index);
+    this.registerObservability(limiter, bucketKey, pool, index);
     return limiter;
   }
 
-  private registerObservability(limiter: Bottleneck, index: number): void {
+  private registerObservability(
+    limiter: Bottleneck,
+    bucketKey: string,
+    pool: string,
+    index: number
+  ): void {
     // High-frequency signal — this key's reservoir just hit 0 and calls are now
     // queuing. Breadcrumb only: fires often under load and must never be an alert.
-    // Tagged with the endpoint so a single persistently-saturated key stands out.
+    // Tagged with the bucket so a single persistently-saturated key stands out.
     limiter.on('depleted', () => {
       Sentry.addBreadcrumb({
         category: 'llm.ratelimit',
         level: 'warning',
-        message: `LLM rate limiter depleted (endpoint ${index}) — calls now queuing`,
-        data: { endpoint: index, ...limiter.counts() },
+        message: `LLM rate limiter depleted (bucket ${bucketKey}) — calls now queuing`,
+        data: { pool, endpoint: index, ...limiter.counts() },
       });
     });
 
-    // A call was enqueued on this key — record its backlog as a per-endpoint gauge.
+    // A call was enqueued on this key — record its backlog as a per-bucket gauge.
     // We do NOT threshold-alert on queue depth: every LLM call originates from the
     // outbox consumer (bounded by MAX_CONCURRENCY), so QUEUED tops out at that
     // concurrency and can't reflect provider-quota pressure. The real "we hit the
@@ -127,12 +171,12 @@ export class LlmRateLimiterService {
     // enqueuing job itself. The gauge therefore has a floor of 1: a value of 1
     // means "no real backlog"; genuine waiting shows as ≥2.
     limiter.on('queued', () => {
-      this.metricsService.recordLLMQueueDepth(limiter.counts().QUEUED, index);
+      this.metricsService.recordLLMQueueDepth(limiter.counts().QUEUED, pool, index);
     });
 
     // Record this key's backlog draining back down as slots free up.
     limiter.on('done', () => {
-      this.metricsService.recordLLMQueueDepth(limiter.counts().QUEUED, index);
+      this.metricsService.recordLLMQueueDepth(limiter.counts().QUEUED, pool, index);
     });
   }
 }

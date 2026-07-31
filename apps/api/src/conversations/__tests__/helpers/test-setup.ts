@@ -43,6 +43,7 @@ import {
 import { PortfolioGraphService } from '../../../portfolio-graph/portfolio-graph.service';
 import { MessageProcessingHandler } from '../../../outbox/handlers/message-processing.handler';
 import { ProcessingService } from '../../../processing/processing.service';
+import { LocalPiiService } from '../../../processing/redaction/local-pii.service';
 import { ConversationContextService } from '../../conversation-context.service';
 import { ConversationsRepository } from '../../conversations.repository';
 import {
@@ -81,9 +82,7 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
   // Use replica set so Mongoose transactions work (they require oplog)
   const mongod = await MongoMemoryReplSet.create({
     replSet: { count: 1, storageEngine: 'wiredTiger' },
-    instanceOpts: [
-      { args: ['--setParameter', 'maxTransactionLockRequestTimeoutMillis=5000'] },
-    ],
+    instanceOpts: [{ args: ['--setParameter', 'maxTransactionLockRequestTimeoutMillis=5000'] }],
   });
   const uri = mongod.getUri();
 
@@ -112,6 +111,11 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
       },
       TransactionService,
       PortfolioGraphService,
+      // Real, not mocked: it has no dependencies of its own (it wraps the pure
+      // uk-pii-patterns matchers), and the editMessage tests assert that
+      // structured PII is actually redacted in place — a stub would pass them
+      // while testing nothing.
+      LocalPiiService,
       {
         provide: ARTEFACTS_REPOSITORY,
         useClass: ArtefactsRepository,
@@ -144,7 +148,7 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
         useFactory: (
           start: AnalysisStartHandler,
           resume: AnalysisResumeHandler,
-          processing: MessageProcessingHandler,
+          processing: MessageProcessingHandler
         ) => [start, resume, processing],
         inject: [AnalysisStartHandler, AnalysisResumeHandler, MessageProcessingHandler],
       },
@@ -217,7 +221,6 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
           markPendingDeleteByMessageIds: jest.fn().mockResolvedValue({ ok: true, value: 0 }),
         },
       },
-
     ],
   }).compile();
 
@@ -268,8 +271,22 @@ export async function cleanupDatabase(connection: Connection): Promise<void> {
 
 /**
  * Tear down the test harness: close NestJS module + stop MongoMemoryReplSet.
+ *
+ * Every step is optional-chained and independently guarded because this runs in
+ * `afterAll`, where the harness may be **partially built or entirely undefined** —
+ * `createTestHarness` can throw at the replset, at `compile()` (an unregistered
+ * provider), or at `init()`.
+ *
+ * Getting this wrong is disproportionately expensive. Previously a `beforeAll`
+ * failure left `harness` undefined, so `harness.module.close()` threw a
+ * TypeError, teardown never ran, and the replset + Nest module stayed open —
+ * Jest then finished its tests and hung forever on the leaked handles, with the
+ * TypeError masking the real DI error underneath. A one-line dependency mistake
+ * cost ~15 minutes of unexplained wedge. Teardown must therefore be
+ * unconditionally best-effort: releasing what exists matters, and a failure here
+ * must never displace the original error that caused it.
  */
-export async function destroyTestHarness(harness: TestHarness): Promise<void> {
-  await harness.module.close();
-  await harness.mongod.stop();
+export async function destroyTestHarness(harness?: TestHarness): Promise<void> {
+  await harness?.module?.close().catch(() => undefined);
+  await harness?.mongod?.stop().catch(() => undefined);
 }

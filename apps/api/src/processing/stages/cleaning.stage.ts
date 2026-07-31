@@ -52,8 +52,18 @@ export class CleaningStage implements IProcessingStage {
     const response = await this.llmService.invokeStructured(messages, cleaningResponseSchema, {
       ...this.modelConfig.resolve(Stage.Cleaning),
       temperature: 0.1,
-      // Shard by conversation so a conversation's cleaning shares the endpoint its
-      // graph stages will use (cleaning runs pre-artefact, so no artefactId yet).
+      // Shard by conversation within whichever pool this stage resolves to, so a
+      // conversation sticks to one key of that pool (cleaning runs pre-artefact,
+      // so there is no artefactId to key on yet).
+      //
+      // NOT cross-stage affinity: under a split-pool variant (F) cleaning sits in
+      // `interactive` while the graph stages sit in `analysis`, so the same
+      // conversation deliberately uses different endpoints for the two. That
+      // separation IS the bulkhead that keeps a machine-paced analysis burst off
+      // the interactive path — do not "restore" shared routing between them.
+      //
+      // Inert while a pool has a single key (the resolver short-circuits to index
+      // 0), and correct the moment that pool gains a second.
       routingKey: context.conversationId.toString(),
     });
 

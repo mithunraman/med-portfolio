@@ -1,16 +1,18 @@
 import type { ConfigService } from '@nestjs/config';
-import type { FoundryEndpoint } from '../../config/app.config';
+import type { FoundryEndpoint, FoundryPools } from '../../config/app.config';
 import { LlmEndpointResolver } from '../llm-endpoint.resolver';
+import { Pool } from '../llm-pools';
+import type { ModelTarget } from '../llm.service';
 import type { ModelConfigService } from '../model-config.service';
 
-function configStub(endpoints: FoundryEndpoint[]): ConfigService {
+function configStub(pools: Partial<FoundryPools>): ConfigService {
   return {
-    get: jest.fn((key: string) => (key === 'app.azureFoundry.endpoints' ? endpoints : undefined)),
+    get: jest.fn((key: string) => (key === 'app.azureFoundry.pools' ? pools : undefined)),
   } as unknown as ConfigService;
 }
 
-function modelConfigStub(usesFoundry: boolean): ModelConfigService {
-  return { usesProvider: jest.fn((p: string) => p === 'azure-foundry' && usesFoundry) } as unknown as ModelConfigService;
+function modelConfigStub(poolsInUse: string[]): ModelConfigService {
+  return { poolsInUse: () => new Set(poolsInUse) } as unknown as ModelConfigService;
 }
 
 const ep = (n: number): FoundryEndpoint => ({
@@ -18,67 +20,143 @@ const ep = (n: number): FoundryEndpoint => ({
   baseURL: `https://res-${n}.services.ai.azure.com/openai/v1/`,
 });
 
-function build(endpoints: FoundryEndpoint[], usesFoundry = true): LlmEndpointResolver {
-  return new LlmEndpointResolver(configStub(endpoints), modelConfigStub(usesFoundry));
+const foundryTarget = (pool: Pool): ModelTarget => ({
+  provider: 'azure-foundry',
+  model: 'deployment',
+  pool,
+});
+
+const openaiTarget: ModelTarget = { provider: 'openai', model: 'gpt-test' };
+
+function build(pools: Partial<FoundryPools>, inUse = Object.keys(pools)): LlmEndpointResolver {
+  return new LlmEndpointResolver(configStub(pools), modelConfigStub(inUse));
 }
 
 describe('LlmEndpointResolver', () => {
-  describe('count()', () => {
-    it('is the number of endpoints when the active variant uses Foundry', () => {
-      expect(build([ep(1), ep(2)]).count()).toBe(2);
+  describe('buckets()', () => {
+    it('creates one bucket per key, per pool, namespaced by pool', () => {
+      const resolver = build({
+        [Pool.Interactive]: [ep(1)],
+        [Pool.Analysis]: [ep(2), ep(3)],
+      });
+
+      expect(resolver.buckets().map((b) => b.bucketKey)).toEqual([
+        'interactive:0',
+        'analysis:0',
+        'analysis:1',
+      ]);
     });
 
-    it('collapses to 1 when the active variant does NOT use Foundry (single-key providers)', () => {
-      // Endpoints may be configured, but if no stage routes to Foundry there is a
-      // single quota bucket — the pre-rotation behavior.
-      expect(build([ep(1), ep(2)], false).count()).toBe(1);
+    it('gives a credential-less provider pool exactly one bucket', () => {
+      // openai/openrouter keys live on LLMService, not in the endpoint config —
+      // they must still be rate-limited, so the pool floors at one bucket.
+      const resolver = build({}, ['openai']);
+      expect(resolver.buckets()).toEqual([{ bucketKey: 'openai:0', pool: 'openai', index: 0 }]);
     });
 
-    it('collapses to 1 when Foundry is used but no endpoints are configured', () => {
-      expect(build([]).count()).toBe(1);
+    it('ignores pools the active variant does not use', () => {
+      // Interactive is configured but unused: no bucket, so no limiter, so no
+      // requirement to configure it at all.
+      const resolver = build({ [Pool.Interactive]: [ep(1)], [Pool.Analysis]: [ep(2)] }, [
+        Pool.Analysis,
+      ]);
+      expect(resolver.buckets().map((b) => b.bucketKey)).toEqual(['analysis:0']);
     });
   });
 
-  describe('indexFor()', () => {
+  describe('resolveBucket()', () => {
     it('is deterministic: the same key always resolves to the same endpoint', () => {
-      const resolver = build([ep(1), ep(2)]);
-      const first = resolver.indexFor('conversation-abc');
+      const resolver = build({ [Pool.Analysis]: [ep(1), ep(2)] });
+      const first = resolver.resolveBucket(foundryTarget(Pool.Analysis), 'conversation-abc');
+
       for (let i = 0; i < 20; i++) {
-        expect(resolver.indexFor('conversation-abc')).toBe(first);
+        expect(resolver.resolveBucket(foundryTarget(Pool.Analysis), 'conversation-abc')).toEqual(
+          first
+        );
       }
     });
 
-    it('always returns an index within [0, count)', () => {
-      const resolver = build([ep(1), ep(2), ep(3)]);
+    it('always returns an index within the pool’s range', () => {
+      const resolver = build({ [Pool.Analysis]: [ep(1), ep(2), ep(3)] });
+
       for (let i = 0; i < 100; i++) {
-        const idx = resolver.indexFor(`conversation-${i}`);
-        expect(idx).toBeGreaterThanOrEqual(0);
-        expect(idx).toBeLessThan(3);
+        const { index } = resolver.resolveBucket(foundryTarget(Pool.Analysis), `conversation-${i}`);
+        expect(index).toBeGreaterThanOrEqual(0);
+        expect(index).toBeLessThan(3);
       }
     });
 
-    it('spreads distinct keys across all buckets', () => {
-      const resolver = build([ep(1), ep(2)]);
-      const seen = new Set<number>();
-      for (let i = 0; i < 50; i++) seen.add(resolver.indexFor(`conversation-${i}`));
+    it('spreads distinct keys across all of a pool’s buckets', () => {
+      const resolver = build({ [Pool.Analysis]: [ep(1), ep(2)] });
+      const seen = new Set<string>();
+      for (let i = 0; i < 50; i++) {
+        seen.add(
+          resolver.resolveBucket(foundryTarget(Pool.Analysis), `conversation-${i}`).bucketKey
+        );
+      }
+
       // Over a healthy sample both buckets must be used — proves it is not a
       // constant-0 hash.
-      expect(seen).toEqual(new Set([0, 1]));
+      expect(seen).toEqual(new Set(['analysis:0', 'analysis:1']));
     });
 
     it('pins to endpoint 0 for a missing/empty routing key', () => {
-      expect(build([ep(1), ep(2)]).indexFor('')).toBe(0);
+      const resolver = build({ [Pool.Analysis]: [ep(1), ep(2)] });
+      expect(resolver.resolveBucket(foundryTarget(Pool.Analysis), '').index).toBe(0);
     });
 
-    it('always returns 0 when there is a single bucket (N=1 fast path)', () => {
-      const resolver = build([ep(1)]);
-      expect(resolver.indexFor('anything')).toBe(0);
-      expect(resolver.indexFor('another')).toBe(0);
+    it('always returns 0 when a pool has a single key (N=1 fast path)', () => {
+      const resolver = build({ [Pool.Interactive]: [ep(1)] });
+      expect(resolver.resolveBucket(foundryTarget(Pool.Interactive), 'anything').index).toBe(0);
+      expect(resolver.resolveBucket(foundryTarget(Pool.Interactive), 'another').index).toBe(0);
+    });
+
+    it('routes a non-Foundry target to its provider-named pool with no credentials', () => {
+      const resolver = build({}, ['openai']);
+      expect(resolver.resolveBucket(openaiTarget, 'conversation-abc')).toEqual({
+        bucketKey: 'openai:0',
+        pool: 'openai',
+        index: 0,
+        endpoint: undefined,
+      });
+    });
+
+    it('keeps pools independent: the same routing key hits both pools separately', () => {
+      const resolver = build({
+        [Pool.Interactive]: [ep(1)],
+        [Pool.Analysis]: [ep(2), ep(3)],
+      });
+
+      const interactive = resolver.resolveBucket(foundryTarget(Pool.Interactive), 'conv-1');
+      const analysis = resolver.resolveBucket(foundryTarget(Pool.Analysis), 'conv-1');
+
+      // One conversation draws from BOTH pools — cleaning from interactive, the
+      // graph stages from analysis — so these must never collapse to one bucket.
+      expect(interactive.pool).toBe(Pool.Interactive);
+      expect(analysis.pool).toBe(Pool.Analysis);
+      expect(interactive.bucketKey).not.toBe(analysis.bucketKey);
     });
   });
 
-  it('exposes the configured endpoints indexed identically to the buckets', () => {
-    const resolver = build([ep(1), ep(2)]);
-    expect(resolver.endpoints).toEqual([ep(1), ep(2)]);
+  describe('bucket/credential invariant', () => {
+    it('always returns the credentials belonging to the bucket it names', () => {
+      // THE core invariant: the key whose limiter gates a call is the key whose
+      // credentials send it. Returning both in one value is what makes this hold
+      // by construction — this test would catch any regression to a bare index
+      // that callers look up separately.
+      const pools = {
+        [Pool.Interactive]: [ep(1)],
+        [Pool.Analysis]: [ep(2), ep(3)],
+      };
+      const resolver = build(pools);
+
+      for (const pool of [Pool.Interactive, Pool.Analysis]) {
+        for (let i = 0; i < 100; i++) {
+          const resolved = resolver.resolveBucket(foundryTarget(pool), `conversation-${i}`);
+          expect(resolved.bucketKey).toBe(`${resolved.pool}:${resolved.index}`);
+          expect(resolved.endpoint).toBe(pools[pool][resolved.index]);
+        }
+      }
+    });
   });
 });

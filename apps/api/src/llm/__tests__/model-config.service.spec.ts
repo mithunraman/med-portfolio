@@ -1,6 +1,9 @@
 import type { ConfigService } from '@nestjs/config';
+import { Pool } from '../llm-pools';
 import { ModelConfigService } from '../model-config.service';
 import { Stage, VARIANTS } from '../model-variants';
+
+const endpoint = { apiKey: 'az-key', baseURL: 'https://res.services.ai.azure.com/openai/v1/' };
 
 /**
  * Build a ConfigService stub backed by a plain key→value map. Only the keys the
@@ -32,9 +35,7 @@ describe('ModelConfigService', () => {
       const service = new ModelConfigService(
         configStub({
           'app.llm.variant': 'D',
-          'app.azureFoundry.endpoints': [
-            { apiKey: 'az-key', baseURL: 'https://res.services.ai.azure.com/openai/v1/' },
-          ],
+          'app.azureFoundry.pools': { [Pool.Analysis]: [endpoint] },
         })
       );
 
@@ -44,10 +45,67 @@ describe('ModelConfigService', () => {
         expect(target).toEqual({
           provider: 'azure-foundry',
           model: 'DeepSeek-V4-Flash',
+          pool: Pool.Analysis,
           thinkMode: 'off',
           structuredMethod: 'jsonSchema',
         });
       }
+    });
+
+    it('splits variant F across two pools and two models', () => {
+      const service = new ModelConfigService(
+        configStub({
+          'app.llm.variant': 'F',
+          'app.azureFoundry.pools': {
+            [Pool.Interactive]: [endpoint],
+            [Pool.Analysis]: [endpoint],
+          },
+        })
+      );
+
+      // Cleaning is the interactive path (user-paced, blocks the message
+      // appearing) and uses native function calling — the jsonSchema workaround
+      // is DeepSeek's constraint, not nano's.
+      expect(service.resolve(Stage.Cleaning)).toEqual({
+        provider: 'azure-foundry',
+        model: 'gpt-5.4-nano',
+        pool: Pool.Interactive,
+        thinkMode: 'off',
+        structuredMethod: 'functionCalling',
+      });
+
+      // Every other stage is the machine-paced analysis burst.
+      for (const stage of ALL_STAGES.filter((s) => s !== Stage.Cleaning)) {
+        expect(service.resolve(stage)).toEqual({
+          provider: 'azure-foundry',
+          model: 'DeepSeek-V4-Flash',
+          pool: Pool.Analysis,
+          thinkMode: 'off',
+          structuredMethod: 'jsonSchema',
+        });
+      }
+    });
+  });
+
+  describe('poolsInUse()', () => {
+    it('reports the provider-named pool for single-key providers', () => {
+      const service = new ModelConfigService(
+        configStub({ 'app.llm.variant': 'A', 'app.openai.apiKey': 'sk-test' })
+      );
+      expect(service.poolsInUse()).toEqual(new Set(['openai']));
+    });
+
+    it('reports every distinct Foundry pool a variant draws from', () => {
+      const service = new ModelConfigService(
+        configStub({
+          'app.llm.variant': 'F',
+          'app.azureFoundry.pools': {
+            [Pool.Interactive]: [endpoint],
+            [Pool.Analysis]: [endpoint],
+          },
+        })
+      );
+      expect(service.poolsInUse()).toEqual(new Set([Pool.Interactive, Pool.Analysis]));
     });
   });
 
@@ -58,19 +116,33 @@ describe('ModelConfigService', () => {
       );
     });
 
-    it('throws when variant D has no Azure Foundry endpoints configured', () => {
+    it('throws when variant D has no endpoints for the pool it uses', () => {
       // Missing entirely...
-      expect(
-        () => new ModelConfigService(configStub({ 'app.llm.variant': 'D' }))
-      ).toThrow(/uses Azure Foundry but no endpoints are configured/);
+      expect(() => new ModelConfigService(configStub({ 'app.llm.variant': 'D' }))).toThrow(
+        /pool 'analysis' but no endpoints are configured/
+      );
 
       // ...and present-but-empty (all indexed pairs absent → []).
       expect(
         () =>
           new ModelConfigService(
-            configStub({ 'app.llm.variant': 'D', 'app.azureFoundry.endpoints': [] })
+            configStub({ 'app.llm.variant': 'D', 'app.azureFoundry.pools': { analysis: [] } })
           )
-      ).toThrow(/uses Azure Foundry but no endpoints are configured/);
+      ).toThrow(/AZURE_FOUNDRY_ANALYSIS_API_KEY_1/);
+    });
+
+    it('throws when a MULTI-pool variant configures only one of its pools', () => {
+      // The failure mode per-pool validation exists for: "some Foundry endpoint
+      // is configured" was true here, yet the cleaning stage had no key at all.
+      expect(
+        () =>
+          new ModelConfigService(
+            configStub({
+              'app.llm.variant': 'F',
+              'app.azureFoundry.pools': { [Pool.Analysis]: [endpoint] },
+            })
+          )
+      ).toThrow(/pool 'interactive' but no endpoints are configured/);
     });
 
     it('throws when variant B lacks the OpenRouter API key', () => {

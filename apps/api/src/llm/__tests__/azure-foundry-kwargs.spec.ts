@@ -1,3 +1,4 @@
+import { Pool } from '../llm-pools';
 import { azureFoundryKwargs } from '../llm.service';
 import type { ModelTarget } from '../llm.service';
 import type { ThinkMode } from '../llm.service';
@@ -11,7 +12,9 @@ import type { ThinkMode } from '../llm.service';
  * per the TODO in azureFoundryKwargs), so a green test here is not endpoint proof.
  */
 function target(thinkMode?: ThinkMode): Extract<ModelTarget, { provider: 'azure-foundry' }> {
-  return { provider: 'azure-foundry', model: 'DeepSeek-V4-Flash', thinkMode };
+  // The pool is irrelevant to the wire format — reasoning params are a property of
+  // the model, not of which credential serves it.
+  return { provider: 'azure-foundry', model: 'DeepSeek-V4-Flash', pool: Pool.Analysis, thinkMode };
 }
 
 describe('azureFoundryKwargs', () => {

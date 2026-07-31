@@ -8,7 +8,9 @@ import { AssemblyAI, SpeechModel } from 'assemblyai';
 import { backOff } from 'exponential-backoff';
 import { z } from 'zod';
 import { MetricsService } from '../common/metrics';
+import type { FoundryEndpoint } from '../config/app.config';
 import { LlmEndpointResolver } from './llm-endpoint.resolver';
+import type { Pool } from './llm-pools';
 import { LlmRateLimiterService } from './llm-rate-limiter.service';
 import { LlmTraceContext, traceLlmCall } from './llm-trace.util';
 import { MEDICAL_KEYTERMS, TRANSCRIPTION_TIMEOUT_MS } from './medical-keyterms';
@@ -52,6 +54,13 @@ export type ModelTarget =
       provider: 'azure-foundry';
       /** Foundry deployment name (used as the OpenAI `model` field). */
       model: string;
+      /**
+       * Which credential/quota pool serves this target. Required, not optional:
+       * a Foundry target that doesn't name its pool is meaningless, and making
+       * the compiler demand one means no variant can silently inherit a default.
+       * Independent of `model` — see llm-pools.ts.
+       */
+      pool: Pool;
       /** Reasoning effort for hybrid models (DeepSeek V4). */
       thinkMode?: ThinkMode;
       structuredMethod?: StructuredMethod;
@@ -61,9 +70,12 @@ export type LLMOptions = ModelTarget & {
   temperature?: number;
   maxTokens?: number;
   /**
-   * Stable key (the conversationId) used to shard the call across API keys/
-   * endpoints. All calls sharing a routingKey deterministically hit the same key
-   * and its rate limiter. Omitted → endpoint 0. See LlmEndpointResolver.
+   * Stable key (the conversationId) used to shard the call across the API keys of
+   * the pool THIS TARGET resolves to. Calls sharing a routingKey deterministically
+   * hit the same key and its rate limiter *within a pool* — two targets in
+   * different pools shard independently and will land on different endpoints, by
+   * design (see llm-pools.ts). Omitted → index 0 of that pool.
+   * See LlmEndpointResolver.
    */
   routingKey?: string;
   /** Dev-only: optional correlation (stage/conversationId) attached to LLM_TRACE output. */
@@ -102,6 +114,24 @@ function reasoningHeadroom(thinkMode?: ThinkMode): number {
       return 8000;
     case 'max':
       return 16000;
+    // `low` is listed explicitly, and returns 0 DELIBERATELY — it is not the
+    // `off`/undefined case falling through. Reasoning-mandatory models (gpt-oss-120b,
+    // variant E) cannot run below `low`, so they always spend some answer budget on
+    // thinking. We add nothing back because `low` was measured at ~200-300 completion
+    // tokens on generate_followup and `low` was chosen precisely to fit inside the
+    // stages' existing budgets (see the gptOss helper in model-variants.ts).
+    //
+    // Caveat on that evidence: it is ONE measurement on ONE prompt, generalised to
+    // nine stages — and the tightest budget is classify's 800, not the 1000 measured,
+    // while reflect/refine size theirs off transcript length. There is currently no
+    // `finish_reason === 'length'` check anywhere in this service, so a truncation
+    // would surface only as a node degrading (e.g. classify → confidence 0), not as
+    // an error. Add that detection before tuning this number: raising the cap is
+    // nearly free (providers bill actual usage, not the reservation), so the reason
+    // to hold at 0 is the absence of evidence, not cost.
+    case 'low':
+      return 0;
+    case 'off':
     default:
       return 0;
   }
@@ -149,9 +179,9 @@ export class LLMService {
     private readonly configService: ConfigService,
     private readonly metricsService: MetricsService,
     private readonly rateLimiter: LlmRateLimiterService,
-    // Owns the routingKey → endpoint index mapping AND the per-key Foundry
-    // credentials. Both the limiter bucket and the credentials are selected by the
-    // same index (computed once per call), so they can never disagree.
+    // Owns the (pool, routingKey) → bucket mapping AND the per-key Foundry
+    // credentials. It returns both as one value, so the limiter bucket and the
+    // credentials that call can never disagree.
     private readonly endpointResolver: LlmEndpointResolver
   ) {
     const openaiApiKey = this.configService.get<string>('app.openai.apiKey');
@@ -194,10 +224,12 @@ export class LLMService {
     const { temperature = 0.1, maxTokens = 2000, traceContext, routingKey, ...target } = options;
     const modelLabel = target.model;
 
-    // Compute the endpoint index ONCE and use it for BOTH the credentials
-    // (createChatModel) and the rate-limiter bucket (schedule) — this single
-    // shared value is what guarantees the key that gates a call also sends it.
-    const endpointIndex = this.endpointResolver.indexFor(routingKey ?? '');
+    // Resolve the bucket ONCE. Credentials and limiter-bucket identity come back
+    // as a SINGLE value, so the key that gates a call is structurally the key
+    // that sends it — they cannot be paired wrongly because there is no pairing
+    // step. (With multiple pools each having an endpoint 0, looking the two up
+    // separately would be a live hazard, not a theoretical one.)
+    const bucket = this.endpointResolver.resolveBucket(target, routingKey ?? '');
 
     this.logger.debug(
       `invokeStructured [${target.provider}:${modelLabel}] messages:\n${messages.map((m) => `[${m.type}] ${m.content}`).join('\n')}`
@@ -210,7 +242,7 @@ export class LLMService {
     try {
       const result = await backOff(
         async () => {
-          const chatModel = this.createChatModel(target, temperature, maxTokens, endpointIndex);
+          const chatModel = this.createChatModel(target, temperature, maxTokens, bucket.endpoint);
 
           // Cast to `any` to avoid TS2589 (excessive type depth) from LangChain's
           // heavily overloaded withStructuredOutput generics. Caller-side type
@@ -234,9 +266,13 @@ export class LLMService {
           // Measuring end-to-end (before schedule) would let minTime pacing +
           // queue wait dominate the "provider latency" metric under concurrency.
           const scheduledAt = Date.now();
-          const data = (await this.rateLimiter.schedule(endpointIndex, async () => {
+          const data = (await this.rateLimiter.schedule(bucket.bucketKey, async () => {
             const callStart = Date.now();
-            this.metricsService.recordLLMWait('invokeStructured', callStart - scheduledAt);
+            this.metricsService.recordLLMWait(
+              'invokeStructured',
+              bucket.pool,
+              callStart - scheduledAt
+            );
             try {
               return await structuredModel.invoke(messages);
             } finally {
@@ -262,9 +298,10 @@ export class LLMService {
             // keep us under the provider's cap. Record it distinctly from generic
             // retries so it can be alerted on directly (see recordLLMRateLimited).
             if (this.isRateLimitError(error)) {
-              this.metricsService.recordLLMRateLimited('invokeStructured');
+              this.metricsService.recordLLMRateLimited('invokeStructured', bucket.pool);
               this.logger.warn(
-                `LLM provider rate limit (429) — limiter did not prevent it${detail}`,
+                `LLM provider rate limit (429) on bucket ${bucket.bucketKey} — limiter did ` +
+                  `not prevent it${detail}`,
                 error
               );
             }
@@ -272,7 +309,10 @@ export class LLMService {
             const retryable = this.isRetryableApiError(error);
             if (retryable) {
               this.metricsService.recordLLMRetry('invokeStructured');
-              this.logger.warn(`Retryable OpenAI error, retrying...${detail}`, error);
+              this.logger.warn(
+                `Retryable [${target.provider}:${modelLabel}] error, retrying...${detail}`,
+                error
+              );
             } else {
               // Non-retryable (4xx) used to return false with no log at all, so a
               // rejected parameter or schema was invisible outside Sentry. This is
@@ -331,6 +371,10 @@ export class LLMService {
           operation: 'invokeStructured',
           provider: target.provider,
           model: modelLabel,
+          // Which quota pool (and key) the failure came from — pools have
+          // different caps, so "we're 429ing" isn't actionable without it.
+          pool: bucket.pool,
+          bucket: bucket.bucketKey,
           // Distinguishes a quota breach (retries exhausted on 429s) from other
           // failures, so "limiter insufficient" can be alerted on directly.
           rateLimited: this.isRateLimitError(error),
@@ -363,7 +407,7 @@ export class LLMService {
     target: ModelTarget,
     temperature: number,
     maxTokens: number,
-    endpointIndex: number
+    endpoint: FoundryEndpoint | undefined
   ): BaseChatModel {
     switch (target.provider) {
       case 'openai':
@@ -395,11 +439,17 @@ export class LLMService {
         });
       }
       case 'azure-foundry': {
-        // Pick the endpoint the resolver routed this call to. `endpointIndex` is
-        // the SAME value that selected the rate-limiter bucket in invokeStructured,
-        // so this key's credentials are always paced by this key's limiter.
-        const endpoint = this.endpointResolver.endpoints[endpointIndex];
-        if (!endpoint) throw new Error('Missing config: app.azureFoundry.endpoints');
+        // The endpoint arrives from the SAME resolved bucket that selected the
+        // rate-limiter slot in invokeStructured — there is no second lookup here
+        // to get wrong, so this key's credentials are always paced by this key's
+        // limiter. Unreachable in practice: ModelConfigService fails startup if a
+        // pool the active variant uses has no endpoints.
+        if (!endpoint) {
+          throw new Error(
+            `Missing Azure Foundry credentials for pool '${target.pool}' ` +
+              `(app.azureFoundry.pools.${target.pool}).`
+          );
+        }
         // Azure AI Foundry serves DeepSeek through its OpenAI-compatible `/openai/v1`
         // surface, so — like OpenRouter — we reuse ChatOpenAI and just repoint the
         // base URL. The API key rides as a Bearer token, which ChatOpenAI does for us.
@@ -427,10 +477,9 @@ export class LLMService {
    * effort `high` and `xhigh` (xhigh = max reasoning); `off` disables thinking.
    * `provider.order` pins the upstream inference provider (e.g. digitalocean).
    */
-  private openrouterKwargs(target: Extract<ModelTarget, { provider: 'openrouter' }>): Record<
-    string,
-    unknown
-  > {
+  private openrouterKwargs(
+    target: Extract<ModelTarget, { provider: 'openrouter' }>
+  ): Record<string, unknown> {
     const kwargs: Record<string, unknown> = {};
 
     if (target.thinkMode === 'off') {
@@ -480,14 +529,33 @@ export class LLMService {
           // (only LeMUR does). So a stalled submit POST or a single poll GET is
           // bounded only by undici's per-request default (~300s, version-dependent),
           // not the intended 120s — and TranscriptionStage has no outer timeout, so
-          // the message stays "processing" that whole time (and the outbox may
-          // re-claim it after the 30s stale-lock reset → duplicate submits).
+          // the message stays "processing" for that whole window.
+          //
+          // NB this comment previously claimed the outbox would then re-claim the
+          // entry "after the 30s stale-lock reset → duplicate submits". That is
+          // WRONG and the conclusion does not survive re-deriving: the lock is
+          // `DEFAULT_LOCK_DURATION_MS` (outbox.service.ts), currently TEN MINUTES,
+          // and resetStaleLocks only frees entries whose `lockedUntil` has passed —
+          // there is no separate 30s timer. A single ~300s stall therefore cannot
+          // trigger a re-claim. Nor does retrying get us there: a Node fetch timeout
+          // surfaces as `TypeError: fetch failed` (the real cause is on `.cause`),
+          // which matches neither the "timed out" guard below nor isRetryableApiError,
+          // so it fails on the first attempt. Cite the constant by NAME if you touch
+          // this — restating the value is what let it drift by 20x unnoticed.
+          //
+          // So the remaining cost is latency and a message stuck "processing" for up
+          // to ~300s, NOT duplicate submits. That lowers the priority but not the fix.
           // FIX: restore a wall-clock cap alongside pollingTimeout — wrap this call
           // in `Promise.race([transcribe(...), timeoutPromise(TRANSCRIPTION_TIMEOUT_MS)])`
           // with `clearTimeout` in a `finally` (keep pollingTimeout so the abandoned
           // poll loop still self-terminates). AbortSignal isn't an option until the
           // SDK plumbs one through the transcribe path. Add a fake-timer test that a
           // never-settling transcribe rejects at the cap.
+          //
+          // Separate gap found while re-deriving the above: because the classifiers
+          // only inspect `error.message`, a `TypeError: fetch failed` from ANY
+          // transient network fault is treated as non-retryable. Inspecting
+          // `error.cause?.code` (UND_ERR_*) would fix that — worth its own ticket.
           let transcript;
           try {
             transcript = await this.assemblyai.transcripts.transcribe(
@@ -608,6 +676,11 @@ export class LLMService {
    * or a Sentry field — an error shape we didn't anticipate must not become a
    * second error inside the handler for the first one. Truncated to 500 chars
    * because some providers echo the entire request body back.
+   *
+   * Output is operator-facing only: nothing here feeds control flow. Retry and
+   * 429 classification read `error.status`/`statusCode` directly (see
+   * isRateLimitError), and the original error is rethrown unmodified, so this
+   * string can never contaminate a later match.
    */
   private providerErrorDetail(error: unknown): string {
     try {
@@ -619,8 +692,20 @@ export class LLMService {
       const meta = body?.metadata ?? e?.metadata;
       const parts: string[] = [];
 
-      const status = e?.status ?? e?.statusCode ?? body?.code;
+      // `body.code` means different things per provider, so it is split by TYPE
+      // rather than assumed: OpenRouter's error envelope carries a NUMBER equal to
+      // the HTTP status, while OpenAI carries a string slug ('context_length_exceeded').
+      // Both are worth keeping — the slug is often more actionable than the status —
+      // but only the number belongs under `status=`. Emitting a slug there defeats
+      // log alerting that greps for `status=429`, and this fallback fires exactly
+      // when LangChain has swallowed the real status, i.e. when the line matters most.
+      // The typeof guards also drop OpenAI's frequent `code: null` (which `??` would
+      // otherwise pass through as the literal `status=null`).
+      const bodyCode = body?.code;
+      const status =
+        e?.status ?? e?.statusCode ?? (typeof bodyCode === 'number' ? bodyCode : undefined);
       if (status !== undefined) parts.push(`status=${status}`);
+      if (typeof bodyCode === 'string' && bodyCode) parts.push(`code=${bodyCode}`);
       if (meta?.provider_name) parts.push(`upstream=${meta.provider_name}`);
 
       const raw = meta?.raw ?? meta?.reasons ?? body?.message;

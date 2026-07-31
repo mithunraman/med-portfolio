@@ -49,22 +49,56 @@ returns the target and call sites never name a provider. Flipping the env var sw
 stage's model with zero call-site edits. The tables in §3/§4/§6 below describe **Variant A**
 (the OpenAI baseline).
 
-| Variant | Provider / route | Model | Structured output |
-|---|---|---|---|
-| **A** *(default)* | OpenAI direct | Per-stage GPT mix (see §6) | function calling |
-| **B** | DeepSeek via OpenRouter (Atlas Cloud) | DeepSeek V4 Flash | `json_schema` |
-| **C** | DeepSeek via OpenRouter (Atlas Cloud) | DeepSeek V4 Pro | `json_schema` |
-| **D** | DeepSeek via **Azure AI Foundry** (OpenAI-compatible `/openai/v1`) | DeepSeek V4 Flash | `json_schema` |
+| Variant | Provider / route | Model | Quota pool | Structured output |
+|---|---|---|---|---|
+| **A** *(default)* | OpenAI direct | Per-stage GPT mix (see §6) | `openai` | function calling |
+| **B** | DeepSeek via OpenRouter (Atlas Cloud) | DeepSeek V4 Flash | `openrouter` | `json_schema` |
+| **C** | DeepSeek via OpenRouter (Atlas Cloud) | DeepSeek V4 Pro | `openrouter` | `json_schema` |
+| **D** | DeepSeek via **Azure AI Foundry** (OpenAI-compatible `/openai/v1`) | DeepSeek V4 Flash | `analysis` | `json_schema` |
+| **E** | gpt-oss-120b via OpenRouter (DeepInfra, bf16) | gpt-oss-120b | `openrouter` | `json_schema` |
+| **F** | **Split** — both on Azure AI Foundry | `gpt-5.4-nano` (cleaning) + DeepSeek V4 Flash (graph) | `interactive` + `analysis` | function calling / `json_schema` |
 
-Variants B–D route **every** stage to the same DeepSeek model (thinking disabled). They use
-`json_schema` rather than function calling because DeepSeek's native tool-call format isn't
-normalized into OpenAI `tool_calls`. Non-OpenAI providers require their credentials
-(`OPENROUTER_API_KEY`, or `AZURE_FOUNDRY_API_KEY` + `AZURE_FOUNDRY_BASE_URL`), enforced at
-startup by `ModelConfigService`. Reasoning control differs per provider (owned by
+Variants B–E route **every** stage to the same model. They use `json_schema` rather than
+function calling because DeepSeek's native tool-call format isn't normalized into OpenAI
+`tool_calls`. **Variant F is the first non-uniform profile** — the per-stage table was built for
+exactly this: cleaning runs on GPT-5.4-nano (which normalizes `tool_calls` properly, so it uses
+native function calling) while the eight graph stages stay on DeepSeek.
+
+Non-OpenAI providers require their credentials (`OPENROUTER_API_KEY`, or the pool-scoped
+`AZURE_FOUNDRY_<POOL>_API_KEY_<i>` / `_BASE_URL_<i>`), enforced **per pool** at startup by
+`ModelConfigService`. Reasoning control differs per provider (owned by
 `LLMService.azureFoundryKwargs` / `openrouterKwargs`): on Foundry, DeepSeek V4 Flash runs
 non-thinking by default and **rejects** DeepSeek's native `thinking` / `enable_thinking` params
 (both 400), so `off` sends **no** reasoning param (`high`/`max` use the standard OpenAI
 `reasoning_effort`); OpenRouter instead uses its normalized `reasoning` map.
+
+### Quota pools
+
+A **pool** ([`llm/llm-pools.ts`](../../apps/api/src/llm/llm-pools.ts)) is a named set of
+interchangeable credentials sharing one quota policy. It is deliberately independent of the
+model: on Foundry an (apiKey, baseURL) pair identifies a *resource*, and one resource hosts many
+*deployments*. Rate-limiter bucket identity is therefore `(pool, indexWithinPool)` — two pools
+each have an endpoint 0, and they are different quotas.
+
+| Pool | Serves | Cap (env) | Keys |
+|---|---|---|---|
+| `interactive` | cleaning — user-paced, blocks the message appearing | `LLM_RPM_INTERACTIVE` (60) | 1 |
+| `analysis` | the eight graph stages — machine-paced ~9-call bursts | `LLM_RPM_ANALYSIS` (35) | 2+ |
+| `openai` / `openrouter` | implicit single-key pools | `LLM_MAX_REQUESTS_PER_MINUTE` (18) | 1 |
+
+Pools exist for **two independent reasons**, and both must hold before merging any two of them:
+
+1. **Quota** — each Azure resource has its own cap, and a limiter can only honour a per-key cap
+   if it is per-key.
+2. **Workload isolation** — a machine-paced analysis burst must never consume the rate-limiter
+   slots interactive work needs. This holds *even if the caps converge*, so do not collapse
+   pools on the grounds that their numbers match.
+
+Routing within a pool is `hash(conversationId) % N` — sticky across restarts. **Consequence:** a
+conversation is pinned to ONE key per pool, so its own throughput is bound by that key's cap
+regardless of `N`. At 35 rpm the derived `minTime` is ~1714 ms, so a 9-call analysis turn spends
+~15 s in pacing alone. To make a single journey faster, raise the pool's cap — adding keys
+raises aggregate concurrency across users, never one journey's speed.
 
 ---
 
@@ -269,7 +303,16 @@ Each row: purpose · model (temp / maxTokens) · schema · source.
 | 9 | refine | Graph | OpenAI `gpt-5.4` | 0 | dynamic |
 | 10 | generate_pdp | Graph | OpenAI `gpt-4.1` | 0.3 | 1000 |
 
-**All text stages are OpenAI today**, accessed via LangChain through the single
-`LLMService.invokeStructured` chokepoint; audio transcription is AssemblyAI. Swapping a
-provider for any stage is a matter of changing the `model` passed at that call site (and,
-for a non-OpenAI provider, the client wiring in `LLMService`).
+**All text stages are OpenAI under the default Variant A**, accessed via LangChain through the
+single `LLMService.invokeStructured` chokepoint; audio transcription is AssemblyAI. Swapping a
+provider for any stage is a matter of editing that stage's row in `VARIANTS` — all nine call
+sites already spread `modelConfig.resolve(Stage.X)`, so no call site changes.
+
+Under **Variant F** the same table becomes:
+
+| # | Stage | Pipeline | Provider / Model | Pool |
+|--:|---|---|---|---|
+| 1 | Cleaning | Processing | Foundry `gpt-5.4-nano` | `interactive` |
+| 3–10 | classify … generate_pdp | Graph | Foundry DeepSeek V4 Flash | `analysis` |
+
+Redaction (§3.3) is Azure AI Language, not `LLMService`, so it is unaffected by variant or pool.

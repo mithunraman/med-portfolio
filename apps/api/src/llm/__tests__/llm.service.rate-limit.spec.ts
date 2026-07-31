@@ -74,15 +74,19 @@ describe('LLMService rate-limit wiring', () => {
       audio_duration: 1,
     });
     // Transparent limiter: run the job immediately but record that it was gated.
-    // Signature mirrors the real schedule(index, fn) — the index is ignored here.
-    scheduleSpy = jest.fn((_index: number, fn: () => Promise<unknown>) => fn());
+    // Signature mirrors the real schedule(bucketKey, fn) — the key is ignored here.
+    scheduleSpy = jest.fn((_bucketKey: string, fn: () => Promise<unknown>) => fn());
     const rateLimiter = { schedule: scheduleSpy } as unknown as LlmRateLimiterService;
-    // Single-endpoint resolver: every call routes to endpoint 0. The routing/spread
-    // logic itself is covered in llm-endpoint.resolver.spec.ts.
+    // Single-bucket resolver: every call routes to openai:0. The pool routing and
+    // spread logic itself is covered in llm-endpoint.resolver.spec.ts.
     const resolver = {
-      indexFor: jest.fn(() => 0),
-      endpoints: [{ apiKey: 'az-key', baseURL: 'https://res.services.ai.azure.com/openai/v1/' }],
-      count: () => 1,
+      resolveBucket: jest.fn(() => ({
+        bucketKey: 'openai:0',
+        pool: 'openai',
+        index: 0,
+        endpoint: { apiKey: 'az-key', baseURL: 'https://res.services.ai.azure.com/openai/v1/' },
+      })),
+      buckets: () => [{ bucketKey: 'openai:0', pool: 'openai', index: 0 }],
     } as unknown as LlmEndpointResolver;
     metrics = metricsStub();
     service = new LLMService(
@@ -111,7 +115,7 @@ describe('LLMService rate-limit wiring', () => {
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     // Limiter that delays ~50ms before running the provider call — simulates
     // queue/pacing wait. The provider call itself (mockInvoke) is ~instant.
-    scheduleSpy.mockImplementation(async (_index: number, fn: () => Promise<unknown>) => {
+    scheduleSpy.mockImplementation(async (_bucketKey: string, fn: () => Promise<unknown>) => {
       await sleep(50);
       return fn();
     });
@@ -128,9 +132,14 @@ describe('LLMService rate-limit wiring', () => {
     expect(durationCall).toBeDefined();
     expect(durationCall![2]).toBeLessThan(50);
 
-    // ...and the wait is captured separately as its own signal.
-    expect(metrics.recordLLMWait).toHaveBeenCalledWith('invokeStructured', expect.any(Number));
-    expect(metrics.recordLLMWait.mock.calls[0][1]).toBeGreaterThanOrEqual(40);
+    // ...and the wait is captured separately as its own signal, attributed to the
+    // pool whose limiter did the waiting.
+    expect(metrics.recordLLMWait).toHaveBeenCalledWith(
+      'invokeStructured',
+      'openai',
+      expect.any(Number)
+    );
+    expect(metrics.recordLLMWait.mock.calls[0][2]).toBeGreaterThanOrEqual(40);
   });
 
   it('builds the chat model with maxRetries: 0 so the limiter is the only retry layer', async () => {
@@ -142,6 +151,25 @@ describe('LLMService rate-limit wiring', () => {
     // Guards against LangChain's AsyncCaller (default 6 retries, 429 included)
     // firing extra provider requests inside a single rate-limiter slot.
     expect(ChatOpenAI).toHaveBeenCalledWith(expect.objectContaining({ maxRetries: 0 }));
+  });
+
+  it('sends a Foundry call with the credentials of the bucket that paced it', async () => {
+    await service.invokeStructured([], z.object({ ok: z.boolean() }), {
+      provider: 'azure-foundry',
+      model: 'DeepSeek-V4-Flash',
+      pool: 'analysis',
+    });
+
+    // The invariant at the transport boundary: the bucket handed to the limiter
+    // and the credentials handed to the client come from ONE resolved value, so
+    // a call can never be paced by one key and sent with another.
+    expect(scheduleSpy).toHaveBeenCalledWith('openai:0', expect.any(Function));
+    expect(ChatOpenAI).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: 'az-key',
+        configuration: { baseURL: 'https://res.services.ai.azure.com/openai/v1/' },
+      })
+    );
   });
 
   it('does NOT rate-limit audio transcription', async () => {
@@ -195,12 +223,19 @@ describe('LLMService rate-limit wiring', () => {
     await jest.advanceTimersByTimeAsync(10_000); // flush backOff retry delays
     await settled;
 
-    // Ground-truth quota signal fired…
-    expect(metrics.recordLLMRateLimited).toHaveBeenCalledWith('invokeStructured');
+    // Ground-truth quota signal fired, attributed to the pool whose cap was hit —
+    // with several pools at different caps, "we're 429ing" isn't actionable alone.
+    expect(metrics.recordLLMRateLimited).toHaveBeenCalledWith('invokeStructured', 'openai');
     // …and the hard failure is tagged as rate-limited for alerting.
     expect(Sentry.captureException).toHaveBeenCalledWith(
       err,
-      expect.objectContaining({ tags: expect.objectContaining({ rateLimited: true }) })
+      expect.objectContaining({
+        tags: expect.objectContaining({
+          rateLimited: true,
+          pool: 'openai',
+          bucket: 'openai:0',
+        }),
+      })
     );
   });
 
@@ -247,5 +282,84 @@ describe('LLMService rate-limit wiring', () => {
       err,
       expect.objectContaining({ tags: expect.objectContaining({ rateLimited: false }) })
     );
+  });
+
+  /**
+   * `providerErrorDetail` is private, so these drive it through the public failure
+   * path and assert on the Sentry `extra.providerDetail` it produces.
+   *
+   * What is being pinned: `body.code` means different things per provider, so the
+   * decoder splits it by TYPE. Getting this wrong is not a behaviour bug (nothing
+   * here feeds retry/429 classification) but it does break log alerting — and the
+   * fallback only fires when LangChain has swallowed the real status, i.e. exactly
+   * when the log line is the only evidence left.
+   */
+  describe('providerErrorDetail — status vs code', () => {
+    /** Fail once with `err`, then return the decoded providerDetail string. */
+    async function detailFor(err: unknown): Promise<string> {
+      mockInvoke.mockReset().mockRejectedValue(err);
+      await service
+        .invokeStructured([], z.object({ ok: z.boolean() }), {
+          provider: 'openai',
+          model: 'gpt-test',
+        })
+        .catch(() => undefined);
+
+      const call = (Sentry.captureException as jest.Mock).mock.calls.at(-1);
+      return (call?.[1] as { extra: { providerDetail: string } }).extra.providerDetail;
+    }
+
+    it('reads a NUMERIC body code as the status (OpenRouter envelope)', async () => {
+      // OpenRouter reports `{ error: { code: 429 } }` with no top-level status.
+      // That number IS the HTTP status, so it must land under `status=` — a log
+      // alert grepping `status=429` has to match here.
+      const detail = await detailFor(
+        Object.assign(new Error('wrapped'), { error: { code: 429, message: 'slow down' } })
+      );
+
+      expect(detail).toContain('status=429');
+      expect(detail).not.toContain('code=429');
+    });
+
+    it('reads a STRING body code under its own label, never as a status', async () => {
+      // OpenAI reports a slug. It is often more actionable than the status, so it
+      // is kept — but under `code=`, because `status=context_length_exceeded`
+      // would silently defeat any status-based log matching.
+      const detail = await detailFor(
+        Object.assign(new Error('wrapped'), {
+          error: { code: 'context_length_exceeded', message: 'too long' },
+        })
+      );
+
+      expect(detail).toContain('code=context_length_exceeded');
+      expect(detail).not.toContain('status=context_length_exceeded');
+      expect(detail).not.toContain('status=');
+    });
+
+    it('emits neither field for a null body code (OpenAI’s common shape)', async () => {
+      // `??` only skips null on its LEFT, so an unguarded fallback would pass
+      // `null` through and print the literal `status=null`.
+      const detail = await detailFor(
+        Object.assign(new Error('wrapped'), { error: { code: null, message: 'boom' } })
+      );
+
+      expect(detail).not.toContain('status=');
+      expect(detail).not.toContain('code=');
+      expect(detail).toContain('raw=boom'); // the useful part still survives
+    });
+
+    it('prefers a real top-level status over the body code', async () => {
+      const detail = await detailFor(
+        Object.assign(new Error('bad request'), {
+          status: 400,
+          error: { code: 'unsupported_parameter', message: "Unsupported parameter: 'temperature'" },
+        })
+      );
+
+      // Both are kept, each under the right label — the status for matching, the
+      // slug for diagnosis.
+      expect(detail).toContain('status=400');
+      expect(detail).toContain('code=unsupported_parameter');
+    });
   });
 });

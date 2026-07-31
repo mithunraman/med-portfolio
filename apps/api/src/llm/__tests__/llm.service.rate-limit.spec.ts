@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { MetricsService } from '../../common/metrics';
 import type { LlmEndpointResolver } from '../llm-endpoint.resolver';
 import type { LlmRateLimiterService } from '../llm-rate-limiter.service';
+import { Pool } from '../llm-pools';
 import { LLMService } from '../llm.service';
 import { TRANSCRIPTION_TIMEOUT_MS } from '../medical-keyterms';
 
@@ -32,8 +33,10 @@ jest.mock('assemblyai', () => ({
 }));
 
 function configStub(): ConfigService {
+  // No LLM API key here: chat credentials arrive per-call from the resolved
+  // bucket, never from config read by LLMService. AssemblyAI is the exception —
+  // separate quota, not routed through the limiter.
   const values: Record<string, unknown> = {
-    'app.openai.apiKey': 'sk-test',
     'app.assemblyai.apiKey': 'aai-test',
     'app.assemblyai.baseUrl': 'https://api.eu.assemblyai.com',
   };
@@ -104,6 +107,7 @@ describe('LLMService rate-limit wiring', () => {
   it('routes structured LLM calls through the rate limiter', async () => {
     const result = await service.invokeStructured([], z.object({ ok: z.boolean() }), {
       provider: 'openai',
+      pool: Pool.OpenAI,
       model: 'gpt-test',
     });
 
@@ -122,6 +126,7 @@ describe('LLMService rate-limit wiring', () => {
 
     await service.invokeStructured([], z.object({ ok: z.boolean() }), {
       provider: 'openai',
+      pool: Pool.OpenAI,
       model: 'gpt-test',
     });
 
@@ -145,6 +150,7 @@ describe('LLMService rate-limit wiring', () => {
   it('builds the chat model with maxRetries: 0 so the limiter is the only retry layer', async () => {
     await service.invokeStructured([], z.object({ ok: z.boolean() }), {
       provider: 'openai',
+      pool: Pool.OpenAI,
       model: 'gpt-test',
     });
 
@@ -217,6 +223,7 @@ describe('LLMService rate-limit wiring', () => {
     const settled = expect(
       service.invokeStructured([], z.object({ ok: z.boolean() }), {
         provider: 'openai',
+        pool: Pool.OpenAI,
         model: 'gpt-test',
       })
     ).rejects.toThrow('Rate limit exceeded');
@@ -249,6 +256,7 @@ describe('LLMService rate-limit wiring', () => {
     await expect(
       service.invokeStructured([], z.object({ ok: z.boolean() }), {
         provider: 'openai',
+        pool: Pool.OpenAI,
         model: 'gpt-test',
       })
     ).rejects.toThrow('8429');
@@ -271,6 +279,7 @@ describe('LLMService rate-limit wiring', () => {
     const settled = expect(
       service.invokeStructured([], z.object({ ok: z.boolean() }), {
         provider: 'openai',
+        pool: Pool.OpenAI,
         model: 'gpt-test',
       })
     ).rejects.toThrow('Internal server error');
@@ -301,6 +310,7 @@ describe('LLMService rate-limit wiring', () => {
       await service
         .invokeStructured([], z.object({ ok: z.boolean() }), {
           provider: 'openai',
+          pool: Pool.OpenAI,
           model: 'gpt-test',
         })
         .catch(() => undefined);

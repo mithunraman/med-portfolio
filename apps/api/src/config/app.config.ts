@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
-import { ALL_POOLS, Pool } from '../llm/llm-pools';
+import { ALL_POOLS, POOL_SPECS, Pool } from '../llm/llm-pools';
 import { MAX_OTP_WINDOW_MINUTES } from '../otp/otp.constants';
 
 export const NodeEnv = {
@@ -64,38 +64,44 @@ export const envSchema = z.object({
     .string({ required_error: 'S3_BUCKET_MEDIA is required' })
     .min(1, 'S3_BUCKET_MEDIA cannot be empty'),
 
-  // OpenAI
-  OPENAI_API_KEY: z
-    .string({ required_error: 'OPENAI_API_KEY is required' })
-    .min(1, 'OPENAI_API_KEY cannot be empty'),
-
   // LLM A/B/C/D/E/F variant selector. Selects a complete stage→model profile from
   // VARIANTS (see llm/model-variants.ts).
   LLM_VARIANT: z.enum(['A', 'B', 'C', 'D', 'E', 'F']).default('A'),
 
-  // DEFAULT per-KEY LLM request rate limit, used by any pool that doesn't set its
-  // own (i.e. the implicit single-key `openai` / `openrouter` pools — see
-  // llm/llm-pools.ts). Azure Foundry pools set theirs via LLM_RPM_<POOL> below.
+  // Per-POOL rate limits, one per member of the Pool enum. Unlike endpoint
+  // cardinality (variable, hence parsed by pattern below), the POOL SET is closed
+  // — it's a code constant — so these are static, fully-validated schema fields
+  // and `byPool` in appConfig is exhaustive.
   //
-  // Caps outbound structured LLM calls per API key to protect each key's provider
-  // quota. Each key gets its own limiter at its pool's rate, so a pool's aggregate
-  // CAPACITY CEILING is its rate × its key count — a ceiling, not a guaranteed
-  // rate: utilization depends on how conversations hash across keys. A single
-  // conversation is sharded to ONE key (sticky routing), so its own throughput is
-  // bound by the per-key value regardless of key count. Overflow queues in-process
-  // and drains as the window refreshes — see LlmRateLimiterService.
-  // Transcription (AssemblyAI) is a separate quota and is NOT gated by this.
+  // Each DOES have a default (below), so omitting one is legal and boots at that
+  // value. Two things this does NOT mean:
+  //  - It is not the same as the limiter's removed fallback for a pool with no
+  //    `byPool` entry. LlmRateLimiterService now throws there instead. That
+  //    guards CODE/CONFIG DRIFT, not operator input — `satisfies Record<Pool,
+  //    RateLimitPolicy>` makes an entry mandatory, so it is unreachable through
+  //    real config. Do not read it as validation of these env vars.
+  //  - A default is only consulted for a pool actually IN USE. An unused pool
+  //    gets no bucket and therefore no limiter, so its cap is never read.
   //
-  // Default 18 = 10% headroom under a strict 20 req/min. Smoothing
-  // (minTime = 60000 / rpm) is DERIVED from the cap — see appConfig — so the
-  // budget is paced evenly rather than bursted; there is no separate min-time env
-  // var to drift out of sync.
-  LLM_MAX_REQUESTS_PER_MINUTE: rpmSchema('18'),
+  // NB the defaults are not equally conservative: 18 is a genuine floor (10%
+  // under a strict 20 rpm, the lowest common tier) while 60/35 are OUR
+  // provisioned Azure numbers. If you provision differently and forget the var,
+  // 60/35 will silently be wrong for you.
+  //
+  // Each caps outbound structured LLM calls per API KEY, to protect that key's
+  // provider quota. Each key gets its own limiter at its pool's rate, so a pool's
+  // aggregate CAPACITY CEILING is its rate × its key count — a ceiling, not a
+  // guaranteed rate: utilization depends on how conversations hash across keys. A
+  // single conversation is sharded to ONE key (sticky routing), so its own
+  // throughput is bound by the per-key value regardless of key count. Overflow
+  // queues in-process and drains as the window refreshes — see
+  // LlmRateLimiterService. Transcription (AssemblyAI) is a separate quota and is
+  // NOT gated by any of these.
+  //
+  // Smoothing (minTime = 60000 / rpm) is DERIVED from the cap — see
+  // rateLimitPolicy — so the budget is paced evenly rather than bursted, and
+  // there is no separate min-time env var to drift out of sync.
 
-  // Per-POOL rate limits. Unlike endpoint cardinality (variable, hence parsed by
-  // pattern below), the POOL SET is closed — it's a code constant — so these are
-  // static, fully-validated schema fields.
-  //
   // Interactive serves the cleaning stage: user-paced and latency-critical, since
   // it sits between the user sending a message and seeing it.
   LLM_RPM_INTERACTIVE: rpmSchema('60'),
@@ -104,19 +110,24 @@ export const envSchema = z.object({
   // conversation is pinned to one key, so a 9-call turn spends ~15s in pacing
   // alone. The lever for that is a higher cap, NOT more keys.
   LLM_RPM_ANALYSIS: rpmSchema('35'),
+  // The two account-scoped provider pools. 18 = 10% headroom under a strict
+  // 20 req/min, the historical default for these.
+  LLM_RPM_OPENAI: rpmSchema('18'),
+  LLM_RPM_OPENROUTER: rpmSchema('18'),
 
-  // OpenRouter — required only when the active variant routes any stage to it
-  // (ModelConfigService enforces this at startup).
-  OPENROUTER_API_KEY: z.string().optional(),
-
-  // Azure AI Foundry — one or more (key, base URL) endpoints PER POOL, each
-  // carrying its own RPM quota. Supplied as pool-scoped indexed pairs
-  // AZURE_FOUNDRY_<POOL>_API_KEY_<i> / AZURE_FOUNDRY_<POOL>_BASE_URL_<i>
-  // (i = 1..8, POOL = INTERACTIVE | ANALYSIS) and parsed by parseFoundryPools()
-  // below: they are variable-cardinality, so they can't be static schema fields.
-  // Only the pools the active variant actually uses are required, and that is
-  // enforced at startup by ModelConfigService. Base URL is the OpenAI-compatible
-  // surface, e.g. https://<resource>.services.ai.azure.com/openai/v1/
+  // LLM credentials — one or more (key, base URL) endpoints PER POOL, each
+  // carrying its own quota. Supplied as pool-scoped indexed pairs
+  // <PREFIX>_API_KEY_<i> / <PREFIX>_BASE_URL_<i> (i = 1..8), where <PREFIX> comes
+  // from POOL_SPECS in llm/llm-pools.ts:
+  //
+  //   AZURE_FOUNDRY_INTERACTIVE_*  AZURE_FOUNDRY_ANALYSIS_*  OPENAI_*  OPENROUTER_*
+  //
+  // These are variable-cardinality, so they can't be static schema fields — they
+  // are parsed by parseLlmPools() below. Only the pools the active variant
+  // actually uses are required, and that is enforced at startup by
+  // ModelConfigService. Base URL is the OpenAI-compatible surface, e.g.
+  // https://<resource>.services.ai.azure.com/openai/v1/ for Foundry or
+  // https://api.openai.com/v1 for OpenAI.
 
   // Azure AI Language — PII/PHI redaction. Authenticated with a Microsoft Entra
   // service principal (no static key), so `disableLocalAuth` can be enforced on
@@ -243,14 +254,20 @@ function getEnv(): EnvConfig {
   return cachedEnv;
 }
 
-/** One Azure Foundry endpoint: an API key paired with its OpenAI-compatible base URL. */
-export interface FoundryEndpoint {
+/**
+ * One LLM endpoint: an API key paired with its OpenAI-compatible base URL.
+ *
+ * Deliberately provider-agnostic — every provider we call is OpenAI-wire
+ * compatible, so this pair is the complete credential for all of them. There is
+ * no second credential shape anywhere in the LLM layer.
+ */
+export interface LlmEndpoint {
   apiKey: string;
   baseURL: string;
 }
 
-/** Azure Foundry endpoints grouped by the quota pool they belong to. */
-export type FoundryPools = Record<Pool, FoundryEndpoint[]>;
+/** Every pool's endpoints. Pools the active variant doesn't use may be empty. */
+export type LlmPools = Record<Pool, LlmEndpoint[]>;
 
 /** A resolved rate-limit policy: the cap, plus the pacing derived from it. */
 export interface RateLimitPolicy {
@@ -258,12 +275,9 @@ export interface RateLimitPolicy {
   minTimeMs: number;
 }
 
-const MAX_FOUNDRY_ENDPOINTS = 8;
-const foundryBaseUrlSchema = z.string().url();
+const MAX_ENDPOINTS_PER_POOL = 8;
+const baseUrlSchema = z.string().url();
 const configLogger = new Logger('AppConfig');
-
-/** Env var prefix for a pool's indexed endpoint pairs, e.g. AZURE_FOUNDRY_ANALYSIS. */
-const envPrefixFor = (pool: Pool) => `AZURE_FOUNDRY_${pool.toUpperCase()}`;
 
 /**
  * Derive a rate-limit policy from a cap. `minTime` is DERIVED, never its own env
@@ -276,60 +290,86 @@ export const rateLimitPolicy = (rpm: number): RateLimitPolicy => ({
 });
 
 /**
- * Parse one pool's indexed Azure Foundry endpoint pairs
- * (AZURE_FOUNDRY_<POOL>_API_KEY_<i> / AZURE_FOUNDRY_<POOL>_BASE_URL_<i>) into an
- * ordered list. These are variable-cardinality (1..N keys, each its own quota), so
- * they can't be static Zod fields — this is the one place config reads process.env
- * by pattern, and each value is still validated:
+ * Parse one pool's indexed endpoint pairs (`<PREFIX>_API_KEY_<i>` /
+ * `<PREFIX>_BASE_URL_<i>`, prefix from POOL_SPECS) into an ordered list.
+ *
+ * ONE parser for every pool, provider included: the only thing that varies is
+ * the prefix and the duplicate-URL rule, both read from the pool's spec. That is
+ * the point — a provider whose credentials were parsed some other way would be a
+ * second credential plane, which is exactly what this design removes.
+ *
+ * Endpoints are variable-cardinality (1..N keys, each its own quota), so they
+ * can't be static Zod fields — this is the one place config reads process.env by
+ * pattern, and each value is still validated:
  *  - a slot with BOTH vars set → a valid endpoint,
  *  - a slot with NEITHER set → skipped,
  *  - a slot with EXACTLY ONE set → throws (half-configured; naming pool and index)
  *    so a key never routes to a missing URL, or vice versa, undetected,
- *  - two slots in the SAME pool with the same base URL → throws (see below).
- *
- * Duplicate base URL within a pool = duplicate resource = duplicate quota. All of
- * a pool's endpoints serve the SAME deployment, and an Azure resource labels its
- * access keys "Key 1"/"Key 2" — matching our _1/_2 naming — so pasting one
- * resource's two keys is an easy mistake that would spin up two limiters against a
- * single quota (→ sustained 429s). Same resource always means an identical base
- * URL, so we reject the collision at startup, naming the offending indices.
- *
- * Across POOLS the same base URL is only warned about, not rejected — see
- * warnOnSharedResources.
+ *  - the SAME api key in two slots → always throws (see below),
+ *  - two slots with the same base URL → throws ONLY where that implies a shared
+ *    quota (see PoolSpec.baseUrlImpliesSharedQuota).
  */
-export function parseFoundryEndpoints(env: NodeJS.ProcessEnv, pool: Pool): FoundryEndpoint[] {
-  const endpoints: FoundryEndpoint[] = [];
+export function parseEndpoints(env: NodeJS.ProcessEnv, pool: Pool): LlmEndpoint[] {
+  const { envPrefix: prefix, baseUrlImpliesSharedQuota } = POOL_SPECS[pool];
+  const endpoints: LlmEndpoint[] = [];
   const seenBaseUrls = new Map<string, number>(); // normalized base URL → first index
-  const prefix = envPrefixFor(pool);
+  const seenApiKeys = new Map<string, number>(); // api key → first index
 
-  for (let i = 1; i <= MAX_FOUNDRY_ENDPOINTS; i++) {
+  for (let i = 1; i <= MAX_ENDPOINTS_PER_POOL; i++) {
     const apiKey = env[`${prefix}_API_KEY_${i}`]?.trim();
     const baseUrl = env[`${prefix}_BASE_URL_${i}`]?.trim();
 
     if (!apiKey && !baseUrl) continue;
     if (!apiKey || !baseUrl) {
       throw new Error(
-        `Azure Foundry pool '${pool}' endpoint ${i} is half-configured: set BOTH ` +
+        `LLM pool '${pool}' endpoint ${i} is half-configured: set BOTH ` +
           `${prefix}_API_KEY_${i} and ${prefix}_BASE_URL_${i}, or neither.`
       );
     }
 
-    const parsedUrl = foundryBaseUrlSchema.safeParse(baseUrl);
+    // One key in two slots is never right, for any pool: it is one credential
+    // and therefore one quota, so the second slot only adds a limiter. Unlike
+    // the base-URL rule below this needs no per-pool policy — it holds whatever
+    // the quota is scoped to.
+    //
+    // Deliberately NARROW. It catches a duplicated paste, nothing more. For
+    // account-scoped pools the far likelier mistake is two DIFFERENT keys from
+    // one account (see PoolSpec.baseUrlImpliesSharedQuota) — those keys differ,
+    // so they sail past this check. Do not read its presence as coverage of
+    // that case; there is no parse-time signal for it.
+    const firstKeyIndex = seenApiKeys.get(apiKey);
+    if (firstKeyIndex !== undefined) {
+      throw new Error(
+        `LLM pool '${pool}' endpoints ${firstKeyIndex} and ${i} use the SAME api key. ` +
+          `One key is one quota, so the duplicate adds a rate limiter without adding ` +
+          `capacity. Configure a distinct credential, or remove the extra slot.`
+      );
+    }
+    seenApiKeys.set(apiKey, i);
+
+    const parsedUrl = baseUrlSchema.safeParse(baseUrl);
     if (!parsedUrl.success) {
       throw new Error(`${prefix}_BASE_URL_${i} must be a valid URL.`);
     }
 
     const normalized = normalizeBaseUrl(parsedUrl.data);
     const firstIndex = seenBaseUrls.get(normalized);
-    if (firstIndex !== undefined) {
+    // Only meaningful where the base URL identifies the quota holder. On Azure
+    // Foundry it identifies the RESOURCE, and a resource labels its access keys
+    // "Key 1"/"Key 2" — matching our _1/_2 naming — so pasting one resource's
+    // two keys is an easy mistake that would spin up two limiters against a
+    // single quota (→ sustained 429s). For account-scoped providers the same
+    // shape is legitimate: two OpenAI keys from different orgs necessarily share
+    // api.openai.com while holding independent quotas.
+    if (baseUrlImpliesSharedQuota && firstIndex !== undefined) {
       throw new Error(
-        `Azure Foundry pool '${pool}' endpoints ${firstIndex} and ${i} share the same base ` +
+        `LLM pool '${pool}' endpoints ${firstIndex} and ${i} share the same base ` +
           `URL (${parsedUrl.data}). Two keys of ONE resource share a single RPM quota — ` +
           `configure keys from DISTINCT resources/deployments, not "Key 1"/"Key 2" of ` +
           `the same resource.`
       );
     }
-    seenBaseUrls.set(normalized, i);
+    if (firstIndex === undefined) seenBaseUrls.set(normalized, i);
 
     endpoints.push({ apiKey, baseURL: parsedUrl.data });
   }
@@ -337,35 +377,40 @@ export function parseFoundryEndpoints(env: NodeJS.ProcessEnv, pool: Pool): Found
 }
 
 /** Parse every pool's endpoints. Unconfigured pools yield an empty list. */
-export function parseFoundryPools(env: NodeJS.ProcessEnv): FoundryPools {
+export function parseLlmPools(env: NodeJS.ProcessEnv): LlmPools {
   const pools = Object.fromEntries(
-    ALL_POOLS.map((pool) => [pool, parseFoundryEndpoints(env, pool)])
-  ) as FoundryPools;
+    ALL_POOLS.map((pool) => [pool, parseEndpoints(env, pool)])
+  ) as LlmPools;
 
   warnOnSharedResources(pools);
   return pools;
 }
 
 /**
- * Warn — but do NOT throw — when two pools point at the same base URL.
+ * Warn — but do NOT throw — when two RESOURCE-SCOPED pools point at the same
+ * base URL.
  *
- * Within a pool this is fatal (same deployment ⇒ one quota). Across pools it is
- * usually fine: Azure assigns quota PER DEPLOYMENT, and two pools on one resource
- * normally means two different deployments with independent caps. But if they do
- * turn out to share a quota, the two limiters cannot prevent 429s between them —
- * and that failure is otherwise very hard to attribute, so it's worth a startup
- * line pointing straight at the cause.
+ * Within such a pool this is fatal (same resource ⇒ one quota). Across pools it
+ * is usually fine: Azure assigns quota PER DEPLOYMENT, and two pools on one
+ * resource normally means two different deployments with independent caps. But
+ * if they do turn out to share a quota, the two limiters cannot prevent 429s
+ * between them — and that failure is otherwise very hard to attribute, so it's
+ * worth a startup line pointing straight at the cause.
+ *
+ * Account-scoped pools are skipped entirely: for them a shared base URL is the
+ * norm, so warning would be pure noise.
  */
-function warnOnSharedResources(pools: FoundryPools): void {
+function warnOnSharedResources(pools: LlmPools): void {
   const seen = new Map<string, Pool>(); // normalized base URL → first pool that used it
 
   for (const pool of ALL_POOLS) {
+    if (!POOL_SPECS[pool].baseUrlImpliesSharedQuota) continue;
     for (const { baseURL } of pools[pool]) {
       const normalized = normalizeBaseUrl(baseURL);
       const firstPool = seen.get(normalized);
       if (firstPool !== undefined && firstPool !== pool) {
         configLogger.warn(
-          `Azure Foundry pools '${firstPool}' and '${pool}' both use ${baseURL}. That is ` +
+          `LLM pools '${firstPool}' and '${pool}' both use ${baseURL}. That is ` +
             `safe only if they target DIFFERENT deployments on that resource — deployments ` +
             `carry their own quota, resources do not. If you see unexplained 429s, this is ` +
             `the first thing to check: their separate rate limiters cannot pace a shared quota.`
@@ -407,26 +452,21 @@ export const appConfig = registerAs('app', () => {
       secretAccessKey: env.S3_SECRET_ACCESS_KEY,
       mediaBucket: env.S3_BUCKET_MEDIA,
     },
-    openai: {
-      apiKey: env.OPENAI_API_KEY,
-    },
     llm: {
       variant: env.LLM_VARIANT,
+      // Every pool's credentials, in one place. `satisfies Record<Pool, …>` on
+      // the caps and an exhaustive parser over ALL_POOLS mean a new pool cannot
+      // be half-wired: the compiler demands a cap, and the parser gives it a
+      // (possibly empty) endpoint list that ModelConfigService then validates.
+      pools: parseLlmPools(process.env),
       rateLimit: {
-        // Applies to pools with no explicit cap — the implicit single-key
-        // `openai` / `openrouter` pools.
-        default: rateLimitPolicy(env.LLM_MAX_REQUESTS_PER_MINUTE),
         byPool: {
           [Pool.Interactive]: rateLimitPolicy(env.LLM_RPM_INTERACTIVE),
           [Pool.Analysis]: rateLimitPolicy(env.LLM_RPM_ANALYSIS),
+          [Pool.OpenAI]: rateLimitPolicy(env.LLM_RPM_OPENAI),
+          [Pool.OpenRouter]: rateLimitPolicy(env.LLM_RPM_OPENROUTER),
         } satisfies Record<Pool, RateLimitPolicy>,
       },
-    },
-    openrouter: {
-      apiKey: env.OPENROUTER_API_KEY,
-    },
-    azureFoundry: {
-      pools: parseFoundryPools(process.env),
     },
     azureLanguage: {
       endpoint: env.AZURE_LANGUAGE_ENDPOINT,

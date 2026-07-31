@@ -1,7 +1,7 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { MetricsModule } from '../../common/metrics';
-import { parseFoundryPools, rateLimitPolicy } from '../../config/app.config';
+import { parseLlmPools, rateLimitPolicy } from '../../config/app.config';
 import { LlmEndpointResolver } from '../llm-endpoint.resolver';
 import { LLMModule } from '../llm.module';
 import { Pool } from '../llm-pools';
@@ -20,7 +20,7 @@ import { Stage } from '../model-variants';
  * startup credential guard passing for a pool that then gets no bucket. That
  * seam is exactly what pooling introduced, so it needs its own test.
  *
- * Config is produced by the real `parseFoundryPools` / `rateLimitPolicy`, so the
+ * Config is produced by the real `parseLlmPools` / `rateLimitPolicy`, so the
  * env→config transformation under test is the production one; only the env-schema
  * plumbing (Zod) is bypassed. No network: nothing here calls a provider.
  *
@@ -33,6 +33,8 @@ const INTERACTIVE_URL = 'https://nano-resource.services.ai.azure.com/openai/v1/'
 const ANALYSIS_URL_1 = 'https://deepseek-1.services.ai.azure.com/openai/v1/';
 const ANALYSIS_URL_2 = 'https://deepseek-2.services.ai.azure.com/openai/v1/';
 
+const OPENAI_URL = 'https://api.openai.com/v1';
+
 /** Env exactly as an operator would set it for Variant F (see .env.example). */
 const VARIANT_F_ENV: NodeJS.ProcessEnv = {
   AZURE_FOUNDRY_INTERACTIVE_API_KEY_1: 'nano-key',
@@ -41,6 +43,12 @@ const VARIANT_F_ENV: NodeJS.ProcessEnv = {
   AZURE_FOUNDRY_ANALYSIS_BASE_URL_1: ANALYSIS_URL_1,
   AZURE_FOUNDRY_ANALYSIS_API_KEY_2: 'deepseek-key-2',
   AZURE_FOUNDRY_ANALYSIS_BASE_URL_2: ANALYSIS_URL_2,
+};
+
+/** Variant A's env — the openai pool is credentialed exactly like a Foundry one. */
+const VARIANT_A_ENV: NodeJS.ProcessEnv = {
+  OPENAI_API_KEY_1: 'sk-test',
+  OPENAI_BASE_URL_1: OPENAI_URL,
 };
 
 async function bootModule(variant: string, env: NodeJS.ProcessEnv) {
@@ -54,19 +62,19 @@ async function bootModule(variant: string, env: NodeJS.ProcessEnv) {
         load: [
           () => ({
             app: {
-              openai: { apiKey: 'sk-test' },
               assemblyai: { apiKey: 'aai-test', baseUrl: 'https://api.eu.assemblyai.com' },
               llm: {
                 variant,
+                pools: parseLlmPools(env),
                 rateLimit: {
-                  default: rateLimitPolicy(18),
                   byPool: {
                     [Pool.Interactive]: rateLimitPolicy(60),
                     [Pool.Analysis]: rateLimitPolicy(35),
+                    [Pool.OpenAI]: rateLimitPolicy(18),
+                    [Pool.OpenRouter]: rateLimitPolicy(18),
                   },
                 },
               },
-              azureFoundry: { pools: parseFoundryPools(env) },
             },
           }),
         ],
@@ -185,13 +193,40 @@ describe('LLMModule wiring (pool topology end-to-end)', () => {
       );
     });
 
-    it('boots the OpenAI variant with no Foundry credentials at all', async () => {
-      // Variant A uses only the implicit single-key `openai` pool, so no Foundry
-      // config is required and exactly one bucket exists.
-      const moduleRef = await bootModule('A', {});
+    it('applies that SAME guard to a provider pool', async () => {
+      // The single loop's whole point: OpenAI is not a special case with its own
+      // hand-written check. Booting variant A with no OPENAI_* vars fails at the
+      // composition root with the same message shape as the Foundry case.
+      await expect(bootModule('A', {})).rejects.toThrow(
+        /pool 'openai' but no endpoints are configured.*OPENAI_API_KEY_1/s
+      );
+    });
+
+    it('boots the OpenAI variant from pool config alone, with no Foundry vars', async () => {
+      const moduleRef = await bootModule('A', VARIANT_A_ENV);
       const resolver = moduleRef.get(LlmEndpointResolver);
 
       expect(resolver.buckets()).toEqual([{ bucketKey: 'openai:0', pool: 'openai', index: 0 }]);
+      // The credentials reach the transport by the same route Foundry's do —
+      // there is no second path that could supply a different key.
+      expect(
+        resolver.resolveBucket(moduleRef.get(ModelConfigService).resolve(Stage.Cleaning), 'conv-1')
+          .endpoint
+      ).toEqual({ apiKey: 'sk-test', baseURL: OPENAI_URL });
+      await moduleRef.close();
+    });
+
+    it('shards a provider pool across two keys with no code change', async () => {
+      // Not expressible before unification: the OpenAI key was a single field on
+      // LLMService. Adding OPENAI_API_KEY_2 is now the whole change.
+      const moduleRef = await bootModule('A', {
+        ...VARIANT_A_ENV,
+        OPENAI_API_KEY_2: 'sk-test-org-b',
+        OPENAI_BASE_URL_2: OPENAI_URL, // same host, different org → independent quota
+      });
+      const resolver = moduleRef.get(LlmEndpointResolver);
+
+      expect(resolver.buckets().map((b) => b.bucketKey)).toEqual(['openai:0', 'openai:1']);
       await moduleRef.close();
     });
   });

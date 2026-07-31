@@ -21,7 +21,7 @@ describe('ModelConfigService', () => {
   describe('resolve()', () => {
     it('resolves every stage for the default OpenAI variant (A)', () => {
       const service = new ModelConfigService(
-        configStub({ 'app.llm.variant': 'A', 'app.openai.apiKey': 'sk-test' })
+        configStub({ 'app.llm.variant': 'A', 'app.llm.pools': { [Pool.OpenAI]: [endpoint] } })
       );
 
       expect(service.activeVariant).toBe('A');
@@ -35,7 +35,7 @@ describe('ModelConfigService', () => {
       const service = new ModelConfigService(
         configStub({
           'app.llm.variant': 'D',
-          'app.azureFoundry.pools': { [Pool.Analysis]: [endpoint] },
+          'app.llm.pools': { [Pool.Analysis]: [endpoint] },
         })
       );
 
@@ -56,7 +56,7 @@ describe('ModelConfigService', () => {
       const service = new ModelConfigService(
         configStub({
           'app.llm.variant': 'F',
-          'app.azureFoundry.pools': {
+          'app.llm.pools': {
             [Pool.Interactive]: [endpoint],
             [Pool.Analysis]: [endpoint],
           },
@@ -88,9 +88,9 @@ describe('ModelConfigService', () => {
   });
 
   describe('poolsInUse()', () => {
-    it('reports the provider-named pool for single-key providers', () => {
+    it('reports the provider pool for a single-provider variant', () => {
       const service = new ModelConfigService(
-        configStub({ 'app.llm.variant': 'A', 'app.openai.apiKey': 'sk-test' })
+        configStub({ 'app.llm.variant': 'A', 'app.llm.pools': { [Pool.OpenAI]: [endpoint] } })
       );
       expect(service.poolsInUse()).toEqual(new Set(['openai']));
     });
@@ -99,7 +99,7 @@ describe('ModelConfigService', () => {
       const service = new ModelConfigService(
         configStub({
           'app.llm.variant': 'F',
-          'app.azureFoundry.pools': {
+          'app.llm.pools': {
             [Pool.Interactive]: [endpoint],
             [Pool.Analysis]: [endpoint],
           },
@@ -126,7 +126,7 @@ describe('ModelConfigService', () => {
       expect(
         () =>
           new ModelConfigService(
-            configStub({ 'app.llm.variant': 'D', 'app.azureFoundry.pools': { analysis: [] } })
+            configStub({ 'app.llm.variant': 'D', 'app.llm.pools': { analysis: [] } })
           )
       ).toThrow(/AZURE_FOUNDRY_ANALYSIS_API_KEY_1/);
     });
@@ -139,20 +139,22 @@ describe('ModelConfigService', () => {
           new ModelConfigService(
             configStub({
               'app.llm.variant': 'F',
-              'app.azureFoundry.pools': { [Pool.Analysis]: [endpoint] },
+              'app.llm.pools': { [Pool.Analysis]: [endpoint] },
             })
           )
       ).toThrow(/pool 'interactive' but no endpoints are configured/);
     });
 
-    it('throws when variant B lacks the OpenRouter API key', () => {
+    it('applies the same per-pool guard to the provider pools', () => {
+      // These used to be two hand-written branches (an `if` for OpenRouter, a
+      // throw in the LLMService constructor for OpenAI). They are now the same
+      // loop as Foundry's, which is the point: one credential plane, one check.
       expect(() => new ModelConfigService(configStub({ 'app.llm.variant': 'B' }))).toThrow(
-        /uses OpenRouter but OPENROUTER_API_KEY/
+        /pool 'openrouter' but no endpoints are configured.*OPENROUTER_API_KEY_1/s
       );
-    });
-
-    it('does not require provider credentials for the OpenAI variant', () => {
-      expect(() => new ModelConfigService(configStub({ 'app.llm.variant': 'A' }))).not.toThrow();
+      expect(() => new ModelConfigService(configStub({ 'app.llm.variant': 'A' }))).toThrow(
+        /pool 'openai' but no endpoints are configured.*OPENAI_API_KEY_1/s
+      );
     });
   });
 });

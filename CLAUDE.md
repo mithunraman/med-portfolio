@@ -71,7 +71,9 @@ NestJS with MongoDB (Mongoose). All routes prefixed with `/api`. Global guards: 
 
 **LLM service** (`llm/`): OpenAI structured outputs via `invokeStructured<T>()` with Zod schemas. AssemblyAI for audio transcription with UK-compliant PII redaction.
 
-**Config** (`config/app.config.ts`): Environment variables validated at startup with Zod. Required: MONGODB_URI, JWT_SECRET (32+ chars), OPENAI_API_KEY, S3 credentials.
+**Config** (`config/app.config.ts`): Environment variables validated at startup with Zod. Required: MONGODB_URI, JWT_SECRET (32+ chars), S3 credentials, plus credentials for whichever LLM pools the active `LLM_VARIANT` uses (see below).
+
+**LLM credentials are per-pool, for every provider.** There is no provider-specific env var: all of them use `<PREFIX>_API_KEY_<i>` / `<PREFIX>_BASE_URL_<i>` (i = 1..8), with the prefix coming from `POOL_SPECS` in `llm/llm-pools.ts` — `OPENAI`, `OPENROUTER`, `AZURE_FOUNDRY_INTERACTIVE`, `AZURE_FOUNDRY_ANALYSIS`. Variant A therefore needs `OPENAI_API_KEY_1` + `OPENAI_BASE_URL_1`, **not** a bare `OPENAI_API_KEY`. Each pool also has a cap (`LLM_RPM_<POOL>`), which **does** default (60 / 35 / 18) — omitting one boots at that value rather than failing, so set it explicitly if you provisioned your own quota. Credentials are different: `ModelConfigService` fails startup for any pool in use that lacks endpoints, which is what lets `LlmEndpointResolver.resolveBucket` return a non-optional endpoint.
 
 ### Mobile (`apps/mobile`)
 

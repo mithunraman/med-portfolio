@@ -1,21 +1,21 @@
 import type { ConfigService } from '@nestjs/config';
-import type { FoundryEndpoint, FoundryPools } from '../../config/app.config';
+import type { LlmEndpoint, LlmPools } from '../../config/app.config';
 import { LlmEndpointResolver } from '../llm-endpoint.resolver';
 import { Pool } from '../llm-pools';
 import type { ModelTarget } from '../llm.service';
 import type { ModelConfigService } from '../model-config.service';
 
-function configStub(pools: Partial<FoundryPools>): ConfigService {
+function configStub(pools: Partial<LlmPools>): ConfigService {
   return {
-    get: jest.fn((key: string) => (key === 'app.azureFoundry.pools' ? pools : undefined)),
+    get: jest.fn((key: string) => (key === 'app.llm.pools' ? pools : undefined)),
   } as unknown as ConfigService;
 }
 
-function modelConfigStub(poolsInUse: string[]): ModelConfigService {
+function modelConfigStub(poolsInUse: Pool[]): ModelConfigService {
   return { poolsInUse: () => new Set(poolsInUse) } as unknown as ModelConfigService;
 }
 
-const ep = (n: number): FoundryEndpoint => ({
+const ep = (n: number): LlmEndpoint => ({
   apiKey: `key-${n}`,
   baseURL: `https://res-${n}.services.ai.azure.com/openai/v1/`,
 });
@@ -26,9 +26,16 @@ const foundryTarget = (pool: Pool): ModelTarget => ({
   pool,
 });
 
-const openaiTarget: ModelTarget = { provider: 'openai', model: 'gpt-test' };
+const openaiTarget: ModelTarget = {
+  provider: 'openai',
+  pool: Pool.OpenAI,
+  model: 'gpt-test',
+};
 
-function build(pools: Partial<FoundryPools>, inUse = Object.keys(pools)): LlmEndpointResolver {
+function build(
+  pools: Partial<LlmPools>,
+  inUse = Object.keys(pools) as Pool[]
+): LlmEndpointResolver {
   return new LlmEndpointResolver(configStub(pools), modelConfigStub(inUse));
 }
 
@@ -47,10 +54,11 @@ describe('LlmEndpointResolver', () => {
       ]);
     });
 
-    it('gives a credential-less provider pool exactly one bucket', () => {
-      // openai/openrouter keys live on LLMService, not in the endpoint config —
-      // they must still be rate-limited, so the pool floors at one bucket.
-      const resolver = build({}, ['openai']);
+    it('buckets a provider pool exactly like a Foundry one', () => {
+      // No special case: openai's credentials come from the same config
+      // structure, so it produces buckets by the same rule. Nothing about a
+      // pool's bucketing depends on which provider it serves.
+      const resolver = build({ [Pool.OpenAI]: [ep(1)] });
       expect(resolver.buckets()).toEqual([{ bucketKey: 'openai:0', pool: 'openai', index: 0 }]);
     });
 
@@ -111,14 +119,36 @@ describe('LlmEndpointResolver', () => {
       expect(resolver.resolveBucket(foundryTarget(Pool.Interactive), 'another').index).toBe(0);
     });
 
-    it('routes a non-Foundry target to its provider-named pool with no credentials', () => {
-      const resolver = build({}, ['openai']);
+    it('routes a non-Foundry target to its pool WITH credentials', () => {
+      const resolver = build({ [Pool.OpenAI]: [ep(1)] });
       expect(resolver.resolveBucket(openaiTarget, 'conversation-abc')).toEqual({
         bucketKey: 'openai:0',
         pool: 'openai',
         index: 0,
-        endpoint: undefined,
+        endpoint: ep(1),
       });
+    });
+
+    it('shards a PROVIDER pool across multiple keys, exactly like a Foundry pool', () => {
+      // Newly possible, and the clearest evidence the two credential planes
+      // merged: before unification an OpenAI key lived on LLMService as a single
+      // field, so N>1 was not expressible at all. Nothing here is Foundry-aware.
+      const resolver = build({ [Pool.OpenAI]: [ep(1), ep(2)] });
+      const seen = new Set<string>();
+      for (let i = 0; i < 50; i++) {
+        seen.add(resolver.resolveBucket(openaiTarget, `conversation-${i}`).bucketKey);
+      }
+      expect(seen).toEqual(new Set(['openai:0', 'openai:1']));
+    });
+
+    it('throws, naming the pool, rather than returning an endpoint-less bucket', () => {
+      // Startup validation makes this unreachable in production. It is asserted
+      // because the failure it replaces — an undefined endpoint flowing into an
+      // auth error against an empty key — is far harder to attribute.
+      const resolver = build({}, [Pool.OpenAI]);
+      expect(() => resolver.resolveBucket(openaiTarget, 'conv-1')).toThrow(
+        /No LLM endpoints configured for pool 'openai'/
+      );
     });
 
     it('keeps pools independent: the same routing key hits both pools separately', () => {

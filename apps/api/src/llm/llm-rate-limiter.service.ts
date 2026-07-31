@@ -5,6 +5,7 @@ import Bottleneck from 'bottleneck';
 import { MetricsService } from '../common/metrics';
 import type { RateLimitPolicy } from '../config/app.config';
 import { LlmEndpointResolver } from './llm-endpoint.resolver';
+import type { Pool } from './llm-pools';
 
 /**
  * How often each reservoir refills, in ms. `maxRequestsPerMinute` is the unit, so
@@ -14,9 +15,6 @@ import { LlmEndpointResolver } from './llm-endpoint.resolver';
  * draining deterministically via `incrementReservoir` rather than shrinking this.
  */
 const REFRESH_INTERVAL_MS = 60_000;
-
-/** Mirrors the LLM_MAX_REQUESTS_PER_MINUTE schema default (per key). */
-const DEFAULT_RPM = 18;
 
 /**
  * Owns the in-process rate limiters for outbound LLM calls — ONE limiter per
@@ -66,21 +64,29 @@ export class LlmRateLimiterService {
     private readonly metricsService: MetricsService,
     resolver: LlmEndpointResolver
   ) {
-    // Per-pool caps, with a default for pools that don't declare one (the
-    // implicit single-key openai/openrouter pools). The DEFAULT_RPM fallback
-    // mirrors the schema default so missing config degrades to the SAFE setting,
-    // not to full bursting.
+    // Per-pool caps. There is deliberately no fallback for a pool MISSING FROM
+    // `byPool`: the pool set is a closed enum and app.config declares a cap for
+    // every member (`satisfies Record<Pool, …>`), so a missing entry means code
+    // and config have drifted. A fallback would paper over that by silently
+    // pacing a pool at a guessed rate — surfacing as unexplained 429s or
+    // unexplained slowness, both far harder to trace than a throw naming the pool.
+    //
+    // This says nothing about the ENV VARS. `LLM_RPM_<POOL>` each have a schema
+    // default, so an operator omitting one boots at that value; the throw below
+    // cannot catch that and is not meant to. See the envSchema comment.
     const configured = configService.get<{
-      default?: RateLimitPolicy;
       byPool?: Record<string, RateLimitPolicy>;
     }>('app.llm.rateLimit');
-    const fallback = configured?.default ?? {
-      rpm: DEFAULT_RPM,
-      minTimeMs: Math.floor(REFRESH_INTERVAL_MS / DEFAULT_RPM),
-    };
 
     for (const { bucketKey, pool, index } of resolver.buckets()) {
-      const { rpm, minTimeMs } = configured?.byPool?.[pool] ?? fallback;
+      const policy = configured?.byPool?.[pool];
+      if (!policy) {
+        throw new Error(
+          `No LLM rate-limit policy configured for pool '${pool}' ` +
+            `(expected app.llm.rateLimit.byPool.${pool}).`
+        );
+      }
+      const { rpm, minTimeMs } = policy;
       this.limiters.set(bucketKey, this.buildLimiter(bucketKey, pool, index, rpm, minTimeMs));
       this.logger.log(
         `LLM rate limiter bucket ${bucketKey}: ${rpm} req/min` +
@@ -127,7 +133,7 @@ export class LlmRateLimiterService {
 
   private buildLimiter(
     bucketKey: string,
-    pool: string,
+    pool: Pool,
     index: number,
     rpm: number,
     minTime: number
@@ -145,7 +151,7 @@ export class LlmRateLimiterService {
   private registerObservability(
     limiter: Bottleneck,
     bucketKey: string,
-    pool: string,
+    pool: Pool,
     index: number
   ): void {
     // High-frequency signal — this key's reservoir just hit 0 and calls are now

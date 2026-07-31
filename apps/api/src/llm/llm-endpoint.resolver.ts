@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { FoundryEndpoint, FoundryPools } from '../config/app.config';
-import { bucketKeyOf, poolOf } from './llm-pools';
+import type { LlmEndpoint, LlmPools } from '../config/app.config';
+import { bucketKeyOf, type Pool } from './llm-pools';
 import type { ModelTarget } from './llm.service';
 import { ModelConfigService } from './model-config.service';
 
@@ -9,7 +9,7 @@ import { ModelConfigService } from './model-config.service';
 export interface Bucket {
   /** Bucket identity, `${pool}:${index}`. */
   bucketKey: string;
-  pool: string;
+  pool: Pool;
   index: number;
 }
 
@@ -19,10 +19,12 @@ export interface Bucket {
  */
 export interface ResolvedBucket extends Bucket {
   /**
-   * Foundry credentials for this bucket. Undefined for single-key providers
-   * (openai / openrouter), whose credentials live on LLMService itself.
+   * The credentials for this bucket. NOT optional: every pool, for every
+   * provider, is credentialed from config, and ModelConfigService fails startup
+   * for any pool in use that has none. A caller therefore never has to ask
+   * "which credential path is this?" — there is one.
    */
-  endpoint?: FoundryEndpoint;
+  endpoint: LlmEndpoint;
 }
 
 /**
@@ -40,8 +42,10 @@ export interface ResolvedBucket extends Bucket {
  *
  * Routing within a pool is `hash(routingKey) % N` — sticky (the same key resolves
  * to the same endpoint on every call AND across process restarts), spread across
- * that pool's keys, and needs no state. Only Azure Foundry exposes N > 1; every
- * other provider is single-key (N = 1), which collapses to "always endpoint 0".
+ * that pool's keys, and needs no state. This applies to EVERY pool, provider
+ * pools included: a pool with one key collapses to "always endpoint 0", and the
+ * same pool sharded across two keys needs no code change, only a second
+ * `<PREFIX>_API_KEY_2`.
  *
  * Consequence of stickiness: a single conversation is pinned to ONE key per pool,
  * so its own throughput is bound by that key's per-key rate regardless of N.
@@ -62,19 +66,20 @@ export interface ResolvedBucket extends Bucket {
 export class LlmEndpointResolver {
   private readonly logger = new Logger(LlmEndpointResolver.name);
   /** Pool → its endpoints. Only pools the active variant actually uses. */
-  private readonly poolEndpoints = new Map<string, FoundryEndpoint[]>();
+  private readonly poolEndpoints = new Map<Pool, LlmEndpoint[]>();
 
   constructor(configService: ConfigService, modelConfig: ModelConfigService) {
-    const configured = configService.get<FoundryPools>('app.azureFoundry.pools');
+    const configured = configService.get<LlmPools>('app.llm.pools');
 
+    // Every pool in use is guaranteed non-empty: ModelConfigService has already
+    // failed startup for any that isn't, which is what lets `resolveBucket`
+    // return a non-optional endpoint.
     for (const pool of modelConfig.poolsInUse()) {
-      // Single-key providers (openai/openrouter) have no configured endpoints;
-      // they still get exactly one bucket, reproducing pre-pooling behavior.
-      this.poolEndpoints.set(pool, configured?.[pool as keyof FoundryPools] ?? []);
+      this.poolEndpoints.set(pool, configured?.[pool] ?? []);
     }
 
     const summary = [...this.poolEndpoints]
-      .map(([pool, endpoints]) => `${pool}=${Math.max(endpoints.length, 1)}`)
+      .map(([pool, endpoints]) => `${pool}=${endpoints.length}`)
       .join(', ');
     this.logger.log(`LLM endpoint router active: ${this.buckets().length} bucket(s) [${summary}]`);
   }
@@ -83,7 +88,7 @@ export class LlmEndpointResolver {
   buckets(): Bucket[] {
     const buckets: Bucket[] = [];
     for (const [pool, endpoints] of this.poolEndpoints) {
-      for (let index = 0; index < bucketCount(endpoints); index++) {
+      for (let index = 0; index < endpoints.length; index++) {
         buckets.push({ bucketKey: bucketKeyOf(pool, index), pool, index });
       }
     }
@@ -95,23 +100,25 @@ export class LlmEndpointResolver {
    * credentials that send it. A missing/empty routing key pins to endpoint 0.
    */
   resolveBucket(target: ModelTarget, routingKey: string): ResolvedBucket {
-    const pool = poolOf(target);
+    const { pool } = target;
     const endpoints = this.poolEndpoints.get(pool) ?? [];
-    const count = bucketCount(endpoints);
-    const index = count === 1 || !routingKey ? 0 : hashString(routingKey) % count;
+    const index =
+      endpoints.length <= 1 || !routingKey ? 0 : hashString(routingKey) % endpoints.length;
+    const endpoint = endpoints[index];
 
-    return { bucketKey: bucketKeyOf(pool, index), pool, index, endpoint: endpoints[index] };
+    // Defensive, and deliberately not silent. Startup validation makes this
+    // unreachable, but the alternative to throwing here is handing back an
+    // `undefined` endpoint that surfaces much later as an auth failure against
+    // an empty key — a far worse thing to debug than a named pool at the call site.
+    if (!endpoint) {
+      throw new Error(
+        `No LLM endpoints configured for pool '${pool}'. Known pools: ` +
+          `${[...this.poolEndpoints.keys()].join(', ') || '(none)'}.`
+      );
+    }
+
+    return { bucketKey: bucketKeyOf(pool, index), pool, index, endpoint };
   }
-}
-
-/**
- * Buckets in a pool. Floors at 1 so a credential-less pool (openai/openrouter,
- * whose key lives on LLMService) is still rate-limited rather than unbucketed.
- * A Foundry pool with zero endpoints can't reach here — ModelConfigService fails
- * that at startup.
- */
-function bucketCount(endpoints: FoundryEndpoint[]): number {
-  return Math.max(endpoints.length, 1);
 }
 
 /**

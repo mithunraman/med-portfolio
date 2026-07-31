@@ -30,7 +30,7 @@ function resolverStub(buckets: Bucket[]): LlmEndpointResolver {
   return { buckets: () => buckets } as unknown as LlmEndpointResolver;
 }
 
-const bucket = (pool: string, index: number): Bucket => ({
+const bucket = (pool: Pool, index: number): Bucket => ({
   bucketKey: `${pool}:${index}`,
   pool,
   index,
@@ -47,13 +47,12 @@ describe('LlmRateLimiterService', () => {
 
   /** Single-bucket setup — the default for tests about one limiter's behavior. */
   function build(rpm: number, opts: { minTime?: number } = {}) {
-    return buildPools([bucket('openai', 0)], { default: rate(rpm, opts.minTime ?? 0), byPool: {} });
+    return buildPools([bucket(Pool.OpenAI, 0)], {
+      byPool: { [Pool.OpenAI]: rate(rpm, opts.minTime ?? 0) },
+    });
   }
 
-  function buildPools(
-    buckets: Bucket[],
-    rateLimit: { default: RateLimitPolicy; byPool: Record<string, RateLimitPolicy> }
-  ) {
+  function buildPools(buckets: Bucket[], rateLimit: { byPool: Record<string, RateLimitPolicy> }) {
     const metrics = metricsStub();
     service = new LlmRateLimiterService(
       configStub({ 'app.llm.rateLimit': rateLimit }),
@@ -187,10 +186,13 @@ describe('LlmRateLimiterService', () => {
   });
 
   describe('per-pool policy', () => {
-    it('applies each pool’s own cap, falling back to the default for unlisted pools', async () => {
-      buildPools([bucket(Pool.Interactive, 0), bucket(Pool.Analysis, 0), bucket('openai', 0)], {
-        default: rate(18),
-        byPool: { [Pool.Interactive]: rate(60), [Pool.Analysis]: rate(35) },
+    it('applies each pool’s own cap', async () => {
+      buildPools([bucket(Pool.Interactive, 0), bucket(Pool.Analysis, 0), bucket(Pool.OpenAI, 0)], {
+        byPool: {
+          [Pool.Interactive]: rate(60),
+          [Pool.Analysis]: rate(35),
+          [Pool.OpenAI]: rate(18),
+        },
       });
 
       const capOf = (key: string) =>
@@ -205,6 +207,21 @@ describe('LlmRateLimiterService', () => {
       expect(await capOf('interactive:0')).toBe(60);
       expect(await capOf('analysis:0')).toBe(35);
       expect(await capOf('openai:0')).toBe(18); // no byPool entry → default
+    });
+
+    it('refuses to construct when a bucket’s pool has no configured cap', () => {
+      // There is deliberately no fallback policy. A fallback would silently pace
+      // the pool at a guessed rate — surfacing later as unexplained 429s or
+      // unexplained slowness, both far harder to trace than a throw at boot
+      // naming the pool. The closed Pool enum makes the strict version safe.
+      //
+      // Scope note: this is about a pool missing from `byPool`, which only
+      // happens if code and config drift. It is NOT env-var validation — the
+      // LLM_RPM_<POOL> vars all have schema defaults, so an omitted one never
+      // reaches here.
+      expect(() =>
+        buildPools([bucket(Pool.Analysis, 0)], { byPool: { [Pool.Interactive]: rate(60) } })
+      ).toThrow(/No LLM rate-limit policy configured for pool 'analysis'/);
     });
 
     it('REJECTS with a named error for an unknown bucket rather than a TypeError', async () => {
@@ -236,7 +253,6 @@ describe('LlmRateLimiterService', () => {
       // slots interactive work needs. This test is what a future "simplify back
       // to one limiter" refactor would have to break.
       buildPools([bucket(Pool.Interactive, 0), bucket(Pool.Analysis, 0)], {
-        default: rate(18),
         byPool: { [Pool.Interactive]: rate(5), [Pool.Analysis]: rate(1) },
       });
 

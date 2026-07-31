@@ -75,16 +75,58 @@ non-thinking by default and **rejects** DeepSeek's native `thinking` / `enable_t
 ### Quota pools
 
 A **pool** ([`llm/llm-pools.ts`](../../apps/api/src/llm/llm-pools.ts)) is a named set of
-interchangeable credentials sharing one quota policy. It is deliberately independent of the
-model: on Foundry an (apiKey, baseURL) pair identifies a *resource*, and one resource hosts many
-*deployments*. Rate-limiter bucket identity is therefore `(pool, indexWithinPool)` — two pools
-each have an endpoint 0, and they are different quotas.
+interchangeable credentials sharing one quota policy, and it is the **only** thing that owns
+"which key, which base URL, which cap". `provider` is orthogonal — it says how to *shape* a
+request, never which credentials send it. A pool is likewise independent of the model: on Foundry
+an (apiKey, baseURL) pair identifies a *resource*, and one resource hosts many *deployments*.
+Rate-limiter bucket identity is therefore `(pool, indexWithinPool)` — two pools each have an
+endpoint 0, and they are different quotas.
 
-| Pool | Serves | Cap (env) | Keys |
-|---|---|---|---|
-| `interactive` | cleaning — user-paced, blocks the message appearing | `LLM_RPM_INTERACTIVE` (60) | 1 |
-| `analysis` | the eight graph stages — machine-paced ~9-call bursts | `LLM_RPM_ANALYSIS` (35) | 2+ |
-| `openai` / `openrouter` | implicit single-key pools | `LLM_MAX_REQUESTS_PER_MINUTE` (18) | 1 |
+| Pool | Kind | Serves | Cap (env) | Keys |
+|---|---|---|---|---|
+| `interactive` | workload | cleaning — user-paced, blocks the message appearing | `LLM_RPM_INTERACTIVE` (60) | 1 |
+| `analysis` | workload | the eight graph stages — machine-paced ~9-call bursts | `LLM_RPM_ANALYSIS` (35) | 2+ |
+| `openai` | provider | every stage under variant A | `LLM_RPM_OPENAI` (18) | 1+ |
+| `openrouter` | provider | every stage under variants B/C/E | `LLM_RPM_OPENROUTER` (18) | 1+ |
+
+**Workload** pools are named for *why* they are separated, so moving a stage between them never
+makes a name a lie. **Provider** pools are named for the provider because that *is* the reason
+they are separate: a provider account is a quota boundary.
+
+There is no "unpooled" path. Every pool's credentials are parsed by the same `parseEndpoints` from
+`<PREFIX>_API_KEY_<i>` / `<PREFIX>_BASE_URL_<i>` (prefix from `POOL_SPECS`), and startup fails for
+any pool the active variant uses that has no endpoints. Any pool can be sharded across N keys with
+no code edit — subject to the rule below, which is a real precondition, not a formality.
+
+**Caps behave differently from credentials, and the distinction matters.** `LLM_RPM_<POOL>` each
+carry a schema default, so omitting one boots at that value rather than failing. Only the
+credential check is fail-fast. (Separately, `LlmRateLimiterService` throws if a pool is missing
+from `byPool` — but `satisfies Record<Pool, RateLimitPolicy>` makes that unreachable through real
+config; it guards code/config drift, not operator input.) The defaults are also not equally safe:
+18 is a conservative floor, while 60 and 35 are the quota numbers *this* deployment provisioned.
+
+#### Multi-key pools: every key must carry its own quota
+
+The limiter builds **one reservoir per key**, so N keys admit N × the pool's cap. That is correct
+only if the keys really do hold N independent quotas. Two keys metered against one cap produce two
+limiters over that single cap → ~2× over-admission → sustained 429s. What "its own quota" means
+is provider-specific, and so is whether we can check it:
+
+| Pool | Quota unit | Startup check |
+|---|---|---|
+| `interactive`, `analysis` | the Azure **resource** — one base URL | **Enforced.** Duplicate base URL in the pool is rejected: a resource's "Key 1"/"Key 2" share its cap. |
+| `openai`, `openrouter` | the **account / org / project** | **Not checkable.** These meter per account, not per key; an API key doesn't reveal its account, so nothing at parse time can tell two keys of one project from two keys of two. |
+
+That asymmetry is carried by `PoolSpec.baseUrlImpliesSharedQuota` — not by a provider check.
+`false` there means *undetectable*, **not** *safe*: the same hazard exists on those pools in a form
+with no parse-time signal. Detecting it would need a network call during config parsing, which
+puts boot on the network path and fails closed on transient errors — not worth it to guard a
+configuration that has no upside anyway.
+
+**Practical rule:** keep `openai` / `openrouter` at a single key unless you genuinely have separate
+provider accounts. Adding a second key from the same account buys zero throughput (the cap is
+shared) and costs you 429s. Startup does reject the *same key* pasted into two slots, in any pool,
+but that catches only a duplicated paste.
 
 Pools exist for **two independent reasons**, and both must hold before merging any two of them:
 

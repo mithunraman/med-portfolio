@@ -8,7 +8,7 @@ import { AssemblyAI, SpeechModel } from 'assemblyai';
 import { backOff } from 'exponential-backoff';
 import { z } from 'zod';
 import { MetricsService } from '../common/metrics';
-import type { FoundryEndpoint } from '../config/app.config';
+import type { LlmEndpoint } from '../config/app.config';
 import { LlmEndpointResolver } from './llm-endpoint.resolver';
 import type { Pool } from './llm-pools';
 import { LlmRateLimiterService } from './llm-rate-limiter.service';
@@ -34,37 +34,52 @@ export type StructuredMethod = 'functionCalling' | 'jsonSchema' | 'jsonMode';
 export type ThinkMode = 'off' | 'low' | 'high' | 'max';
 
 /**
- * A concrete, resolved model target: which provider to call and which model
- * (or Azure deployment) to run on it. This is the entire vocabulary LLMService
- * understands. The mapping from a pipeline stage to a target lives in
- * ModelConfigService — never here — so this service stays pure transport.
+ * The provider-independent half of a model target.
+ *
+ * `pool` lives here, not on the individual arms, because it is the ONE field
+ * every target must carry: it names the credentials and the quota, for every
+ * provider without exception. Keeping it common is what lets the resolver hand
+ * back a non-optional endpoint — there is no target shape from which
+ * credentials cannot be derived.
  */
-export type ModelTarget =
-  | { provider: 'openai'; model: string; structuredMethod?: StructuredMethod }
-  | {
-      provider: 'openrouter';
-      model: string;
-      /** Reasoning effort for hybrid models (DeepSeek V4). */
-      thinkMode?: ThinkMode;
-      /** OpenRouter upstream provider-routing preference, e.g. ['DigitalOcean']. */
-      route?: string[];
-      structuredMethod?: StructuredMethod;
-    }
-  | {
-      provider: 'azure-foundry';
-      /** Foundry deployment name (used as the OpenAI `model` field). */
-      model: string;
-      /**
-       * Which credential/quota pool serves this target. Required, not optional:
-       * a Foundry target that doesn't name its pool is meaningless, and making
-       * the compiler demand one means no variant can silently inherit a default.
-       * Independent of `model` — see llm-pools.ts.
-       */
-      pool: Pool;
-      /** Reasoning effort for hybrid models (DeepSeek V4). */
-      thinkMode?: ThinkMode;
-      structuredMethod?: StructuredMethod;
-    };
+type TargetBase = {
+  /**
+   * Which credential/quota pool serves this target. Required, not optional, so
+   * no variant can silently inherit a default. Independent of both `model` and
+   * `provider` — see llm-pools.ts.
+   */
+  pool: Pool;
+  /** Model id, or the Azure Foundry deployment name (same wire field). */
+  model: string;
+  structuredMethod?: StructuredMethod;
+};
+
+/**
+ * A concrete, resolved model target: which pool's credentials to send with,
+ * which provider's request shape to use, and which model to run. This is the
+ * entire vocabulary LLMService understands. The mapping from a pipeline stage to
+ * a target lives in ModelConfigService — never here — so this service stays pure
+ * transport.
+ *
+ * The per-arm fields are exactly what varies in REQUEST SHAPE. Anything to do
+ * with credentials belongs on `pool`.
+ */
+export type ModelTarget = TargetBase &
+  (
+    | { provider: 'openai' }
+    | {
+        provider: 'openrouter';
+        /** Reasoning effort for hybrid models (DeepSeek V4). */
+        thinkMode?: ThinkMode;
+        /** OpenRouter upstream provider-routing preference, e.g. ['DigitalOcean']. */
+        route?: string[];
+      }
+    | {
+        provider: 'azure-foundry';
+        /** Reasoning effort for hybrid models (DeepSeek V4). */
+        thinkMode?: ThinkMode;
+      }
+  );
 
 export type LLMOptions = ModelTarget & {
   temperature?: number;
@@ -169,27 +184,21 @@ export function azureFoundryKwargs(
 @Injectable()
 export class LLMService {
   private readonly logger = new Logger(LLMService.name);
-  private readonly openaiApiKey: string;
-  // Optional — only required when the active variant routes a stage to OpenRouter.
-  // Presence is enforced up front by ModelConfigService's credential guard.
-  private readonly openrouterApiKey: string | undefined;
+  // No LLM API keys are held here. Every chat credential arrives per-call from
+  // the resolved bucket, so this service cannot send with a key that a different
+  // limiter is pacing. AssemblyAI is the deliberate exception: separate quota,
+  // not routed through the rate limiter at all.
   private readonly assemblyai: AssemblyAI;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly metricsService: MetricsService,
     private readonly rateLimiter: LlmRateLimiterService,
-    // Owns the (pool, routingKey) → bucket mapping AND the per-key Foundry
+    // Owns the (pool, routingKey) → bucket mapping AND that bucket's
     // credentials. It returns both as one value, so the limiter bucket and the
     // credentials that call can never disagree.
     private readonly endpointResolver: LlmEndpointResolver
   ) {
-    const openaiApiKey = this.configService.get<string>('app.openai.apiKey');
-    if (!openaiApiKey) throw new Error('Missing config: app.openai.apiKey');
-    this.openaiApiKey = openaiApiKey;
-
-    this.openrouterApiKey = this.configService.get<string>('app.openrouter.apiKey');
-
     const assemblyaiApiKey = this.configService.get<string>('app.assemblyai.apiKey');
     if (!assemblyaiApiKey) throw new Error('Missing config: app.assemblyai.apiKey');
 
@@ -407,65 +416,55 @@ export class LLMService {
     target: ModelTarget,
     temperature: number,
     maxTokens: number,
-    endpoint: FoundryEndpoint | undefined
+    endpoint: LlmEndpoint
   ): BaseChatModel {
+    const { modelKwargs, headroom } = this.providerOptions(target);
+
+    // ONE construction for every provider. All three are OpenAI-wire-compatible
+    // — OpenRouter and Azure Foundry (via its `/openai/v1` surface) differ from
+    // OpenAI only in base URL and request-body extras — so there is nothing per
+    // provider left here to diverge. The endpoint arrives from the SAME resolved
+    // bucket that took the rate-limiter slot in invokeStructured, with no second
+    // lookup to get wrong: this key's credentials are always paced by this key's
+    // limiter.
+    return new ChatOpenAI({
+      apiKey: endpoint.apiKey,
+      model: target.model,
+      temperature,
+      maxTokens: maxTokens + headroom,
+      ...(modelKwargs ? { modelKwargs } : {}),
+      configuration: { baseURL: endpoint.baseURL },
+      maxRetries: 0, // see method doc — our backOff is the only retry layer
+    });
+  }
+
+  /**
+   * The only genuinely per-provider parts of a request: body shaping, and how
+   * much completion budget to reserve for reasoning.
+   *
+   * Reasoning tokens share the completion budget, so a thinking model needs
+   * headroom ON TOP of the caller's answer budget — otherwise structured output
+   * gets truncated mid-JSON once thinking eats maxTokens. The node's maxTokens
+   * stays the answer budget; the overhead is added here. OpenAI targets have no
+   * `thinkMode` in the type at all, hence a flat 0.
+   */
+  private providerOptions(target: ModelTarget): {
+    modelKwargs?: Record<string, unknown>;
+    headroom: number;
+  } {
     switch (target.provider) {
       case 'openai':
-        return new ChatOpenAI({
-          openAIApiKey: this.openaiApiKey,
-          model: target.model,
-          temperature,
-          maxTokens,
-          maxRetries: 0, // see method doc — our backOff is the only retry layer
-        });
-      case 'openrouter': {
-        if (!this.openrouterApiKey) throw new Error('Missing config: app.openrouter.apiKey');
-        // OpenRouter is OpenAI-wire-compatible: reuse ChatOpenAI, just repoint the base URL.
-        // Reasoning ("think") control and upstream provider routing ride along as
-        // extra request-body params via modelKwargs.
-        //
-        // Reasoning tokens share the completion budget, so a thinking model needs
-        // headroom ON TOP of the caller's answer budget — otherwise the structured
-        // output gets truncated mid-JSON once thinking eats maxTokens. The node's
-        // maxTokens stays the answer budget; we add the reasoning overhead here.
-        return new ChatOpenAI({
-          apiKey: this.openrouterApiKey,
-          model: target.model,
-          temperature,
-          maxTokens: maxTokens + reasoningHeadroom(target.thinkMode),
+        return { headroom: 0 };
+      case 'openrouter':
+        return {
           modelKwargs: this.openrouterKwargs(target),
-          configuration: { baseURL: 'https://openrouter.ai/api/v1' },
-          maxRetries: 0, // see createChatModel doc — our backOff is the only retry layer
-        });
-      }
-      case 'azure-foundry': {
-        // The endpoint arrives from the SAME resolved bucket that selected the
-        // rate-limiter slot in invokeStructured — there is no second lookup here
-        // to get wrong, so this key's credentials are always paced by this key's
-        // limiter. Unreachable in practice: ModelConfigService fails startup if a
-        // pool the active variant uses has no endpoints.
-        if (!endpoint) {
-          throw new Error(
-            `Missing Azure Foundry credentials for pool '${target.pool}' ` +
-              `(app.azureFoundry.pools.${target.pool}).`
-          );
-        }
-        // Azure AI Foundry serves DeepSeek through its OpenAI-compatible `/openai/v1`
-        // surface, so — like OpenRouter — we reuse ChatOpenAI and just repoint the
-        // base URL. The API key rides as a Bearer token, which ChatOpenAI does for us.
-        //
-        // Same reasoning-token headroom rule as OpenRouter: thinking shares the
-        // completion budget, so add overhead on top of the caller's answer budget.
-        return new ChatOpenAI({
-          apiKey: endpoint.apiKey,
-          model: target.model,
-          temperature,
-          maxTokens: maxTokens + reasoningHeadroom(target.thinkMode),
+          headroom: reasoningHeadroom(target.thinkMode),
+        };
+      case 'azure-foundry':
+        return {
           modelKwargs: azureFoundryKwargs(target),
-          configuration: { baseURL: endpoint.baseURL },
-          maxRetries: 0, // see createChatModel doc — our backOff is the only retry layer
-        });
-      }
+          headroom: reasoningHeadroom(target.thinkMode),
+        };
     }
   }
 

@@ -482,7 +482,7 @@ Consumed by `init`. (Distinct from the `notices` module below.)
 
 ### Environment and configuration ([src/config](../apps/api/src/config/))
 - [config.module.ts](../apps/api/src/config/config.module.ts) — `@nestjs/config` w/ `appConfig` loader.
-- [app.config.ts](../apps/api/src/config/app.config.ts) — Zod `envSchema` + `validateEnv()`. **Required:** `MONGODB_URI`, `JWT_ACCESS_SECRET` (≥32), `S3_ACCESS_KEY_ID/SECRET/BUCKET_MEDIA`, `OPENAI_API_KEY`, `ASSEMBLYAI_API_KEY`, `SENTRY_DSN`. Optional/defaulted: `PORT` (3001), `ALLOWED_ORIGINS`, `TRUST_PROXY_HOPS`, OTP & SMTP settings, OTEL endpoints.
+- [app.config.ts](../apps/api/src/config/app.config.ts) — Zod `envSchema` + `validateEnv()`. **Required:** `MONGODB_URI`, `JWT_ACCESS_SECRET` (≥32), `S3_ACCESS_KEY_ID/SECRET/BUCKET_MEDIA`, `ASSEMBLYAI_API_KEY`, `SENTRY_DSN`. Optional/defaulted: `PORT` (3001), `ALLOWED_ORIGINS`, `TRUST_PROXY_HOPS`, OTP & SMTP settings, OTEL endpoints, `LLM_RPM_<POOL>` caps. **Not in the Zod schema:** LLM credentials are variable-cardinality (`<PREFIX>_API_KEY_<i>` / `<PREFIX>_BASE_URL_<i>`), so they are parsed by pattern in `parseLlmPools` and validated per-pool at startup by `ModelConfigService` against the active `LLM_VARIANT`.
 - [quota.config.ts](../apps/api/src/config/quota.config.ts) — plans per role, `GUEST_ARTEFACT_LIMIT`, window helpers.
 - [rate-limit.config.ts](../apps/api/src/config/rate-limit.config.ts) — throttler rules (20/10 s, 60/60 s).
 - `.env` / `.env.example` at api root.

@@ -94,7 +94,7 @@ pm2 reload  portfolio-api      # graceful, cluster only
 
 ## 4. Pre-flight checklist
 
-- `.env.production` has all the vars validated in `apps/api/src/config/app.config.ts` (MONGODB_URI, JWT_SECRET ≥32 chars, OPENAI_API_KEY, S3 credentials, SMTP, etc.).
+- `.env.production` has all the vars validated in `apps/api/src/config/app.config.ts` (MONGODB_URI, JWT_SECRET ≥32 chars, OPENAI_API_KEY_1 + OPENAI_BASE_URL_1, S3 credentials, SMTP, etc.).
 - API runs behind nginx/Caddy for TLS and as a real reverse proxy; set `TRUST_PROXY` accordingly (startup log reports `Trust proxy hops: N`).
 - MongoDB connection string points at the prod cluster, not dev.
 - Sentry DSN and OpenTelemetry exporters configured.

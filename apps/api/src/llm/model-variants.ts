@@ -26,7 +26,17 @@ export type VariantKey = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 /** A variant is a complete stage→target mapping — every stage must be present. */
 export type VariantProfile = Record<Stage, ModelTarget>;
 
-const openai = (model: string): ModelTarget => ({ provider: 'openai', model });
+/**
+ * Pools are defaulted in these helpers rather than spelled out per stage: for a
+ * single-account provider there is exactly one sensible pool, and repeating it
+ * nine times per variant would be noise. The parameter still exists so a variant
+ * CAN split (as F does on Foundry) the moment a second account appears.
+ */
+const openai = (model: string, pool: Pool = Pool.OpenAI): ModelTarget => ({
+  provider: 'openai',
+  pool,
+  model,
+});
 
 // Variant B: DeepSeek V4 Flash served through OpenRouter, pinned to Alibaba Cloud
 // Int. as the upstream inference provider (OpenRouter slug `alibaba`) for every
@@ -65,9 +75,11 @@ const DEEPINFRA_ROUTE = ['deepinfra'];
 const deepseek = (
   model: string,
   thinkMode: ThinkMode,
-  route: string[] = ATLAS_CLOUD_ROUTE
+  route: string[] = ATLAS_CLOUD_ROUTE,
+  pool: Pool = Pool.OpenRouter
 ): ModelTarget => ({
   provider: 'openrouter',
+  pool,
   model,
   thinkMode,
   route,
@@ -92,9 +104,11 @@ const deepseek = (
 const gptOss = (
   model: string,
   thinkMode: ThinkMode,
-  route: string[] = DEEPINFRA_ROUTE
+  route: string[] = DEEPINFRA_ROUTE,
+  pool: Pool = Pool.OpenRouter
 ): ModelTarget => ({
   provider: 'openrouter',
+  pool,
   model,
   thinkMode,
   route,
@@ -182,7 +196,7 @@ export const VARIANTS = {
   // Same model as B (DeepSeek V4 Flash), different route: Azure AI Foundry instead
   // of OpenRouter. Enables a clean A/B of the two hosting paths for the same model.
   D: {
-    cleaning: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
+    cleaning: foundry(GPT_NANO_FOUNDRY, Pool.Interactive, 'off', 'functionCalling'),
     classify: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
     check_completeness: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
     generate_followup: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),

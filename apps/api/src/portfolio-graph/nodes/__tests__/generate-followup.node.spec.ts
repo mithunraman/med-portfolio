@@ -14,7 +14,7 @@ function makeDeps(overrides: Partial<GraphDeps> = {}): GraphDeps {
     llmService: {
       invokeStructured: jest.fn(),
     } as any,
-    modelConfig: { resolve: jest.fn(() => ({ provider: 'openai', model: 'test-model' })) } as any,
+    modelConfig: { resolve: jest.fn(() => ({ provider: 'openai', pool: 'openai', model: 'test-model' })) } as any,
     eventEmitter: { emit: jest.fn() } as any,
     ...overrides,
   };

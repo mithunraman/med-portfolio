@@ -1,17 +1,17 @@
 import { Logger } from '@nestjs/common';
 import { Pool } from '../../llm/llm-pools';
-import { parseFoundryEndpoints, parseFoundryPools, rateLimitPolicy } from '../app.config';
+import { parseEndpoints, parseLlmPools, rateLimitPolicy } from '../app.config';
 
 const URL_A = 'https://res-a.services.ai.azure.com/openai/v1/';
 const URL_B = 'https://res-b.services.ai.azure.com/openai/v1/';
 
-describe('parseFoundryEndpoints', () => {
+describe('parseEndpoints', () => {
   it('returns an empty list when no endpoints are configured', () => {
-    expect(parseFoundryEndpoints({}, Pool.Analysis)).toEqual([]);
+    expect(parseEndpoints({}, Pool.Analysis)).toEqual([]);
   });
 
   it('parses distinct indexed pairs into an ordered list', () => {
-    const endpoints = parseFoundryEndpoints(
+    const endpoints = parseEndpoints(
       {
         AZURE_FOUNDRY_ANALYSIS_API_KEY_1: 'key-1',
         AZURE_FOUNDRY_ANALYSIS_BASE_URL_1: URL_A,
@@ -36,26 +36,24 @@ describe('parseFoundryEndpoints', () => {
     };
 
     // Pools are independent namespaces: neither picks up the other's keys.
-    expect(parseFoundryEndpoints(env, Pool.Interactive)).toEqual([
-      { apiKey: 'nano-key', baseURL: URL_A },
-    ]);
-    expect(parseFoundryEndpoints(env, Pool.Analysis)).toEqual([
+    expect(parseEndpoints(env, Pool.Interactive)).toEqual([{ apiKey: 'nano-key', baseURL: URL_A }]);
+    expect(parseEndpoints(env, Pool.Analysis)).toEqual([
       { apiKey: 'deepseek-key', baseURL: URL_B },
     ]);
   });
 
   it('throws on a half-configured pair (key without URL, or vice versa), naming the pool', () => {
     expect(() =>
-      parseFoundryEndpoints({ AZURE_FOUNDRY_ANALYSIS_API_KEY_1: 'key-1' }, Pool.Analysis)
+      parseEndpoints({ AZURE_FOUNDRY_ANALYSIS_API_KEY_1: 'key-1' }, Pool.Analysis)
     ).toThrow(/pool 'analysis' endpoint 1 is half-configured/);
     expect(() =>
-      parseFoundryEndpoints({ AZURE_FOUNDRY_INTERACTIVE_BASE_URL_2: URL_A }, Pool.Interactive)
+      parseEndpoints({ AZURE_FOUNDRY_INTERACTIVE_BASE_URL_2: URL_A }, Pool.Interactive)
     ).toThrow(/pool 'interactive' endpoint 2 is half-configured/);
   });
 
   it('throws on an invalid base URL', () => {
     expect(() =>
-      parseFoundryEndpoints(
+      parseEndpoints(
         {
           AZURE_FOUNDRY_ANALYSIS_API_KEY_1: 'key-1',
           AZURE_FOUNDRY_ANALYSIS_BASE_URL_1: 'not-a-url',
@@ -69,7 +67,7 @@ describe('parseFoundryEndpoints', () => {
     // The "Key 1"/"Key 2" footgun: one resource's two access keys, same base URL.
     // Two limiters would then pace against a single quota → sustained 429s.
     expect(() =>
-      parseFoundryEndpoints(
+      parseEndpoints(
         {
           AZURE_FOUNDRY_ANALYSIS_API_KEY_1: 'resource-a-key-1',
           AZURE_FOUNDRY_ANALYSIS_BASE_URL_1: URL_A,
@@ -81,9 +79,86 @@ describe('parseFoundryEndpoints', () => {
     ).toThrow(/pool 'analysis' endpoints 1 and 2 share the same base URL/);
   });
 
+  it('rejects the SAME api key in two slots, in any pool', () => {
+    // Pool-independent: one credential is one quota, so the duplicate only adds
+    // a limiter. Unlike the base-URL rule this needs no per-pool policy.
+    for (const [pool, env] of [
+      [Pool.OpenAI, { OPENAI_API_KEY_1: 'sk-dup', OPENAI_BASE_URL_1: 'https://api.openai.com/v1' }],
+      [
+        Pool.Analysis,
+        { AZURE_FOUNDRY_ANALYSIS_API_KEY_1: 'az-dup', AZURE_FOUNDRY_ANALYSIS_BASE_URL_1: URL_A },
+      ],
+    ] as const) {
+      const prefix = Object.keys(env)[0].replace(/_API_KEY_1$/, '');
+      expect(() =>
+        parseEndpoints(
+          {
+            ...env,
+            [`${prefix}_API_KEY_2`]: Object.values(env)[0],
+            // Distinct base URL, so this can ONLY be caught by the key check.
+            [`${prefix}_BASE_URL_2`]: URL_B,
+          },
+          pool
+        )
+      ).toThrow(new RegExp(`pool '${pool}' endpoints 1 and 2 use the SAME api key`));
+    }
+  });
+
+  it('does NOT claim to catch two DIFFERENT keys of one account', () => {
+    // The limit of the check above, pinned so nobody mistakes it for a
+    // shared-quota guard. Two keys of ONE OpenAI project share a cap, but they
+    // are different strings and a key does not encode its account — so there is
+    // no parse-time signal and this parses cleanly. The constraint is carried by
+    // documentation (.env.example, llm-pipeline-stages.md), not by code.
+    expect(
+      parseEndpoints(
+        {
+          OPENAI_API_KEY_1: 'sk-proj-aaa',
+          OPENAI_BASE_URL_1: 'https://api.openai.com/v1',
+          OPENAI_API_KEY_2: 'sk-proj-bbb',
+          OPENAI_BASE_URL_2: 'https://api.openai.com/v1',
+        },
+        Pool.OpenAI
+      )
+    ).toHaveLength(2);
+  });
+
+  it('ACCEPTS a duplicate base URL in an account-scoped pool', () => {
+    // The mirror image of the test above, and the reason the rule is a per-pool
+    // property rather than a universal one. Two OpenAI keys from different orgs
+    // necessarily share api.openai.com while holding independent quotas —
+    // applying Foundry's resource logic here would reject a valid setup.
+    const endpoints = parseEndpoints(
+      {
+        OPENAI_API_KEY_1: 'org-a-key',
+        OPENAI_BASE_URL_1: 'https://api.openai.com/v1',
+        OPENAI_API_KEY_2: 'org-b-key',
+        OPENAI_BASE_URL_2: 'https://api.openai.com/v1',
+      },
+      Pool.OpenAI
+    );
+
+    expect(endpoints).toEqual([
+      { apiKey: 'org-a-key', baseURL: 'https://api.openai.com/v1' },
+      { apiKey: 'org-b-key', baseURL: 'https://api.openai.com/v1' },
+    ]);
+  });
+
+  it('applies the SAME parsing rules to a provider pool as to a Foundry one', () => {
+    // One parser, one validation ladder — only the prefix differs. A provider
+    // parsed some other way would be the second credential plane this design
+    // exists to remove.
+    expect(() => parseEndpoints({ OPENROUTER_API_KEY_1: 'key' }, Pool.OpenRouter)).toThrow(
+      /pool 'openrouter' endpoint 1 is half-configured/
+    );
+    expect(() =>
+      parseEndpoints({ OPENAI_API_KEY_1: 'key', OPENAI_BASE_URL_1: 'not-a-url' }, Pool.OpenAI)
+    ).toThrow(/OPENAI_BASE_URL_1 must be a valid URL/);
+  });
+
   it('detects duplicate base URLs that differ only by trailing slash or host case', () => {
     expect(() =>
-      parseFoundryEndpoints(
+      parseEndpoints(
         {
           AZURE_FOUNDRY_ANALYSIS_API_KEY_1: 'key-1',
           AZURE_FOUNDRY_ANALYSIS_BASE_URL_1: 'https://res-a.services.ai.azure.com/openai/v1/',
@@ -102,7 +177,7 @@ describe('rateLimitPolicy', () => {
     // cap, so exposing it separately would let the two disagree.
     expect(rateLimitPolicy(60)).toEqual({ rpm: 60, minTimeMs: 1000 }); // interactive
     expect(rateLimitPolicy(35)).toEqual({ rpm: 35, minTimeMs: 1714 }); // analysis
-    expect(rateLimitPolicy(18)).toEqual({ rpm: 18, minTimeMs: 3333 }); // default
+    expect(rateLimitPolicy(18)).toEqual({ rpm: 18, minTimeMs: 3333 }); // provider pools
   });
 
   it('floors rather than rounds, so pacing is never faster than the cap allows', () => {
@@ -121,9 +196,9 @@ describe('rateLimitPolicy', () => {
   });
 });
 
-describe('parseFoundryPools', () => {
+describe('parseLlmPools', () => {
   it('returns an entry for every pool, empty where unconfigured', () => {
-    const pools = parseFoundryPools({
+    const pools = parseLlmPools({
       AZURE_FOUNDRY_ANALYSIS_API_KEY_1: 'key-1',
       AZURE_FOUNDRY_ANALYSIS_BASE_URL_1: URL_A,
     });
@@ -133,6 +208,8 @@ describe('parseFoundryPools', () => {
     expect(pools).toEqual({
       [Pool.Interactive]: [],
       [Pool.Analysis]: [{ apiKey: 'key-1', baseURL: URL_A }],
+      [Pool.OpenAI]: [],
+      [Pool.OpenRouter]: [],
     });
   });
 
@@ -144,7 +221,7 @@ describe('parseFoundryPools', () => {
     const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
     expect(() =>
-      parseFoundryPools({
+      parseLlmPools({
         AZURE_FOUNDRY_INTERACTIVE_API_KEY_1: 'nano-key',
         AZURE_FOUNDRY_INTERACTIVE_BASE_URL_1: URL_A,
         AZURE_FOUNDRY_ANALYSIS_API_KEY_1: 'deepseek-key',
@@ -159,7 +236,7 @@ describe('parseFoundryPools', () => {
   it('does not warn when pools use distinct resources', () => {
     const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
-    parseFoundryPools({
+    parseLlmPools({
       AZURE_FOUNDRY_INTERACTIVE_API_KEY_1: 'nano-key',
       AZURE_FOUNDRY_INTERACTIVE_BASE_URL_1: URL_A,
       AZURE_FOUNDRY_ANALYSIS_API_KEY_1: 'deepseek-key',

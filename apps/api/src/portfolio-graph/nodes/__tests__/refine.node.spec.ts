@@ -36,7 +36,7 @@ function makeDeps(response: unknown, opts: { throws?: boolean } = {}): GraphDeps
         ? jest.fn().mockRejectedValue(new Error('LLM down'))
         : jest.fn().mockResolvedValue({ data: response }),
     } as any,
-    modelConfig: { resolve: jest.fn(() => ({ provider: 'openai', model: 'test-model' })) } as any,
+    modelConfig: { resolve: jest.fn(() => ({ provider: 'openai', pool: 'openai', model: 'test-model' })) } as any,
     eventEmitter: { emit: jest.fn() } as any,
   };
 }

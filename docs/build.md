@@ -28,7 +28,7 @@ Required variables:
 | `MONGODB_URI` | MongoDB connection string |
 | `JWT_SECRET` | Min 32 characters |
 | `JWT_EXPIRES_IN` | e.g. `7d` |
-| `OPENAI_API_KEY` | OpenAI API key |
+| `OPENAI_API_KEY_1` / `OPENAI_BASE_URL_1` | OpenAI credentials for the `openai` pool (variant A). Other variants use `OPENROUTER_*` or `AZURE_FOUNDRY_*_*` instead — see `.env.example`. |
 | `ASSEMBLYAI_API_KEY` | AssemblyAI API key |
 | `S3_ENDPOINT` | S3-compatible storage endpoint |
 | `S3_REGION` | e.g. `auto` |

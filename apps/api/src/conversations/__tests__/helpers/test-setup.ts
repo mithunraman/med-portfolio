@@ -190,7 +190,7 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
       {
         provide: ModelConfigService,
         useValue: {
-          resolve: () => ({ provider: 'openai', model: 'test-model' }),
+          resolve: () => ({ provider: 'openai', pool: 'openai', model: 'test-model' }),
           activeVariant: 'A',
         },
       },

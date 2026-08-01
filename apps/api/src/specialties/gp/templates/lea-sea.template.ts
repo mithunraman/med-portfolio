@@ -2,7 +2,7 @@ import { ArtefactTemplate, flatSections } from '@acme/shared';
 
 // ---------------------------------------------------------------------------
 // LEA / SEA (Learning Event Analysis / Significant Event)
-// Used by: LEARNING_EVENT, SIGNIFICANT_EVENT
+// Used by: SIGNIFICANT_EVENT (covers both the no-harm LEA and the full SEA)
 // ---------------------------------------------------------------------------
 // On the RCGP/FourteenFish ePortfolio these are a SINGLE combined log tool —
 // "Learning Event Analysis/Significant Event" — not two separate entries. This
@@ -23,8 +23,10 @@ import { ArtefactTemplate, flatSections } from '@acme/shared';
 // when the trainee actually describes harm/impact. That reproduces the form's
 // "extra boxes appear if Yes" behaviour with the mechanism the repo already has.
 // (If a hard severity gate is ever needed — flipping these to required for true
-// SEAs — that branch belongs upstream in classification, via the separate
-// SIGNIFICANT_EVENT entry type, not inside a static template.)
+// SEAs — it belongs in the grading prompt, keyed off whether the transcript
+// describes harm, not in a static template and not in a second entry type. The
+// two types this template used to serve were behaviourally identical, which is
+// why they were merged.)
 //
 // Flat (one probe → one field): unlike CCR's single composed "Brief
 // description", the FourteenFish LEA/SEA form has a separate box per question,

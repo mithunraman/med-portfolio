@@ -9,6 +9,12 @@ import { ConversationStatus } from '@acme/shared';
 import { Conversation, ConversationDocument, ConversationSchema } from '../schemas/conversation.schema';
 import { Message, MessageDocument, MessageSchema } from '../schemas/message.schema';
 import { Media, MediaSchema } from '../../media/schemas/media.schema';
+import {
+  Artefact,
+  ArtefactDocument,
+  ArtefactSchema,
+} from '../../artefacts/schemas/artefact.schema';
+import { ArtefactStatus, Specialty } from '@acme/shared';
 
 /**
  * Repository query tests — verifies that deleted messages are excluded from
@@ -20,6 +26,7 @@ describe('ConversationsRepository — deleted message filtering', () => {
   let repo: ConversationsRepository;
   let messageModel: Model<MessageDocument>;
   let conversationModel: Model<ConversationDocument>;
+  let artefactModel: Model<ArtefactDocument>;
   const userId = new Types.ObjectId();
   const conversationId = new Types.ObjectId();
 
@@ -64,6 +71,8 @@ describe('ConversationsRepository — deleted message filtering', () => {
           { name: Conversation.name, schema: ConversationSchema },
           { name: Message.name, schema: MessageSchema },
           { name: Media.name, schema: MediaSchema },
+          // Required for findArtefactRefByConversationId's populate to resolve.
+          { name: Artefact.name, schema: ArtefactSchema },
         ]),
       ],
       providers: [ConversationsRepository],
@@ -72,11 +81,13 @@ describe('ConversationsRepository — deleted message filtering', () => {
     repo = module.get(ConversationsRepository);
     messageModel = module.get<Model<MessageDocument>>(getModelToken(Message.name));
     conversationModel = module.get<Model<ConversationDocument>>(getModelToken(Conversation.name));
+    artefactModel = module.get<Model<ArtefactDocument>>(getModelToken(Artefact.name));
   });
 
   afterEach(async () => {
     await messageModel.deleteMany({});
     await conversationModel.deleteMany({});
+    await artefactModel.deleteMany({});
   });
 
   afterAll(async () => {
@@ -237,6 +248,45 @@ describe('ConversationsRepository — deleted message filtering', () => {
       await insertConversation({ artefact, userId: otherUserId, status: ConversationStatus.ACTIVE });
 
       const result = await repo.findActiveConversationByArtefact(artefact, userId);
+
+      expect(result.ok).toBe(true);
+      expect(result.value).toBeNull();
+    });
+  });
+
+  describe('findArtefactRefByConversationId — populate projection', () => {
+    it('returns every field the ref contract declares', async () => {
+      // Guards the projection STRING, which no mocked-repository test can reach: a
+      // typo there ("artefactTyp") compiles, satisfies every unit test, and silently
+      // yields undefined at runtime.
+      const [artefact] = await artefactModel.create([
+        {
+          artefactId: `${userId.toString()}_${nanoidAlphanumeric()}`,
+          userId,
+          specialty: Specialty.GP,
+          trainingStage: 'ST1',
+          status: ArtefactStatus.IN_CONVERSATION,
+          artefactType: 'SIGNIFICANT_EVENT',
+          title: 'Test entry',
+        },
+      ]);
+      const conversation = await insertConversation({ artefact: artefact._id });
+
+      const result = await repo.findArtefactRefByConversationId(conversation._id);
+
+      expect(result.ok).toBe(true);
+      expect(result.value).toEqual({
+        xid: artefact.xid,
+        status: ArtefactStatus.IN_CONVERSATION,
+        artefactType: 'SIGNIFICANT_EVENT',
+        specialty: Specialty.GP,
+      });
+    });
+
+    it('returns null when the artefact is missing', async () => {
+      const conversation = await insertConversation({ artefact: new Types.ObjectId() });
+
+      const result = await repo.findArtefactRefByConversationId(conversation._id);
 
       expect(result.ok).toBe(true);
       expect(result.value).toBeNull();

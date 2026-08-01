@@ -1,9 +1,8 @@
-import { useAppDispatch, useAppSelector } from '@/hooks';
+import { useAppDispatch, useAppSelector, useEntryTypes } from '@/hooks';
 import { fetchSpecialties } from '@/store/slices/authSlice';
 import { useTheme } from '@/theme';
-import type { EntryTypeOption } from '@acme/shared';
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -17,6 +16,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EmptyState } from './EmptyState';
 
 type LoadState = 'idle' | 'loading' | 'success' | 'error';
+
+/**
+ * Delay before flashing the scroll indicator, in ms. The Modal's slide-in takes
+ * ~300ms; flashing during it is invisible, which would defeat the point.
+ */
+const SHEET_SETTLE_MS = 350;
 
 interface EntryTypePickerSheetProps {
   visible: boolean;
@@ -43,18 +48,17 @@ export function EntryTypePickerSheet({ visible, onSelect, onDismiss }: EntryType
   const dispatch = useAppDispatch();
 
   const specialties = useAppSelector((s) => s.auth.specialties);
-  const userSpecialty = useAppSelector((s) => s.auth.user?.specialty?.code);
 
   const [loadState, setLoadState] = useState<LoadState>('idle');
   const [error, setError] = useState<string | null>(null);
+  const listRef = useRef<ScrollView>(null);
 
   // The store is the source of truth for whether we have data; `loadState` only
   // records what happened to OUR fetch attempt. Keeping those separate means a
   // response that arrived from somewhere else (onboarding, another screen) is
   // rendered normally instead of being second-guessed by a stale local flag.
   const hasSpecialties = specialties.length > 0;
-  const entryTypes: EntryTypeOption[] =
-    specialties.find((s) => s.specialty === userSpecialty)?.entryTypes ?? [];
+  const entryTypes = useEntryTypes();
 
   const loadEntryTypes = useCallback(async () => {
     setLoadState('loading');
@@ -84,6 +88,24 @@ export function EntryTypePickerSheet({ visible, onSelect, onDismiss }: EntryType
     if (hasSpecialties || loadState !== 'idle') return;
     loadEntryTypes();
   }, [visible, hasSpecialties, loadState, loadEntryTypes]);
+
+  // Flash the scroll indicator once the sheet has settled and the list has content.
+  //
+  // The list is the first in the app long enough to overflow: with nine GP entry types
+  // today only about half fit above the fold, and on a larger phone the fold can land far
+  // enough into a card that it still reads as a complete one — so the list looks
+  // finished when it is not. A flash is the one affordance that fires while the
+  // trainee is deciding, since indicators are transient on both platforms and would
+  // otherwise only appear after they had already discovered scrolling.
+  //
+  // Keyed on the item count, not just `visible`, so a cold start that opens the sheet
+  // before `/specialties` resolves still flashes when the list arrives. Safe to call
+  // unconditionally: on a list that does not overflow there is no indicator to show.
+  useEffect(() => {
+    if (!visible || entryTypes.length === 0) return;
+    const timer = setTimeout(() => listRef.current?.flashScrollIndicators(), SHEET_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [visible, entryTypes.length]);
 
   const handleSelect = useCallback(
     (code: string) => {
@@ -129,26 +151,35 @@ export function EntryTypePickerSheet({ visible, onSelect, onDismiss }: EntryType
 
     return (
       <ScrollView
+        ref={listRef}
         style={styles.list}
         contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
+        // Deliberately ON here, against the convention used by the other lists in the
+        // app (SpecialtyList, StageList, the tab screens). Those hold 1–3 items and
+        // never overflow; this one does, so hiding the indicator hides the fact that
+        // there is more below.
+        showsVerticalScrollIndicator
       >
         {entryTypes.map((option) => (
           <Pressable
             key={option.code}
             onPress={() => handleSelect(option.code)}
             accessibilityRole="button"
-            accessibilityLabel={`${option.label}. ${option.description}`}
+            // Label only, matching what is rendered. `option.description` is
+            // deliberately not read out either — it is hidden because the copy is not
+            // final, not to save space, so surfacing it to screen-reader users would
+            // ship the very text we are holding back.
+            accessibilityLabel={option.label}
             style={[
               styles.option,
               { backgroundColor: colors.background, borderColor: colors.border },
             ]}
           >
             <View style={styles.optionText}>
+              {/* Descriptions are hidden until the final copy lands. The API still
+                  sends `option.description`; only the render is suppressed, so
+                  restoring it is a one-line change here. */}
               <Text style={[styles.optionLabel, { color: colors.text }]}>{option.label}</Text>
-              <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
-                {option.description}
-              </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </Pressable>
@@ -171,6 +202,14 @@ export function EntryTypePickerSheet({ visible, onSelect, onDismiss }: EntryType
 
           <View style={styles.sheetHeader}>
             <Text style={[styles.sheetTitle, { color: colors.text }]}>What are you logging?</Text>
+            {/* States the total up front, so a trainee who can see only the first few
+                options knows how many there are. Hidden below two, where there is
+                nothing to discover and the line would only add noise. */}
+            {entryTypes.length > 1 && (
+              <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
+                Choose from {entryTypes.length} types
+              </Text>
+            )}
           </View>
 
           {renderBody()}
@@ -208,6 +247,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  sheetSubtitle: {
+    fontSize: 13,
+    marginTop: 2,
+  },
   loading: {
     paddingVertical: 32,
     alignItems: 'center',
@@ -236,6 +279,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  /** Unused while descriptions are hidden — kept so restoring them needs no re-tuning. */
   optionDescription: {
     fontSize: 12,
     lineHeight: 17,

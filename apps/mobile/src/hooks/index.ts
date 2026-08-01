@@ -10,3 +10,4 @@ export { useNetworkRecovery } from './useNetworkRecovery';
 export { useOfflineAwareInsets } from './useOfflineAwareInsets';
 export { useBannerVisibility } from './useBannerVisibility';
 export { useCanCreateArtefact } from './useCanCreateArtefact';
+export { useEntryTypes, useEntryTypeLabel } from './useEntryTypes';

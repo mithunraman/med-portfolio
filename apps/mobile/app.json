@@ -68,6 +68,12 @@
         }
       ],
       "expo-sharing",
+      [
+        "expo-dev-client",
+        {
+          "toolsButton": false
+        }
+      ],
       "./plugins/with-sentry-disable-upload",
       "./plugins/with-production-node-env"
     ],

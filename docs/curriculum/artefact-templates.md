@@ -1,13 +1,12 @@
 # Artefact Templates
 
-8 unique templates for 10 entry types. Each template defines the sections required for a complete portfolio entry, what the trainee needs to provide, and how the app generates and checks content.
+8 unique templates for 9 entry types. Each template defines the sections required for a complete portfolio entry, what the trainee needs to provide, and how the app generates and checks content.
 
 Template mapping:
 - `CLINICAL_CASE_REVIEW` → CCR Template
 - `OUT_OF_HOURS` → CCR Template (reused)
-- `SIGNIFICANT_EVENT` → SEA Template
-- `LEARNING_EVENT` → LEA Template
-- `ACADEMIC_ACTIVITY` → LEA Template (reused)
+- `SIGNIFICANT_EVENT` → LEA/SEA Template — one type covering both the no-harm Learning Event and the full Significant Event, mirroring the single combined FourteenFish log tool
+- `ACADEMIC_ACTIVITY` → Generic Reflective Template
 - `FEEDBACK_REFLECTION` → Feedback Template
 - `LEADERSHIP_ACTIVITY` → Leadership Template
 - `QI_PROJECT` → QIP Template
@@ -54,46 +53,66 @@ The workhorse entry. 36 required per year. Must be about a real patient the trai
 
 ---
 
-## Template 2: SEA (Significant Event Analysis)
+## Template 2: LEA/SEA (Learning Event Analysis / Significant Event)
 
 _Used by: SIGNIFICANT_EVENT_
 
-Required when an event meets the GMC threshold for harm. At least 1 per 6 months. Must demonstrate root cause analysis and systemic change, not just personal reflection.
+> **This section previously documented two templates** (a separate "SEA Template" and
+> "LEA Template") with section sets that no longer exist in code. There is one
+> `LEA_SEA_TEMPLATE`, and as of this change one entry type feeding it. The probe list
+> below is a summary — the authoritative descriptions, prompt hints, extraction
+> questions and descriptor criteria live in
+> [`lea-sea.template.ts`](../../apps/api/src/specialties/gp/templates/lea-sea.template.ts)
+> and are not duplicated here, because duplicating them is what produced the drift.
 
-| id | label | required | description | promptHint | extractionQuestion | weight |
-|----|-------|----------|-------------|------------|-------------------|--------|
-| `event_description` | What Happened | yes | Factual, chronological, anonymised account of the event. Who was involved, what occurred, when and where. | Describe the event objectively and chronologically without judgment. Keep anonymised. | Can you walk me through exactly what happened? | 0.15 |
-| `what_went_well` | What Went Well | yes | Aspects of the situation that were handled correctly. Good practice that should be maintained. | Identify positive aspects — what was done correctly, what worked | Was there anything that was handled well during this event? | 0.10 |
-| `what_could_improve` | What Could Have Been Done Differently | yes | Honest assessment of where things went wrong or could have been better. Specific, not vague. | Describe specific actions or decisions that could have been different. Avoid vague generalisations. | Looking back, is there anything you or the team could have done differently? | 0.15 |
-| `root_cause` | Why It Happened | yes | Root cause analysis — system factors, human factors, communication breakdown, resource issues. Not about blaming individuals. | Analyse the contributing factors. Consider system issues, communication, workload, knowledge gaps. Avoid individual blame. | What do you think contributed to this happening? Were there any system or team factors? | 0.20 |
-| `impact` | Impact | yes | Effect on the patient, the trainee, the team, and/or the wider system | Describe the consequences honestly — for the patient, yourself, and the team | What was the impact on the patient and/or your team? | 0.10 |
-| `changes_made` | Changes Made | yes | Concrete actions taken or proposed — protocols changed, guidelines reviewed, team briefings, new processes. Must be specific. | Detail specific changes implemented or planned. Include who is responsible and timelines. | What has been done or changed as a result of this event? | 0.20 |
-| `personal_learning` | Personal Learning | yes | What the trainee personally took away. How it shapes their practice going forward. Link to professional development. | Connect to personal professional development. Address: What will I maintain, improve, or stop? | What did you personally take away from this experience? | 0.10 |
+On the RCGP/FourteenFish ePortfolio this is a **single combined log tool**, not two
+entries. The Learning-vs-Significant distinction is a GMC harm threshold, not a different
+form: answering the threshold question "Yes" simply reveals extra boxes. The app models
+those as optional probes, so they stay invisible for a no-harm event and light up only
+when the trainee describes harm or impact.
 
-**Quality standard:** A good SEA has honest root cause analysis (not superficial), demonstrates team discussion where possible, shows concrete systemic changes (not just "I will be more careful"), and links to professional development.
+Word count: 250–450 — a no-harm LEA sits at the lower end, a full Significant Event
+(with the optional impact fields populated) at the upper.
 
-**Key distinction from LEA:** The event met the GMC threshold for harm (actual harm occurred, or a serious near-miss). If no harm occurred, it should be an LEA instead.
+| id | label | required | weight |
+|----|-------|----------|--------|
+| `event_description` | What Happened | yes | 0.10 |
+| `why_it_happened` | Why It Happened | yes — **threshold: strong** | 0.18 |
+| `what_went_well` | What Was Done Well | yes | 0.07 |
+| `what_could_improve` | What Could Be Done Differently | yes | 0.10 |
+| `who_involved` | Who Was Involved in the Discussion | no | 0.03 |
+| `team_learning` | What You and the Team Learnt | yes | 0.15 |
+| `changes_made` | Changes Made | yes | 0.15 |
+| `reflection` | Reflection | yes — **threshold: strong** | 0.15 |
+| `significant_event_impact` | Impact (Significant Event) | no | 0.04 |
+| `emotional_impact` | Personal & Emotional Impact | no | 0.03 |
+
+**Quality standard:** the two `threshold: 'strong'` probes are the assessment-critical
+ones the GMC singles out — root-cause analysis and reflection. Everything else clears at
+`adequate`. Reflection should focus on insight, learning and resulting changes to
+practice, not on restating the facts.
 
 ---
 
-## Template 3: LEA (Learning Event Analysis)
+## Template 3: Generic Reflective
 
-_Used by: LEARNING_EVENT, ACADEMIC_ACTIVITY_
+_Used by: ACADEMIC_ACTIVITY_
 
-At least 1 per training year. For events that present a learning opportunity but didn't cause GMC-threshold harm. For ACADEMIC_ACTIVITY entries, the same structure applies but the trigger is an academic event (research, teaching, journal club, literature review).
+> **Was missing from this document.** The old mapping claimed `ACADEMIC_ACTIVITY` reused
+> the "LEA Template"; it does not — it has always used `GENERIC_REFLECTIVE_TEMPLATE`.
+> Full descriptions, prompt hints and descriptor criteria are in
+> [`reflective.template.ts`](../../apps/api/src/specialties/gp/templates/reflective.template.ts).
 
-| id | label | required | description | promptHint | extractionQuestion | weight |
-|----|-------|----------|-------------|------------|-------------------|--------|
-| `event_description` | What Happened | yes | Description of the event or learning opportunity. What occurred, who was involved, the setting. | Describe the event or learning opportunity concisely. Include context and setting. | Can you describe what happened or what the learning opportunity was? | 0.15 |
-| `learning_opportunity` | Why This Was a Learning Opportunity | yes | What made this event notable. What could have gone differently. Why it matters for professional development. | Explain why this event is significant for learning. What could have gone wrong, or what insight did it offer? | What made this event stand out as a learning opportunity? | 0.20 |
-| `what_learned` | What Was Learned | yes | Specific knowledge, skills, or attitudes gained. Link to evidence or guidelines where relevant. | Describe concrete learning points. Reference relevant guidelines or evidence if applicable. | What specifically did you learn from this? | 0.25 |
-| `application` | Application to Practice | yes | How this learning will change or has changed the trainee's practice. Specific, not generic. | Describe how this learning applies to your day-to-day practice. Be specific about what will change. | How will this change your practice going forward? | 0.25 |
-| `team_sharing` | Team Sharing | no | Whether and how the learning was shared with the team. Evidence of collaborative learning. | Note if and how this learning was shared with colleagues or the wider team. | Did you share this learning with your team? | 0.05 |
-| `evidence_of_change` | Evidence of Change | no | Concrete examples showing the learning has been applied. Linked entries, follow-up cases, etc. | If applicable, describe specific examples where you've applied this learning since. | Can you give an example of how you've applied this learning since? | 0.10 |
+A Gibbs-shaped reflective structure for activities that aren't patient encounters or
+events — research, teaching, journal club, literature review. Word count: 200–400.
 
-**Quality standard:** A good LEA goes beyond description to analyse why the event matters and demonstrates concrete application to practice. Should show reflective depth.
-
-**Key distinction from SEA:** No GMC-threshold harm occurred. If harm occurred, it should be an SEA instead.
+| id | label | required | weight |
+|----|-------|----------|--------|
+| `activity` | The Activity | yes | 0.15 |
+| `significance` | Why It Mattered | yes | 0.17 |
+| `learning` | What You Learned | yes | 0.30 |
+| `application` | Application to Practice | yes | 0.28 |
+| `challenges` | Challenges & Honest Reflection | no | 0.10 |
 
 ---
 
@@ -204,10 +223,11 @@ All templates use a reflective structure aligned with the RCGP's preferred appro
 All entry types require the trainee to link to relevant RCGP capabilities (C-01 to C-13) with justification. This is handled by the `tag_capabilities` node, not within the templates themselves.
 
 ### Word count guidance
-- CCR reflection sections: 150-300 words (concise but substantive)
-- SEA/LEA full entries: 300-500 words
-- QIP entries: 500-800 words (more structured, data-heavy)
-- Other types: 200-400 words
+Per-entry ranges live in each template's `wordCountRange`
+([`apps/api/src/specialties/gp/templates/`](../../apps/api/src/specialties/gp/templates/)) and
+are not repeated here. This section previously listed four ranges, of which three had drifted
+from the templates — the same duplication called out under "Template 2: LEA/SEA" above, which
+is why probe descriptions and prompt hints are not copied into this file either.
 
 ### Quality over quantity
 The RCGP explicitly states "quality is more important than quantity." Entries should demonstrate critical thinking and self-awareness, not just describe events. The `quality_check` node should assess depth of reflection, not just completeness.

@@ -75,43 +75,44 @@ The app's dictation flow applies to **Category 3 (Learning Log entries)** plus p
 | **Placement Planning Meeting** | Collaborative meeting at the start of a post. Happens with the supervisor present, not dictated afterwards. |
 | **PDP** | The app generates PDP _from_ entries. A standalone PDP isn't dictated, it's assembled from learning needs across entries. |
 
-### Classification enum (10 types)
+### Entry-type enum (9 types)
 
 | Entry type | Enum value | Maps to RCGP type | Frequency | Template used |
 |-----------|------------|-------------------|-----------|---------------|
 | **Clinical Case Review** | `CLINICAL_CASE_REVIEW` | CCR (Learning Log) | Most common — 36/year required | CCR template |
-| **Significant Event** | `SIGNIFICANT_EVENT` | SEA | At least 1 per 6 months | SEA template |
-| **Learning Event** | `LEARNING_EVENT` | LEA | At least 1 per year | LEA template |
+| **Significant Event / Learning event analysis** | `SIGNIFICANT_EVENT` | SEA + LEA | At least 1 SEA per 6 months, 1 LEA per year | LEA/SEA template |
 | **Reflection on Feedback** | `FEEDBACK_REFLECTION` | Reflection on MSF/PSQ/exams | After each feedback cycle | Feedback template |
 | **Leadership Activity** | `LEADERSHIP_ACTIVITY` | Leadership & Professionalism log | Required in ST3 | Leadership template |
-| **Academic Activity** | `ACADEMIC_ACTIVITY` | Academic Activities log | When applicable (academic trainees) | Shares LEA template |
+| **Academic Activity** | `ACADEMIC_ACTIVITY` | Academic Activities log | When applicable (academic trainees) | Generic Reflective template |
 | **Out of Hours** | `OUT_OF_HOURS` | UUC/OOH log | When applicable | Shares CCR template |
 | **QI Project** | `QI_PROJECT` | QIP | At least 1 in primary care | QIP template |
 | **QI Activity** | `QI_ACTIVITY` | QIA | At least 1 per year | QIA template |
 | **Prescribing** | `PRESCRIBING` | Prescribing Assessment | ST3 | Prescribing template |
 
-### Template mapping (10 types, 8 unique templates)
+### Template mapping (9 types, 8 unique templates)
 
 ```
 CLINICAL_CASE_REVIEW  → CCR_TEMPLATE
-SIGNIFICANT_EVENT     → SEA_TEMPLATE
-LEARNING_EVENT        → LEA_TEMPLATE
+SIGNIFICANT_EVENT     → LEA_SEA_TEMPLATE      (covers both LEA and SEA)
 FEEDBACK_REFLECTION   → FEEDBACK_TEMPLATE
 LEADERSHIP_ACTIVITY   → LEADERSHIP_TEMPLATE
-ACADEMIC_ACTIVITY     → LEA_TEMPLATE          (reuses LEA)
+ACADEMIC_ACTIVITY     → GENERIC_REFLECTIVE_TEMPLATE
 OUT_OF_HOURS          → CCR_TEMPLATE          (reuses CCR)
 QI_PROJECT            → QIP_TEMPLATE
 QI_ACTIVITY           → QIA_TEMPLATE
 PRESCRIBING           → PRESCRIBING_TEMPLATE
 ```
 
-### Classification signals
+### Entry-type signals
+
+> Retained as **guidance for the trainee choosing a type**, not as machine input. These
+> were once `classificationSignals` fed to a classifier node; that node is gone and the
+> trainee picks the type at artefact creation. Nothing here is read by code.
 
 | Type | Key signals in transcript |
 |------|--------------------------|
 | **Clinical Case Review** | Specific patient, clinical details, diagnosis, management, no adverse event |
-| **Significant Event** | Harm, near-miss, complaint, unexpected outcome, patient safety, GMC threshold |
-| **Learning Event** | Learning opportunity arose, no harm occurred, could have gone wrong, improvement potential |
+| **Significant Event / Learning event analysis** | Harm, near-miss, complaint, unexpected outcome, patient safety, GMC threshold — **or** a learning opportunity where no harm occurred. Both go here; the harm threshold changes which optional sections light up, not which entry type to pick |
 | **Feedback Reflection** | MSF results, PSQ scores, exam feedback, colleague feedback, survey results |
 | **Leadership Activity** | Chairing, presenting, managing, supervising, team conflict, organisational change |
 | **Academic Activity** | Research, teaching, academic presentation, journal club, literature review |
@@ -120,13 +121,20 @@ PRESCRIBING           → PRESCRIBING_TEMPLATE
 | **QI Activity** | Smaller improvement, single audit, brief evaluation, practice-level change |
 | **Prescribing** | Prescribing patterns, medication review, formulary, polypharmacy, drug interactions |
 
-### Key distinction: CCR vs SEA vs LEA
+### Key distinction: CCR vs SEA/LEA
 
-The most important classification to get right. A trainee dictating a case could be any of these three:
+The choice that matters, and now the only one the trainee has to make here — SEA and LEA
+were merged into a single type, so the hard three-way call is a two-way one:
 
 - **CCR**: Clinical case, no adverse event. Focus on clinical reasoning and learning.
-- **SEA**: Something went wrong or nearly did (GMC harm threshold). Focus on root cause and systemic change.
-- **LEA**: Something could have gone wrong but didn't, or a learning opportunity arose. Focus on what was learned and how to improve.
+- **Significant Event / Learning event analysis**: Something went wrong, nearly did, or
+  could have. Focus on root cause and what changed as a result. Whether it crossed the GMC
+  harm threshold determines how much of the optional impact detail is expected — it no
+  longer determines which entry type to pick.
+
+The SEA-vs-LEA judgement still matters for the trainee's own ARCP counting (an SEA is
+required at least every 6 months, an LEA at least yearly) — but that is a labelling
+question for their ePortfolio, not a branch in this app.
 
 ---
 

@@ -14,6 +14,7 @@ import { AnalysisRunsService } from '../analysis-runs/analysis-runs.service';
 import type { AnalysisRun } from '../analysis-runs/schemas/analysis-run.schema';
 import { isErr } from '../common/utils/result.util';
 import { OutboxService } from '../outbox/outbox.service';
+import { resolveEntryTypeLabel } from '../specialties/specialty.registry';
 import {
   CONVERSATIONS_REPOSITORY,
   type IConversationsRepository,
@@ -56,11 +57,19 @@ export class ConversationContextService {
     const ref = !isErr(refResult) ? refResult.value : null;
     const artefactId = ref?.xid ?? '';
     const artefactStatus = ref?.status ?? null;
+    // Entry type + label travel together. The label is resolved here rather than in
+    // the repository: persistence returns stored values, the domain layer maps them
+    // to presentation — the same split `toArtefactDto` uses, via the same resolver,
+    // so the retired-code fallback cannot drift between the two.
+    const artefactType = ref?.artefactType ?? null;
+    const artefactTypeLabel = ref ? resolveEntryTypeLabel(ref.specialty, ref.artefactType) : null;
 
     if (conversationStatus === ConversationStatus.CLOSED) {
       return {
         artefactId,
         artefactStatus,
+        artefactType,
+        artefactTypeLabel,
         phase: 'closed',
         actions: {
           sendMessage: denied('CONVERSATION_CLOSED', 'This conversation is closed.'),
@@ -127,7 +136,16 @@ export class ConversationContextService {
         }
       : undefined;
 
-    return { artefactId, artefactStatus, phase, actions, activeQuestion, analysisRun };
+    return {
+      artefactId,
+      artefactStatus,
+      artefactType,
+      artefactTypeLabel,
+      phase,
+      actions,
+      activeQuestion,
+      analysisRun,
+    };
   }
 
   private derivePhase(

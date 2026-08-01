@@ -51,6 +51,34 @@ export function isValidEntryType(specialty: Specialty, code: string): boolean {
   return entry.config.entryTypes.some((e) => e.code === code);
 }
 
+/**
+ * Display label for an entry-type code, falling back to the code itself.
+ *
+ * Deliberately total where `getTemplateForEntryType` throws. A template is required
+ * to do any work, so an unresolvable code there is a hard failure; a label is display
+ * only, and showing the raw code beats failing the request that carries it. That keeps
+ * a renamed or retired code from taking out an artefact list or a conversation payload
+ * — `LEARNING_EVENT`, removed from `gp.entry-types.ts`, still renders on artefacts
+ * created before the removal.
+ *
+ * Reads `SPECIALTY_CONFIGS` directly rather than via `getSpecialtyConfig`, which
+ * throws for an inactive specialty. Callers must not have to try/catch a label.
+ *
+ * This makes only the *label* total; it does not make any route survive specialty
+ * deactivation. `toArtefactDto` calls `getSpecialtyConfig` before it reaches this
+ * resolver and throws, as do auth, review periods, and every graph node. Deactivating
+ * a specialty that has live artefacts is unsupported app-wide, not partially handled here.
+ *
+ * Note this resolves for INACTIVE specialties too, unlike `isValidEntryType`, which
+ * rejects them. Not an inconsistency — that one gates creation and must refuse a
+ * deactivated specialty; this renders records that already exist, and they should not
+ * decay into raw codes because their specialty was switched off after the fact.
+ */
+export function resolveEntryTypeLabel(specialty: Specialty, code: string): string {
+  const entry = SPECIALTY_CONFIGS[specialty];
+  return entry?.config.entryTypes.find((e) => e.code === code)?.label ?? code;
+}
+
 /** Project config entry types onto the public option shape (drops server-only fields). */
 function toEntryTypeOptions(config: SpecialtyConfig): EntryTypeOption[] {
   return config.entryTypes.map((e) => ({

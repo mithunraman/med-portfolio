@@ -1,4 +1,10 @@
-import { AnalysisRunStatus, ArtefactStatus, ConversationStatus, MessageRole } from '@acme/shared';
+import {
+  AnalysisRunStatus,
+  ArtefactStatus,
+  ConversationStatus,
+  MessageRole,
+  Specialty,
+} from '@acme/shared';
 import { Types } from 'mongoose';
 import type { AnalysisRun } from '../../analysis-runs/schemas/analysis-run.schema';
 import { err, ok } from '../../common/utils/result.util';
@@ -70,7 +76,12 @@ describe('ConversationContextService', () => {
     mockRepo.findMessageById.mockResolvedValue(ok({ xid: 'msg_xid_123' }));
     mockRepo.getLastMessageRole.mockResolvedValue(ok(null));
     mockRepo.findArtefactRefByConversationId.mockResolvedValue(
-      ok({ xid: 'test-artefact-id', status: ArtefactStatus.IN_CONVERSATION })
+      ok({
+        xid: 'test-artefact-id',
+        status: ArtefactStatus.IN_CONVERSATION,
+        artefactType: 'CLINICAL_CASE_REVIEW',
+        specialty: Specialty.GP,
+      })
     );
     service = createService();
   });
@@ -110,6 +121,16 @@ describe('ConversationContextService', () => {
       expect(mockAnalysisRunsService.findLatestRun).not.toHaveBeenCalled();
       expect(mockRepo.hasProcessingMessages).not.toHaveBeenCalled();
       expect(mockRepo.hasCompleteMessages).not.toHaveBeenCalled();
+    });
+
+    it('still carries the entry type and label', async () => {
+      // This branch returns early and builds its own context object, so it is the
+      // one that silently loses new fields. A closed conversation still has a type
+      // and still needs a title.
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.CLOSED);
+
+      expect(ctx.artefactType).toBe('CLINICAL_CASE_REVIEW');
+      expect(ctx.artefactTypeLabel).toBe('Clinical Case Review');
     });
   });
 
@@ -162,6 +183,45 @@ describe('ConversationContextService', () => {
 
       const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
       expect(ctx.artefactStatus).toBeNull();
+    });
+
+    it('exposes the entry type and its resolved label', async () => {
+      mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
+      mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
+
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      expect(ctx.artefactType).toBe('CLINICAL_CASE_REVIEW');
+      expect(ctx.artefactTypeLabel).toBe('Clinical Case Review');
+    });
+
+    it('falls back to the raw code as the label for a retired entry type', async () => {
+      // The client must never be handed a blank title; a renamed or removed code
+      // still yields something renderable rather than null.
+      mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
+      mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
+      mockRepo.findArtefactRefByConversationId.mockResolvedValue(
+        ok({
+          xid: 'test-artefact-id',
+          status: ArtefactStatus.IN_CONVERSATION,
+          artefactType: 'LEARNING_EVENT',
+          specialty: Specialty.GP,
+        })
+      );
+
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      expect(ctx.artefactTypeLabel).toBe('LEARNING_EVENT');
+    });
+
+    it('nulls both entry-type fields when the artefact ref cannot be resolved', async () => {
+      mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
+      mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
+      mockRepo.findArtefactRefByConversationId.mockResolvedValue(
+        err({ code: 'DB_ERROR', message: 'boom' })
+      );
+
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      expect(ctx.artefactType).toBeNull();
+      expect(ctx.artefactTypeLabel).toBeNull();
     });
 
     it('denies startAnalysis when messages are still processing', async () => {

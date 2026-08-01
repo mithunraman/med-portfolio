@@ -1,5 +1,4 @@
 import {
-  ArtefactStatus,
   ConversationStatus,
   MessageStatus,
   MessageRole,
@@ -10,6 +9,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import { DBError, Result, err, ok } from '../common/utils/result.util';
 import {
+  ArtefactRef,
   CreateConversationData,
   CreateMessageData,
   IConversationsRepository,
@@ -387,21 +387,29 @@ export class ConversationsRepository implements IConversationsRepository {
   async findArtefactRefByConversationId(
     conversationId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<{ xid: string; status: ArtefactStatus } | null, DBError>> {
+  ): Promise<Result<ArtefactRef | null, DBError>> {
     try {
       const conversation = await this.conversationModel
         .findById(conversationId)
-        .populate('artefact', 'xid status')
+        // Projection, not an extra read: this populate already runs on every
+        // context computation. artefactType/specialty ride along for free.
+        .populate('artefact', 'xid status artefactType specialty')
         .lean()
         .session(session || null);
 
       if (!conversation) return ok(null);
 
-      const artefact = conversation.artefact as unknown as {
-        xid: string;
-        status: ArtefactStatus;
-      } | null;
-      return ok(artefact ? { xid: artefact.xid, status: artefact.status } : null);
+      const artefact = conversation.artefact as unknown as ArtefactRef | null;
+      return ok(
+        artefact
+          ? {
+              xid: artefact.xid,
+              status: artefact.status,
+              artefactType: artefact.artefactType,
+              specialty: artefact.specialty,
+            }
+          : null
+      );
     } catch (error) {
       this.logger.error('Failed to find artefact ref by conversation id', error);
       return err({ code: 'DB_ERROR', message: 'Failed to find artefact ref' });

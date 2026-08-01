@@ -266,6 +266,16 @@ export const ConversationContextSchema = z.object({
   // be resolved (missing/DB error) — the client treats null as "not editable"
   // (fail-closed); the server re-checks the artefact authoritatively.
   artefactStatus: z.nativeEnum(ArtefactStatus).nullable(),
+  // The entry type the trainee chose at creation, and its display label. Sent as a
+  // pair for the same reason the Artefact DTO does: the code is what logic branches
+  // on, the label is what renders. The label falls back to the code server-side, so
+  // it is never blank for a renamed or retired type.
+  //
+  // Null on the same condition as artefactStatus — the artefact ref could not be
+  // resolved. Required-but-nullable, not optional: that is what makes the compiler
+  // flag every ConversationContext construction site, of which there is more than one.
+  artefactType: z.string().nullable(),
+  artefactTypeLabel: z.string().nullable(),
   actions: z.object({
     sendMessage: ActionStateSchema,
     sendAudio: ActionStateSchema,

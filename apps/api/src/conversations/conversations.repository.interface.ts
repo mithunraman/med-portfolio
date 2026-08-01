@@ -1,4 +1,11 @@
-import { type Question, ArtefactStatus, MessageStatus, MessageRole, MessageType } from '@acme/shared';
+import {
+  type Question,
+  ArtefactStatus,
+  MessageStatus,
+  MessageRole,
+  MessageType,
+  Specialty,
+} from '@acme/shared';
 import { ClientSession, Types } from 'mongoose';
 import type { DBError, Result } from '../common/utils/result.util';
 import type { Conversation } from './schemas/conversation.schema';
@@ -47,6 +54,19 @@ export interface ListMessagesQuery {
 
 export interface ListMessagesResult {
   messages: Message[];
+}
+
+/**
+ * The slice of the parent artefact that conversation-context computation needs.
+ *
+ * `specialty` and `artefactType` are the raw stored values — resolving them to a
+ * display label is the service's job, not the repository's.
+ */
+export interface ArtefactRef {
+  xid: string;
+  status: ArtefactStatus;
+  artefactType: string;
+  specialty: Specialty;
 }
 
 export interface IConversationsRepository {
@@ -171,8 +191,11 @@ export interface IConversationsRepository {
   ): Promise<Result<Message | null, DBError>>;
 
   /**
-   * Resolve the artefact xid + status for a conversation by populating the
-   * artefact ref. Returns null if the conversation or artefact is missing.
+   * Resolve the artefact ref for a conversation by populating it. Returns null if
+   * the conversation or artefact is missing.
+   *
+   * `specialty` is returned so the caller can resolve `artefactType` to a display
+   * label; it is not itself exposed to clients.
    *
    * SYSTEM READ — intentionally NOT scoped by userId. The sole caller is
    * conversation-context computation, which is user-agnostic and passes an
@@ -183,7 +206,7 @@ export interface IConversationsRepository {
   findArtefactRefByConversationId(
     conversationId: Types.ObjectId,
     session?: ClientSession
-  ): Promise<Result<{ xid: string; status: ArtefactStatus } | null, DBError>>;
+  ): Promise<Result<ArtefactRef | null, DBError>>;
 
   /**
    * Return conversation IDs belonging to a user.

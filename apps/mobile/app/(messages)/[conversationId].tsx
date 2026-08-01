@@ -3,7 +3,13 @@ import { ChatComposer, MessageList, ReadinessHeader, useLoading } from '@/compon
 import { type ActionBarState, ActionBar } from '@/components/ActionBar';
 import { MessageEditorModal } from '@/components/chat/MessageEditorModal';
 import { CompletionCard } from '@/components/CompletionCard';
-import { useAppDispatch, useAppSelector, useAuth, useCanCreateArtefact } from '@/hooks';
+import {
+  useAppDispatch,
+  useAppSelector,
+  useAuth,
+  useCanCreateArtefact,
+  useEntryTypeLabel,
+} from '@/hooks';
 import type { AudioRecordingResult } from '@/hooks/useAudioRecorder';
 import { useBannerOffset } from '@/hooks/useBannerOffset';
 import {
@@ -469,6 +475,32 @@ export default function ChatScreen() {
         : undefined,
     });
   }, [artefactId, phase, deleting, navigation, colors.text, handleShowMenu]);
+
+  // Title the screen with the entry type, so the header states which template the
+  // conversation is being graded against.
+  //
+  // Two sources, ordered by when they become available — not by preference:
+  //
+  //  1. The `entryType` route param, set only on the way in from the picker. It
+  //     resolves synchronously, and it is the ONLY source during a brand-new
+  //     conversation, because no artefact (and therefore no server context) exists
+  //     until the first message is sent.
+  //  2. `context.artefactTypeLabel`, which covers every other path — reopening from
+  //     the entries list, a deep link, a restored app. Costs one render of 'Chat' on
+  //     a cold open, before the first context fetch lands.
+  //
+  // Context-first would show 'Chat' for the whole pre-first-message window on a new
+  // entry and then flip; param-first never regresses, and once both are present they
+  // agree — they resolve through the same registry, server-side and client-side.
+  //
+  // Both degrade to 'Chat' rather than rendering a raw code at the trainee: the param
+  // path returns undefined for a code no longer offered, and the server path resolves
+  // the label itself.
+  const paramEntryTypeLabel = useEntryTypeLabel(entryType);
+  const entryTypeLabel = paramEntryTypeLabel ?? context?.artefactTypeLabel ?? null;
+  useEffect(() => {
+    navigation.setOptions({ title: entryTypeLabel ?? 'Chat' });
+  }, [navigation, entryTypeLabel]);
 
   // Clear the optimistic flag when the server phase leaves 'analysing'.
   // This works for both start and resume because the server now returns

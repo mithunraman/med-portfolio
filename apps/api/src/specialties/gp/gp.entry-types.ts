@@ -2,8 +2,14 @@ import { EntryTypeDefinition } from '@acme/shared';
 
 export enum GpEntryType {
   CLINICAL_CASE_REVIEW = 'CLINICAL_CASE_REVIEW',
+  /**
+   * Covers both a full Significant Event and a no-harm Learning Event. They were
+   * separate types once, but both resolved to LEA_SEA_TEMPLATE — identical sections,
+   * probes, rubrics and word range — so the trainee was being asked to make a
+   * GMC-threshold judgement that changed nothing downstream. One type, one form,
+   * matching how FourteenFish handles it.
+   */
   SIGNIFICANT_EVENT = 'SIGNIFICANT_EVENT',
-  LEARNING_EVENT = 'LEARNING_EVENT',
   FEEDBACK_REFLECTION = 'FEEDBACK_REFLECTION',
   LEADERSHIP_ACTIVITY = 'LEADERSHIP_ACTIVITY',
   ACADEMIC_ACTIVITY = 'ACADEMIC_ACTIVITY',
@@ -23,16 +29,9 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
   },
   {
     code: GpEntryType.SIGNIFICANT_EVENT,
-    label: 'Significant Event Analysis',
+    label: 'Significant Event / Learning event analysis',
     description:
-      'Analysis of an event that met the GMC threshold for harm. Focus on root cause and systemic change.',
-    templateId: 'LEA_SEA_TEMPLATE',
-  },
-  {
-    code: GpEntryType.LEARNING_EVENT,
-    label: 'Learning Event Analysis',
-    description:
-      'Analysis of an event that presented a learning opportunity but did not cause GMC-threshold harm.',
+      'Analysis of an event worth learning from, whether or not it met the GMC threshold for harm. Focus on root cause and what changed as a result.',
     templateId: 'LEA_SEA_TEMPLATE',
   },
   {

@@ -1,7 +1,7 @@
 import type { ActiveConversation, Artefact, PdpGoalStatus } from '@acme/shared';
 import type { Conversation } from '../../conversations/schemas/conversation.schema';
 import type { PdpGoal } from '../../pdp-goals/schemas/pdp-goal.schema';
-import { getSpecialtyConfig } from '../../specialties/specialty.registry';
+import { getSpecialtyConfig, resolveEntryTypeLabel } from '../../specialties/specialty.registry';
 import type { Artefact as ArtefactSchema } from '../schemas/artefact.schema';
 import { extractArtefactClientId } from '../utils/artefact-id.util';
 
@@ -23,10 +23,6 @@ export function toArtefactDto(
 ): Artefact {
   const config = getSpecialtyConfig(artefact.specialty);
 
-  // Resolve artefact type code → display label. Falls back to the raw code for a
-  // type that is no longer in the active config (e.g. a renamed or retired code).
-  const entryTypeDef = config.entryTypes.find((et) => et.code === artefact.artefactType);
-
   // Build capability code → name lookup
   const capabilityNameMap = new Map(config.capabilities.map((c) => [c.code, c.name]));
 
@@ -37,7 +33,7 @@ export function toArtefactDto(
     trainingStage: artefact.trainingStage ?? '',
     status: artefact.status,
     artefactType: artefact.artefactType,
-    artefactTypeLabel: entryTypeDef?.label ?? artefact.artefactType,
+    artefactTypeLabel: resolveEntryTypeLabel(artefact.specialty, artefact.artefactType),
     title: artefact.title,
     pdpGoals: pdpGoals.map((g) => ({
       id: g.xid,

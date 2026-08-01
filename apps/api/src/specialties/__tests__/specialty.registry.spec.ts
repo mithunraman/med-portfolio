@@ -5,6 +5,7 @@ import {
   getSpecialtyConfig,
   isValidEntryType,
   isValidTrainingStage,
+  resolveEntryTypeLabel,
 } from '../specialty.registry';
 
 describe('SpecialtyRegistry', () => {
@@ -108,6 +109,39 @@ describe('SpecialtyRegistry', () => {
     it('should reject all entry types for inactive specialties', () => {
       expect(isValidEntryType(Specialty.PSYCHIATRY, 'CLINICAL_CASE_REVIEW')).toBe(false);
       expect(isValidEntryType(Specialty.INTERNAL_MEDICINE, 'CLINICAL_CASE_REVIEW')).toBe(false);
+    });
+  });
+
+  describe('resolveEntryTypeLabel', () => {
+    it('should return the configured label for every offered entry type', () => {
+      for (const specialty of getAllSpecialtyOptions()) {
+        for (const entryType of specialty.entryTypes) {
+          expect(resolveEntryTypeLabel(specialty.specialty, entryType.code)).toBe(entryType.label);
+        }
+      }
+    });
+
+    it('should fall back to the raw code for an unknown or retired type', () => {
+      // Display-only, so it degrades instead of throwing the way
+      // getTemplateForEntryType does — a renamed code must not break a list row.
+      expect(resolveEntryTypeLabel(Specialty.GP, 'NOT_A_REAL_TYPE')).toBe('NOT_A_REAL_TYPE');
+      expect(resolveEntryTypeLabel(Specialty.GP, 'LEARNING_EVENT')).toBe('LEARNING_EVENT');
+    });
+
+    it('should still resolve labels for an INACTIVE specialty', () => {
+      // Deliberately unlike isValidEntryType, which returns false here. That gates
+      // CREATION and must refuse a deactivated specialty; this renders what already
+      // exists, and an existing artefact should not decay into raw codes because its
+      // specialty was switched off. getSpecialtyConfig throws here — this must not.
+      expect(() => resolveEntryTypeLabel(Specialty.PSYCHIATRY, 'SIGNIFICANT_EVENT')).not.toThrow();
+      expect(resolveEntryTypeLabel(Specialty.PSYCHIATRY, 'SIGNIFICANT_EVENT')).toBe(
+        'Significant Event Analysis'
+      );
+      expect(isValidEntryType(Specialty.PSYCHIATRY, 'SIGNIFICANT_EVENT')).toBe(false);
+    });
+
+    it('should fall back to the code for a specialty with no config at all', () => {
+      expect(resolveEntryTypeLabel(999 as Specialty, 'SIGNIFICANT_EVENT')).toBe('SIGNIFICANT_EVENT');
     });
   });
 

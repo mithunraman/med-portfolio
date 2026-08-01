@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme';
@@ -20,7 +21,7 @@ export const TierChip = memo(function TierChip({ tier, meetsThreshold = true }: 
 
   return (
     <View style={[styles.chip, { borderColor: color }, !meetsThreshold && styles.muted]}>
-      <Text style={[styles.icon, { color }]}>{visual.icon}</Text>
+      <Ionicons name={visual.icon} size={11} color={color} />
       <Text style={[styles.label, { color }]}>{visual.label}</Text>
     </View>
   );
@@ -38,10 +39,6 @@ const styles = StyleSheet.create({
   },
   muted: {
     opacity: 0.55,
-  },
-  icon: {
-    fontSize: 11,
-    fontWeight: '700',
   },
   label: {
     fontSize: 11,

@@ -8,7 +8,7 @@ import {
   markReviewPeriodsStale,
   selectReviewPeriodById,
 } from '@/store';
-import { useTheme } from '@/theme';
+import { useTheme, type ThemeColors } from '@/theme';
 import { ReviewPeriodStatus, type CoverageResponse, type DomainCoverage } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Ionicons } from '@expo/vector-icons';
@@ -52,9 +52,23 @@ function getStatusDisplay(status: ReviewPeriodStatus): { label: string; variant:
 
 // ── Domain Section ───────────────────────────────────────────────────────────
 
+/**
+ * Domain completeness → bar colour. Three states rather than a gradient so a
+ * domain's standing is readable at a glance while collapsed: fully evidenced,
+ * partially evidenced, or untouched.
+ */
+function coverageTone(covered: number, total: number, colors: ThemeColors): string {
+  if (total === 0 || covered === 0) return colors.border;
+  return covered >= total ? colors.accent : colors.primary;
+}
+
 function DomainSection({ domain }: { domain: DomainCoverage }) {
   const { colors } = useTheme();
   const [expanded, setExpanded] = useState(true);
+
+  const fillPercent =
+    domain.totalCount > 0 ? Math.round((domain.coveredCount / domain.totalCount) * 100) : 0;
+  const barColor = coverageTone(domain.coveredCount, domain.totalCount, colors);
 
   const handleToggle = useCallback(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -80,6 +94,14 @@ function DomainSection({ domain }: { domain: DomainCoverage }) {
           {domain.coveredCount}/{domain.totalCount}
         </Text>
       </TouchableOpacity>
+
+      {/* Completeness bar. Carries the domain's standing without expanding it —
+          the counts alone made every domain look identical at a glance. */}
+      <View style={[styles.domainBarTrack, { backgroundColor: colors.border }]}>
+        <View
+          style={[styles.domainBarFill, { width: `${fillPercent}%`, backgroundColor: barColor }]}
+        />
+      </View>
 
       {expanded && (
         <View style={[styles.capabilitiesList, { backgroundColor: colors.surface }]}>
@@ -356,6 +378,15 @@ const styles = StyleSheet.create({
   domainProgress: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  domainBarTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  domainBarFill: {
+    height: '100%',
+    borderRadius: 2,
   },
   capabilitiesList: {
     borderRadius: 12,

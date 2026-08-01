@@ -60,6 +60,15 @@ export function NotesSection({
         )}
       </View>
 
+      {/* Notes travel with the entry when it is exported. Disclosed here, at the
+          point of input, rather than only in Settings — a trainee deciding what
+          to write needs to know before they write it, not afterwards. */}
+      {editable && (
+        <Text style={[styles.hint, { color: colors.textSecondary }]}>
+          Included when you export this entry.
+        </Text>
+      )}
+
       {notes.length === 0 ? (
         <Pressable
           onPress={editable ? onAddNote : undefined}
@@ -120,6 +129,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: '600',
+  },
+  hint: {
+    fontSize: 13,
+    // Negative offset against the container's 10px gap so the line reads as a
+    // subtitle of the header rather than a separate block.
+    marginTop: -6,
   },
   addButton: {
     flexDirection: 'row',

@@ -1,9 +1,13 @@
-import { useAuth } from '@/hooks';
-import { useAppDispatch } from '@/hooks';
 import { SettingsItem, SettingsSection } from '@/components';
+import { LEGAL_URLS, SUPPORT_MAILTO } from '@/constants/legal';
+import { useAppDispatch, useAuth } from '@/hooks';
 import { requestDeletion } from '@/store/slices/authSlice';
 import { useTheme } from '@/theme';
+import { openInAppBrowser, openSystemLink } from '@/utils/external-link';
+import { logger } from '@/utils/logger';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+const settingsLogger = logger.createScope('PrivacySupport');
 
 export default function PrivacySupportScreen() {
   const dispatch = useAppDispatch();
@@ -11,6 +15,14 @@ export default function PrivacySupportScreen() {
   const { user, isGuest } = useAuth();
 
   const hasPendingDeletion = !!user?.deletionScheduledFor;
+
+  // SettingsItem.onPress is sync, so the rejection has to be caught here or it
+  // surfaces as an unhandled promise (same pattern as LinksBlock).
+  const openLegalPage = (url: string) => {
+    openInAppBrowser(url).catch((error) => {
+      settingsLogger.warn('Failed to open legal page', { url, error });
+    });
+  };
 
   const handleDeleteAccount = () => {
     Alert.alert(
@@ -35,27 +47,15 @@ export default function PrivacySupportScreen() {
         {/* Privacy & Data */}
         <SettingsSection title="Privacy & Data">
           <SettingsItem
-            icon="shield-checkmark-outline"
-            label="How your data is stored"
-            onPress={() =>
-              Alert.alert(
-                'Data Storage',
-                'We store your conversations and entries so you can edit and export them. PDFs are stored on your device. Confidential notes are never included in exports.'
-              )
-            }
-          />
-          <SettingsItem
             icon="document-text-outline"
             label="Privacy Policy"
-            onPress={() => Alert.alert('Privacy Policy', 'Privacy policy will be available soon.')}
+            onPress={() => openLegalPage(LEGAL_URLS.privacy)}
           />
-          {!isGuest && (
-            <SettingsItem
-              icon="download-outline"
-              label="Export My Data"
-              onPress={() => Alert.alert('Export', 'Data export will be available soon.')}
-            />
-          )}
+          <SettingsItem
+            icon="reader-outline"
+            label="Terms of Use"
+            onPress={() => openLegalPage(LEGAL_URLS.terms)}
+          />
         </SettingsSection>
 
         {/* Support */}
@@ -63,7 +63,11 @@ export default function PrivacySupportScreen() {
           <SettingsItem
             icon="help-circle-outline"
             label="Help & Feedback"
-            onPress={() => Alert.alert('Help', 'Contact support@logdit.app for help.')}
+            onPress={() => {
+              openSystemLink(SUPPORT_MAILTO).catch((error) => {
+                settingsLogger.warn('Failed to open mail composer', { error });
+              });
+            }}
           />
           <SettingsItem
             icon="information-circle-outline"
@@ -77,7 +81,7 @@ export default function PrivacySupportScreen() {
 
         {/* Danger Zone */}
         {!isGuest && !hasPendingDeletion && (
-          <SettingsSection title="Danger Zone">
+          <SettingsSection title="Manage Account">
             <SettingsItem
               icon="trash-outline"
               label="Delete Account"

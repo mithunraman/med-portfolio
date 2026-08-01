@@ -1,5 +1,21 @@
 import { CapabilityDefinition } from '@acme/shared';
 
+/**
+ * Provenance — read before editing.
+ *
+ * `code`, `name`, `domainCode` and `domainName` follow the RCGP GP curriculum
+ * capability framework, used descriptively so a trainee's evidence can be mapped
+ * to the framework their own training is assessed against. Logdit is not
+ * affiliated with, endorsed by, or connected to the Royal College of General
+ * Practitioners.
+ *
+ * `description` and `descriptorCriteria` are ORIGINAL Logdit authorship —
+ * summaries and grading rubrics written for this product. Do not replace them
+ * with verbatim RCGP descriptor or word-picture text: keeping the third-party
+ * footprint to names and codes is what makes the App Store content-rights
+ * declaration ("contains third-party content, and I have the necessary rights")
+ * straightforward to defend.
+ */
 export const GP_CAPABILITIES: CapabilityDefinition[] = [
   // Domain 1: Knowing yourself and relating to others
   {

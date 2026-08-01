@@ -11,6 +11,12 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import {
   MAX_RECORDING_DURATION,
   useAudioRecorder,
@@ -62,6 +68,46 @@ interface VoiceNoteRecorderBarProps {
   /** Optional container style */
   style?: StyleProp<ViewStyle>;
 }
+
+// ============================================================================
+// RECORDING INDICATOR
+// ============================================================================
+
+/** Pulse cycle for the live-recording dot, in ms (one fade direction). */
+const PULSE_DURATION_MS = 700;
+
+/**
+ * The "we are live" affordance. The timer alone reads as a stopwatch — a
+ * pulsing red dot is the convention users already know from every other
+ * recorder, and it is the only element that survives being viewed at
+ * thumbnail size.
+ *
+ * Holds steady (no pulse) while paused, so the paused state is visually
+ * distinct rather than just a swapped button glyph.
+ */
+const RecordingIndicator = memo(function RecordingIndicator({ active }: { active: boolean }) {
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    if (active) {
+      opacity.value = withRepeat(withTiming(0.25, { duration: PULSE_DURATION_MS }), -1, true);
+    } else {
+      // Cancels the repeat by assigning a terminal value; paused reads as a
+      // steady, dimmed dot.
+      opacity.value = withTiming(0.4, { duration: 150 });
+    }
+  }, [active, opacity]);
+
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  return (
+    <Animated.View
+      style={[styles.recordingDot, animatedStyle]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    />
+  );
+});
 
 // ============================================================================
 // PERMISSION DENIED VIEW
@@ -294,8 +340,9 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
 
   return (
     <View style={containerStyle}>
-      {/* Top row: centred timer */}
+      {/* Top row: live indicator + centred timer */}
       <View style={styles.topRow}>
+        {!maxDurationReached && <RecordingIndicator active={isRecording && !isPaused} />}
         <Text
           style={timerTextStyle}
           testID={`${testIDPrefix}-timer`}
@@ -364,8 +411,17 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   topRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     marginBottom: 12,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.pauseButton,
   },
   timerText: {
     fontSize: 18,

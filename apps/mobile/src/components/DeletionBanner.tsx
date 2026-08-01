@@ -41,7 +41,7 @@ export function DeletionBanner() {
     >
       <Ionicons name="time-outline" size={14} color="#fff" />
       <Text style={styles.text} numberOfLines={1}>
-        Deletion scheduled {scheduledDate}
+        Account deletion on {scheduledDate}
       </Text>
       <TouchableOpacity
         onPress={handleCancel}

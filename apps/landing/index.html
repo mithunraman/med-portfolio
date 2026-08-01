@@ -6,7 +6,7 @@
     <title>LOGDit - Curriculum-mapped portfolio entries from a 5-minute voice note</title>
     <meta
       name="description"
-      content="Speak your case. LOGDit turns it into a curriculum-mapped portfolio entry with reflections and PDP goals. UK GP trainees, beta."
+      content="Speak your case. LOGDit turns it into a curriculum-mapped portfolio entry with reflections and PDP goals. Built for UK GP trainees."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -186,14 +186,15 @@
       .screenshot {
         width: 240px;
         height: auto;
-        aspect-ratio: 280 / 600;
-        border-radius: 28px;
-        border: 6px solid #1a1a2e;
+        /* Matches the intrinsic size of the App Store frames, so nothing is
+           cropped. No bezel border: each frame already contains a device
+           mockup, and adding one would render a phone inside a phone. */
+        aspect-ratio: 1242 / 2688;
+        border-radius: 20px;
         box-shadow:
           var(--shadow-lg),
           0 0 0 1px rgba(0, 0, 0, 0.05);
-        background: var(--color-surface);
-        object-fit: cover;
+        object-fit: contain;
       }
 
       /* ── eportfolio bridge ── */
@@ -232,32 +233,16 @@
         line-height: 1.55;
       }
 
-      /* ── Problem hook (slim emotional lead-in) ── */
-      .problem-hook {
-        background: var(--color-surface);
+      /* ── How it works ── */
+      /* Tinted so the section separates from the hero above it. Cannot use
+         --color-surface: .features immediately below is already white, and the
+         two would merge into one block instead. */
+      .how-it-works {
+        background: var(--color-primary-soft);
         border-top: 1px solid var(--color-border);
         border-bottom: 1px solid var(--color-border);
-        padding: 40px 24px;
       }
 
-      .problem-hook .container {
-        max-width: 720px;
-        text-align: center;
-      }
-
-      .problem-hook p {
-        font-size: clamp(18px, 2.4vw, 22px);
-        line-height: 1.5;
-        color: var(--color-text-secondary);
-        letter-spacing: -0.2px;
-      }
-
-      .problem-hook strong {
-        color: var(--color-text);
-        font-weight: 600;
-      }
-
-      /* ── How it works ── */
       .how-it-works h2 {
         text-align: center;
         font-size: clamp(28px, 4vw, 40px);
@@ -812,7 +797,7 @@
           <svg viewBox="0 0 24 24">
             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
           </svg>
-          Beta - UK GP trainees
+          Built for UK GP trainees
         </div>
         <h1>Speak your case. Get a <span>curriculum-mapped</span> portfolio entry in 5 minutes.</h1>
         <p class="hero-sub">
@@ -837,41 +822,40 @@
         </div>
         <!-- Hidden for now - restore when ready
         <p class="hero-micro">
-          Built with GP trainees in beta · <strong>Free during beta</strong> · No card required
+          Built with GP trainees · <strong>Free to use</strong> · No card required
         </p>
         -->
 
 
+        <!-- App Store marketing frames. Each already contains its own device
+             mockup and caption, so the CSS deliberately adds no bezel. Intrinsic
+             size is set on every image to reserve layout space and avoid CLS. -->
         <div class="screenshots">
           <img
             class="screenshot"
-            src="https://placehold.co/280x600/E0F4EE/1F8C73?text=Screenshot+1"
-            alt="LOGDit recording screen"
-            loading="lazy"
-          />
-          <img
-            class="screenshot screenshot-center"
-            src="https://placehold.co/280x600/2BB394/FFFFFF?text=Screenshot+2"
-            alt="LOGDit structured entry"
+            src="assets/screen1.png"
+            width="1242"
+            height="2688"
+            alt="LOGDit welcome screen, captioned: Five minutes. One complete entry."
             loading="lazy"
           />
           <img
             class="screenshot"
-            src="https://placehold.co/280x600/F5E6D3/B07A3C?text=Screenshot+3"
-            alt="LOGDit coverage dashboard"
+            src="assets/screen2.png"
+            width="1242"
+            height="2688"
+            alt="A trainee dictating a clinical case into LOGDit, captioned: Just talk it through — your voice note after clinic is all it takes."
+            loading="lazy"
+          />
+          <img
+            class="screenshot"
+            src="assets/screen4.png"
+            width="1242"
+            height="2688"
+            alt="LOGDit asking a follow-up question with a worked example answer and an entry readiness score of 4 out of 10, captioned: The AI asks. You just answer."
             loading="lazy"
           />
         </div>
-      </div>
-    </section>
-
-    <!-- Problem hook -->
-    <section class="problem-hook">
-      <div class="container">
-        <p>
-          No more <strong>blank reflection box at 11pm on a Sunday</strong>. Talk through a case you
-          just saw and walk away with a finished entry.
-        </p>
       </div>
     </section>
 
@@ -978,10 +962,27 @@
       </div>
     </section>
 
-    <!-- Testimonials -->
+    <!--
+      TODO: restore when we have real feedback.
+
+      Hidden 2026-08-02. The quotes and the "45-60 min -> 5 min" figure below are
+      illustrative, and the app has had no users yet — so they cannot be
+      evidenced. Testimonials must be genuine and documented (CAP Code; App Store
+      Review Guideline 2.3 on misleading metadata), and this page is linked from
+      the App Store listing.
+
+      To bring it back: delete this comment wrapper and the closing one after
+      </section>, then replace every quote, attribution and the stat with real,
+      consented feedback. Keep anonymised attributions ("GP ST2 · Thames Valley")
+      only where the trainee agreed to that form. The stat needs to be measured,
+      or reworded as a design goal rather than a typical result.
+
+      The .testimonials* CSS is left in place so restoring is a single uncomment.
+    -->
+    <!-- Testimonials
     <section class="testimonials">
       <div class="container">
-        <div class="testimonials-eyebrow">From trainees in beta</div>
+        <div class="testimonials-eyebrow">From GP trainees</div>
         <h2>Portfolio time, minus the dread</h2>
         <div class="testimonials-grid">
           <figure class="testimonial-card">
@@ -1014,6 +1015,7 @@
         </p>
       </div>
     </section>
+    -->
 
     <!-- Trust -->
     <section class="trust">
@@ -1077,7 +1079,7 @@
           <details class="faq-item">
             <summary class="has-state">Which specialties do you support?</summary>
             <div class="faq-item-body">
-              In beta today: General Practice (RCGP) only. Internal Medicine (JRCPTB), Psychiatry
+              Today: General Practice (RCGP) only. Internal Medicine (JRCPTB), Psychiatry
               (RCPsych), Emergency Medicine and Paediatrics are on the roadmap. Email us with your
               specialty and we'll prioritise based on demand.
             </div>
@@ -1102,8 +1104,9 @@
           <details class="faq-item">
             <summary class="has-state">Is it free?</summary>
             <div class="faq-item-body">
-              Free while in beta - no card required, no trial timer. We'll announce pricing when we
-              launch a paid plan, with advance notice and no auto-charges. Final pricing TBD.
+              Free to use today - no card required, no trial timer. We'll announce pricing before we
+              introduce a paid plan, with advance notice and no auto-charges. Anything you've used
+              for free stays free.
             </div>
           </details>
           <details class="faq-item">
@@ -1132,7 +1135,7 @@
     <section class="cta-section" id="cta">
       <div class="container">
         <h2>Get <span class="brand">LOGDit</span> before your next ARCP</h2>
-        <p class="cta-section-sub">Beta access is open to UK GP trainees.</p>
+        <p class="cta-section-sub">Open to UK GP trainees.</p>
         <div class="waitlist">
           <a
             href="https://apps.apple.com/app/logdit"
@@ -1150,7 +1153,7 @@
             </span>
           </a>
         </div>
-        <p class="cta-micro">Free during beta.</p>
+        <p class="cta-micro">Free to use.</p>
       </div>
     </section>
 

@@ -21,7 +21,7 @@ export const Stage = {
 export type Stage = (typeof Stage)[keyof typeof Stage];
 
 /** Known variants. */
-export type VariantKey = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+export type VariantKey = 'A' | 'B' | 'C' | 'D' | 'E';
 
 /** A variant is a complete stage→target mapping — every stage must be present. */
 export type VariantProfile = Record<Stage, ModelTarget>;
@@ -30,7 +30,7 @@ export type VariantProfile = Record<Stage, ModelTarget>;
  * Pools are defaulted in these helpers rather than spelled out per stage: for a
  * single-account provider there is exactly one sensible pool, and repeating it
  * nine times per variant would be noise. The parameter still exists so a variant
- * CAN split (as F does on Foundry) the moment a second account appears.
+ * CAN split (as D does on Foundry) the moment a second account appears.
  */
 const openai = (model: string, pool: Pool = Pool.OpenAI): ModelTarget => ({
   provider: 'openai',
@@ -116,11 +116,11 @@ const gptOss = (
 });
 
 // Variant D: DeepSeek V4 Flash served through Azure AI Foundry's OpenAI-compatible
-// endpoint (a first-party-cloud alternative to the OpenRouter route in B). The
-// value is the Foundry *deployment name*, not a catalog slug — set it to whatever
-// the deployment is called in your Foundry resource.
+// endpoint (a first-party-cloud alternative to the OpenRouter route in B), for D's
+// eight graph stages. The value is the Foundry *deployment name*, not a catalog
+// slug — set it to whatever the deployment is called in your Foundry resource.
 const DEEPSEEK_FLASH_FOUNDRY = 'DeepSeek-V4-Flash';
-// Variant F: GPT-5.4-nano deployed on Azure Foundry, serving the cleaning stage
+// Variant D: GPT-5.4-nano deployed on Azure Foundry, serving the cleaning stage
 // only. Also a Foundry *deployment name*. Unlike DeepSeek it normalizes into
 // OpenAI `tool_calls`, so it uses native function calling (see below).
 const GPT_NANO_FOUNDRY = 'gpt-5.4-nano';
@@ -193,9 +193,27 @@ export const VARIANTS = {
     refine: deepseek(DEEPSEEK_PRO, 'off'),
     generate_pdp: deepseek(DEEPSEEK_PRO, 'off'),
   },
-  // Same model as B (DeepSeek V4 Flash), different route: Azure AI Foundry instead
-  // of OpenRouter. Enables a clean A/B of the two hosting paths for the same model.
+  // The only NON-UNIFORM profile — what the per-stage table was built for. Both
+  // models run on Azure Foundry, but each stage group draws from its own
+  // credential/quota pool:
+  //
+  //   cleaning  → GPT-5.4-nano, Pool.Interactive (1 key,  60 rpm)
+  //   the rest  → DeepSeek V4 Flash, Pool.Analysis (2+ keys, 35 rpm each)
+  //
+  // Two independent reasons for the split. QUOTA: the pools are distinct Azure
+  // resources with distinct caps, and a limiter can only honour a per-key cap if
+  // it is per-key. WORKLOAD: cleaning is user-paced and blocks the message
+  // appearing, while the other eight stages fire as a machine-paced ~9-call
+  // burst — separate pools mean a burst can never starve the interactive path.
+  // That second reason holds even if the caps later converge, so do NOT collapse
+  // these back into one pool on the grounds that the numbers match.
+  //
+  // The eight graph stages run the SAME model as B over a different route, so
+  // B-vs-D is a hosting-path comparison for those — but NOT for cleaning, which
+  // deliberately changes model as well. Don't read D as a like-for-like B.
   D: {
+    // Native function calling, not jsonSchema: the DSML workaround is DeepSeek's
+    // constraint and nano doesn't share it (see the `foundry` helper).
     cleaning: foundry(GPT_NANO_FOUNDRY, Pool.Interactive, 'off', 'functionCalling'),
     classify: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
     check_completeness: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
@@ -222,32 +240,5 @@ export const VARIANTS = {
     reflect: gptOss(GPT_OSS_120B, 'low'),
     refine: gptOss(GPT_OSS_120B, 'low'),
     generate_pdp: gptOss(GPT_OSS_120B, 'low'),
-  },
-  // The first NON-UNIFORM profile — what the per-stage table was built for. Both
-  // models run on Azure Foundry, but each stage group draws from its own
-  // credential/quota pool:
-  //
-  //   cleaning  → GPT-5.4-nano, Pool.Interactive (1 key,  60 rpm)
-  //   the rest  → DeepSeek V4 Flash, Pool.Analysis (2+ keys, 35 rpm each)
-  //
-  // Two independent reasons for the split. QUOTA: the pools are distinct Azure
-  // resources with distinct caps, and a limiter can only honour a per-key cap if
-  // it is per-key. WORKLOAD: cleaning is user-paced and blocks the message
-  // appearing, while the other eight stages fire as a machine-paced ~9-call
-  // burst — separate pools mean a burst can never starve the interactive path.
-  // That second reason holds even if the caps later converge, so do NOT collapse
-  // these back into one pool on the grounds that the numbers match.
-  F: {
-    // Native function calling, not jsonSchema: the DSML workaround is DeepSeek's
-    // constraint and nano doesn't share it (see the `foundry` helper).
-    cleaning: foundry(GPT_NANO_FOUNDRY, Pool.Interactive, 'off', 'functionCalling'),
-    classify: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
-    check_completeness: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
-    generate_followup: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
-    tag_capabilities: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
-    elicit_justification: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
-    reflect: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
-    refine: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
-    generate_pdp: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
   },
 } satisfies Record<VariantKey, VariantProfile>;

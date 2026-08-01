@@ -3,7 +3,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
-import { Stage } from '../../llm';
+import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { CapabilityTag, PortfolioStateType, ReadinessTier } from '../portfolio-graph.state';
 import {
@@ -266,10 +266,17 @@ export function createTagCapabilitiesNode(deps: GraphDeps) {
       transcript: state.fullTranscript,
     });
 
+    const policy = STAGE_POLICY[Stage.TagCapabilities];
+
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       tagCapabilitiesResponseSchema,
-      { ...deps.modelConfig.resolve(Stage.TagCapabilities), temperature: 0.1, maxTokens: 2000, routingKey: cid }
+      {
+        ...deps.modelConfig.resolve(Stage.TagCapabilities),
+        temperature: policy.temperature,
+        maxTokens: policy.maxTokens,
+        routingKey: routingKeyFor(Stage.TagCapabilities, cid),
+      }
     );
 
     // Verbatim-quote evidence must be the trainee's OWN words, so gate every quote

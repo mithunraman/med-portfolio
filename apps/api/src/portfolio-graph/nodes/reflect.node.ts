@@ -2,7 +2,7 @@ import { ArtefactTemplate, Section, Specialty } from '@acme/shared';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { Stage } from '../../llm';
+import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
@@ -245,7 +245,14 @@ function assembleSections(
       }
     }
 
-    reflectTrace.push({ sectionId: section.id, probes, narrative, verification, finalText, source });
+    reflectTrace.push({
+      sectionId: section.id,
+      probes,
+      narrative,
+      verification,
+      finalText,
+      source,
+    });
 
     if (finalText.length === 0 && !section.required) continue;
     composedDocument.push({ sectionId: section.id, label: section.label, text: finalText });
@@ -293,10 +300,13 @@ export function createReflectNode(deps: GraphDeps) {
     const config = getSpecialtyConfig(specialty);
     const template = getTemplateForEntryType(config, state.entryType);
 
+    const policy = STAGE_POLICY[Stage.Reflect];
+
     // ── Token budget proportional to transcript length ──
-    // 2× headroom for JSON overhead + section headings + narratives. Floor at 2000.
+    // 2× headroom for JSON overhead + section headings + narratives, floored at
+    // the stage's policy budget (llm-stage-policy).
     const transcriptWordCount = state.fullTranscript.split(/\s+/).filter(Boolean).length;
-    const maxTokens = Math.max(Math.ceil(transcriptWordCount * 2), 2000);
+    const maxTokens = Math.max(Math.ceil(transcriptWordCount * 2), policy.maxTokens);
 
     // ── Build and send prompt ──
     const messages = await reflectPrompt.formatMessages({
@@ -310,7 +320,12 @@ export function createReflectNode(deps: GraphDeps) {
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       reflectResponseSchema,
-      { ...deps.modelConfig.resolve(Stage.Reflect), temperature: 0.3, maxTokens, routingKey: cid }
+      {
+        ...deps.modelConfig.resolve(Stage.Reflect),
+        temperature: policy.temperature,
+        maxTokens,
+        routingKey: routingKeyFor(Stage.Reflect, cid),
+      }
     );
 
     const { composedDocument, reflectTrace } = assembleSections(template, response.sections, cid);

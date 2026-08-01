@@ -2,7 +2,7 @@ import { type FollowupQuestion, leafProbes, Probe, probeThreshold, Specialty } f
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { Stage } from '../../llm';
+import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
@@ -38,7 +38,7 @@ const contextualisedQuestionSchema = z.object({
   unmetDimension: z
     .string()
     .describe(
-      'BEFORE writing the question, state the ONE specific part of the section\'s ' +
+      "BEFORE writing the question, state the ONE specific part of the section's " +
         'Target-depth rubric bar the trainee has NOT yet met — the gap the question and ' +
         'hints must close. One short clause, e.g. "names differentials but not the ' +
         'discriminating reasoning" or "a bare verdict with no learning point". This is the ' +
@@ -224,9 +224,7 @@ function formatMissingSectionBlock(
  * fix + the decision-table prompt keep the LLM from dropping a live gap — so this is
  * a genuine floor, not the common path.
  */
-function fallbackQuestion(
-  section: Probe & { extractionQuestion: string }
-): FollowupQuestion {
+function fallbackQuestion(section: Probe & { extractionQuestion: string }): FollowupQuestion {
   return {
     sectionId: section.id,
     question: section.extractionQuestion,
@@ -297,8 +295,7 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
     for (const section of [...template.sections].sort((a, b) => a.order - b.order)) {
       for (const probe of section.probes) narrativeOrder.set(probe.id, narrativeIndex++);
     }
-    const orderRank = (id: string): number =>
-      narrativeOrder.get(id) ?? Number.MAX_SAFE_INTEGER;
+    const orderRank = (id: string): number => narrativeOrder.get(id) ?? Number.MAX_SAFE_INTEGER;
 
     const missingSectionDefs = leafProbes(template)
       .filter(
@@ -343,6 +340,8 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
     // ── Contextualise questions via LLM (with fallback) ──
     let questions: FollowupQuestion[];
 
+    const policy = STAGE_POLICY[Stage.GenerateFollowup];
+
     try {
       const messages = await followupPrompt.formatMessages({
         templateName: template.name,
@@ -356,7 +355,12 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
       const { data: response } = await deps.llmService.invokeStructured(
         messages,
         followupQuestionsResponseSchema,
-        { ...deps.modelConfig.resolve(Stage.GenerateFollowup), temperature: 0.3, maxTokens: 1000, routingKey: cid }
+        {
+          ...deps.modelConfig.resolve(Stage.GenerateFollowup),
+          temperature: policy.temperature,
+          maxTokens: policy.maxTokens,
+          routingKey: routingKeyFor(Stage.GenerateFollowup, cid),
+        }
       );
 
       // Log the model's gap analysis (chain-of-thought) before it's mapped away —

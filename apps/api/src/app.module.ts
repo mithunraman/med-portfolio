@@ -62,6 +62,33 @@ import { VersionPolicyModule } from './version-policy';
             }
             return { userId: req['user']?.userId };
           },
+          // Severity carries the outcome, so warn/error lines are greppable and
+          // alertable without inspecting statusCode. Without this, pino-http logs
+          // everything below 500 at `info` — a 401 or 429 looks like a healthy request.
+          customLogLevel: (_req: Record<string, any>, res: Record<string, any>, err?: Error) => {
+            if (err || res.statusCode >= 500) return 'error';
+            if (res.statusCode >= 400) return 'warn';
+            return 'info';
+          },
+          // The default serializers log every request and response header on every
+          // request. Those become log-record attributes in Loki (the OTel pino
+          // instrumentation in tracing.ts ships each record over OTLP), so the blob
+          // is both ingest cost and an unnecessary export of device/session headers.
+          // `wrapSerializers` (pino-http default) means these receive the
+          // std-serialized shape, with the Express req/res on `.raw`.
+          serializers: {
+            req: (req: Record<string, any>) => ({
+              id: req.id,
+              method: req.method,
+              url: req.url,
+              // req.raw.ip honours `trust proxy`; remoteAddress is the reverse proxy.
+              ip: req.raw?.ip ?? req.remoteAddress,
+              userAgent: req.headers?.['user-agent'],
+            }),
+            res: (res: Record<string, any>) => ({ statusCode: res.statusCode }),
+          },
+          // Kept as defence in depth: headers are no longer serialized above, but
+          // these paths must stay redacted if the req serializer is ever widened.
           redact: ['req.headers.authorization', 'req.headers.cookie'],
           customSuccessMessage: (req: Record<string, any>, res: Record<string, any>) =>
             `${req.method} ${req.url} ${res.statusCode}`,

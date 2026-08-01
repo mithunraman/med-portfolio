@@ -64,9 +64,9 @@ export const envSchema = z.object({
     .string({ required_error: 'S3_BUCKET_MEDIA is required' })
     .min(1, 'S3_BUCKET_MEDIA cannot be empty'),
 
-  // LLM A/B/C/D/E/F variant selector. Selects a complete stage→model profile from
+  // LLM A/B/C/D/E variant selector. Selects a complete stage→model profile from
   // VARIANTS (see llm/model-variants.ts).
-  LLM_VARIANT: z.enum(['A', 'B', 'C', 'D', 'E', 'F']).default('A'),
+  LLM_VARIANT: z.enum(['A', 'B', 'C', 'D', 'E']).default('A'),
 
   // Per-POOL rate limits, one per member of the Pool enum. Unlike endpoint
   // cardinality (variable, hence parsed by pattern below), the POOL SET is closed
@@ -91,9 +91,10 @@ export const envSchema = z.object({
   // Each caps outbound structured LLM calls per API KEY, to protect that key's
   // provider quota. Each key gets its own limiter at its pool's rate, so a pool's
   // aggregate CAPACITY CEILING is its rate × its key count — a ceiling, not a
-  // guaranteed rate: utilization depends on how conversations hash across keys. A
-  // single conversation is sharded to ONE key (sticky routing), so its own
-  // throughput is bound by the per-key value regardless of key count. Overflow
+  // guaranteed rate: utilization depends on how routing keys hash across them.
+  // Whether one conversation's calls concentrate on a single key is a per-stage
+  // decision (see CacheAffinity in llm/llm-stage-policy.ts), so the per-key value
+  // bounds a journey only for the stages that pin. Overflow
   // queues in-process and drains as the window refreshes — see
   // LlmRateLimiterService. Transcription (AssemblyAI) is a separate quota and is
   // NOT gated by any of these.
@@ -106,9 +107,12 @@ export const envSchema = z.object({
   // it sits between the user sending a message and seeing it.
   LLM_RPM_INTERACTIVE: rpmSchema('60'),
   // Analysis serves the eight portfolio-graph stages: machine-paced bursts of ~9
-  // calls per turn. NB minTime pacing (60000/35 ≈ 1714ms) applies per key and a
-  // conversation is pinned to one key, so a 9-call turn spends ~15s in pacing
-  // alone. The lever for that is a higher cap, NOT more keys.
+  // calls per turn. NB minTime pacing (60000/35 ≈ 1714ms) applies PER KEY, and only
+  // check_completeness pins a journey to one key — the other seven spread across
+  // the pool. So BOTH levers are live here: raise this cap to speed up the pinned
+  // stage, add a key to relieve the rest. (Pacing only bites when calls arrive
+  // faster than the interval; the graph stages run sequentially, so it competes
+  // with model latency rather than simply adding to it.)
   LLM_RPM_ANALYSIS: rpmSchema('35'),
   // The two account-scoped provider pools. 18 = 10% headroom under a strict
   // 20 req/min, the historical default for these.

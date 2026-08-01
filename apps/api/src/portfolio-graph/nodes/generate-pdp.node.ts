@@ -2,7 +2,7 @@ import { Specialty } from '@acme/shared';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { Stage } from '../../llm';
+import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
 import { getStageContext } from '../../specialties/stage-context';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
@@ -45,9 +45,7 @@ const pdpGoalSchema = z.object({
     .describe(
       'The learning need or development objective this goal addresses (e.g. "Improve confidence managing acute upper GI bleeding")'
     ),
-  actions: z
-    .array(pdpGoalActionSchema)
-    .describe('SMART actions to achieve this goal'),
+  actions: z.array(pdpGoalActionSchema).describe('SMART actions to achieve this goal'),
 });
 
 /**
@@ -145,9 +143,7 @@ function formatCapabilityBlock(
 ): string {
   if (capabilities.length === 0) return 'None identified.';
 
-  return capabilities
-    .map((c) => `- ${c.code} ${c.name}: ${c.reasoning}`)
-    .join('\n');
+  return capabilities.map((c) => `- ${c.code} ${c.name}: ${c.reasoning}`).join('\n');
 }
 
 /* ------------------------------------------------------------------ */
@@ -166,9 +162,7 @@ function validateGoals(goals: GeneratedGoal[]): PdpGoal[] {
       // persisted goal. Construct the PdpGoal explicitly rather than spreading.
       (g): PdpGoal => ({
         goal: g.goal,
-        actions: g.actions
-          .filter((a) => a.action.trim().length > 0)
-          .slice(0, MAX_ACTIONS_PER_GOAL),
+        actions: g.actions.filter((a) => a.action.trim().length > 0).slice(0, MAX_ACTIONS_PER_GOAL),
       })
     )
     .filter((g) => g.goal.trim().length > 0 && g.actions.length > 0)
@@ -191,7 +185,10 @@ export function createGeneratePdpNode(deps: GraphDeps) {
   return async function generatePdpNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'generate_pdp' });
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
+      conversationId: state.conversationId,
+      step: 'generate_pdp',
+    });
     const cid = state.conversationId;
     logger.log(`[${cid}] Generating PDP`);
 
@@ -219,22 +216,24 @@ export function createGeneratePdpNode(deps: GraphDeps) {
       reflection: reflectionText,
     });
 
+    const policy = STAGE_POLICY[Stage.GeneratePdp];
+
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       generatePdpResponseSchema,
-      { ...deps.modelConfig.resolve(Stage.GeneratePdp), temperature: 0.3, maxTokens: 1000, routingKey: cid }
+      {
+        ...deps.modelConfig.resolve(Stage.GeneratePdp),
+        temperature: policy.temperature,
+        maxTokens: policy.maxTokens,
+        routingKey: routingKeyFor(Stage.GeneratePdp, cid),
+      }
     );
 
     const pdpGoals = validateGoals(response.goals);
 
     logger.log(
       `[${cid}] Generated ${pdpGoals.length} PDP goals: ` +
-        pdpGoals
-          .map(
-            (g) =>
-              `"${g.goal.slice(0, 50)}..." (${g.actions.length} actions)`
-          )
-          .join(', ')
+        pdpGoals.map((g) => `"${g.goal.slice(0, 50)}..." (${g.actions.length} actions)`).join(', ')
     );
 
     return { pdpGoals };

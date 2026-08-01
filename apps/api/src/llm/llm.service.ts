@@ -85,11 +85,16 @@ export type LLMOptions = ModelTarget & {
   temperature?: number;
   maxTokens?: number;
   /**
-   * Stable key (the conversationId) used to shard the call across the API keys of
-   * the pool THIS TARGET resolves to. Calls sharing a routingKey deterministically
-   * hit the same key and its rate limiter *within a pool* — two targets in
-   * different pools shard independently and will land on different endpoints, by
-   * design (see llm-pools.ts). Omitted → index 0 of that pool.
+   * Key used to shard the call across the API keys of the pool THIS TARGET
+   * resolves to. Calls sharing a routingKey deterministically hit the same key and
+   * its rate limiter *within a pool* — two targets in different pools shard
+   * independently and will land on different endpoints, by design (see
+   * llm-pools.ts). Omitted → index 0 of that pool.
+   *
+   * Build it with `routingKeyFor(stage, conversationId)`, never from a bare
+   * conversationId: whether a journey's calls SHOULD share a key is a per-stage
+   * decision (see CacheAffinity in llm-stage-policy.ts), and only the affinity
+   * stages pass the conversationId through unchanged.
    * See LlmEndpointResolver.
    */
   routingKey?: string;
@@ -319,7 +324,8 @@ export class LLMService {
             if (retryable) {
               this.metricsService.recordLLMRetry('invokeStructured');
               this.logger.warn(
-                `Retryable [${target.provider}:${modelLabel}] error, retrying...${detail}`,
+                `Retryable [${target.provider}:${modelLabel}@${bucket.bucketKey}] error, ` +
+                  `retrying...${detail}`,
                 error
               );
             } else {
@@ -328,7 +334,8 @@ export class LLMService {
               // the branch where the provider's own message actually explains the
               // failure, so it's the one that most needs the decoded detail.
               this.logger.warn(
-                `Non-retryable [${target.provider}:${modelLabel}] error, not retrying${detail}`,
+                `Non-retryable [${target.provider}:${modelLabel}@${bucket.bucketKey}] error, ` +
+                  `not retrying${detail}`,
                 error
               );
             }
@@ -345,6 +352,7 @@ export class LLMService {
         maxTokens,
         durationMs: Date.now() - startTime,
         ok: true,
+        bucket: bucket.bucketKey,
         input: traceInput,
         output: result.data,
         context: traceContext,
@@ -358,7 +366,7 @@ export class LLMService {
       // was the Sentry event — in local dev (no DSN) a 4xx vanished entirely and
       // surfaced only as the caller's downstream fallback.
       this.logger.error(
-        `invokeStructured failed [${target.provider}:${modelLabel}]${detail}: ` +
+        `invokeStructured failed [${target.provider}:${modelLabel}@${bucket.bucketKey}]${detail}: ` +
           `${error instanceof Error ? error.message : String(error)}`
       );
 
@@ -370,6 +378,7 @@ export class LLMService {
         maxTokens,
         durationMs: Date.now() - startTime,
         ok: false,
+        bucket: bucket.bucketKey,
         input: traceInput,
         error: `${error instanceof Error ? error.message : String(error)}${detail}`,
         context: traceContext,

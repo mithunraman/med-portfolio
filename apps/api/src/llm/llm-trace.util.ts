@@ -28,6 +28,13 @@ export interface LlmTraceRecord {
   op: 'invokeStructured' | 'transcribeAudio';
   provider: string;
   model: string;
+  /**
+   * Which credential/quota bucket served the call (`pool:index`). Routing for a
+   * non-affinity stage is randomised, so the key cannot be recomputed after the
+   * fact — this is the only record of which endpoint actually ran the request.
+   * Absent for transcription, which does not go through the endpoint resolver.
+   */
+  bucket?: string;
   temperature?: number;
   maxTokens?: number;
   durationMs: number;

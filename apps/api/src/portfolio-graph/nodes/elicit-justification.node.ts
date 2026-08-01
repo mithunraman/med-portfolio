@@ -2,7 +2,7 @@ import { Specialty } from '@acme/shared';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { Stage } from '../../llm';
+import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { CapabilityTag, PortfolioStateType, ReadinessTier } from '../portfolio-graph.state';
@@ -167,14 +167,16 @@ export function createElicitJustificationNode(deps: GraphDeps) {
       transcript: state.fullTranscript,
     });
 
+    const policy = STAGE_POLICY[Stage.ElicitJustification];
+
     const { data: response } = await deps.llmService.invokeStructured(
       messages,
       elicitJustificationResponseSchema,
       {
         ...deps.modelConfig.resolve(Stage.ElicitJustification),
-        temperature: 0.3,
-        maxTokens: 1500,
-        routingKey: cid,
+        temperature: policy.temperature,
+        maxTokens: policy.maxTokens,
+        routingKey: routingKeyFor(Stage.ElicitJustification, cid),
       }
     );
 
@@ -237,10 +239,7 @@ function stripTierCommentary(justification: string): string {
     `[,;.]\\s+(?:but|although|however|though|yet|whereas)\\b[^.]*?\\bso this is (?:${JUSTIFICATION_TIERS})\\b[^.]*\\.?\\s*$`,
     'i'
   );
-  const bare = new RegExp(
-    `[,;]\\s*so this is (?:${JUSTIFICATION_TIERS})\\b[^.]*\\.?\\s*$`,
-    'i'
-  );
+  const bare = new RegExp(`[,;]\\s*so this is (?:${JUSTIFICATION_TIERS})\\b[^.]*\\.?\\s*$`, 'i');
   const cleaned = justification.replace(withLead, '.').replace(bare, '.');
   return cleaned.trim();
 }

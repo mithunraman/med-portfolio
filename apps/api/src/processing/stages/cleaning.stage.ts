@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
 import { z } from 'zod';
-import { LLMService, ModelConfigService, Stage } from '../../llm';
+import { LLMService, ModelConfigService, routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
 import { CLEANING_PROMPT } from '../prompts/cleaning.prompt';
 import { placeholderTypes } from '../redaction/placeholders';
 import { IProcessingStage, StageContext, StageResult } from './stage.interface';
@@ -48,23 +48,34 @@ export class CleaningStage implements IProcessingStage {
    */
   async execute(input: string, context: StageContext): Promise<StageResult> {
     const messages = await CLEANING_PROMPT.formatMessages({ transcript: input });
+    const policy = STAGE_POLICY[Stage.Cleaning];
 
     const response = await this.llmService.invokeStructured(messages, cleaningResponseSchema, {
       ...this.modelConfig.resolve(Stage.Cleaning),
-      temperature: 0.1,
-      // Shard by conversation within whichever pool this stage resolves to, so a
-      // conversation sticks to one key of that pool (cleaning runs pre-artefact,
-      // so there is no artefactId to key on yet).
+      temperature: policy.temperature,
+      maxTokens: policy.maxTokens,
+      // Free-routed, NOT sharded by conversation. What makes a prefix cacheable is
+      // POSITIONAL: only the run of messages before the first varying byte counts.
+      // CLEANING_PROMPT does interpolate `{transcript}`, but that TRAILS a system
+      // message which is a bare constant, so the cacheable prefix is byte-identical
+      // on every cleaning call system-wide. Every key in the pool warms it
+      // independently and there is nothing to hold together — pinning would only
+      // bind a conversation to one key's rate limit.
       //
-      // NOT cross-stage affinity: under a split-pool variant (F) cleaning sits in
-      // `interactive` while the graph stages sit in `analysis`, so the same
-      // conversation deliberately uses different endpoints for the two. That
-      // separation IS the bulkhead that keeps a machine-paced analysis burst off
-      // the interactive path — do not "restore" shared routing between them.
+      // So keep the SYSTEM message variable-free. A value interpolated into it
+      // (specialty-aware cleaning, say) would move the first varying byte to the
+      // front, make the prefix per-journey, and invert this classification.
+      // See CacheAffinity in llm-stage-policy.
+      //
+      // Pool separation is a different thing and still holds: under a split-pool
+      // variant (F) cleaning sits in `interactive` while the graph stages sit in
+      // `analysis`, so the same conversation deliberately uses different endpoints
+      // for the two. That separation IS the bulkhead keeping a machine-paced
+      // analysis burst off the interactive path — do not collapse it.
       //
       // Inert while a pool has a single key (the resolver short-circuits to index
-      // 0), and correct the moment that pool gains a second.
-      routingKey: context.conversationId.toString(),
+      // 0), and live the moment that pool gains a second.
+      routingKey: routingKeyFor(Stage.Cleaning, context.conversationId.toString()),
     });
 
     const injectionDetected = response.data.injectionDetected;

@@ -31,37 +31,18 @@ describe('ModelConfigService', () => {
       }
     });
 
-    it('resolves every stage to Azure Foundry DeepSeek Flash for variant D', () => {
+    it('splits variant D across two pools and two models', () => {
       const service = new ModelConfigService(
         configStub({
           'app.llm.variant': 'D',
-          'app.llm.pools': { [Pool.Analysis]: [endpoint] },
-        })
-      );
-
-      expect(service.activeVariant).toBe('D');
-      for (const stage of ALL_STAGES) {
-        const target = service.resolve(stage);
-        expect(target).toEqual({
-          provider: 'azure-foundry',
-          model: 'DeepSeek-V4-Flash',
-          pool: Pool.Analysis,
-          thinkMode: 'off',
-          structuredMethod: 'jsonSchema',
-        });
-      }
-    });
-
-    it('splits variant F across two pools and two models', () => {
-      const service = new ModelConfigService(
-        configStub({
-          'app.llm.variant': 'F',
           'app.llm.pools': {
             [Pool.Interactive]: [endpoint],
             [Pool.Analysis]: [endpoint],
           },
         })
       );
+
+      expect(service.activeVariant).toBe('D');
 
       // Cleaning is the interactive path (user-paced, blocks the message
       // appearing) and uses native function calling — the jsonSchema workaround
@@ -98,7 +79,7 @@ describe('ModelConfigService', () => {
     it('reports every distinct Foundry pool a variant draws from', () => {
       const service = new ModelConfigService(
         configStub({
-          'app.llm.variant': 'F',
+          'app.llm.variant': 'D',
           'app.llm.pools': {
             [Pool.Interactive]: [endpoint],
             [Pool.Analysis]: [endpoint],
@@ -116,33 +97,48 @@ describe('ModelConfigService', () => {
       );
     });
 
-    it('throws when variant D has no endpoints for the pool it uses', () => {
+    it('throws when variant D has no endpoints for the pools it uses', () => {
       // Missing entirely...
       expect(() => new ModelConfigService(configStub({ 'app.llm.variant': 'D' }))).toThrow(
-        /pool 'analysis' but no endpoints are configured/
+        /pool 'interactive' but no endpoints are configured/
       );
 
       // ...and present-but-empty (all indexed pairs absent → []).
       expect(
         () =>
           new ModelConfigService(
-            configStub({ 'app.llm.variant': 'D', 'app.llm.pools': { analysis: [] } })
+            configStub({
+              'app.llm.variant': 'D',
+              'app.llm.pools': { [Pool.Interactive]: [], [Pool.Analysis]: [endpoint] },
+            })
           )
-      ).toThrow(/AZURE_FOUNDRY_ANALYSIS_API_KEY_1/);
+      ).toThrow(/AZURE_FOUNDRY_INTERACTIVE_API_KEY_1/);
     });
 
     it('throws when a MULTI-pool variant configures only one of its pools', () => {
       // The failure mode per-pool validation exists for: "some Foundry endpoint
-      // is configured" was true here, yet the cleaning stage had no key at all.
+      // is configured" was true here, yet one whole stage group had no key at
+      // all. Asserted in BOTH directions so neither pool can become the only one
+      // actually checked.
       expect(
         () =>
           new ModelConfigService(
             configStub({
-              'app.llm.variant': 'F',
+              'app.llm.variant': 'D',
               'app.llm.pools': { [Pool.Analysis]: [endpoint] },
             })
           )
       ).toThrow(/pool 'interactive' but no endpoints are configured/);
+
+      expect(
+        () =>
+          new ModelConfigService(
+            configStub({
+              'app.llm.variant': 'D',
+              'app.llm.pools': { [Pool.Interactive]: [endpoint] },
+            })
+          )
+      ).toThrow(/pool 'analysis' but no endpoints are configured/);
     });
 
     it('applies the same per-pool guard to the provider pools', () => {

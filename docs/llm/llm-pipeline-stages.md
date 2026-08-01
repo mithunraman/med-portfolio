@@ -54,18 +54,19 @@ stage's model with zero call-site edits. The tables in §3/§4/§6 below describ
 | **A** *(default)* | OpenAI direct | Per-stage GPT mix (see §6) | `openai` | function calling |
 | **B** | DeepSeek via OpenRouter (Atlas Cloud) | DeepSeek V4 Flash | `openrouter` | `json_schema` |
 | **C** | DeepSeek via OpenRouter (Atlas Cloud) | DeepSeek V4 Pro | `openrouter` | `json_schema` |
-| **D** | DeepSeek via **Azure AI Foundry** (OpenAI-compatible `/openai/v1`) | DeepSeek V4 Flash | `analysis` | `json_schema` |
+| **D** | **Split** — both on **Azure AI Foundry** (OpenAI-compatible `/openai/v1`) | `gpt-5.4-nano` (cleaning) + DeepSeek V4 Flash (graph) | `interactive` + `analysis` | function calling / `json_schema` |
 | **E** | gpt-oss-120b via OpenRouter (DeepInfra, bf16) | gpt-oss-120b | `openrouter` | `json_schema` |
-| **F** | **Split** — both on Azure AI Foundry | `gpt-5.4-nano` (cleaning) + DeepSeek V4 Flash (graph) | `interactive` + `analysis` | function calling / `json_schema` |
 
-Variants B–E route **every** stage to the same model. They use `json_schema` rather than
-function calling because DeepSeek's native tool-call format isn't normalized into OpenAI
-`tool_calls`. **Variant F is the first non-uniform profile** — the per-stage table was built for
-exactly this: cleaning runs on GPT-5.4-nano (which normalizes `tool_calls` properly, so it uses
-native function calling) while the eight graph stages stay on DeepSeek.
+Variants A, B, C and E route **every** stage to the same model. B, C and E use `json_schema`
+rather than function calling because DeepSeek's native tool-call format isn't normalized into
+OpenAI `tool_calls`. **Variant D is the only non-uniform profile** — the per-stage table was built
+for exactly this: cleaning runs on GPT-5.4-nano (which normalizes `tool_calls` properly, so it uses
+native function calling) while the eight graph stages stay on DeepSeek. D's graph stages are
+therefore a hosting-path A/B against B (same model, Foundry instead of OpenRouter); its cleaning
+stage is not.
 
 Non-OpenAI providers require their credentials (`OPENROUTER_API_KEY`, or the pool-scoped
-`AZURE_FOUNDRY_<POOL>_API_KEY_<i>` / `_BASE_URL_<i>`), enforced **per pool** at startup by
+`AZURE_FOUNDRY_<POOL>_API_KEY_<i>` / `_BASE_URL_<i>` — D needs **both** Foundry pools), enforced **per pool** at startup by
 `ModelConfigService`. Reasoning control differs per provider (owned by
 `LLMService.azureFoundryKwargs` / `openrouterKwargs`): on Foundry, DeepSeek V4 Flash runs
 non-thinking by default and **rejects** DeepSeek's native `thinking` / `enable_thinking` params
@@ -136,11 +137,22 @@ Pools exist for **two independent reasons**, and both must hold before merging a
    slots interactive work needs. This holds *even if the caps converge*, so do not collapse
    pools on the grounds that their numbers match.
 
-Routing within a pool is `hash(conversationId) % N` — sticky across restarts. **Consequence:** a
-conversation is pinned to ONE key per pool, so its own throughput is bound by that key's cap
-regardless of `N`. At 35 rpm the derived `minTime` is ~1714 ms, so a 9-call analysis turn spends
-~15 s in pacing alone. To make a single journey faster, raise the pool's cap — adding keys
-raises aggregate concurrency across users, never one journey's speed.
+Routing within a pool is `hash(routingKey) % N`, sticky across restarts **for a given key**.
+Whether one journey's calls share a key is a *per-stage* decision, made by `routingKeyFor`
+([`llm/llm-stage-policy.ts`](../../apps/api/src/llm/llm-stage-policy.ts)) from that stage's
+`CacheAffinity`:
+
+| Stage | Routing key | Effect | Lever when it queues |
+|---|---|---|---|
+| `check_completeness` | bare `conversationId` | every round pins to ONE key, keeping its prompt prefix warm | raise the pool's **cap** — extra keys don't help |
+| the other eight | per-call | calls spread across the pool's keys | **add a key** *or* raise the cap |
+
+So there is no pool-wide answer to "raise the cap or add a key?" — it depends which stages are
+queuing. Both levers are inert on a single-key pool, which resolves to index 0 without hashing.
+
+At 35 rpm the derived `minTime` is ~1714 ms **per key**. It paces a key's calls, so it only bites
+when they arrive faster than that interval; since the graph stages run sequentially, pacing
+competes with model latency rather than simply adding to it.
 
 ---
 
@@ -350,7 +362,7 @@ single `LLMService.invokeStructured` chokepoint; audio transcription is Assembly
 provider for any stage is a matter of editing that stage's row in `VARIANTS` — all nine call
 sites already spread `modelConfig.resolve(Stage.X)`, so no call site changes.
 
-Under **Variant F** the same table becomes:
+Under **Variant D** the same table becomes:
 
 | # | Stage | Pipeline | Provider / Model | Pool |
 |--:|---|---|---|---|

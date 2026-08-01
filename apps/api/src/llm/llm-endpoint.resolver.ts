@@ -47,14 +47,25 @@ export interface ResolvedBucket extends Bucket {
  * same pool sharded across two keys needs no code change, only a second
  * `<PREFIX>_API_KEY_2`.
  *
- * Consequence of stickiness: a single conversation is pinned to ONE key per pool,
- * so its own throughput is bound by that key's per-key rate regardless of N.
- * Adding keys raises the AGGREGATE capacity ceiling (across many conversations),
- * not any single journey's speed — if one journey is too slow, raise that pool's
- * cap; do not add keys. And because routing is a plain hash, N concurrent
- * conversations are not guaranteed to land on distinct keys — collisions are
- * expected and, at per-conversation rates well under the per-key cap, harmless;
- * genuine saturation surfaces in the per-endpoint queue-depth metric.
+ * Stickiness is a property of the KEY, not of a conversation. Whether one
+ * journey's calls reuse a key is decided by the CALLER — `routingKeyFor` in
+ * llm-stage-policy.ts — and now differs per stage:
+ *  - AFFINITY stages (`check_completeness`) pass the bare conversationId, so a
+ *    journey's rounds all pin to one key and keep its prompt prefix warm. Their
+ *    throughput is bound by that key's rate regardless of N, so the lever there
+ *    is a HIGHER CAP; extra keys do nothing for them.
+ *  - FREE-ROUTED stages pass a per-call key, so their calls spread across the
+ *    pool. Adding a key raises THEIR throughput too, not just the pool's
+ *    aggregate ceiling across many conversations.
+ *
+ * So "raise the cap or add a key?" has no pool-wide answer — it depends which
+ * stages are queuing. Both levers are inert on a single-key pool, which
+ * `resolveBucket` short-circuits to index 0 without hashing at all.
+ *
+ * And because routing is a plain hash, distinct keys are not guaranteed to land
+ * on distinct endpoints — collisions are expected and, at rates well under the
+ * per-key cap, harmless; genuine saturation surfaces in the per-endpoint
+ * queue-depth metric.
  *
  * `resolveBucket` returns credentials and bucket identity as a SINGLE value, and
  * that is what structurally guarantees the invariant: the key whose limiter gates

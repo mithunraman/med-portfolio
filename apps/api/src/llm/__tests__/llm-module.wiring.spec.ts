@@ -24,7 +24,7 @@ import { Stage } from '../model-variants';
  * env→config transformation under test is the production one; only the env-schema
  * plumbing (Zod) is bypassed. No network: nothing here calls a provider.
  *
- * This is the nearest offline equivalent of the live Variant F smoke test, which
+ * This is the nearest offline equivalent of the live Variant D smoke test, which
  * additionally needs real Azure credentials to confirm the nano deployment
  * accepts `temperature` and honours `functionCalling`.
  */
@@ -35,8 +35,8 @@ const ANALYSIS_URL_2 = 'https://deepseek-2.services.ai.azure.com/openai/v1/';
 
 const OPENAI_URL = 'https://api.openai.com/v1';
 
-/** Env exactly as an operator would set it for Variant F (see .env.example). */
-const VARIANT_F_ENV: NodeJS.ProcessEnv = {
+/** Env exactly as an operator would set it for Variant D (see .env.example). */
+const VARIANT_D_ENV: NodeJS.ProcessEnv = {
   AZURE_FOUNDRY_INTERACTIVE_API_KEY_1: 'nano-key',
   AZURE_FOUNDRY_INTERACTIVE_BASE_URL_1: INTERACTIVE_URL,
   AZURE_FOUNDRY_ANALYSIS_API_KEY_1: 'deepseek-key-1',
@@ -91,11 +91,11 @@ async function bootModule(variant: string, env: NodeJS.ProcessEnv) {
 }
 
 describe('LLMModule wiring (pool topology end-to-end)', () => {
-  describe('Variant F', () => {
+  describe('Variant D', () => {
     let moduleRef: Awaited<ReturnType<typeof bootModule>>;
 
     beforeAll(async () => {
-      moduleRef = await bootModule('F', VARIANT_F_ENV);
+      moduleRef = await bootModule('D', VARIANT_D_ENV);
     });
 
     afterAll(async () => {
@@ -103,7 +103,7 @@ describe('LLMModule wiring (pool topology end-to-end)', () => {
     });
 
     it('constructs the whole LLM DI graph', () => {
-      expect(moduleRef.get(ModelConfigService).activeVariant).toBe('F');
+      expect(moduleRef.get(ModelConfigService).activeVariant).toBe('D');
       expect(moduleRef.get(LlmEndpointResolver)).toBeDefined();
       expect(moduleRef.get(LlmRateLimiterService)).toBeDefined();
     });
@@ -157,29 +157,30 @@ describe('LLMModule wiring (pool topology end-to-end)', () => {
       expect(await capOf('analysis:1')).toBe(35); // every key in a pool gets the pool's cap
     });
 
-    it('shards analysis conversations across both keys, but pins each one', () => {
+    it('spreads distinct routing keys across both analysis keys, and is stable per key', () => {
       const modelConfig = moduleRef.get(ModelConfigService);
       const resolver = moduleRef.get(LlmEndpointResolver);
       const target = modelConfig.resolve(Stage.Reflect);
 
       const seen = new Set<string>();
       for (let i = 0; i < 50; i++) {
-        seen.add(resolver.resolveBucket(target, `conversation-${i}`).bucketKey);
+        seen.add(resolver.resolveBucket(target, `routing-key-${i}`).bucketKey);
       }
       expect(seen).toEqual(new Set(['analysis:0', 'analysis:1']));
 
-      // …while a single conversation stays on one key, which is why extra keys
-      // raise aggregate capacity but never one journey's speed.
-      const pinned = resolver.resolveBucket(target, 'conversation-7').bucketKey;
+      // …while a repeated key always lands on the same endpoint. Stickiness is a
+      // property of the KEY. Whether a journey reuses one is routingKeyFor's call
+      // (only check_completeness does), so this is NOT "a conversation pins".
+      const pinned = resolver.resolveBucket(target, 'routing-key-7').bucketKey;
       for (let i = 0; i < 10; i++) {
-        expect(resolver.resolveBucket(target, 'conversation-7').bucketKey).toBe(pinned);
+        expect(resolver.resolveBucket(target, 'routing-key-7').bucketKey).toBe(pinned);
       }
     });
   });
 
   describe('startup validation', () => {
     it('refuses to boot when a pool the variant uses has no credentials', async () => {
-      // Variant F needs BOTH pools. Configuring only analysis used to satisfy a
+      // Variant D needs BOTH pools. Configuring only analysis used to satisfy a
       // provider-level check ("some Foundry endpoint exists") while leaving the
       // cleaning stage with no key at all — the failure per-pool validation exists
       // to catch, and it must happen at boot, not on the first cleaning call.
@@ -188,7 +189,7 @@ describe('LLMModule wiring (pool topology end-to-end)', () => {
         AZURE_FOUNDRY_ANALYSIS_BASE_URL_1: ANALYSIS_URL_1,
       };
 
-      await expect(bootModule('F', analysisOnly)).rejects.toThrow(
+      await expect(bootModule('D', analysisOnly)).rejects.toThrow(
         /pool 'interactive' but no endpoints are configured.*AZURE_FOUNDRY_INTERACTIVE_API_KEY_1/s
       );
     });

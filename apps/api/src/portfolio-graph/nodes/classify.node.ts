@@ -5,7 +5,7 @@ import * as Sentry from '@sentry/nestjs';
 import { z } from 'zod';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
-import { Stage } from '../../llm';
+import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import { ClassificationAlternative, PortfolioStateType } from '../portfolio-graph.state';
 
@@ -85,7 +85,10 @@ export const classifyResponseSchema = buildClassifyResponseSchema(z.string(), z.
  */
 function buildSpecialtySchema(validCodes: string[]) {
   const codes = validCodes as [string, ...string[]];
-  return buildClassifyResponseSchema(z.enum([...codes, 'none'] as [string, ...string[]]), z.enum(codes));
+  return buildClassifyResponseSchema(
+    z.enum([...codes, 'none'] as [string, ...string[]]),
+    z.enum(codes)
+  );
 }
 
 type ClassifyResponse = z.infer<typeof classifyResponseSchema>;
@@ -263,11 +266,18 @@ export function createClassifyNode(deps: GraphDeps) {
       transcript: state.fullTranscript,
     });
 
+    const policy = STAGE_POLICY[Stage.Classify];
+
     try {
       const { data: classification } = await deps.llmService.invokeStructured(
         messages,
         responseSchema,
-        { ...deps.modelConfig.resolve(Stage.Classify), temperature: 0.1, maxTokens: 800, routingKey: cid }
+        {
+          ...deps.modelConfig.resolve(Stage.Classify),
+          temperature: policy.temperature,
+          maxTokens: policy.maxTokens,
+          routingKey: routingKeyFor(Stage.Classify, cid),
+        }
       );
 
       // Belt-and-suspenders: the enum schema already guarantees a valid code,

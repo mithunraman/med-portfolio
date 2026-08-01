@@ -1,17 +1,11 @@
-import {
-  ArtefactTemplate,
-  leafProbes,
-  Probe,
-  probeThreshold,
-  Specialty,
-} from '@acme/shared';
+import { ArtefactTemplate, leafProbes, Probe, probeThreshold, Specialty } from '@acme/shared';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
 import { z } from 'zod';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
-import { Stage } from '../../llm';
+import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
 import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
 import {
   PortfolioStateType,
@@ -270,8 +264,7 @@ export function deriveReadiness(
   }
 
   // Overall score on a 0–10 scale, weighted by probe importance.
-  const readinessScore =
-    weightTotal > 0 ? Math.round((weightedSum / weightTotal) * 100) / 10 : 0;
+  const readinessScore = weightTotal > 0 ? Math.round((weightedSum / weightTotal) * 100) / 10 : 0;
 
   return { probeReadiness, sectionReadiness, readinessScore, missingProbeIds };
 }
@@ -409,17 +402,19 @@ export function createCheckCompletenessNode(deps: GraphDeps) {
     // Constrain ids to this template's assessable sections at generation time.
     const responseSchema = buildAssessableSchema([...assessableIds]);
 
+    const policy = STAGE_POLICY[Stage.CheckCompleteness];
+
     try {
-      const { data: response } = await deps.llmService.invokeStructured(
-        messages,
-        responseSchema,
-        {
-          ...deps.modelConfig.resolve(Stage.CheckCompleteness),
-          temperature: 0.1,
-          maxTokens: 2000,
-          routingKey: cid,
-        }
-      );
+      const { data: response } = await deps.llmService.invokeStructured(messages, responseSchema, {
+        ...deps.modelConfig.resolve(Stage.CheckCompleteness),
+        temperature: policy.temperature,
+        maxTokens: policy.maxTokens,
+        // The only stage pinned to one key per journey: its prompt emits
+        // template/section values ahead of its static instructions, so the
+        // cached prefix is unique to this run and every round would otherwise
+        // re-pay for it. See CacheAffinity in llm-stage-policy.
+        routingKey: routingKeyFor(Stage.CheckCompleteness, cid),
+      });
 
       // ── Tiers: LLM grades quality vs rubric, code applies structural floors ──
       const probeTiers = deriveTiers(response.assignments, response.sectionGrades, assessableIds);
@@ -427,8 +422,11 @@ export function createCheckCompletenessNode(deps: GraphDeps) {
       // Ratchet against the best tier reached so far so a cleared section can't re-open.
       const bestTierByProbe = ratchetTiers(state.bestTierByProbe ?? {}, probeTiers);
 
-      const { probeReadiness, sectionReadiness, readinessScore, missingProbeIds } =
-        deriveReadiness(bestTierByProbe, assessableSections, template);
+      const { probeReadiness, sectionReadiness, readinessScore, missingProbeIds } = deriveReadiness(
+        bestTierByProbe,
+        assessableSections,
+        template
+      );
       const missingSections = missingProbeIds;
       const hasEnoughInfo = missingSections.length === 0;
 

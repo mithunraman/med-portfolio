@@ -2,71 +2,39 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 import { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 import { GraphDeps } from './graph-deps';
 import {
-  createAskClarificationNode,
   createAskFollowupNode,
   createCheckCompletenessNode,
-  createClassifyNode,
   createRefineNode,
   createElicitJustificationNode,
   createGatherContextNode,
   createGenerateFollowupNode,
   createGeneratePdpNode,
   createPresentCapabilitiesNode,
-  createPresentClassificationNode,
   createReflectNode,
+  createRejectEntryNode,
   createSaveNode,
   createTagCapabilitiesNode,
 } from './nodes';
 import { shouldContinueElicitation } from './elicitation.util';
 import { PortfolioState, PortfolioStateType } from './portfolio-graph.state';
 
-// ── Max loop limits ──
-// The follow-up round cap is per-run (state.maxFollowupRounds, derived by
-// check_completeness from the template). This is a circuit-breaker backstop, not
-// the exit condition — the planner asks one question per round and exits when the
-// rubric clears (hasEnoughInfo).
-export const CONFIDENCE_THRESHOLD = 0.7;
-export const MAX_CLARIFICATION_ROUNDS = 2;
-
 // ── Router functions ──
 
 /**
- * After gather_context: if the user has already confirmed the entry type,
- * skip classification and go straight to completeness check.
- * Otherwise (first run or clarification loop), proceed to classify.
- */
-export function gatherContextRouter(state: PortfolioStateType): 'classify' | 'check_completeness' {
-  return state.classificationConfirmed ? 'check_completeness' : 'classify';
-}
-
-/**
- * After classify: route based on relevance and confidence.
+ * After check_completeness: reject the entry, generate follow-up questions, or
+ * proceed to tag capabilities.
  *
- * - Irrelevant content → ask_clarification (up to MAX_CLARIFICATION_ROUNDS)
- * - Low confidence      → ask_clarification (up to MAX_CLARIFICATION_ROUNDS)
- * - Otherwise           → present_classification
- *
- * Both irrelevant and low-confidence share the same round counter.
- * After MAX_CLARIFICATION_ROUNDS, falls through to present_classification.
+ * The relevance gate fires ONLY on the first pass (`followUpRound === 0`). The
+ * grader re-assesses relevance every round, so enforcing it later would let one
+ * noisy verdict terminate a journey the trainee has already invested rounds in.
+ * A first-pass-only gate still catches what it is for — content that was never a
+ * portfolio entry — because that verdict is available before any question is asked.
  */
-export function classifyRouter(
+export function completenessRouter(
   state: PortfolioStateType
-): 'present_classification' | 'ask_clarification' {
-  const canAskMore = state.clarificationRound < MAX_CLARIFICATION_ROUNDS;
+): 'generate_followup' | 'tag_capabilities' | 'reject_entry' {
+  if (!state.isRelevant && state.followUpRound === 0) return 'reject_entry';
 
-  // Irrelevant content always routes to clarification if rounds remain
-  if (!state.isRelevant && canAskMore) return 'ask_clarification';
-
-  const lowConfidence = state.classificationConfidence < CONFIDENCE_THRESHOLD;
-  if (lowConfidence && canAskMore) return 'ask_clarification';
-
-  return 'present_classification';
-}
-
-/**
- * After check_completeness: proceed to tag capabilities or generate follow-up questions.
- */
-function completenessRouter(state: PortfolioStateType): 'generate_followup' | 'tag_capabilities' {
   // The exit policy (rubric met, good-enough, exhausted, done, or round cap) lives in
   // shouldContinueElicitation so it is pure and unit-testable.
   return shouldContinueElicitation(state, state.maxFollowupRounds)
@@ -75,35 +43,49 @@ function completenessRouter(state: PortfolioStateType): 'generate_followup' | 't
 }
 
 /**
+ * After present_capabilities: a run with no confirmed capabilities produces no
+ * entry, so it ends rather than composing one.
+ *
+ * On the normal path this branch is not reached: the empty-capabilities case
+ * interrupts with a TERMINAL message, and the API refuses to resume terminal
+ * questions, so the run parks there. The edge exists so that the skip is enforced
+ * by the topology rather than by an `if` in every downstream node — which is what
+ * it replaced. Anything that did resume the run (a directly enqueued outbox job,
+ * say) still cannot compose an entry with nothing to justify.
+ */
+export function capabilitiesRouter(state: PortfolioStateType): 'elicit_justification' | typeof END {
+  return state.capabilities.length === 0 ? END : 'elicit_justification';
+}
+
+/**
  * Builds and compiles the portfolio processing graph.
+ *
+ * The entry type is chosen by the trainee at artefact creation and seeded into
+ * state at start, so there is nothing to classify — the graph opens straight into
+ * the elicitation loop.
  *
  * Graph structure:
  *
- *   START → gather_context ──┬── (classificationConfirmed) ──────────────────────→ check_completeness
- *               ↑            │                                                              ↓
- *               │            └── (first run) ──→ classify → classifyRouter ──┐  ┌── completenessRouter ──┐
- *               │                                                             │  ↓                        ↓
- *               │                                            (confidence OK) ─┴→ present_classification  generate_followup
- *               │                                                                    (INTERRUPT)              ↓
- *               │                                            (low confidence) ──→ ask_clarification    ask_followup (INTERRUPT)
- *               │                                                                    (INTERRUPT)              │
- *               ├───────────────────────────────────────────────────────────────────────┘                    │
- *               └────────────────────────────────────────────────────────────────────────────────────────────┘
- *
- *   present_classification (INTERRUPT) → check_completeness → ... → tag_capabilities
- *                                                                          ↓
- *                                                               present_capabilities (INTERRUPT)
- *                                                                          ↓
- *                                                                       reflect → refine → generate_pdp → save → END
+ *   START → gather_context → check_completeness ──┬─ (not a portfolio entry, round 0)
+ *               ↑                                 │        → reject_entry (INTERRUPT) → END
+ *               │                                 │
+ *               │                                 ├─ (gaps remain) → generate_followup
+ *               │                                 │                        ↓
+ *               │                                 │                  ask_followup (INTERRUPT)
+ *               └─────────────────────────────────┼────────────────────────┘
+ *                                                 │
+ *                                                 └─ (rubric met / exhausted) → tag_capabilities
+ *                                                                                     ↓
+ *                                                                       present_capabilities (INTERRUPT)
+ *                                                                                     ↓
+ *                          elicit_justification → reflect → refine → generate_pdp → save → END
  */
 export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: GraphDeps) {
   const graph = new StateGraph(PortfolioState)
     // ── Nodes ──
     .addNode('gather_context', createGatherContextNode(deps))
-    .addNode('classify', createClassifyNode(deps))
-    .addNode('ask_clarification', createAskClarificationNode(deps))
-    .addNode('present_classification', createPresentClassificationNode(deps))
     .addNode('check_completeness', createCheckCompletenessNode(deps))
+    .addNode('reject_entry', createRejectEntryNode(deps))
     .addNode('generate_followup', createGenerateFollowupNode(deps))
     .addNode('ask_followup', createAskFollowupNode(deps))
     .addNode('tag_capabilities', createTagCapabilitiesNode(deps))
@@ -116,34 +98,26 @@ export function buildPortfolioGraph(checkpointer: BaseCheckpointSaver, deps: Gra
 
     // ── Edges ──
 
-    // Entry point
+    // Entry point — gather the transcript, then assess it against the template.
     .addEdge(START, 'gather_context')
-
-    // After gathering context: classify on first run, skip to completeness if type confirmed
-    .addConditionalEdges('gather_context', gatherContextRouter, {
-      classify: 'classify',
-      check_completeness: 'check_completeness',
-    })
-
-    // Classification → route based on confidence
-    .addConditionalEdges('classify', classifyRouter, {
-      present_classification: 'present_classification',
-      ask_clarification: 'ask_clarification',
-    })
-    .addEdge('ask_clarification', 'gather_context')
-    .addEdge('present_classification', 'check_completeness')
+    .addEdge('gather_context', 'check_completeness')
 
     // Completeness routing (loop: generate questions → interrupt → loop back)
     .addConditionalEdges('check_completeness', completenessRouter, {
       generate_followup: 'generate_followup',
       tag_capabilities: 'tag_capabilities',
+      reject_entry: 'reject_entry',
     })
+    .addEdge('reject_entry', END)
     .addEdge('generate_followup', 'ask_followup')
     .addEdge('ask_followup', 'gather_context') // Loop back, re-gather + re-check completeness
 
     // Linear chain: tag → present → justify → reflect → refine → PDP → save → end
     .addEdge('tag_capabilities', 'present_capabilities')
-    .addEdge('present_capabilities', 'elicit_justification')
+    .addConditionalEdges('present_capabilities', capabilitiesRouter, {
+      elicit_justification: 'elicit_justification',
+      [END]: END,
+    })
     .addEdge('elicit_justification', 'reflect')
     .addEdge('reflect', 'refine')
     .addEdge('refine', 'generate_pdp')

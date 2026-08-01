@@ -18,6 +18,8 @@ export interface AnalysisStartPayload {
   userId: string;
   specialty: string;
   trainingStage: string;
+  /** The trainee's entry type, chosen at artefact creation and validated there. */
+  entryType: string;
   langGraphThreadId: string;
 }
 
@@ -67,6 +69,7 @@ export class AnalysisStartHandler implements OutboxHandler {
         userId: data.userId,
         specialty: data.specialty,
         trainingStage: data.trainingStage ?? '',
+        entryType: data.entryType,
         threadId,
       });
 

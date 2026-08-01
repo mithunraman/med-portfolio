@@ -24,12 +24,14 @@ interface CapabilitiesResumeValue {
  *
  * Presents the LLM-tagged capabilities to the user for confirmation.
  * The user can select/deselect from the suggestions (multi-select).
- * This keeps the node replay-safe by design — identical to the
- * present_classification pattern.
+ * The interrupt payload carries the options, so the node is replay-safe by design.
  *
  * On resume, validates the user's selections against the options
  * that were presented. Invalid codes are silently dropped.
  * If nothing valid remains, falls back to the full LLM suggestion.
+ *
+ * The empty-capabilities branch interrupts with a terminal message and stops
+ * there; `capabilitiesRouter` routes it to END rather than into the compose chain.
  */
 export function createPresentCapabilitiesNode(deps: GraphDeps) {
   return async function presentCapabilitiesNode(
@@ -42,18 +44,14 @@ export function createPresentCapabilitiesNode(deps: GraphDeps) {
     });
     logger.log(`[${cid}] Presenting capabilities`);
 
-    // ── Guard: no entry type (irrelevant content path) — skip entirely ──
-    if (!state.entryType) {
-      logger.warn(`[${cid}] No entry type — skipping capability presentation`);
-      return {};
-    }
-
     // ── Empty capabilities: interrupt with empty options for terminal message ──
     if (state.capabilities.length === 0) {
       logger.warn(`[${cid}] No capabilities — interrupting with empty options`);
       interrupt({ type: 'capabilities', options: [], entryType: state.entryType });
-      // After resume: clear entryType so downstream nodes skip gracefully
-      return { entryType: null };
+      // Terminal: the API refuses to resume terminal questions, so the run parks
+      // at the interrupt above. If something did resume it, `capabilitiesRouter`
+      // sends it to END — there is nothing to justify or compose.
+      return {};
     }
 
     // Build options from the tagged capabilities (already sorted by tier). The

@@ -21,6 +21,20 @@ interface EnsureConversationResult {
 }
 
 /**
+ * The artefact a not-yet-created conversation is waiting on. Present means "create
+ * this on first send"; absent means the conversation already exists. Both fields
+ * are required together — that is the point of the bundle, and it is why no
+ * runtime check is needed here for a half-supplied pair.
+ */
+export interface PendingArtefact {
+  /** Client-minted id, also the temporary conversation id. Doubles as the
+   *  server-side idempotency key, so a retry cannot create a second artefact. */
+  artefactId: string;
+  /** Chosen in the entry-type picker before the conversation opened. */
+  entryType: string;
+}
+
+/**
  * If this is a new conversation, create the artefact to get the real conversation ID.
  * Does NOT rekey optimistic messages — the caller (screen) must dispatch
  * rekeyOptimisticMessages in the same synchronous block as setRealConversationId
@@ -28,14 +42,13 @@ interface EnsureConversationResult {
  */
 async function ensureConversation(
   conversationId: string,
-  isNewConversation?: boolean,
-  artefactId?: string,
+  pendingArtefact?: PendingArtefact,
 ): Promise<EnsureConversationResult> {
-  if (!isNewConversation || !artefactId) {
+  if (!pendingArtefact) {
     return { conversationId };
   }
 
-  const artefact = await api.artefacts.createArtefact({ artefactId });
+  const artefact = await api.artefacts.createArtefact(pendingArtefact);
   return { conversationId: artefact.conversation.id, artefactXid: artefact.id };
 }
 
@@ -138,12 +151,11 @@ export const sendMessageWithRetry = createAsyncThunk(
       content: string;
       localId: string;
       idempotencyKey: string;
-      isNewConversation?: boolean;
-      artefactId?: string;
+      pendingArtefact?: PendingArtefact;
     },
     { dispatch, rejectWithValue }
   ) => {
-    const { content, localId, idempotencyKey, isNewConversation, artefactId } = params;
+    const { content, localId, idempotencyKey, pendingArtefact } = params;
     let { conversationId } = params;
 
     // 1. Optimistic message — INSTANT, before any network call
@@ -156,14 +168,13 @@ export const sendMessageWithRetry = createAsyncThunk(
       deliveryStatus: 'sending',
       idempotencyKey,
       createdAt: new Date().toISOString(),
-      isNewConversation,
-      artefactId,
+      pendingArtefact,
     };
     dispatch(addOptimisticMessage(optimistic));
 
     // 2. New conversation? Create artefact to get real conversation ID
     try {
-      const result = await ensureConversation(conversationId, isNewConversation, artefactId);
+      const result = await ensureConversation(conversationId, pendingArtefact);
       conversationId = result.conversationId;
 
       // 3. Send with retry
@@ -194,12 +205,11 @@ export const retryFailedMessage = createAsyncThunk(
       conversationId: string;
       content: string;
       idempotencyKey: string;
-      isNewConversation?: boolean;
-      artefactId?: string;
+      pendingArtefact?: PendingArtefact;
     },
     { dispatch, rejectWithValue }
   ) => {
-    const { localId, content, idempotencyKey, isNewConversation, artefactId } = params;
+    const { localId, content, idempotencyKey, pendingArtefact } = params;
     let { conversationId } = params;
 
     // Reset status to sending
@@ -207,7 +217,7 @@ export const retryFailedMessage = createAsyncThunk(
 
     try {
       // Re-attempt artefact creation if it failed previously
-      const result = await ensureConversation(conversationId, isNewConversation, artefactId);
+      const result = await ensureConversation(conversationId, pendingArtefact);
       conversationId = result.conversationId;
 
       const response = await retryWrite(() => {
@@ -243,13 +253,11 @@ export const sendVoiceNoteWithRetry = createAsyncThunk(
       idempotencyKey: string;
       recordingUri: string;
       recordingMime: string;
-      isNewConversation?: boolean;
-      artefactId?: string;
+      pendingArtefact?: PendingArtefact;
     },
     { dispatch, rejectWithValue }
   ) => {
-    const { localId, idempotencyKey, recordingUri, recordingMime, isNewConversation, artefactId } =
-      params;
+    const { localId, idempotencyKey, recordingUri, recordingMime, pendingArtefact } = params;
     let { conversationId } = params;
 
     // 1. Optimistic bubble — INSTANT, before any network call
@@ -264,14 +272,13 @@ export const sendVoiceNoteWithRetry = createAsyncThunk(
       createdAt: new Date().toISOString(),
       recordingUri,
       recordingMime,
-      isNewConversation,
-      artefactId,
+      pendingArtefact,
     };
     dispatch(addOptimisticMessage(optimistic));
 
     // 2. New conversation? Create artefact to get real conversation ID
     try {
-      const result = await ensureConversation(conversationId, isNewConversation, artefactId);
+      const result = await ensureConversation(conversationId, pendingArtefact);
       conversationId = result.conversationId;
 
       // Read the recording size once. The file doesn't change between retries, and

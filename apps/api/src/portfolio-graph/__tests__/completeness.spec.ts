@@ -64,16 +64,4 @@ describe('deriveCompleteness', () => {
     expect(result.unmetSections.map((s) => s.label)).toEqual(['Patient Outcome', 'Reflection']);
     expect(result.unmetSections.map((s) => s.status)).toEqual(['missing', 'shallow']);
   });
-
-  it('falls back to the section id when no template is resolvable (no entry type yet)', () => {
-    const result = deriveCompleteness(
-      makeState({
-        entryType: undefined,
-        hasEnoughInfo: false,
-        missingSections: ['management'],
-        probeReadiness: { management: entry('missing') },
-      })
-    );
-    expect(result.unmetSections[0].label).toBe('management');
-  });
 });

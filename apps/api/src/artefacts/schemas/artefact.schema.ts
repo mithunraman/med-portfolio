@@ -112,8 +112,12 @@ export class Artefact {
   @Prop({ required: true, type: Number, default: ArtefactStatus.IN_CONVERSATION })
   status!: ArtefactStatus;
 
-  @Prop({ type: String, default: null })
-  artefactType!: string | null;
+  // Chosen by the trainee at creation and fixed for the artefact's life — see
+  // UpsertArtefactData. Not in UpdateArtefactData, so it cannot be written after
+  // creation. `required` is enforced on `.create()`; the upsert path sets it in
+  // `$setOnInsert` (findOneAndUpdate does not run validators).
+  @Prop({ type: String, required: true })
+  artefactType!: string;
 
   @Prop({ type: String, maxlength: 200, default: null })
   title!: string | null;

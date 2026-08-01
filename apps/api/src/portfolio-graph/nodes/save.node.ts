@@ -22,14 +22,6 @@ export function createSaveNode(deps: GraphDeps) {
 
     const cid = state.conversationId;
 
-    // ── Irrelevant content path: graph completes without artefact output ──
-    if (!state.entryType) {
-      logger.warn(
-        `[${cid}] No entry type — graph completing without artefact (content was not relevant)`
-      );
-      return {};
-    }
-
     // ── Normal path: validate all required fields are present ──
     if (!state.title) throw new Error(`[${cid}] Cannot save: title is not set`);
     if (!state.composedDocument || state.composedDocument.length === 0) {

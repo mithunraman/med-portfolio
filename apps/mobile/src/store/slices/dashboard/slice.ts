@@ -7,8 +7,10 @@ import { fetchInit } from './thunks';
  * Fulfilled action type prefixes for mutations that affect dashboard data.
  * When any of these succeed, the dashboard is marked stale so it refetches on next focus.
  *
- * Artefact and PDP goal mutations are NOT listed here — both are normalized
+ * Most artefact and PDP goal mutations are NOT listed here — they are normalized
  * into their entity slices, so updates are reflected immediately without refetch.
+ * `finaliseArtefact` is the exception: it moves an entry between dashboard buckets,
+ * which the entity update alone doesn't capture.
  */
 const DASHBOARD_INVALIDATING_PREFIXES = [
   'messages/sendMessageWithRetry',
@@ -18,7 +20,6 @@ const DASHBOARD_INVALIDATING_PREFIXES = [
   'reviewPeriods/updateReviewPeriod',
   'reviewPeriods/archiveReviewPeriod',
   'artefacts/finaliseArtefact',
-  'artefacts/createArtefact',
 ];
 
 function isDashboardInvalidatingAction(actionType: string): boolean {

@@ -1,68 +1,75 @@
-import { gatherContextRouter, classifyRouter, CONFIDENCE_THRESHOLD, MAX_CLARIFICATION_ROUNDS } from '../portfolio-graph.builder';
+import { END } from '@langchain/langgraph';
+import { capabilitiesRouter, completenessRouter } from '../portfolio-graph.builder';
 import type { PortfolioStateType } from '../portfolio-graph.state';
 
 function s(overrides: Partial<PortfolioStateType>): PortfolioStateType {
   return overrides as PortfolioStateType;
 }
 
-describe('gatherContextRouter', () => {
-  it('routes to classify when classificationConfirmed is false', () => {
-    expect(gatherContextRouter(s({ classificationConfirmed: false }))).toBe('classify');
+/** A relevant, mid-journey state with one live gap — the "keep eliciting" baseline. */
+function completenessState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateType {
+  return s({
+    isRelevant: true,
+    followUpRound: 0,
+    hasEnoughInfo: false,
+    missingSections: ['reflection'],
+    maxFollowupRounds: 8,
+    sectionAttempts: {},
+    probeReadiness: {},
+    readinessScore: 3,
+    ...overrides,
+  });
+}
+
+describe('completenessRouter', () => {
+  it('keeps eliciting while a live gap remains', () => {
+    expect(completenessRouter(completenessState())).toBe('generate_followup');
   });
 
-  it('routes to check_completeness when classificationConfirmed is true', () => {
-    expect(gatherContextRouter(s({ classificationConfirmed: true }))).toBe('check_completeness');
+  it('proceeds to tag_capabilities once the rubric is met', () => {
+    expect(completenessRouter(completenessState({ hasEnoughInfo: true, missingSections: [] }))).toBe(
+      'tag_capabilities'
+    );
+  });
+
+  // ── Relevance gate (first pass only) ──
+
+  it('rejects an irrelevant transcript on the first pass', () => {
+    expect(completenessRouter(completenessState({ isRelevant: false }))).toBe('reject_entry');
+  });
+
+  it('does NOT reject an irrelevant verdict after the first pass', () => {
+    // The grader re-assesses relevance every round; a late false verdict must not
+    // terminate a journey the trainee has already invested rounds in.
+    expect(completenessRouter(completenessState({ isRelevant: false, followUpRound: 1 }))).toBe(
+      'generate_followup'
+    );
+  });
+
+  it('does NOT reject a late irrelevant verdict even when the entry is otherwise done', () => {
+    expect(
+      completenessRouter(
+        completenessState({
+          isRelevant: false,
+          followUpRound: 3,
+          hasEnoughInfo: true,
+          missingSections: [],
+        })
+      )
+    ).toBe('tag_capabilities');
   });
 });
 
-describe('classifyRouter', () => {
-  it('routes to present_classification when confidence meets threshold', () => {
+describe('capabilitiesRouter', () => {
+  it('composes the entry when capabilities were confirmed', () => {
     expect(
-      classifyRouter(s({ isRelevant: true, classificationConfidence: CONFIDENCE_THRESHOLD, clarificationRound: 0 }))
-    ).toBe('present_classification');
+      capabilitiesRouter(s({ capabilities: [{ code: 'C-06' }] as never }))
+    ).toBe('elicit_justification');
   });
 
-  it('routes to present_classification when confidence is above threshold', () => {
-    expect(
-      classifyRouter(s({ isRelevant: true, classificationConfidence: 0.9, clarificationRound: 0 }))
-    ).toBe('present_classification');
-  });
-
-  it('routes to ask_clarification when confidence is below threshold and rounds remain', () => {
-    expect(
-      classifyRouter(s({ isRelevant: true, classificationConfidence: 0.5, clarificationRound: 0 }))
-    ).toBe('ask_clarification');
-  });
-
-  it('routes to ask_clarification on second low-confidence round', () => {
-    expect(
-      classifyRouter(s({ isRelevant: true, classificationConfidence: 0.5, clarificationRound: 1 }))
-    ).toBe('ask_clarification');
-  });
-
-  it('falls through to present_classification after max clarification rounds', () => {
-    expect(
-      classifyRouter(s({ isRelevant: true, classificationConfidence: 0.5, clarificationRound: MAX_CLARIFICATION_ROUNDS }))
-    ).toBe('present_classification');
-  });
-
-  // ── Relevance gate ──
-
-  it('routes to ask_clarification when content is irrelevant and rounds remain', () => {
-    expect(
-      classifyRouter(s({ isRelevant: false, classificationConfidence: 0, clarificationRound: 0 }))
-    ).toBe('ask_clarification');
-  });
-
-  it('routes to ask_clarification when irrelevant on second round', () => {
-    expect(
-      classifyRouter(s({ isRelevant: false, classificationConfidence: 0, clarificationRound: 1 }))
-    ).toBe('ask_clarification');
-  });
-
-  it('falls through to present_classification when irrelevant and max rounds exhausted', () => {
-    expect(
-      classifyRouter(s({ isRelevant: false, classificationConfidence: 0, clarificationRound: MAX_CLARIFICATION_ROUNDS }))
-    ).toBe('present_classification');
+  it('ends the run when no capabilities were confirmed', () => {
+    // Replaces the old `entryType: null` sentinel and the seven per-node guards
+    // that read it: a run with nothing to justify cannot compose an entry.
+    expect(capabilitiesRouter(s({ capabilities: [] }))).toBe(END);
   });
 });

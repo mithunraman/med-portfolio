@@ -12,8 +12,6 @@ import { PortfolioStateType } from './portfolio-graph.state';
  * has been organised by the reflect node.
  */
 export function buildReadinessSnapshot(state: PortfolioStateType): ReadinessSnapshot | undefined {
-  if (!state.entryType) return undefined;
-
   const config = getSpecialtyConfig(Number(state.specialty) as Specialty);
   const template = getTemplateForEntryType(config, state.entryType);
 

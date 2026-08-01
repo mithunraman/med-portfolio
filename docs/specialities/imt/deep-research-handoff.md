@@ -4,6 +4,28 @@
 **Status:** Research / scoping complete. No code written. No commitment to build yet.
 **Owner context:** Exploratory product/architecture investigation into whether the existing reflective-portfolio engine can serve UK Internal Medicine Training (IMT) trainees, and what it would take.
 
+> ### ⚠️ The pipeline this document describes has changed
+>
+> This research was done against a graph that **classified** the entry type with an LLM.
+> That is gone. The trainee now **picks the entry type at artefact creation**; it is
+> validated once at the API boundary, persisted as `artefact.artefactType`, and seeded into
+> graph state at start. There is no `classify` node, no `present_classification` interrupt,
+> no `ask_clarification` loop, and no `classificationSignals` field on `EntryTypeDefinition`.
+>
+> **What this invalidates:** the pipeline chain in §2, the `EntryTypeDefinition` shape in §2,
+> and — most importantly — the **`kind`-discriminator design in §8 and step 5 of §13**, which
+> proposes forking the graph "early at `classify`". There is no such fork point any more. The
+> equivalent seam is now the entry type the trainee chose, known *before* the graph starts,
+> which is strictly easier: the fork can happen at graph entry rather than mid-run, and a
+> structured-record type never needs to enter the reflective loop at all.
+>
+> **What survives unchanged:** the market sizing (§4), the training-pathway structure (§5),
+> the ARCP artefact inventory (§6), and the component-granularity compatibility analysis (§7).
+> Those are about IMT, not about our graph.
+>
+> Current topology: [docs/architecture-overview.md](../../architecture-overview.md) ·
+> stage → model map: [docs/llm/llm-pipeline-stages.md](../../llm/llm-pipeline-stages.md).
+
 ---
 
 ## 1. Purpose, Scope & Current Status
@@ -31,7 +53,7 @@ A chain of questions that began with a friend applying for **ST4 plastic surgery
 
 ## 2. Product / Codebase Context (Confirmed)
 
-The app is a **reflective-writing authoring engine**, not a generic portfolio store. A medical trainee narrates an experience (audio/text); the AI classifies it, elicits missing detail, scores it against rubrics, composes a polished prose reflection, tags it against a capability framework, and generates a PDP.
+The app is a **reflective-writing authoring engine**, not a generic portfolio store. A medical trainee picks an entry type and narrates an experience (audio/text); the AI elicits missing detail, scores it against that type's rubrics, composes a polished prose reflection, tags it against a capability framework, and generates a PDP.
 
 **Already multi-specialty.** The codebase has a specialty registry with three configs:
 
@@ -48,7 +70,7 @@ The app is a **reflective-writing authoring engine**, not a generic portfolio st
 |---|---|
 | `apps/api/src/specialties/specialty.registry.ts` | Registry: `SPECIALTY_CONFIGS`, `getSpecialtyConfig`, `getTemplateForEntryType`, `isValidTrainingStage` |
 | `apps/api/src/specialties/gp/gp.templates.ts` | GP `ArtefactTemplate`s (LEA, FEEDBACK, LEADERSHIP, QIP, QIA, PRESCRIBING) |
-| `apps/api/src/specialties/gp/gp.entry-types.ts` | `GP_ENTRY_TYPES` (`EntryTypeDefinition[]`) with `classificationSignals` |
+| `apps/api/src/specialties/gp/gp.entry-types.ts` | `GP_ENTRY_TYPES` (`EntryTypeDefinition[]`) — offered to the trainee at creation |
 | `apps/api/src/specialties/gp/gp.capabilities.ts` | RCGP capability framework (C-01…C-13 across 5 domains) |
 | `apps/api/src/specialties/gp/gp.training-stages.ts` | Flat `TrainingStageDefinition[]` (ST1→ST2→ST3) |
 | `apps/api/src/specialties/gp/templates/` | `sea.template.ts`, `ccr.template.ts`, `index.ts` |
@@ -56,21 +78,21 @@ The app is a **reflective-writing authoring engine**, not a generic portfolio st
 | `packages/shared/src/specialty/template.helpers.ts` | `leafProbes`, `sectionForProbe`, `probeThreshold`, `flatSections` |
 | `apps/api/src/portfolio-graph/nodes/` | LangGraph pipeline node implementations |
 
-### The pipeline (LangGraph node chain — confirmed from `portfolio-graph/nodes/`)
+### The pipeline (LangGraph node chain)
 ```
-gather-context → classify → present-classification (interrupt)
-  → check-completeness → generate-followup → ask-followup (interrupt)
-  → reflect → present-draft
-  → tag-capabilities → elicit-justification → present-capabilities (interrupt)
-  → generate-pdp → save
+gather-context → check-completeness
+  ├─ (not a portfolio entry, first pass only) → reject-entry (terminal interrupt) → END
+  ├─ (gaps remain) → generate-followup → ask-followup (interrupt) → back to gather-context
+  └─ (rubric met / exhausted) → tag-capabilities → present-capabilities (interrupt)
+       └─ elicit-justification → reflect → refine → generate-pdp → save
 ```
-Node files: `gather-context`, `classify`, `present-classification`, `check-completeness`, `generate-followup`, `ask-followup`, `reflect`, `present-draft`, `tag-capabilities`, `elicit-justification`, `present-capabilities`, `generate-pdp`, `save`, plus utils `capability-grading.util.ts`, `compose-verify.util.ts`, and `ask-clarification.node.ts`.
+Node files: `gather-context`, `check-completeness`, `reject-entry`, `generate-followup`, `ask-followup`, `tag-capabilities`, `present-capabilities`, `elicit-justification`, `reflect`, `refine`, `generate-pdp`, `save`, plus utils `capability-grading.util.ts`, `compose-verify.util.ts`, `text-tokens.util.ts`.
 
 ### Core type shapes (confirmed from `packages/shared/src/specialty/types.ts`)
 - **`Probe`** — leaf elicitation/scoring unit: `id`, `label`, `required`, `description`, `promptHint`, `extractionQuestion` (`string|null`), `weight` (weights within a template sum to 1.0), optional `descriptorCriteria` (strong/adequate/shallow rubric), optional `threshold` (`'adequate'|'strong'`).
 - **`Section`** — a document field; owns one or more `Probe`s; optional `composePrompt`.
 - **`ArtefactTemplate`** — `id`, `name`, `sections: Section[]`, `wordCountRange: {min,max}`.
-- **`EntryTypeDefinition`** — `code`, `label`, `description`, `templateId`, `classificationSignals: string[]`.
+- **`EntryTypeDefinition`** — `code`, `label`, `description`, `templateId`. (`classificationSignals` was removed with the classifier — see the notice at the top.)
 - **`CapabilityDefinition`** — `code`, `name`, `description`, optional `descriptorCriteria`, optional `exemplars`, `domainCode`, `domainName`.
 - **`SpecialtyConfig`** — `specialty`, `name`, `entryTypes`, `templates` (keyed by id), `capabilities`, `trainingStages`.
 
@@ -279,7 +301,12 @@ Every incompatibility reduces to one of two root causes:
 Promote a `kind: 'REFLECTION' | 'LOGBOOK_RECORD' | 'EVIDENCE_DOC'` onto the template/entry abstraction:
 - Current `ArtefactTemplate` becomes the `REFLECTION` kind (unchanged behaviour).
 - `LOGBOOK_RECORD` gets a **structured field schema** + **deterministic validator** + **cross-row aggregation** (instead of `sections/probes` + `descriptorCriteria` + `wordCountRange`).
-- The graph **forks early at `classify`**: reflections take the full path; structured records take a short capture/aggregate path (no `reflect`, no `wordCountRange`).
+- The graph **forks on the entry type the trainee chose**: reflections take the full path;
+  structured records take a short capture/aggregate path (no `reflect`, no `wordCountRange`).
+  *(Originally written as "forks early at `classify`". With the classifier gone the fork gets
+  easier, not harder — `kind` is derivable from the chosen entry type before the graph starts,
+  so a structured record need never enter the elicitation loop. It becomes a routing decision
+  at graph entry, or arguably a different graph, rather than a mid-run branch.)*
 - This is the seam that stops "specialty" being conflated with "everything is a reflection."
 
 ### Three-layer build scope for IMT
@@ -381,7 +408,7 @@ Promote a `kind: 'REFLECTION' | 'LOGBOOK_RECORD' | 'EVIDENCE_DOC'` onto the temp
 2. **Verify the redaction path** — confirm whether PII redaction runs on direct typed entry or only audio transcription. If audio-only, this is a known gap for clinical entries (§10).
 3. **Produce the one-page build scope** — map Tier A "ship now" artefacts to existing GP templates (reuse vs net-new): e.g. reflective log → LEA/CCR, significant event → SEA, QIP write-up → QIP_TEMPLATE, feedback reflection → FEEDBACK_TEMPLATE, teaching → LEADERSHIP. Identify net-new templates needed.
 4. **Decide use-case priority** (Open Q #2): ARCP-support (Phase 1, reflective) vs selection self-assessment (needs Option C). Recommendation: ARCP-support first.
-5. **Design the `kind` discriminator** (Option B) — type changes to `ArtefactTemplate`/`SpecialtyConfig`, the `classify` fork, and the structured-record schema + **aggregation** model (the clinic "X/40 + variety" tracker is the headline feature).
+5. **Design the `kind` discriminator** (Option B) — type changes to `ArtefactTemplate`/`SpecialtyConfig`, the **entry-type fork at graph entry** (not a `classify` fork — that node no longer exists), and the structured-record schema + **aggregation** model (the clinic "X/40 + variety" tracker is the headline feature).
 6. **Design the IMT training-stage tree** — encode IMT1–2 shared stem → Group 1/Group 2 fork; resolve "one config vs stem + leaves."
 7. **Confirm canonical references** — open the bot-blocked JRCPTB/Federation PDFs in a browser to lock down: Group 1/2 list, MSF scale wording, WPBA form fields (Open Qs #3–5).
 

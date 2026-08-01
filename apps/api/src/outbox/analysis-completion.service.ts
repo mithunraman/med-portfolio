@@ -53,9 +53,9 @@ export class AnalysisCompletionService {
 
     // If the graph completed without producing an artefact (e.g. irrelevant content),
     // just transition to COMPLETED without saving artefact/PDP data.
-    if (!finalState.entryType || !finalState.composedDocument?.length) {
+    if (!finalState.composedDocument?.length) {
       this.logger.warn(
-        `Graph completed without artefact output (entryType: ${finalState.entryType}) — skipping saves`,
+        `Graph completed without artefact output (no composed document) — skipping saves`,
       );
       await this.analysisRunsService.transitionStatus(
         runId,
@@ -76,7 +76,9 @@ export class AnalysisCompletionService {
           artefactOid,
           userOid,
           {
-            artefactType: finalState.entryType,
+            // artefactType is NOT written here. It is chosen by the trainee at
+            // creation and is the artefact's fixed identity — graph state has no
+            // authority over it.
             title: finalState.title,
             capabilities: finalState.capabilities.map((c) => ({
               code: c.code,

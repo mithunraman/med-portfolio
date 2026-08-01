@@ -23,10 +23,9 @@ export function toArtefactDto(
 ): Artefact {
   const config = getSpecialtyConfig(artefact.specialty);
 
-  // Resolve artefact type code → display label
-  const entryTypeDef = artefact.artefactType
-    ? config.entryTypes.find((et) => et.code === artefact.artefactType)
-    : undefined;
+  // Resolve artefact type code → display label. Falls back to the raw code for a
+  // type that is no longer in the active config (e.g. a renamed or retired code).
+  const entryTypeDef = config.entryTypes.find((et) => et.code === artefact.artefactType);
 
   // Build capability code → name lookup
   const capabilityNameMap = new Map(config.capabilities.map((c) => [c.code, c.name]));

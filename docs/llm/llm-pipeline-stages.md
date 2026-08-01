@@ -16,7 +16,7 @@ AI client directly** — every call funnels through one service.
 
 | Provider | Used for | Entry point |
 |---|---|---|
-| **OpenAI** (via LangChain `ChatOpenAI`) | All text generation, grading, classification, cleaning, redaction | `LLMService.invokeStructured<T>()` |
+| **OpenAI** (via LangChain `ChatOpenAI`) | All text generation, grading, cleaning, redaction | `LLMService.invokeStructured<T>()` |
 | **AssemblyAI** | Audio → text transcription only | `LLMService.transcribeAudio()` |
 
 Both live in [`apps/api/src/llm/llm.service.ts`](../../apps/api/src/llm/llm.service.ts).
@@ -31,7 +31,7 @@ Defined in `llm.service.ts` (`OpenAIModels`). Default model is **`gpt-4.1-mini`*
 | `GPT_5_4` | `gpt-5.4` | refine |
 | `GPT_5_4_NANO` | `gpt-5.4-nano` | cleaning, redaction |
 | `GPT_4_1` | `gpt-4.1` | generate_followup, elicit_justification, reflect, generate_pdp |
-| `GPT_4_1_MINI` | `gpt-4.1-mini` (default) | classify, check_completeness, tag_capabilities |
+| `GPT_4_1_MINI` | `gpt-4.1-mini` (default) | check_completeness, tag_capabilities |
 
 ### How OpenAI calls are made
 
@@ -171,8 +171,11 @@ A message travels through **two** distinct pipelines:
                     (AssemblyAI)      (nano)       (regex+nano)
                                                                           │
                     ┌───────────────── Portfolio-Graph (per analysis run) ▼──────────┐
-  gather_context ─► classify ─► [present_classification] ─► check_completeness
+  gather_context ─────────────────────────────────► check_completeness
         ▲                                                        │
+        │                          ┌──── not an entry ───────────┤
+        │                          ▼                             │
+        │                 [reject_entry] ─► END                  │
         │                                          ┌──── gaps ───┴──── enough ────┐
         └─── ask_followup ◄─ generate_followup ◄───┘                              ▼
                                                                       tag_capabilities
@@ -243,18 +246,19 @@ text skips transcription.
 A `StateGraph` compiled with a MongoDB checkpointer
 ([`portfolio-graph.builder.ts`](../../apps/api/src/portfolio-graph/portfolio-graph.builder.ts),
 [`portfolio-graph.service.ts`](../../apps/api/src/portfolio-graph/portfolio-graph.service.ts)).
-State flows through nodes; four **interrupt** nodes pause for user input and resume from
-the checkpoint. Loop limits: max 8 follow-up rounds, max 2 clarification rounds,
-classification confidence threshold 0.7.
+State flows through nodes; three **interrupt** nodes pause for user input and resume from
+the checkpoint. The entry type is chosen by the trainee at artefact creation and seeded
+into state at start, so there is no classification step — the graph opens straight into
+the elicitation loop. Loop limit: `maxFollowupRounds` = askable probes x `ATTEMPT_LIMIT`
+(2), derived per run by `check_completeness`.
 
 ### Nodes without an LLM call
 
 | Node | Role |
 |---|---|
 | `gather_context` | Assembles `fullTranscript` from conversation messages |
-| `present_classification` *(interrupt)* | User confirms/overrides entry type — resumes with `{ entryType }` |
-| `ask_clarification` *(interrupt)* | Asks for clarification when confidence is low — resumes with a signal |
 | `ask_followup` *(interrupt)* | Presents follow-up questions — resumes with a signal |
+| `reject_entry` *(interrupt)* | Terminal: the transcript is not a portfolio entry. Writes a terminal message, then `END`. Never resumed |
 | `present_capabilities` *(interrupt)* | User selects capabilities — resumes with `{ selectedCodes[] }` |
 | `save` | Validation gate; sets `draftStatus` before `END` |
 
@@ -262,56 +266,51 @@ classification confidence threshold 0.7.
 
 Each row: purpose · model (temp / maxTokens) · schema · source.
 
-#### 4.1 classify
-- **Purpose.** Pick the best-matching portfolio entry type for the specialty, gate relevance, and emit a (later down-adjusted) confidence.
-- **Model.** `gpt-4.1-mini` *(default)* — temp `0.1`, maxTokens `800`.
-- **Prompt architecture.** `classificationPrompt` (system + human `ChatPromptTemplate`) with a prompt-injection guard. Response schema is built dynamically per specialty via `buildSpecialtySchema(validCodes)` so `entryType` is enum-constrained to that specialty's codes.
-- **Output schema.** `classifyResponseSchema` → `{ reasoning, signalsFound, isRelevant, entryType, confidence, alternatives }`.
-- **Source.** [`nodes/classify.node.ts`](../../apps/api/src/portfolio-graph/nodes/classify.node.ts).
-
-#### 4.2 check_completeness
+#### 4.1 check_completeness
 - **Purpose.** Grade how well the transcript covers each template section — partition every idea to a section, then tier each covered section (strong / adequate / shallow) against a depth rubric. Drives the follow-up loop.
 - **Model.** `gpt-4.1-mini` *(default)* — temp `0.1`, maxTokens `2000`.
-- **Prompt architecture.** `completenessPrompt` (versioned `completeness-v2-tier`). Schema built dynamically via `buildAssessableSchema(assessableIds)` to constrain `assignments`/`sectionGrades` to real section ids.
+- **Purpose (relevance gate).** Also emits `relevanceReason` + `isRelevant` FIRST: whether the transcript is a portfolio entry at all. Acted on only at follow-up round 0 (node and `completenessRouter`), routing to `reject_entry`. Fails open — a failed call returns `isRelevant: true`.
+- **Empty-partition guard.** After round 0, a response assigning nothing is treated as a model misfire and returns no state update, whatever `isRelevant` says. Grading it would floor every probe to `missing` and — since the ratchet honours `missing` as a structural re-partition — wipe `bestTierByProbe` along with it. Not applied at round 0, where the `missing` floor is the correct input to the elicitation loop.
+- **Prompt architecture.** `completenessPrompt` (versioned `completeness-v7-relevance`). Schema built dynamically via `buildAssessableSchema(assessableIds)` to constrain `assignments`/`sectionGrades` to real section ids.
 - **Output schema.** `completenessResponseSchema` → `{ assignments[], sectionGrades[] }`; code derives readiness/score.
 - **Source.** [`nodes/check-completeness.node.ts`](../../apps/api/src/portfolio-graph/nodes/check-completeness.node.ts).
 
-#### 4.3 generate_followup
+#### 4.2 generate_followup
 - **Purpose.** Generate a single, leverage-ranked Socratic follow-up question targeting the weakest unmet rubric dimension, with anti-redundancy against previously asked questions. **The stage that helps the author think and complete their portfolio.**
 - **Model.** `gpt-4.1` — temp `0.3`, maxTokens `1000`.
 - **Prompt architecture.** Composed from a static, cacheable `FOLLOWUP_SYSTEM_INSTRUCTIONS` prefix + a per-call `FOLLOWUP_CONTEXT` (assembled in `followupPrompt`). One question per round (`MAX_QUESTIONS_PER_ROUND = 1`); falls back to default questions on failure.
 - **Output schema.** `followupQuestionsResponseSchema` → array of `{ sectionId, unmetDimension, question, hints.examples }`.
 - **Source.** [`nodes/generate-followup.node.ts`](../../apps/api/src/portfolio-graph/nodes/generate-followup.node.ts).
 
-#### 4.4 tag_capabilities
+#### 4.3 tag_capabilities
 - **Purpose.** Grade every curriculum capability against its descriptor using verbatim-quote evidence, with anti-inflation rules; keep only `adequate`+ with a real quote, capped at 5.
 - **Model.** `gpt-4.1-mini` *(default)* — temp `0.1`, maxTokens `2000`.
 - **Prompt architecture.** `tagCapabilitiesPrompt` (versioned `tag-v3-anti-inflation`). Recognition-based grading with explicit anti-inflation guardrails; post-filter verifies each quote appears in the transcript.
 - **Output schema.** `tagCapabilitiesResponseSchema` → array of `{ code, quote, reasoning, tier }`.
 - **Source.** [`nodes/tag-capabilities.node.ts`](../../apps/api/src/portfolio-graph/nodes/tag-capabilities.node.ts).
 
-#### 4.5 elicit_justification
+#### 4.4 elicit_justification
 - **Purpose.** Write a first-person, paste-ready justification linking the trainee's own action (verbatim source quote) to a specific descriptor clause; graded on a tier ladder.
 - **Model.** `gpt-4.1` — temp `0.3`, maxTokens `1500`.
 - **Prompt architecture.** `justificationPrompt` with faithfulness rules (must ground in the source quote). Post-processing enforces first person and downgrades unverifiable quotes.
 - **Output schema.** `elicitJustificationResponseSchema` → array of `{ code, sourceQuote, descriptorClause, justification, justificationTier }`.
 - **Source.** [`nodes/elicit-justification.node.ts`](../../apps/api/src/portfolio-graph/nodes/elicit-justification.node.ts).
 
-#### 4.6 reflect
+#### 4.5 reflect
 - **Purpose.** Compose the transcript into structured template sections and section narratives (organise + copy-edit, **not** invent) and produce a title.
 - **Model.** `gpt-4.1` — temp `0.3`, maxTokens dynamic (`max(transcriptWords × 2, 2000)`).
 - **Prompt architecture.** `reflectPrompt` with strict faithfulness rules. Output runs through a **deterministic fabrication tripwire** (`compose-verify.util.ts`, `verifyComposed`) — telemetry only — that flags novel numbers/words.
 - **Output schema.** `reflectResponseSchema` → `{ title, sections[] (probes[], narrative) }` → assembled into `composedDocument`.
 - **Source.** [`nodes/reflect.node.ts`](../../apps/api/src/portfolio-graph/nodes/reflect.node.ts).
 
-#### 4.7 refine
+#### 4.6 refine
 - **Purpose.** Final prose polish — merge restatements and smooth the composed document per section, faithfully (no new facts or sentiment). The only stage on the flagship model.
 - **Model.** `gpt-5.4` — temp `0`, maxTokens dynamic (`max(wordCount × 2, 1000)`).
 - **Prompt architecture.** `refinePrompt` (per-section polish with faithfulness constraints). Keeps the original section text if a section is omitted/blank; falls back to reflect output on failure.
 - **Output schema.** `refineResponseSchema` → `{ sections[] (sectionId, text) }` → updates `composedDocument`.
 - **Source.** [`nodes/refine.node.ts`](../../apps/api/src/portfolio-graph/nodes/refine.node.ts).
 
-#### 4.8 generate_pdp
+#### 4.7 generate_pdp
 - **Purpose.** Generate 1–2 SMART Personal Development Plan goals (with actions and intended evidence) grounded in the trainee's expressed learning needs from the reflection.
 - **Model.** `gpt-4.1` — temp `0.3`, maxTokens `1000`.
 - **Prompt architecture.** `generatePdpPrompt`; the human message is the **composed reflection**, not the raw transcript. Post-validation caps goals (2) and actions per goal (3).
@@ -330,7 +329,7 @@ Each row: purpose · model (temp / maxTokens) · schema · source.
 - **Prompt versioning.** Grading prompts carry a version tag (`completeness-v2-tier`,
   `tag-v3-anti-inflation`) for traceability across changes.
 - **Injection guards.** User-supplied transcript is framed as data, not instructions, in
-  cleaning, redaction, and classify.
+  cleaning and redaction.
 - **Faithfulness guardrails.** Generative stages (reflect, refine, elicit_justification,
   generate_pdp) carry explicit "do not invent" rules; reflect additionally has a
   deterministic fabrication tripwire.
@@ -348,18 +347,17 @@ Each row: purpose · model (temp / maxTokens) · schema · source.
 | — | Transcription | Processing | AssemblyAI Universal-3 Pro | — | — |
 | 1 | Cleaning | Processing | OpenAI `gpt-5.4-nano` | 0.1 | default |
 | 2 | Redaction | Processing | regex + OpenAI `gpt-5.4-nano` | 0 | default |
-| 3 | classify | Graph | OpenAI `gpt-4.1-mini` *(default)* | 0.1 | 800 |
-| 4 | check_completeness | Graph | OpenAI `gpt-4.1-mini` *(default)* | 0.1 | 2000 |
-| 5 | generate_followup | Graph | OpenAI `gpt-4.1` | 0.3 | 1000 |
-| 6 | tag_capabilities | Graph | OpenAI `gpt-4.1-mini` *(default)* | 0.1 | 2000 |
-| 7 | elicit_justification | Graph | OpenAI `gpt-4.1` | 0.3 | 1500 |
-| 8 | reflect | Graph | OpenAI `gpt-4.1` | 0.3 | dynamic |
-| 9 | refine | Graph | OpenAI `gpt-5.4` | 0 | dynamic |
-| 10 | generate_pdp | Graph | OpenAI `gpt-4.1` | 0.3 | 1000 |
+| 3 | check_completeness | Graph | OpenAI `gpt-4.1-mini` *(default)* | 0.1 | 2000 |
+| 4 | generate_followup | Graph | OpenAI `gpt-4.1` | 0.3 | 1000 |
+| 5 | tag_capabilities | Graph | OpenAI `gpt-4.1-mini` *(default)* | 0.1 | 2000 |
+| 6 | elicit_justification | Graph | OpenAI `gpt-4.1` | 0.3 | 1500 |
+| 7 | reflect | Graph | OpenAI `gpt-4.1` | 0.3 | dynamic |
+| 8 | refine | Graph | OpenAI `gpt-5.4` | 0 | dynamic |
+| 9 | generate_pdp | Graph | OpenAI `gpt-4.1` | 0.3 | 1000 |
 
 **All text stages are OpenAI under the default Variant A**, accessed via LangChain through the
 single `LLMService.invokeStructured` chokepoint; audio transcription is AssemblyAI. Swapping a
-provider for any stage is a matter of editing that stage's row in `VARIANTS` — all nine call
+provider for any stage is a matter of editing that stage's row in `VARIANTS` — all eight call
 sites already spread `modelConfig.resolve(Stage.X)`, so no call site changes.
 
 Under **Variant D** the same table becomes:
@@ -367,6 +365,6 @@ Under **Variant D** the same table becomes:
 | # | Stage | Pipeline | Provider / Model | Pool |
 |--:|---|---|---|---|
 | 1 | Cleaning | Processing | Foundry `gpt-5.4-nano` | `interactive` |
-| 3–10 | classify … generate_pdp | Graph | Foundry DeepSeek V4 Flash | `analysis` |
+| 3–9 | check_completeness … generate_pdp | Graph | Foundry DeepSeek V4 Flash | `analysis` |
 
 Redaction (§3.3) is Azure AI Language, not `LLMService`, so it is unaffected by variant or pool.

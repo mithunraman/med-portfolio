@@ -277,10 +277,6 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
     // ── Load template ──
     const specialty = Number(state.specialty) as Specialty;
     const config = getSpecialtyConfig(specialty);
-    if (!state.entryType) {
-      logger.warn(`[${cid}] No entry type set — cannot generate follow-up`);
-      return { followUpRound: state.followUpRound + 1, pendingFollowupQuestions: [] };
-    }
     const template = getTemplateForEntryType(config, state.entryType);
 
     // ── Select the next missing section to ask about, in clinical-story order ──

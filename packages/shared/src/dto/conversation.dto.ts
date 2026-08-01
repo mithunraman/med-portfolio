@@ -20,14 +20,6 @@ export type MessageMedia = z.infer<typeof MessageMediaSchema>;
 
 // ── Graph interrupt sub-schemas (used to cast LangGraph interrupt payloads) ──
 
-export const ClassificationOptionSchema = z.object({
-  code: z.string(),
-  label: z.string(),
-  confidence: z.number(),
-  reasoning: z.string(),
-});
-export type ClassificationOption = z.infer<typeof ClassificationOptionSchema>;
-
 export const CapabilityOptionSchema = z.object({
   code: z.string(),
   name: z.string(),

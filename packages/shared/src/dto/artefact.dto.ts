@@ -138,8 +138,8 @@ export const ArtefactSchema = z.object({
   specialty: z.nativeEnum(Specialty),
   trainingStage: z.string(),
   status: z.nativeEnum(ArtefactStatus),
-  artefactType: z.string().nullable(),
-  artefactTypeLabel: z.string().nullable(),
+  artefactType: z.string(),
+  artefactTypeLabel: z.string(),
   title: z.string().nullable(),
   pdpGoals: z.array(PdpGoalSchema).nullable(),
   capabilities: z.array(CapabilitySchema).nullable(),
@@ -166,6 +166,13 @@ export const CreateArtefactRequestSchema = z.object({
     .string()
     .min(10, 'Artefact ID must be at least 10 characters')
     .max(36, 'Artefact ID must not exceed 36 characters'),
+  /**
+   * The entry type the trainee is writing, chosen up front. Validated against the
+   * user's specialty config server-side — the shape check here only guarantees a
+   * non-empty string. This drives the template for the whole analysis run and is
+   * fixed for the artefact's life.
+   */
+  entryType: z.string().min(1, 'Entry type is required'),
 });
 
 export type CreateArtefactRequest = z.infer<typeof CreateArtefactRequestSchema>;

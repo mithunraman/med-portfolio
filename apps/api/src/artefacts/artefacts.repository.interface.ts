@@ -13,6 +13,8 @@ export interface UpsertArtefactData {
   specialty: Specialty;
   trainingStage: string;
   title: string;
+  /** The trainee's chosen entry type. Validated at the service boundary. */
+  artefactType: string;
 }
 
 export interface ListArtefactsQuery {
@@ -27,7 +29,6 @@ export interface ListArtefactsResult {
 }
 
 export interface UpdateArtefactData {
-  artefactType?: string | null;
   title?: string | null;
   capabilities?: Array<{ code: string; evidence: string; justification?: string }> | null;
   completeness?: Completeness | null;

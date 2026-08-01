@@ -30,12 +30,7 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
 
     isRelevant: true,
     entryType: 'CLINICAL_CASE_REVIEW',
-    classificationConfidence: 0.9,
-    classificationReasoning: 'Strong signals',
 
-    alternatives: [],
-    classificationConfirmed: true,
-    clarificationRound: 0,
     missingSections: [],
     hasEnoughInfo: true,
     followUpRound: 0,
@@ -55,14 +50,6 @@ describe('PresentCapabilitiesNode', () => {
     jest.clearAllMocks();
   });
 
-  it('should skip entirely when there is no entry type', async () => {
-    const node = createPresentCapabilitiesNode(makeDeps());
-    const result = await node(makeState({ entryType: null }));
-
-    expect(result).toEqual({});
-    expect(interrupt).not.toHaveBeenCalled();
-  });
-
   it('should interrupt with empty options when capabilities are empty', async () => {
     const node = createPresentCapabilitiesNode(makeDeps());
     const result = await node(makeState({ capabilities: [] }));
@@ -72,7 +59,9 @@ describe('PresentCapabilitiesNode', () => {
       options: [],
       entryType: 'CLINICAL_CASE_REVIEW',
     });
-    expect(result).toEqual({ entryType: null });
+    // No state update: the interrupt is terminal, and capabilitiesRouter sends a
+    // zero-capability run to END rather than into the compose chain.
+    expect(result).toEqual({});
   });
 
   it('should interrupt with populated options when capabilities exist', async () => {
@@ -144,7 +133,7 @@ describe('PresentCapabilitiesNode', () => {
   it('should emit ANALYSIS_STEP_STARTED event', async () => {
     const deps = makeDeps();
     const node = createPresentCapabilitiesNode(deps);
-    await node(makeState({ entryType: null }));
+    await node(makeState({ capabilities: [] }));
 
     expect(deps.eventEmitter.emit).toHaveBeenCalledWith(
       'analysis.step.started',

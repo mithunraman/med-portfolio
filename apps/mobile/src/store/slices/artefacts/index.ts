@@ -23,7 +23,6 @@ export type { TypedError, ErrorKind } from './thunks';
 
 // Thunks
 export {
-  createArtefact,
   deleteArtefact,
   fetchArtefact,
   fetchArtefacts,

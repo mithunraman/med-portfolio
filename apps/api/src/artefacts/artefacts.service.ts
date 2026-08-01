@@ -57,7 +57,7 @@ import {
   IArtefactsRepository,
   UpdateArtefactData,
 } from './artefacts.repository.interface';
-import { getSpecialtyConfig } from '../specialties/specialty.registry';
+import { getSpecialtyConfig, isValidEntryType } from '../specialties/specialty.registry';
 import { CreateArtefactDto, ListArtefactsDto } from './dto';
 import { toArtefactDto } from './mappers/artefact.mapper';
 import type { Artefact as ArtefactSchema } from './schemas/artefact.schema';
@@ -105,6 +105,13 @@ export class ArtefactsService {
 
     const { specialty, trainingStage } = user;
 
+    // Boundary check: the entry type is chosen by the client, so validate it once
+    // here against the user's specialty. Everything downstream — the analysis
+    // graph, getTemplateForEntryType (which throws) — treats it as trusted.
+    if (!isValidEntryType(specialty, dto.entryType)) {
+      throw new BadRequestException(`Unknown entry type "${dto.entryType}" for this specialty`);
+    }
+
     return this.transactionService.withTransaction(
       async (session) => {
         await this.assertGuestWithinArtefactLimit(user.role, userId, session);
@@ -119,6 +126,7 @@ export class ArtefactsService {
             specialty,
             title: defaultTitle,
             trainingStage,
+            artefactType: dto.entryType,
           },
           session
         );
@@ -782,7 +790,7 @@ export class ArtefactsService {
         );
         if (isErr(goalsResult)) throw new InternalServerErrorException(goalsResult.error.message);
 
-        // Create new artefact
+        // Create new artefact — the copy inherits the source's entry type.
         const newArtefactResult = await this.artefactsRepository.upsertArtefact(
           {
             artefactId: createInternalArtefactId(userId, nanoidAlphanumeric()),
@@ -790,6 +798,7 @@ export class ArtefactsService {
             specialty: sourceArtefact.specialty,
             trainingStage: sourceArtefact.trainingStage ?? '',
             title: `Copy of ${sourceArtefact.title}`.slice(0, 200),
+            artefactType: sourceArtefact.artefactType,
           },
           session
         );
@@ -804,7 +813,6 @@ export class ArtefactsService {
           userOid,
           {
             status: ArtefactStatus.IN_REVIEW,
-            artefactType: sourceArtefact.artefactType ?? null,
             composedDocument: sourceArtefact.composedDocument ?? null,
             capabilities: sourceArtefact.capabilities ?? null,
             tags: sourceArtefact.tags ?? null,

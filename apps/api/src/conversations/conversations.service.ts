@@ -544,7 +544,7 @@ export class ConversationsService {
           );
         }
 
-        // Look up artefact to get specialty + trainingStage for the graph
+        // Look up artefact to get specialty, trainingStage + entry type for the graph
         const artefactResult = await this.artefactsRepository.findById(
           conversation.artefact,
           session
@@ -570,6 +570,7 @@ export class ConversationsService {
               userId,
               specialty: artefact.specialty.toString(),
               trainingStage: artefact.trainingStage ?? '',
+              entryType: artefact.artefactType,
               langGraphThreadId: run.langGraphThreadId,
             },
           },
@@ -665,17 +666,27 @@ export class ConversationsService {
     }
 
     // 6b. Build graph resume value based on NODE (domain-specific)
-    let resumeValue: Record<string, unknown> | true = true;
+    // Deliberately NOT initialised: definite-assignment analysis then makes an
+    // unhandled node a compile error. With an initialiser, a newly added resumable
+    // node would silently resume with `true` instead of its real payload.
+    let resumeValue: Record<string, unknown> | true;
     switch (node) {
-      case 'present_classification':
-        resumeValue = { entryType: selectedKey };
-        break;
       case 'present_capabilities':
         resumeValue = { selectedCodes: selectedKeys };
         break;
       case 'ask_followup':
         resumeValue = true;
         break;
+      case 'reject_entry':
+        // Unreachable — step 3 above rejects terminal questions before we get here.
+        // Kept so the switch stays exhaustive over InterruptNode.
+        throw new BadRequestException(
+          'This analysis has ended. Start a new conversation to try again.'
+        );
+      default: {
+        const unhandled: never = node;
+        throw new InternalServerErrorException(`Unknown interrupt node "${String(unhandled)}"`);
+      }
     }
 
     // Extract idempotency key from value (client sends it alongside selection data)

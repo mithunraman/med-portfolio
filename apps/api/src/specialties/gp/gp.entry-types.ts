@@ -20,17 +20,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Reflection on a patient case personally seen. The core learning log entry for clinical encounters.',
     templateId: 'CCR_TEMPLATE',
-    classificationSignals: [
-      'specific patient',
-      'clinical details',
-      'diagnosis',
-      'management plan',
-      'examination findings',
-      'prescribed',
-      'referred',
-      'investigation results',
-      'no adverse event',
-    ],
   },
   {
     code: GpEntryType.SIGNIFICANT_EVENT,
@@ -38,19 +27,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Analysis of an event that met the GMC threshold for harm. Focus on root cause and systemic change.',
     templateId: 'LEA_SEA_TEMPLATE',
-    classificationSignals: [
-      'harm',
-      'near-miss',
-      'complaint',
-      'unexpected outcome',
-      'patient safety',
-      'error',
-      'adverse event',
-      'deterioration',
-      'death',
-      'serious incident',
-      'GMC threshold',
-    ],
   },
   {
     code: GpEntryType.LEARNING_EVENT,
@@ -58,15 +34,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Analysis of an event that presented a learning opportunity but did not cause GMC-threshold harm.',
     templateId: 'LEA_SEA_TEMPLATE',
-    classificationSignals: [
-      'learning opportunity',
-      'no harm occurred',
-      'could have gone wrong',
-      'improvement potential',
-      'good practice observed',
-      'interesting case',
-      'unusual presentation',
-    ],
   },
   {
     code: GpEntryType.FEEDBACK_REFLECTION,
@@ -74,19 +41,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Reflection on feedback received from colleagues (MSF), patients (PSQ), or exam results.',
     templateId: 'FEEDBACK_TEMPLATE',
-    classificationSignals: [
-      'MSF',
-      'multi-source feedback',
-      'PSQ',
-      'patient satisfaction',
-      'exam results',
-      'feedback',
-      'survey',
-      'colleague feedback',
-      'appraisal',
-      'scores',
-      'ratings',
-    ],
   },
   {
     code: GpEntryType.LEADERSHIP_ACTIVITY,
@@ -94,18 +48,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Reflective entry on a leadership, management, or organisational activity undertaken.',
     templateId: 'LEADERSHIP_TEMPLATE',
-    classificationSignals: [
-      'chairing',
-      'presenting',
-      'managing',
-      'supervising',
-      'team conflict',
-      'organisational change',
-      'led a meeting',
-      'coordinated',
-      'protocol development',
-      'wellbeing initiative',
-    ],
   },
   {
     code: GpEntryType.ACADEMIC_ACTIVITY,
@@ -113,17 +55,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Reflection on an academic activity such as research, teaching, journal club, or literature review.',
     templateId: 'GENERIC_REFLECTIVE_TEMPLATE',
-    classificationSignals: [
-      'research',
-      'teaching',
-      'academic presentation',
-      'journal club',
-      'literature review',
-      'published',
-      'abstract',
-      'poster',
-      'lecture',
-    ],
   },
   {
     code: GpEntryType.OUT_OF_HOURS,
@@ -131,17 +62,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Reflection on cases seen during out-of-hours or unscheduled urgent care sessions.',
     templateId: 'CCR_TEMPLATE',
-    classificationSignals: [
-      'on call',
-      'OOH',
-      'out of hours',
-      'urgent care',
-      'unscheduled',
-      'overnight',
-      'duty doctor',
-      'walk-in',
-      'emergency',
-    ],
   },
   {
     code: GpEntryType.QI_PROJECT,
@@ -149,17 +69,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'A structured quality improvement project with PDSA cycles, data collection, and sustainability plan.',
     templateId: 'QIP_TEMPLATE',
-    classificationSignals: [
-      'audit cycle',
-      'PDSA',
-      'quality improvement project',
-      'data collection',
-      'run chart',
-      'baseline measurement',
-      'protocol change',
-      'practice-wide',
-      'sustainability',
-    ],
   },
   {
     code: GpEntryType.QI_ACTIVITY,
@@ -167,15 +76,6 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'A smaller-scale quality improvement activity demonstrating ability to identify and act on quality issues.',
     templateId: 'QIA_TEMPLATE',
-    classificationSignals: [
-      'small improvement',
-      'single audit',
-      'brief evaluation',
-      'practice-level change',
-      'quality improvement activity',
-      'identified a gap',
-      'implemented a change',
-    ],
   },
   {
     code: GpEntryType.PRESCRIBING,
@@ -183,17 +83,5 @@ export const GP_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Reflection on prescribing practice based on a review of prescriptions against GP prescribing proficiencies.',
     templateId: 'PRESCRIBING_TEMPLATE',
-    classificationSignals: [
-      'prescribing patterns',
-      'medication review',
-      'formulary',
-      'polypharmacy',
-      'drug interactions',
-      'prescribing errors',
-      'BNF',
-      'antimicrobial stewardship',
-      '50 prescriptions',
-      'prescribing proficiencies',
-    ],
   },
 ];

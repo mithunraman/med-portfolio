@@ -31,12 +31,7 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
 
     isRelevant: true,
     entryType: 'CLINICAL_CASE_REVIEW',
-    classificationConfidence: 0.9,
-    classificationReasoning: '',
 
-    alternatives: [],
-    classificationConfirmed: true,
-    clarificationRound: 0,
     probeReadiness: {
       presentation: { score: 0.7, tier: 'adequate', meetsThreshold: true },
       clinical_reasoning: { score: 0, tier: 'missing', meetsThreshold: false },
@@ -257,18 +252,6 @@ describe('GenerateFollowupNode', () => {
       expect(coveredBlock).not.toContain('Clinical Reasoning');
       // …while a genuinely threshold-meeting section still is.
       expect(coveredBlock).toContain('Clinical Presentation');
-    });
-  });
-
-  describe('no entry type', () => {
-    it('should return empty questions and increment round when entryType is null', async () => {
-      const node = createGenerateFollowupNode(makeDeps());
-      const state = makeState({ entryType: null });
-
-      const result = await node(state);
-
-      expect(result.pendingFollowupQuestions).toEqual([]);
-      expect(result.followUpRound).toBe(1);
     });
   });
 

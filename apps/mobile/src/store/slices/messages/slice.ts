@@ -3,6 +3,7 @@ import { MessageRole, MessageStatus, MessageType } from '@acme/shared';
 import { createEntityAdapter, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { deleteConversation } from '../conversations/thunks';
 import {
+  type PendingArtefact,
   fetchMessages,
   pollConversation,
   resumeAnalysis,
@@ -35,9 +36,12 @@ export interface OptimisticMessage {
   /** For voice notes — local recording URI for retry */
   recordingUri?: string;
   recordingMime?: string;
-  /** For retry — if the artefact was never created, retry needs these to re-attempt */
-  isNewConversation?: boolean;
-  artefactId?: string;
+  /**
+   * Set while the conversation's artefact has not been created yet. Retry needs it
+   * to re-attempt creation. One field, not three loose ones: the id and entry type
+   * are only ever meaningful together, so a half-populated state is unrepresentable.
+   */
+  pendingArtefact?: PendingArtefact;
 }
 
 /**
@@ -201,9 +205,8 @@ const messagesSlice = createSlice({
       for (const opt of Object.values(state.optimisticMessages)) {
         if (opt && opt.conversationId === oldConversationId) {
           opt.conversationId = newConversationId;
-          // Artefact was created — clear flags so retry doesn't re-create
-          opt.isNewConversation = undefined;
-          opt.artefactId = undefined;
+          // Artefact was created — drop the pending marker so retry doesn't re-create
+          opt.pendingArtefact = undefined;
         }
       }
     },

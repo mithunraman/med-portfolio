@@ -1,10 +1,8 @@
 export { createGatherContextNode } from './gather-context.node';
-export { createClassifyNode } from './classify.node';
-export { createPresentClassificationNode } from './present-classification.node';
 export { createCheckCompletenessNode } from './check-completeness.node';
+export { createRejectEntryNode } from './reject-entry.node';
 export { createGenerateFollowupNode } from './generate-followup.node';
 export { createAskFollowupNode } from './ask-followup.node';
-export { createAskClarificationNode } from './ask-clarification.node';
 export { createTagCapabilitiesNode } from './tag-capabilities.node';
 export { createPresentCapabilitiesNode } from './present-capabilities.node';
 export { createElicitJustificationNode } from './elicit-justification.node';

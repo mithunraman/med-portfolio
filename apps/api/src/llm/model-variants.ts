@@ -9,7 +9,6 @@ import { OpenAIModels } from './openai-models';
  */
 export const Stage = {
   Cleaning: 'cleaning',
-  Classify: 'classify',
   CheckCompleteness: 'check_completeness',
   GenerateFollowup: 'generate_followup',
   TagCapabilities: 'tag_capabilities',
@@ -162,7 +161,6 @@ const foundry = (
 export const VARIANTS = {
   A: {
     cleaning: openai(OpenAIModels.GPT_5_4_NANO),
-    classify: openai(OpenAIModels.GPT_5_4_NANO),
     check_completeness: openai(OpenAIModels.GPT_5_4_NANO),
     generate_followup: openai(OpenAIModels.GPT_5_4_NANO),
     tag_capabilities: openai(OpenAIModels.GPT_5_4_NANO),
@@ -173,7 +171,6 @@ export const VARIANTS = {
   },
   B: {
     cleaning: deepseek(DEEPSEEK_FLASH, 'off'),
-    classify: deepseek(DEEPSEEK_FLASH, 'off'),
     check_completeness: deepseek(DEEPSEEK_FLASH, 'off'),
     generate_followup: deepseek(DEEPSEEK_FLASH, 'off'),
     tag_capabilities: deepseek(DEEPSEEK_FLASH, 'off'),
@@ -184,7 +181,6 @@ export const VARIANTS = {
   },
   C: {
     cleaning: deepseek(DEEPSEEK_PRO, 'off'),
-    classify: deepseek(DEEPSEEK_PRO, 'off'),
     check_completeness: deepseek(DEEPSEEK_PRO, 'off'),
     generate_followup: deepseek(DEEPSEEK_PRO, 'off'),
     tag_capabilities: deepseek(DEEPSEEK_PRO, 'off'),
@@ -215,7 +211,6 @@ export const VARIANTS = {
     // Native function calling, not jsonSchema: the DSML workaround is DeepSeek's
     // constraint and nano doesn't share it (see the `foundry` helper).
     cleaning: foundry(GPT_NANO_FOUNDRY, Pool.Interactive, 'off', 'functionCalling'),
-    classify: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
     check_completeness: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
     generate_followup: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
     tag_capabilities: foundry(DEEPSEEK_FLASH_FOUNDRY, Pool.Analysis),
@@ -232,7 +227,6 @@ export const VARIANTS = {
   // vs the incumbent.
   E: {
     cleaning: gptOss(GPT_OSS_120B, 'low'),
-    classify: gptOss(GPT_OSS_120B, 'low'),
     check_completeness: gptOss(GPT_OSS_120B, 'low'),
     generate_followup: gptOss(GPT_OSS_120B, 'low'),
     tag_capabilities: gptOss(GPT_OSS_120B, 'low'),

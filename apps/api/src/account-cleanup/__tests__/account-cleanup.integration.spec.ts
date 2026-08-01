@@ -193,6 +193,7 @@ describe('AccountCleanupService (integration)', () => {
       trainingStage: 'ST1',
       title: `Artefact for ${userId}`,
       status: ArtefactStatus.COMPLETED,
+      artefactType: 'CLINICAL_CASE_REVIEW',
     });
 
     await conversationModel.create({

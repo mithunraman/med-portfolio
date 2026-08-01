@@ -76,7 +76,6 @@ const { Journey, None } = CacheAffinity;
  */
 export const STAGE_POLICY: Record<Stage, StagePolicy> = {
   cleaning: { maxTokens: 2000, temperature: 0.1, cacheAffinity: None },
-  classify: { maxTokens: 800, temperature: 0.1, cacheAffinity: None },
   check_completeness: { maxTokens: 2000, temperature: 0.1, cacheAffinity: Journey },
   generate_followup: { maxTokens: 1000, temperature: 0.3, cacheAffinity: None },
   tag_capabilities: { maxTokens: 2000, temperature: 0.1, cacheAffinity: None },

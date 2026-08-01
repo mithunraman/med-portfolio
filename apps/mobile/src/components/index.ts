@@ -11,6 +11,7 @@ export { EditableReflectionSection } from './EditableReflectionSection';
 export { EditableTitle } from './EditableTitle';
 export { EntryActionBar } from './EntryActionBar';
 export { EmptyState } from './EmptyState';
+export { EntryTypePickerSheet } from './EntryTypePickerSheet';
 export { ErrorBanner } from './ErrorBanner';
 export { ErrorBoundary } from './ErrorBoundary';
 export { ExportSheet } from './ExportSheet';

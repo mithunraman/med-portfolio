@@ -91,36 +91,6 @@ export class SequentialLLMMock {
 // ── Response builders ──
 
 /**
- * Build a canned classify response.
- * Default: CLINICAL_CASE_REVIEW with high confidence.
- */
-export function classifyResponse(
-  overrides: Partial<{
-    isRelevant: boolean;
-    entryType: string;
-    confidence: number;
-    reasoning: string;
-    signalsFound: string[];
-    alternatives: Array<{ entryType: string; confidence: number; reasoning: string }>;
-  }> = {}
-) {
-  return {
-    isRelevant: overrides.isRelevant ?? true,
-    entryType: overrides.entryType ?? 'CLINICAL_CASE_REVIEW',
-    confidence: overrides.confidence ?? 0.92,
-    reasoning: overrides.reasoning ?? 'Patient presentation with clinical details',
-    signalsFound: overrides.signalsFound ?? [
-      'specific patient',
-      'clinical details',
-      'management plan',
-    ],
-    alternatives: overrides.alternatives ?? [
-      { entryType: 'OUT_OF_HOURS', confidence: 0.3, reasoning: 'Could be OOH' },
-    ],
-  };
-}
-
-/**
  * Build a canned completeness response (partition + rubric-grade).
  * Provide section IDs with their coverage status. Covered sections get one
  * assignment plus a grade whose tier maps to the requested depth; uncovered
@@ -132,7 +102,9 @@ export function completenessResponse(
     covered: boolean;
     depth?: 'rich' | 'adequate' | 'shallow';
     idea?: string;
-  }>
+  }>,
+  /** Set false to exercise the reject_entry branch (see completenessRouter). */
+  isRelevant = true
 ) {
   const TIER_BY_DEPTH = { rich: 'strong', adequate: 'adequate', shallow: 'shallow' } as const;
   const assignments: Array<{ idea: string; sectionId: string }> = [];
@@ -154,7 +126,12 @@ export function completenessResponse(
     });
   }
 
-  return { assignments, sectionGrades };
+  return {
+    relevanceReason: isRelevant ? 'clinical experience described' : 'no clinical content',
+    isRelevant,
+    assignments,
+    sectionGrades,
+  };
 }
 
 /**

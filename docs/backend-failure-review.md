@@ -2,6 +2,15 @@
 
 An AI-powered portfolio builder for UK medical trainees. This document reviews the backend architecture for points of failure, reliability risks, integrity risks, operational risks, and scaling bottlenecks.
 
+> **Note on the classification risks.** Some entries below analyse a `classify` node,
+> a `present_classification` interrupt, and `ClassificationOption` payloads. Those were
+> **removed** — the trainee now picks the entry type at artefact creation, so the graph has
+> nothing to classify. Affected entries are marked **N/A — node removed** in place.
+>
+> They are retained rather than deleted: this is a dated review, and the risks were real
+> against the code as it stood. For the current graph see
+> [architecture-overview.md](architecture-overview.md).
+
 ---
 
 ## Executive Summary
@@ -58,10 +67,16 @@ An AI-powered portfolio builder for UK medical trainees. This document reviews t
 
 ### 2. OpenAI structured output returns schema-valid but semantically wrong data
 
+> **Partly N/A — node removed.** The worked example below is the `classify` node, which no
+> longer exists; the trainee picks the entry type, so an entry can no longer be mis-typed by
+> the AI. The *general* risk — schema-valid but semantically wrong output — still applies to
+> every remaining LLM node, and the mitigation now lands on `check_completeness`'s grading
+> and `tag_capabilities`' verbatim-quote gate rather than on confidence calibration.
+
 - **Original risk #:** 13
 - **Type:** Inferred risk
 - **Severity:** Medium (inherent LLM limitation)
-- **Backend area:** All LLM-backed graph nodes (classify, check_completeness, tag_capabilities, reflect, generate_pdp)
+- **Backend area:** All LLM-backed graph nodes (check_completeness, tag_capabilities, elicit_justification, reflect, refine, generate_pdp)
 - **Failure scenario:**
   1. `classify` node asks GPT-4.1 to classify a short, ambiguous transcript.
   2. LLM returns `{ entryType: "CASE_REVIEW", confidence: 0.95 }` — valid by Zod schema but wrong.
@@ -138,7 +153,7 @@ An AI-powered portfolio builder for UK medical trainees. This document reviews t
 - **Backend area:** PortfolioGraphService.handleInterruptSideEffects
 - **Failure scenario:**
   1. A bug in a graph node produces a malformed interrupt payload (e.g., `options` is null, or `type` is an unexpected string).
-  2. `handleInterruptSideEffects` casts `interruptValue.options as ClassificationOption[]` without validation.
+  2. `handleInterruptSideEffects` casts `interruptValue.options as ClassificationOption[]` without validation. *(`ClassificationOption` is gone with the classifier — the same unvalidated cast now applies to `CapabilityOption[]` on the `capabilities` branch, so the risk stands.)*
   3. `.map()` on a null/undefined throws a runtime TypeError.
   4. Error propagates up -> handler transitions run to FAILED.
   5. The actual interrupt payload is lost — difficult to debug.
@@ -239,7 +254,7 @@ The atomic claim design supports multi-instance deployment. The `isProcessing` b
 
 ### Contract/Schema Tests
 
-- Every interrupt payload matches its expected Zod schema (classification, followup, capabilities)
+- Every interrupt payload matches its expected Zod schema (followup, capabilities, rejected)
 - Every LLM response parsed by `invokeStructured<T>()` matches the declared Zod schema
 - `ConversationContext` DTO matches the shared package schema for every possible analysis run state
 - API response DTOs never leak `_id` (only `xid`)

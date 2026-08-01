@@ -20,21 +20,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Reflection on a clinical encounter personally assessed. The core entry type for bedside assessments covering history, examination, clinical reasoning, and management.',
     templateId: 'IM_MINIEX_TEMPLATE',
-    classificationSignals: [
-      'patient assessment',
-      'history taking',
-      'clinical examination',
-      'diagnosis',
-      'management plan',
-      'prescribed',
-      'ward round',
-      'clinic',
-      'admitted',
-      'discharged',
-      'clerked',
-      'post-take',
-      'on-call',
-    ],
   },
   {
     code: ImEntryType.CASE_BASED_DISCUSSION,
@@ -42,17 +27,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Structured discussion of a case with a supervisor focusing on clinical reasoning, diagnostic uncertainty, management of comorbidities, and evidence-based decision-making.',
     templateId: 'IM_CBD_TEMPLATE',
-    classificationSignals: [
-      'discussed with consultant',
-      'case discussion',
-      'clinical reasoning',
-      'differential diagnosis',
-      'CbD',
-      'case-based discussion',
-      'supervisor meeting',
-      'reviewed with consultant',
-      'post-take discussion',
-    ],
   },
   {
     code: ImEntryType.ACUTE_CARE_ASSESSMENT,
@@ -60,21 +34,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Reflection on management of an acute unselected or specialty take, or the care of an acutely deteriorating patient. Covers the full episode from presentation through to disposition.',
     templateId: 'IM_ACAT_TEMPLATE',
-    classificationSignals: [
-      'acute take',
-      'unselected take',
-      'on-call',
-      'acute admission',
-      'deteriorating patient',
-      'resuscitation',
-      'crash call',
-      'MET call',
-      'NEWS score',
-      'escalation',
-      'ACAT',
-      'acute assessment',
-      'handover',
-    ],
   },
   {
     code: ImEntryType.SIGNIFICANT_EVENT,
@@ -82,19 +41,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Analysis of a significant event such as a patient safety incident, unexpected deterioration, cardiac arrest, near-miss, or complaint. Focus on root cause and systemic learning.',
     templateId: 'IM_SEA_TEMPLATE',
-    classificationSignals: [
-      'patient safety',
-      'serious incident',
-      'near-miss',
-      'cardiac arrest',
-      'unexpected death',
-      'complaint',
-      'never event',
-      'duty of candour',
-      'Datix',
-      'incident report',
-      'mortality review',
-    ],
   },
   {
     code: ImEntryType.REFLECTIVE_PRACTICE,
@@ -102,18 +48,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'General reflection on a clinical or professional experience. Suited to exploring diagnostic uncertainty, ethical dilemmas, communication challenges, or personal development.',
     templateId: 'IM_REFLECTION_TEMPLATE',
-    classificationSignals: [
-      'reflection',
-      'thought about',
-      'made me think',
-      'learning moment',
-      'interesting case',
-      'ethical dilemma',
-      'communication challenge',
-      'uncertainty',
-      'difficult conversation',
-      'end of life',
-    ],
   },
   {
     code: ImEntryType.PROCEDURAL_SKILLS,
@@ -121,20 +55,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Reflection on performing or observing a practical procedure. Covers indication, consent, technique, complications, and supervision level.',
     templateId: 'IM_DOPS_TEMPLATE',
-    classificationSignals: [
-      'procedure',
-      'DOPS',
-      'lumbar puncture',
-      'chest drain',
-      'central line',
-      'ascitic tap',
-      'paracentesis',
-      'pleural aspiration',
-      'NG tube',
-      'DC cardioversion',
-      'arterial blood gas',
-      'cannulation',
-    ],
   },
   {
     code: ImEntryType.OUTPATIENT_ASSESSMENT,
@@ -142,19 +62,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Reflection on managing patients in an outpatient, ambulatory, or community setting. Covers long-term condition management, clinic letters, and shared decision-making.',
     templateId: 'IM_OPCAT_TEMPLATE',
-    classificationSignals: [
-      'outpatient',
-      'clinic',
-      'follow-up',
-      'long-term condition',
-      'ambulatory',
-      'community',
-      'virtual clinic',
-      'clinic letter',
-      'OPCAT',
-      'new patient',
-      'review appointment',
-    ],
   },
   {
     code: ImEntryType.TEACHING_ACTIVITY,
@@ -162,19 +69,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Reflection on planning and delivering teaching, or supervising junior colleagues. Covers teaching methods, feedback received, and impact on learners.',
     templateId: 'IM_TEACHING_TEMPLATE',
-    classificationSignals: [
-      'teaching',
-      'taught',
-      'lecture',
-      'bedside teaching',
-      'simulation',
-      'supervising',
-      'FY1',
-      'medical student',
-      'grand round',
-      'journal club',
-      'case presentation',
-    ],
   },
   {
     code: ImEntryType.QI_PROJECT,
@@ -182,18 +76,6 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'A structured quality improvement project with PDSA cycles, data collection, and sustainability plan within a medical service.',
     templateId: 'IM_QIP_TEMPLATE',
-    classificationSignals: [
-      'audit',
-      'quality improvement',
-      'QI project',
-      'PDSA',
-      'QIPAT',
-      'data collection',
-      'service improvement',
-      'clinical governance',
-      'protocol change',
-      're-audit',
-    ],
   },
   {
     code: ImEntryType.FEEDBACK_REFLECTION,
@@ -201,18 +83,5 @@ export const IM_ENTRY_TYPES: EntryTypeDefinition[] = [
     description:
       'Reflection on multi-source feedback (MSF), patient survey (PS), MRCP exam results, or supervisor feedback.',
     templateId: 'IM_FEEDBACK_TEMPLATE',
-    classificationSignals: [
-      'MSF',
-      'multi-source feedback',
-      'patient survey',
-      'MRCP',
-      'exam results',
-      'feedback',
-      'appraisal',
-      'supervisor feedback',
-      'colleague feedback',
-      'MCR',
-      'multiple consultant report',
-    ],
   },
 ];

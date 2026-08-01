@@ -13,16 +13,25 @@ import { AnalysisStartHandler, type AnalysisStartPayload } from '../analysis-sta
 
 const oid = () => new Types.ObjectId();
 
+/**
+ * `handle()` takes an untyped outbox payload, so the return type is deliberately
+ * widened — but the literal is annotated INSIDE the function so it must still
+ * satisfy `AnalysisStartPayload`. Annotating only the return type would check
+ * nothing: a newly-required field would go missing from every test in this file
+ * and surface as `undefined` reaching the graph at runtime, not as a build error.
+ */
 function makePayload(overrides: Partial<AnalysisStartPayload> = {}): Record<string, unknown> {
-  return {
+  const payload: AnalysisStartPayload = {
     analysisRunId: oid().toString(),
     conversationId: oid().toString(),
     artefactId: oid().toString(),
     userId: oid().toString(),
     specialty: '0',
+    trainingStage: 'ST1',
+    entryType: 'CLINICAL_CASE_REVIEW',
     langGraphThreadId: 'conv:1',
-    ...overrides,
   };
+  return { ...payload, ...overrides };
 }
 
 function makeRun(status: AnalysisRunStatus) {
@@ -36,19 +45,25 @@ function makeRun(status: AnalysisRunStatus) {
 
 function makeInterruptPayload() {
   return {
-    idempotencyKey: 'conv:present_classification:cp-1',
-    pausedNode: 'present_classification' as const,
-    questionType: 'single_select' as const,
+    idempotencyKey: 'conv:ask_followup:cp-1',
+    pausedNode: 'ask_followup' as const,
+    questionType: 'free_text' as const,
     messageData: {
       conversation: oid(),
       userId: oid(),
       role: 'ASSISTANT',
       messageType: 'TEXT',
-      rawContent: 'test',
-      content: 'test',
+      rawContent: 'follow-up questions',
+      content: 'follow-up questions',
       status: 'COMPLETE',
-      question: { questionType: 'single_select', options: [], suggestedKey: 'CE' },
-      idempotencyKey: 'conv:present_classification:cp-1',
+      question: {
+        questionType: 'free_text',
+        prompts: [],
+        missingSections: [],
+        followUpRound: 0,
+        entryType: 'CLINICAL_CASE_REVIEW',
+      },
+      idempotencyKey: 'conv:ask_followup:cp-1',
     },
   };
 }
@@ -195,6 +210,42 @@ describe('AnalysisStartHandler', () => {
     });
   });
 
+  describe('payload passthrough', () => {
+    it('seeds the graph with every field the outbox payload carries', async () => {
+      const startGraph = jest.fn().mockResolvedValue(null);
+      const payload = makePayload();
+
+      const { handler } = createHandler({ startGraph });
+      await handler.handle(payload);
+
+      // Asserted as a whole object, not field-by-field: `entryType` is the
+      // trainee's chosen type and the graph's only source for it, and a dropped
+      // field would otherwise reach `getTemplateForEntryType` as `undefined` and
+      // throw mid-run. `threadId` is renamed from `langGraphThreadId` on the way
+      // through, so it is spelled out rather than spread.
+      expect(startGraph).toHaveBeenCalledWith({
+        conversationId: payload.conversationId,
+        artefactId: payload.artefactId,
+        userId: payload.userId,
+        specialty: payload.specialty,
+        trainingStage: payload.trainingStage,
+        entryType: payload.entryType,
+        threadId: payload.langGraphThreadId,
+      });
+    });
+
+    it('defaults a missing trainingStage to empty rather than passing undefined', async () => {
+      const startGraph = jest.fn().mockResolvedValue(null);
+
+      const { handler } = createHandler({ startGraph });
+      await handler.handle(makePayload({ trainingStage: undefined }));
+
+      expect(startGraph).toHaveBeenCalledWith(
+        expect.objectContaining({ trainingStage: '' })
+      );
+    });
+  });
+
   describe('transactional interrupt handling', () => {
     it('should create message and transition status in a single transaction when graph pauses', async () => {
       const interruptPayload = makeInterruptPayload();
@@ -204,7 +255,7 @@ describe('AnalysisStartHandler', () => {
       const withTransaction = jest.fn((fn) => fn({}));
 
       const { handler } = createHandler({
-        startGraph: jest.fn().mockResolvedValue('present_classification'),
+        startGraph: jest.fn().mockResolvedValue('ask_followup'),
         getInterruptPayload: jest.fn().mockResolvedValue(interruptPayload),
         transitionStatus,
         withTransaction,
@@ -226,7 +277,7 @@ describe('AnalysisStartHandler', () => {
       const createMessage = jest.fn();
 
       const { handler } = createHandler({
-        startGraph: jest.fn().mockResolvedValue('present_classification'),
+        startGraph: jest.fn().mockResolvedValue('ask_followup'),
         getInterruptPayload: jest.fn().mockResolvedValue(interruptPayload),
         transitionStatus,
         withTransaction,
@@ -245,7 +296,7 @@ describe('AnalysisStartHandler', () => {
 
     it('should throw when graph pauses but no interrupt payload found', async () => {
       const { handler } = createHandler({
-        startGraph: jest.fn().mockResolvedValue('present_classification'),
+        startGraph: jest.fn().mockResolvedValue('ask_followup'),
         getInterruptPayload: jest.fn().mockResolvedValue(null),
         transitionStatus: jest.fn().mockResolvedValue({}),
       });

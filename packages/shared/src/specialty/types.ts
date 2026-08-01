@@ -99,8 +99,6 @@ export interface EntryTypeDefinition {
   description: string;
   /** Which template to use for this entry type */
   templateId: string;
-  /** Keywords and phrases that signal this entry type in a transcript */
-  classificationSignals: string[];
 }
 
 /**
@@ -148,13 +146,29 @@ export interface TrainingStageDefinition {
 }
 
 /**
+ * An entry type as offered to the client, for the "what are you writing?" picker
+ * shown at artefact creation.
+ *
+ * A deliberate subset of EntryTypeDefinition: `templateId` is a config internal
+ * and must never leave the server — this response is public and cached for an
+ * hour, and the field names a server-side template the client has no use for.
+ */
+export interface EntryTypeOption {
+  code: string;
+  label: string;
+  description: string;
+}
+
+/**
  * Shape returned by GET /api/specialties — one per supported specialty.
- * Drives the mobile onboarding picker without hardcoding lists on the client.
+ * Drives the mobile onboarding picker and the entry-type picker without
+ * hardcoding lists on the client.
  */
 export interface SpecialtyOption {
   specialty: Specialty;
   name: string;
   trainingStages: TrainingStageDefinition[];
+  entryTypes: EntryTypeOption[];
 }
 
 /**

@@ -20,7 +20,14 @@ function makeDeps(): GraphDeps {
     pdpGoalsRepository: {} as any,
     transactionService: {} as any,
     llmService: {
-      invokeStructured: jest.fn().mockResolvedValue({ data: { assignments: [], sectionGrades: [] } }),
+      invokeStructured: jest.fn().mockResolvedValue({
+        data: {
+          relevanceReason: 'clinical encounter',
+          isRelevant: true,
+          assignments: [],
+          sectionGrades: [],
+        },
+      }),
     } as any,
     modelConfig: { resolve: jest.fn(() => ({ provider: 'openai', pool: 'openai', model: 'test-model' })) } as any,
     eventEmitter: { emit: jest.fn() } as any,
@@ -38,11 +45,6 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
     entryType: 'CLINICAL_CASE_REVIEW',
 
     isRelevant: true,
-    classificationConfidence: 0.9,
-    classificationReasoning: '',
-    alternatives: [],
-    classificationConfirmed: true,
-    clarificationRound: 0,
     missingSections: [],
     hasEnoughInfo: false,
     followUpRound: 0,
@@ -156,9 +158,11 @@ describe('checkCompletenessNode — schema & resilience', () => {
   it('constrains sectionId to assessable sections and tier to the grade enum', async () => {
     const schema = await captureSchema();
     const validId = [...ccrIds][0];
+    const relevance = { relevanceReason: 'clinical encounter', isRelevant: true };
 
     expect(
       schema.safeParse({
+        ...relevance,
         assignments: [{ idea: 'x', sectionId: validId }],
         sectionGrades: [{ sectionId: validId, tierReason: 'r', tier: 'adequate' }],
       }).success
@@ -167,6 +171,7 @@ describe('checkCompletenessNode — schema & resilience', () => {
     // bogus section id
     expect(
       schema.safeParse({
+        ...relevance,
         assignments: [{ idea: 'x', sectionId: 'BOGUS' }],
         sectionGrades: [],
       }).success
@@ -175,10 +180,117 @@ describe('checkCompletenessNode — schema & resilience', () => {
     // bogus tier
     expect(
       schema.safeParse({
+        ...relevance,
         assignments: [{ idea: 'x', sectionId: validId }],
         sectionGrades: [{ sectionId: validId, tierReason: 'r', tier: 'amazing' }],
       }).success
     ).toBe(false);
+  });
+
+  /** Response shape for a grader that assigns nothing. */
+  function emptyPartition(isRelevant: boolean) {
+    return {
+      data: {
+        relevanceReason: isRelevant ? 'clinical content present' : 'a shopping list',
+        isRelevant,
+        assignments: [],
+        sectionGrades: [],
+      },
+    };
+  }
+
+  /** A mid-journey state: five probes cleared, one gap, readiness accumulated. */
+  function midJourneyState(followUpRound: number) {
+    return makeState({
+      followUpRound,
+      missingSections: ['learning_needs'],
+      hasEnoughInfo: false,
+      readinessScore: 8.2,
+      bestTierByProbe: { reflection: 'strong', clinical_reasoning: 'strong' },
+      probeReadiness: { reflection: { score: 1, tier: 'strong', meetsThreshold: true } },
+    });
+  }
+
+  it('rejects at round 0 when the transcript is not relevant', async () => {
+    const deps = makeDeps();
+    (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue(emptyPartition(false));
+
+    const result = await createCheckCompletenessNode(deps)(makeState({ followUpRound: 0 }));
+
+    // Only the verdict — completenessRouter turns this into reject_entry.
+    expect(result).toEqual({ isRelevant: false });
+  });
+
+  it('keeps prior readiness when the partition is empty after round 0', async () => {
+    const deps = makeDeps();
+    (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue(emptyPartition(false));
+
+    const result = await createCheckCompletenessNode(deps)(midJourneyState(3));
+
+    // No update at all: grading an empty partition would floor every probe to
+    // `missing`, and the ratchet honours `missing`, so `bestTierByProbe` — the
+    // record of what the trainee already cleared — would be wiped with it.
+    expect(result).toEqual({});
+    expect(result.bestTierByProbe).toBeUndefined();
+    expect(result.readinessScore).toBeUndefined();
+    expect(result.missingSections).toBeUndefined();
+  });
+
+  it('guards an empty partition after round 0 even when graded relevant', async () => {
+    const deps = makeDeps();
+    (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue(emptyPartition(true));
+
+    const result = await createCheckCompletenessNode(deps)(midJourneyState(2));
+
+    // The hazard is the empty partition, not the verdict — so the guard must not
+    // depend on `isRelevant`.
+    expect(result).toEqual({});
+  });
+
+  it('still floors every probe to missing on an empty partition at round 0', async () => {
+    const deps = makeDeps();
+    (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue(emptyPartition(true));
+
+    const result = await createCheckCompletenessNode(deps)(makeState({ followUpRound: 0 }));
+
+    // Round 0 has no prior readiness to protect, and the `missing` floor is what
+    // puts every section into the elicitation loop — the guard must NOT apply here.
+    expect(result.missingSections).toEqual(ccrAssessable.map((p) => p.id));
+    expect(result.readinessScore).toBe(0);
+    expect(result.hasEnoughInfo).toBe(false);
+  });
+
+  it('uses the grades when a late irrelevant verdict still carries a partition', async () => {
+    const deps = makeDeps();
+    (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({
+      data: {
+        relevanceReason: 'model says irrelevant but partitioned anyway',
+        isRelevant: false,
+        assignments: [{ idea: 'I read NICE NG28', sectionId: 'learning_needs' }],
+        sectionGrades: [
+          { sectionId: 'learning_needs', tierReason: 'specific gap + intent', tier: 'adequate' },
+        ],
+      },
+    });
+
+    const result = await createCheckCompletenessNode(deps)(midJourneyState(3));
+
+    // A usable partition is worth more than the verdict that came with it — don't
+    // discard a call we already paid for.
+    expect(result.probeReadiness?.['learning_needs'].tier).toBe('adequate');
+    expect(result.missingSections).not.toContain('learning_needs');
+  });
+
+  it('fails OPEN on relevance when the LLM call fails', async () => {
+    const deps = makeDeps();
+    (deps.llmService.invokeStructured as jest.Mock).mockRejectedValue(new Error('boom'));
+
+    const result = await createCheckCompletenessNode(deps)(makeState());
+
+    // Asserted as "never writes false" rather than "writes true": the channel
+    // defaults to true, so not writing IS the fail-open behaviour, and this is
+    // what would catch a `false` creeping into the failure path.
+    expect(result.isRelevant).not.toBe(false);
   });
 
   it('degrades safely when the LLM fails: proceeds without follow-ups, reports to Sentry', async () => {
@@ -196,13 +308,6 @@ describe('checkCompletenessNode — schema & resilience', () => {
         extra: expect.objectContaining({ conversationId: 'conv-xyz' }),
       })
     );
-  });
-
-  it('short-circuits with hasEnoughInfo when there is no entry type', async () => {
-    const deps = makeDeps();
-    const result = await createCheckCompletenessNode(deps)(makeState({ entryType: null }));
-    expect(result.hasEnoughInfo).toBe(true);
-    expect(deps.llmService.invokeStructured).not.toHaveBeenCalled();
   });
 
   it('derives the follow-up round cap from the template (askable probes × ATTEMPT_LIMIT)', async () => {

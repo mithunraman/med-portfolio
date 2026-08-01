@@ -289,12 +289,6 @@ export function createReflectNode(deps: GraphDeps) {
     const cid = state.conversationId;
     logger.log(`[${cid}] Organising reflection (type: ${state.entryType})`);
 
-    // ── Guard: no entry type ──
-    if (!state.entryType) {
-      logger.warn(`[${cid}] No entry type set — skipping reflection`);
-      return { composedDocument: [] };
-    }
-
     // ── Load template ──
     const specialty = Number(state.specialty) as Specialty;
     const config = getSpecialtyConfig(specialty);

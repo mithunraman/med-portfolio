@@ -1182,13 +1182,37 @@ describe('ArtefactsService', () => {
   // ─── Guest artefact limit ───
 
   describe('guest artefact limit', () => {
-    const dto = { artefactId: 'client_abc12345' };
+    const dto = { artefactId: 'client_abc12345', entryType: 'CLINICAL_CASE_REVIEW' };
 
     function mockCreatePathSuccess() {
       mockArtefactsRepo.upsertArtefact.mockResolvedValue(ok(makeArtefactDoc()));
       mockConversationsRepo.findActiveConversationByArtefact.mockResolvedValue(ok(null));
       mockConversationsRepo.createConversation.mockResolvedValue(ok(makeConversationDoc()));
     }
+
+    it('persists the chosen entry type on the artefact', async () => {
+      setUserMock({ role: UserRole.USER, specialty: 100, trainingStage: 'ST1' });
+      mockCreatePathSuccess();
+
+      await service.createArtefact(userIdStr, { ...dto, entryType: 'SIGNIFICANT_EVENT' });
+
+      expect(mockArtefactsRepo.upsertArtefact).toHaveBeenCalledWith(
+        expect.objectContaining({ artefactType: 'SIGNIFICANT_EVENT' }),
+        expect.anything()
+      );
+    });
+
+    it('rejects an entry type that is not in the user\'s specialty config', async () => {
+      setUserMock({ role: UserRole.USER, specialty: 100, trainingStage: 'ST1' });
+      mockCreatePathSuccess();
+
+      // The boundary check — everything downstream (getTemplateForEntryType, which
+      // throws) treats the entry type as trusted.
+      await expect(
+        service.createArtefact(userIdStr, { ...dto, entryType: 'NOT_A_REAL_TYPE' })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockArtefactsRepo.upsertArtefact).not.toHaveBeenCalled();
+    });
 
     it('allows guest under the artefact limit to create', async () => {
       setUserMock({ role: UserRole.USER_GUEST, specialty: 100, trainingStage: 'ST1' });

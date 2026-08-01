@@ -1,9 +1,7 @@
 import {
   type CapabilityOption,
-  type ClassificationOption,
   type FreeTextQuestion,
   type MultiSelectQuestion,
-  type SingleSelectQuestion,
   MessageRole,
   MessageStatus,
   MessageType,
@@ -35,30 +33,46 @@ import type { PortfolioStateType } from './portfolio-graph.state';
 import { buildReadinessSnapshot } from './readiness-snapshot';
 
 /**
- * Maps each interrupt node to its expected resume value type.
+ * Maps each RESUMABLE interrupt node to its expected resume value type.
  * `true` means the node resumes with no payload (just a signal).
  */
-export interface GraphResumeMap {
-  present_classification: { entryType: string };
+export interface ResumableNodeMap {
   ask_followup: true;
-  ask_clarification: true;
   present_capabilities: { selectedCodes: string[] };
 }
 
-export type InterruptNode = keyof GraphResumeMap;
+/** Interrupt nodes that can be resumed with a user's answer. */
+export type ResumableNode = keyof ResumableNodeMap;
 
-const CLASSIFICATION_PROMPTS = [
-  'Which entry type best describes this? Select one below, or choose a different one.',
-  "I've identified some possible entry types. Pick the best match, or choose another.",
-  'Here are the entry types I think fit best. Select one, or go with something else.',
-  "Based on what you've shared, these entry types seem most relevant. Which one fits?",
-  'I narrowed it down to a few entry types. Choose the closest match below.',
-  'Take a look at the options below - which entry type feels right?',
-  "These entry types look like the best fit. Select one, or pick a different one if you'd prefer.",
-  'I think one of these entry types matches your input. Which would you go with?',
-  "Here's what I came up with - select the entry type that fits best, or choose your own.",
-  'A few entry types stood out. Pick the one that best captures your input.',
-] as const;
+/**
+ * Interrupt nodes that pause the graph with an informational message and are
+ * never resumed — the API rejects resumes of terminal questions. Kept out of
+ * `ResumableNodeMap` so `resumeGraph` cannot be called with one: the contract is
+ * enforced by the type rather than by a comment.
+ */
+export type TerminalNode = 'reject_entry';
+
+/** Every node the graph can pause at — what `getPausedNode` reports. */
+export type InterruptNode = ResumableNode | TerminalNode;
+
+/**
+ * Runtime membership test for `getPausedNode`, which only has a raw string from
+ * the checkpoint to work with.
+ *
+ * Derived from a `Record<InterruptNode, true>` rather than hand-written, because
+ * that errors BOTH ways: an unknown key is rejected, and a missing one fails to
+ * compile. Omission is the dangerous direction — a node absent from this set makes
+ * a genuinely paused run look unpaused, and callers read the resulting `null` as
+ * "the run completed", silently transitioning it to COMPLETED with no question
+ * message ever written.
+ */
+const INTERRUPT_NODE_FLAGS: Record<InterruptNode, true> = {
+  ask_followup: true,
+  present_capabilities: true,
+  reject_entry: true,
+};
+
+const INTERRUPT_NODES: ReadonlySet<string> = new Set(Object.keys(INTERRUPT_NODE_FLAGS));
 
 const CAPABILITIES_PROMPTS = [
   "I spotted some capabilities in your entry. Confirm the ones that apply, or deselect any that don't fit.",
@@ -72,24 +86,6 @@ const CAPABILITIES_PROMPTS = [
   'I found some relevant capabilities in your input. Review and adjust the selection.',
   "Here's what I identified - select the capabilities that best reflect your entry.",
 ] as const;
-
-const CLARIFICATION_PROMPTS: Record<string, readonly string[]> = {
-  initial: [
-    "I wasn't able to identify the entry type from what you've shared. Could you describe the clinical situation in more detail - for example, what happened, your role, and what you learned?",
-    'I need a bit more context to categorise this entry. Could you tell me more about the clinical situation, your involvement, and the outcome?',
-    'Could you share more detail about the clinical experience? A brief description of what happened, your role, and any reflections would help.',
-  ],
-  retry: [
-    'A little more detail about the clinical context would help me categorise this correctly.',
-    "That's helpful. Could you add a bit more about the clinical situation or your specific role?",
-    'A few more details about what happened clinically would help me identify the right entry type.',
-  ],
-  irrelevant: [
-    "That doesn't look like a portfolio entry to me. Could you describe a clinical experience, learning event, or professional activity you'd like to reflect on?",
-    "I wasn't able to identify a clinical or learning experience in what you shared. Could you tell me about a case, procedure, or training event instead?",
-    'It looks like this might not be related to your medical portfolio. Try describing a specific clinical encounter or learning activity.',
-  ],
-} as const;
 
 /** Data needed to create the ASSISTANT question message for an interrupt. No DB writes. */
 export interface InterruptPayload {
@@ -167,6 +163,8 @@ export class PortfolioGraphService implements OnModuleInit {
     userId: string;
     specialty: string;
     trainingStage: string;
+    /** Chosen by the trainee at artefact creation; validated at that boundary. */
+    entryType: string;
     threadId: string;
   }): Promise<InterruptNode | null> {
     const { threadId } = params;
@@ -183,6 +181,7 @@ export class PortfolioGraphService implements OnModuleInit {
         userId: params.userId,
         specialty: params.specialty,
         trainingStage: params.trainingStage,
+        entryType: params.entryType,
       },
       config
     );
@@ -193,18 +192,20 @@ export class PortfolioGraphService implements OnModuleInit {
   }
 
   /**
-   * Resume a paused graph after the user responds (to classification, follow-up, or review).
+   * Resume a paused graph after the user responds (to a follow-up or capability review).
    * Returns the interrupt node name if the graph paused again, null if it completed.
    * No side effects (message creation) - the handler is responsible for those.
    *
    * threadId is the LangGraph thread namespace (e.g. `${conversationId}:${runNumber}`).
-   * Type-safe: each interrupt node declares its resume value shape in GraphResumeMap.
-   * Nodes that resume with just a signal (e.g. ask_followup) take no resumeValue arg.
+   * Type-safe: each resumable node declares its resume value shape in
+   * `ResumableNodeMap`, and nodes that resume with just a signal (e.g.
+   * ask_followup) take no resumeValue arg. Constrained to `ResumableNode`, so
+   * passing a terminal node here is a compile error rather than a runtime one.
    */
-  async resumeGraph<N extends InterruptNode>(
+  async resumeGraph<N extends ResumableNode>(
     threadId: string,
     node: N,
-    ...args: GraphResumeMap[N] extends true ? [] : [resumeValue: GraphResumeMap[N]]
+    ...args: ResumableNodeMap[N] extends true ? [] : [resumeValue: ResumableNodeMap[N]]
   ): Promise<InterruptNode | null> {
     const config = { configurable: { thread_id: threadId } };
     const resumeValue = args.length > 0 ? args[0] : true;
@@ -235,14 +236,8 @@ export class PortfolioGraphService implements OnModuleInit {
     if (!state?.next?.length) return null;
 
     const nextNode = state.next[0];
-    const interruptNodes = new Set<string>([
-      'present_classification',
-      'ask_followup',
-      'ask_clarification',
-      'present_capabilities',
-    ]);
 
-    if (interruptNodes.has(nextNode)) {
+    if (INTERRUPT_NODES.has(nextNode)) {
       return nextNode as InterruptNode;
     }
 
@@ -308,105 +303,6 @@ export class PortfolioGraphService implements OnModuleInit {
     const userOid = new Types.ObjectId(state.userId);
 
     switch (interruptValue.type) {
-      case 'classification': {
-        const options = interruptValue.options as ClassificationOption[];
-
-        // ── Terminal message: content was not relevant, no options to present ──
-        if (options.length === 0) {
-          const terminalContent =
-            "I wasn't able to identify a portfolio entry type from what you've shared. " +
-            'You can start a new conversation with a clinical experience or learning event.';
-
-          return {
-            idempotencyKey,
-            pausedNode,
-            questionType: 'terminal',
-            messageData: {
-              conversation: conversationOid,
-              userId: userOid,
-              role: MessageRole.ASSISTANT,
-              messageType: MessageType.TEXT,
-              rawContent: terminalContent,
-              content: terminalContent,
-              status: MessageStatus.COMPLETE,
-              idempotencyKey,
-            },
-          };
-        }
-
-        const content =
-          CLASSIFICATION_PROMPTS[Math.floor(Math.random() * CLASSIFICATION_PROMPTS.length)];
-
-        const question: SingleSelectQuestion = {
-          questionType: 'single_select',
-          options: options.map((o) => ({
-            key: o.code,
-            label: o.label,
-            confidence: o.confidence,
-            reasoning: o.reasoning,
-          })),
-          suggestedKey: interruptValue.suggestedEntryType as string,
-        };
-
-        return {
-          idempotencyKey,
-          pausedNode,
-          questionType: 'single_select',
-          messageData: {
-            conversation: conversationOid,
-            userId: userOid,
-            role: MessageRole.ASSISTANT,
-            messageType: MessageType.TEXT,
-            rawContent: content,
-            content,
-            status: MessageStatus.COMPLETE,
-            question,
-            idempotencyKey,
-          },
-        };
-      }
-
-      case 'clarification': {
-        const round = interruptValue.clarificationRound as number;
-        const isRelevant = interruptValue.isRelevant as boolean;
-
-        let prompts: readonly string[];
-        if (!isRelevant) {
-          prompts = CLARIFICATION_PROMPTS.irrelevant;
-        } else if (round === 0) {
-          prompts = CLARIFICATION_PROMPTS.initial;
-        } else {
-          prompts = CLARIFICATION_PROMPTS.retry;
-        }
-
-        const content = prompts[Math.floor(Math.random() * prompts.length)];
-
-        const clarificationQuestion: FreeTextQuestion = {
-          questionType: 'free_text',
-          prompts: [],
-          missingSections: [],
-          followUpRound: 0,
-          entryType: (interruptValue.suggestedEntryType as string) ?? '',
-        };
-
-        return {
-          idempotencyKey,
-          pausedNode,
-          questionType: 'free_text',
-          messageData: {
-            conversation: conversationOid,
-            userId: userOid,
-            role: MessageRole.ASSISTANT,
-            messageType: MessageType.TEXT,
-            rawContent: content,
-            content,
-            status: MessageStatus.COMPLETE,
-            question: clarificationQuestion,
-            idempotencyKey,
-          },
-        };
-      }
-
       case 'followup': {
         const questions = interruptValue.questions as Array<{
           sectionId: string;
@@ -440,6 +336,31 @@ export class PortfolioGraphService implements OnModuleInit {
             content,
             status: MessageStatus.COMPLETE,
             question,
+            idempotencyKey,
+          },
+        };
+      }
+
+      case 'rejected': {
+        // Terminal: check_completeness graded the transcript as not a portfolio
+        // entry. No question to answer — the trainee starts a new conversation.
+        const terminalContent =
+          "That doesn't look like a portfolio entry to me. " +
+          'You can start a new conversation describing a clinical experience, ' +
+          'learning event, or professional activity you would like to reflect on.';
+
+        return {
+          idempotencyKey,
+          pausedNode,
+          questionType: 'terminal',
+          messageData: {
+            conversation: conversationOid,
+            userId: userOid,
+            role: MessageRole.ASSISTANT,
+            messageType: MessageType.TEXT,
+            rawContent: terminalContent,
+            content: terminalContent,
+            status: MessageStatus.COMPLETE,
             idempotencyKey,
           },
         };

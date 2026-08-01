@@ -1,7 +1,6 @@
 import { capabilityAssessmentSchema } from '../tag-capabilities.node';
 import { justificationAssessmentSchema } from '../elicit-justification.node';
 import { completenessResponseSchema } from '../check-completeness.node';
-import { classificationAlternativeSchema, classifyResponseSchema } from '../classify.node';
 import { reflectResponseSchema } from '../reflect.node';
 import { generatePdpResponseSchema } from '../generate-pdp.node';
 
@@ -19,25 +18,6 @@ import { generatePdpResponseSchema } from '../generate-pdp.node';
  * regressing model accuracy.
  */
 describe('structured-output schema field order', () => {
-  it('classifyResponseSchema emits reasoning before any verdict', () => {
-    expect(Object.keys(classifyResponseSchema.shape)).toEqual([
-      'reasoning',
-      'signalsFound',
-      'isRelevant',
-      'entryType',
-      'confidence',
-      'alternatives',
-    ]);
-  });
-
-  it('classificationAlternativeSchema emits reasoning before the verdict', () => {
-    expect(Object.keys(classificationAlternativeSchema.shape)).toEqual([
-      'reasoning',
-      'entryType',
-      'confidence',
-    ]);
-  });
-
   it('capabilityAssessmentSchema emits quote then reasoning before the tier verdict', () => {
     expect(Object.keys(capabilityAssessmentSchema.shape)).toEqual([
       'code',
@@ -83,8 +63,13 @@ describe('structured-output schema field order', () => {
     ]);
   });
 
-  it('completenessResponseSchema emits the partition (assignments) before grades', () => {
-    expect(Object.keys(completenessResponseSchema.shape)).toEqual(['assignments', 'sectionGrades']);
+  it('completenessResponseSchema gates on relevance first, then partition before grades', () => {
+    expect(Object.keys(completenessResponseSchema.shape)).toEqual([
+      'relevanceReason',
+      'isRelevant',
+      'assignments',
+      'sectionGrades',
+    ]);
   });
 
   it('completeness assignment emits idea before its section', () => {

@@ -27,12 +27,7 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
 
     isRelevant: true,
     entryType: 'CLINICAL_ENCOUNTER',
-    classificationConfidence: 0.9,
-    classificationReasoning: 'test',
 
-    alternatives: [],
-    classificationConfirmed: true,
-    clarificationRound: 0,
     missingSections: [],
     hasEnoughInfo: true,
     followUpRound: 0,
@@ -78,13 +73,6 @@ describe('SaveNode (validation-only)', () => {
     expect(deps.artefactsRepository).toEqual({});
     expect(deps.pdpGoalsRepository).toEqual({});
     expect(deps.transactionService).toEqual({});
-  });
-
-  it('should return empty state without throwing when entryType is null (irrelevant content path)', async () => {
-    const node = createSaveNode(makeDeps());
-    const result = await node(makeState({ entryType: null }));
-
-    expect(result).toEqual({});
   });
 
   it('should throw when title is missing', async () => {

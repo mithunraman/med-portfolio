@@ -23,27 +23,36 @@ The bot turns spoken or typed clinical experiences into formal portfolio entries
 
 ### LangGraph — AI State Machine
 
-The core intelligence is a LangGraph state machine, not simple prompt chaining. It defines a directed graph of processing nodes:
+The core intelligence is a LangGraph state machine, not simple prompt chaining. It defines a directed graph of processing nodes.
+
+The entry type is **chosen by the trainee at artefact creation** and seeded into state at
+start, so there is nothing to classify — the graph opens straight into the elicitation loop.
 
 ```
 START
   → gather_context
-  → classify
-  → present_classification   [INTERRUPT — user picks entry type]
   → check_completeness
-    ├─ (missing sections) → ask_followup → gather_context  (loop, max 2 rounds)
-    └─ (complete) → tag_capabilities
+    ├─ (not a portfolio entry, first pass only) → reject_entry   [INTERRUPT — terminal] → END
+    ├─ (gaps remain) → generate_followup → ask_followup  [INTERRUPT] → gather_context  (loop)
+    └─ (rubric met / exhausted) → tag_capabilities
   → present_capabilities      [INTERRUPT — user confirms capabilities]
-  → reflect
-  → generate_pdp
-  → save
-  → END
+    ├─ (no capabilities confirmed) → END
+    └─ elicit_justification → reflect → refine → generate_pdp → save → END
 ```
 
 Key properties:
 
-- **3 interrupt points** where the graph pauses, writes a question message, and waits for the user's decision. When the user responds, the graph resumes from exactly that checkpoint.
-- **Looping** — follow-up questions loop back to `gather_context` to incorporate new information, up to 2 rounds.
+- **3 interrupt points** where the graph pauses and writes a message. Two are questions
+  (`ask_followup`, `present_capabilities`) and resume from exactly that checkpoint when the
+  user responds. The third, `reject_entry`, is **terminal** — it presents no answerable
+  question and the API refuses to resume it, so the run ends there and the trainee starts a
+  new conversation.
+- **Looping** — follow-up questions loop back to `gather_context` to incorporate new
+  information. The round cap is derived per run (`maxFollowupRounds` = askable probes ×
+  `ATTEMPT_LIMIT`), not a fixed number.
+- **Two paths produce no entry** — a first-pass irrelevance verdict (`reject_entry`) and a
+  run that confirms no capabilities. Both are enforced by the topology rather than by guards
+  in downstream nodes.
 - **Checkpoint persistence** — graph state is snapshotted to MongoDB after every node, so it survives crashes and can be inspected or replayed.
 
 ### MongoDB — Persistence & Checkpointing
@@ -52,20 +61,17 @@ Key properties:
 - Acts as the LangGraph checkpoint store — graph state snapshots are persisted per conversation.
 - Supports transactions for atomic multi-document operations (e.g. creating a message and queuing an analysis job together).
 
-### OpenAI GPT-4.1 — LLM Backbone
+### LLM Backbone
 
 - All LLM calls use **structured outputs** via Zod schemas — responses are type-safe by design, no parsing needed.
-- Different temperatures per task: 0.1 for classification (deterministic), 0.4 for reflection writing (creative).
-- Confidence scores are calibrated down for short transcripts or weak signals to counter LLM overconfidence.
+- The model per stage is **not fixed**: `LLM_VARIANT` selects a provider mix, resolved through
+  per-pool credentials and rate limits (`llm/llm-pools.ts`, `llm/model-variants.ts`).
+- Temperature is set per stage in `STAGE_POLICY` (`llm/llm-stage-policy.ts`) — broadly 0.1 for
+  extraction and grading, 0.3 for generative stages, 0 for `refine`.
 
-| Node              | Temperature | Purpose                           |
-| ----------------- | ----------- | --------------------------------- |
-| Classify          | 0.1         | Entry type (deterministic)        |
-| CheckCompleteness | 0.1         | Section coverage (deterministic)  |
-| AskFollowup       | 0.3         | Question generation (constrained) |
-| TagCapabilities   | 0.1         | Capability extraction             |
-| Reflect           | 0.4         | Reflection writing (creative)     |
-| GeneratePDP       | 0.2         | Goal generation                   |
+> The authoritative, source-verified stage → model / temperature / schema map is
+> [docs/llm/llm-pipeline-stages.md](llm/llm-pipeline-stages.md). It is deliberately not
+> duplicated here — the table that used to sit in this section drifted from the code.
 
 ### AssemblyAI — Audio Transcription
 
@@ -165,14 +171,19 @@ Build tool: **Turborepo** with **pnpm** workspaces.
 
 ## Data Flow (Happy Path)
 
-1. User sends a message → message created (`PENDING`).
-2. `ProcessingService` runs async → audio transcribed and cleaned → message `COMPLETE`.
-3. User taps "Continue Analysis" → `OutboxService` enqueues `analysis.start` job.
-4. `OutboxConsumer` picks up job → `PortfolioGraphService.startGraph()`.
-5. Graph runs → `classify` → `present_classification` (pauses, writes assistant message with options).
-6. Mobile polls → gets assistant message + `ConversationContext` with `activeQuestion`.
-7. User selects entry type → API calls `resumeGraph()` with the selection.
-8. Graph resumes → `check_completeness` → `ask_followup` (if missing sections) or `tag_capabilities`.
-9. Loop repeats for follow-ups, then capabilities confirmation.
-10. Graph continues → `reflect` → `generate_pdp` → `save`.
+1. User picks an **entry type** and `POST /artefacts` creates the artefact. The type is
+   validated against the specialty config here (`isValidEntryType`) and persisted as
+   `artefact.artefactType` — this is the only place it is ever set.
+2. User sends a message → message created (`PENDING`).
+3. `ProcessingService` runs async → audio transcribed and cleaned → message `COMPLETE`.
+4. User taps "Continue Analysis" → `OutboxService` enqueues `analysis.start` job.
+5. `OutboxConsumer` picks up job → `PortfolioGraphService.startGraph()`, seeding the stored
+   entry type into graph state.
+6. Graph runs → `gather_context` → `check_completeness` → `generate_followup` →
+   `ask_followup` (pauses, writes assistant message with free-text prompts).
+7. Mobile polls → gets assistant message + `ConversationContext` with `activeQuestion`.
+8. User answers → API calls `resumeGraph()` → loops back to `gather_context` until the rubric
+   is met, the probes are exhausted, or the round cap is hit.
+9. `tag_capabilities` → `present_capabilities` (pauses) → user confirms capabilities.
+10. Graph continues → `elicit_justification` → `reflect` → `refine` → `generate_pdp` → `save`.
 11. `AnalysisRun` → `COMPLETED` → mobile switches to "Entry ready for review".

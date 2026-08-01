@@ -27,6 +27,7 @@ async function insertArtefact(
       trainingStage: 'ST1',
       status: overrides.status ?? ArtefactStatus.IN_REVIEW,
       title: overrides.title ?? 'Test Artefact',
+      artefactType: 'CLINICAL_CASE_REVIEW',
     },
   ]);
   return doc;

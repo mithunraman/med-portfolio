@@ -72,19 +72,6 @@ export class AnalysisResumeHandler implements OutboxHandler {
             'ask_followup'
           );
           break;
-        case 'ask_clarification':
-          pausedNode = await this.portfolioGraphService.resumeGraph(
-            threadId,
-            'ask_clarification'
-          );
-          break;
-        case 'present_classification':
-          pausedNode = await this.portfolioGraphService.resumeGraph(
-            threadId,
-            'present_classification',
-            data.resumeValue as { entryType: string }
-          );
-          break;
         case 'present_capabilities':
           pausedNode = await this.portfolioGraphService.resumeGraph(
             threadId,
@@ -92,6 +79,21 @@ export class AnalysisResumeHandler implements OutboxHandler {
             data.resumeValue as { selectedCodes: string[] }
           );
           break;
+        case 'reject_entry':
+          // Terminal: pauses with an informational message and presents no answerable
+          // question. The API rejects resumes of terminal questions, so an enqueued
+          // payload naming this node means something bypassed that check.
+          throw new Error(`Cannot resume graph at terminal node "${data.node}"`);
+        default: {
+          // Exhaustiveness: `data.node` narrows to `never` only while every
+          // InterruptNode is handled above — adding one without wiring it here is a
+          // COMPILE error, not a 3am one. The throw still runs, because `data` is
+          // cast from an untyped outbox payload: a job enqueued by an older deploy
+          // can name a node that no longer exists, and falling through silently
+          // would complete the run without ever resuming it.
+          const unhandled: never = data.node;
+          throw new Error(`Unknown interrupt node "${String(unhandled)}"`);
+        }
       }
 
       if (pausedNode) {

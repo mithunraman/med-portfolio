@@ -2,15 +2,6 @@ import { type DraftStatus, type FollowupQuestion } from '@acme/shared';
 import { Annotation } from '@langchain/langgraph';
 
 /**
- * Classification alternative returned by the classify node.
- */
-export interface ClassificationAlternative {
-  entryType: string;
-  confidence: number;
-  reasoning: string;
-}
-
-/**
  * Capability tag extracted from the transcript.
  */
 export interface CapabilityTag {
@@ -108,12 +99,23 @@ export const DEFAULT_MAX_FOLLOWUP_ROUNDS = 8;
  * Reducers define how updates are merged (last-write-wins unless specified).
  */
 export const PortfolioState = Annotation.Root({
-  // ── Identity (set once at graph start, never updated) ──
+  // ── Identity (set once at graph start) ──
   conversationId: Annotation<string>,
   artefactId: Annotation<string>,
   userId: Annotation<string>,
   specialty: Annotation<string>,
   trainingStage: Annotation<string>({
+    reducer: (_, next) => next,
+    default: () => '',
+  }),
+  /**
+   * The trainee's entry type, chosen at artefact creation and validated there, so
+   * it arrives trusted and selects the template for the whole run.
+   *
+   * Seeded once at graph start and never written by any node — a run's entry type
+   * cannot change under it.
+   */
+  entryType: Annotation<string>({
     reducer: (_, next) => next,
     default: () => '',
   }),
@@ -125,41 +127,24 @@ export const PortfolioState = Annotation.Root({
     default: () => '',
   }),
 
-  // ── Classification ──
-  /** Whether the transcript content is relevant to medical portfolio entries. */
+  // ── Completeness ──
+  /**
+   * Whether the transcript is a portfolio entry at all — graded by
+   * check_completeness alongside the section rubric. Drives the reject_entry
+   * branch of completenessRouter, which only acts on it at round 0.
+   *
+   * Defaults to `true` (fail open): nothing may reject an entry except an
+   * explicit verdict from a successful grading call.
+   *
+   * `check_completeness` is the ONLY writer, and it only ever writes `false` —
+   * every other path leaves the channel alone and inherits the default. That is
+   * what makes relying on the default safe, so a second writer (or a `true` write
+   * that could mask a `false`) would invalidate the reasoning here.
+   */
   isRelevant: Annotation<boolean>({
     reducer: (_, next) => next,
     default: () => true,
   }),
-  entryType: Annotation<string | null>({
-    reducer: (_, next) => next,
-    default: () => null,
-  }),
-  classificationConfidence: Annotation<number>({
-    reducer: (_, next) => next,
-    default: () => 0,
-  }),
-  classificationReasoning: Annotation<string>({
-    reducer: (_, next) => next,
-    default: () => '',
-  }),
-  alternatives: Annotation<ClassificationAlternative[]>({
-    reducer: (_, next) => next,
-    default: () => [],
-  }),
-  /** True once the user has confirmed the entry type. Drives gatherContextRouter. */
-  classificationConfirmed: Annotation<boolean>({
-    reducer: (_, next) => next,
-    default: () => false,
-  }),
-
-  /** Number of low-confidence clarification rounds completed. Drives classifyRouter. */
-  clarificationRound: Annotation<number>({
-    reducer: (_, next) => next,
-    default: () => 0,
-  }),
-
-  // ── Completeness ──
   missingSections: Annotation<string[]>({
     reducer: (_, next) => next,
     default: () => [],

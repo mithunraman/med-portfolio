@@ -80,6 +80,7 @@ export class ArtefactsRepository implements IArtefactsRepository {
               trainingStage: data.trainingStage,
               status: ArtefactStatus.IN_CONVERSATION,
               title: data.title,
+              artefactType: data.artefactType,
             },
           },
           { upsert: true, new: true, session }

@@ -1,4 +1,11 @@
-import { CoverageRing, HomeSkeleton, SectionHeader, StatusPill, WelcomeModule } from '@/components';
+import {
+  CoverageRing,
+  EntryTypePickerSheet,
+  HomeSkeleton,
+  SectionHeader,
+  StatusPill,
+  WelcomeModule,
+} from '@/components';
 import { GuestDataBanner } from '@/components/GuestDataBanner';
 import { GuestLimitBanner } from '@/components/GuestLimitBanner';
 import { NoticeBanner } from '@/components/NoticeBanner';
@@ -486,11 +493,22 @@ export default function HomeScreen() {
 
   const { canCreate, guard } = useCanCreateArtefact();
 
+  // The entry type is chosen before the conversation opens: it fixes the template
+  // for the whole run, and the artefact cannot be created without it.
+  const [pickerVisible, setPickerVisible] = useState(false);
+
   const handleStartNew = useCallback(() => {
     if (!guard()) return;
-    const newConversationId = randomUUID();
-    router.push(`/(messages)/${newConversationId}?isNew=true`);
-  }, [guard, router]);
+    setPickerVisible(true);
+  }, [guard]);
+
+  const handleEntryTypeSelected = useCallback(
+    (entryType: string) => {
+      const newConversationId = randomUUID();
+      router.push(`/(messages)/${newConversationId}?isNew=true&entryType=${entryType}`);
+    },
+    [router]
+  );
 
   const handleEntryPress = useCallback(
     (item: Artefact) => {
@@ -609,6 +627,12 @@ export default function HomeScreen() {
           </>
         )}
       </ScrollView>
+
+      <EntryTypePickerSheet
+        visible={pickerVisible}
+        onSelect={handleEntryTypeSelected}
+        onDismiss={() => setPickerVisible(false)}
+      />
     </View>
   );
 }

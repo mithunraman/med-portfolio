@@ -38,9 +38,8 @@ export function deriveCompleteness(state: PortfolioStateType): Completeness {
   return { complete: state.hasEnoughInfo, unmetSections };
 }
 
-/** Map probe id → label from the entry's template (empty if no entry type yet). */
+/** Map probe id → label from the entry's template. */
 function buildProbeLabelMap(state: PortfolioStateType): Map<string, string> {
-  if (!state.entryType) return new Map();
   const config = getSpecialtyConfig(Number(state.specialty) as Specialty);
   const template = getTemplateForEntryType(config, state.entryType);
   return new Map(leafProbes(template).map((p) => [p.id, p.label]));

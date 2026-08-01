@@ -13,7 +13,6 @@ export { default as uiReducer } from './uiSlice';
 
 // ── Artefacts ──
 export {
-  createArtefact,
   deleteArtefact,
   fetchArtefact,
   fetchArtefacts,

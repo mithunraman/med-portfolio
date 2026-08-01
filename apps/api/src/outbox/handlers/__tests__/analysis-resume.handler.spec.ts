@@ -17,8 +17,8 @@ function makePayload(overrides: Partial<AnalysisResumePayload> = {}): Record<str
   return {
     analysisRunId: oid().toString(),
     conversationId: oid().toString(),
-    node: 'present_classification',
-    resumeValue: { entryType: 'CLINICAL_ENCOUNTER' },
+    node: 'present_capabilities',
+    resumeValue: { selectedCodes: ['C-01'] },
     langGraphThreadId: 'conv:1',
     ...overrides,
   };
@@ -306,12 +306,14 @@ describe('AnalysisResumeHandler', () => {
       await handler.handle(payload);
 
       // resumeGraph uses threadId
-      expect(resumeGraph).toHaveBeenCalledWith('conv-456:3', 'present_classification', { entryType: 'CLINICAL_ENCOUNTER' });
+      expect(resumeGraph).toHaveBeenCalledWith('conv-456:3', 'present_capabilities', {
+        selectedCodes: ['C-01'],
+      });
       // getFinalState uses threadId
       expect(getFinalState).toHaveBeenCalledWith('conv-456:3');
     });
 
-    it('should resume ask_clarification with no resume value', async () => {
+    it('should resume ask_followup with no resume value', async () => {
       const resumeGraph = jest.fn().mockResolvedValue(null);
 
       const { handler } = createHandler({
@@ -322,10 +324,36 @@ describe('AnalysisResumeHandler', () => {
         deleteByArtefactId: jest.fn().mockResolvedValue({ ok: true, value: 0 }),
       });
 
-      const payload = makePayload({ node: 'ask_clarification', resumeValue: undefined, langGraphThreadId: 'conv-456:3' });
+      const payload = makePayload({
+        node: 'ask_followup',
+        resumeValue: undefined,
+        langGraphThreadId: 'conv-456:3',
+      });
       await handler.handle(payload);
 
-      expect(resumeGraph).toHaveBeenCalledWith('conv-456:3', 'ask_clarification');
+      expect(resumeGraph).toHaveBeenCalledWith('conv-456:3', 'ask_followup');
+    });
+
+    it('should refuse to resume a terminal node', async () => {
+      const resumeGraph = jest.fn();
+
+      const { handler } = createHandler({
+        resumeGraph,
+        transitionStatus: jest.fn().mockResolvedValue({}),
+        withTransaction: jest.fn((fn) => fn({})),
+        updateArtefactById: jest.fn().mockResolvedValue({ ok: true, value: {} }),
+        deleteByArtefactId: jest.fn().mockResolvedValue({ ok: true, value: 0 }),
+      });
+
+      // reject_entry pauses the graph but presents no answerable question. It is a
+      // TerminalNode, so `resumeGraph` cannot even be called with it (compile
+      // error); this covers the runtime half — an enqueued payload naming it means
+      // something bypassed the API's terminal check, and that must fail loudly
+      // rather than silently no-op the run into a stuck state.
+      const payload = makePayload({ node: 'reject_entry', resumeValue: undefined });
+
+      await expect(handler.handle(payload)).rejects.toThrow(/terminal node/);
+      expect(resumeGraph).not.toHaveBeenCalled();
     });
   });
 });

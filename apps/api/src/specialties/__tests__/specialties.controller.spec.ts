@@ -57,8 +57,20 @@ describe('SpecialtiesController', () => {
       for (const specialty of result.specialties) {
         const raw = specialty as Record<string, unknown>;
         expect(raw['templates']).toBeUndefined();
-        expect(raw['entryTypes']).toBeUndefined();
         expect(raw['capabilities']).toBeUndefined();
+      }
+    });
+
+    it('should expose entry types as code/label/description only', () => {
+      // The entry-type picker needs these, but this response is public and cached
+      // for an hour — templateId is a config internal and must not ride along.
+      const result = controller.getSpecialties();
+
+      for (const specialty of result.specialties) {
+        expect(specialty.entryTypes.length).toBeGreaterThan(0);
+        for (const entryType of specialty.entryTypes) {
+          expect(Object.keys(entryType).sort()).toEqual(['code', 'description', 'label']);
+        }
       }
     });
   });

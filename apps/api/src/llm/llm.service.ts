@@ -142,11 +142,12 @@ function reasoningHeadroom(thinkMode?: ThinkMode): number {
     // stages' existing budgets (see the gptOss helper in model-variants.ts).
     //
     // Caveat on that evidence: it is ONE measurement on ONE prompt, generalised to
-    // nine stages — and the tightest budget is classify's 800, not the 1000 measured,
-    // while reflect/refine size theirs off transcript length. There is currently no
-    // `finish_reason === 'length'` check anywhere in this service, so a truncation
-    // would surface only as a node degrading (e.g. classify → confidence 0), not as
-    // an error. Add that detection before tuning this number: raising the cap is
+    // eight stages — and the tightest budgets are generate_followup's and refine's
+    // 1000, while reflect/refine size theirs off transcript length. There is
+    // currently no `finish_reason === 'length'` check anywhere in this service, so a
+    // truncation would surface only as a node degrading (e.g. check_completeness
+    // returning no grades), not as an error. Add that detection before tuning this
+    // number: raising the cap is
     // nearly free (providers bill actual usage, not the reservation), so the reason
     // to hold at 0 is the absence of evidence, not cost.
     case 'low':

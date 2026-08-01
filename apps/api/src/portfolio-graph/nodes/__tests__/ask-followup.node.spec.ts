@@ -33,12 +33,7 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
 
     isRelevant: true,
     entryType: 'CLINICAL_CASE_REVIEW',
-    classificationConfidence: 0.9,
-    classificationReasoning: '',
 
-    alternatives: [],
-    classificationConfirmed: true,
-    clarificationRound: 0,
     missingSections: ['reflection', 'outcome'],
     hasEnoughInfo: false,
     followUpRound: 1,

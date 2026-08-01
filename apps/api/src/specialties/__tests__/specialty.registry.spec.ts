@@ -3,6 +3,7 @@ import {
   getAllRegisteredConfigs,
   getAllSpecialtyOptions,
   getSpecialtyConfig,
+  isValidEntryType,
   isValidTrainingStage,
 } from '../specialty.registry';
 
@@ -59,14 +60,54 @@ describe('SpecialtyRegistry', () => {
       }
     });
 
-    it('should not expose templates or entry type details', () => {
+    it('should not expose templates or capabilities', () => {
       const options = getAllSpecialtyOptions();
 
       for (const option of options) {
         expect(option).not.toHaveProperty('templates');
-        expect(option).not.toHaveProperty('entryTypes');
         expect(option).not.toHaveProperty('capabilities');
       }
+    });
+
+    it('should project entry types down to code/label/description', () => {
+      // The picker needs the list, but templateId is a config internal and must
+      // never leave the server.
+      const options = getAllSpecialtyOptions();
+
+      for (const option of options) {
+        expect(option.entryTypes.length).toBeGreaterThan(0);
+        for (const entryType of option.entryTypes) {
+          expect(Object.keys(entryType).sort()).toEqual(['code', 'description', 'label']);
+        }
+      }
+    });
+  });
+
+  describe('isValidEntryType', () => {
+    it('should accept every entry type the picker is offered', () => {
+      // The options endpoint and the creation gate must agree, or the client can
+      // present a choice the API then rejects. Driven off the same builder the
+      // controller returns — asserting against the raw config instead would test
+      // config-vs-gate and miss any divergence introduced by the projection.
+      const options = getAllSpecialtyOptions();
+      expect(options.length).toBeGreaterThan(0);
+
+      for (const specialty of options) {
+        expect(specialty.entryTypes.length).toBeGreaterThan(0);
+        for (const entryType of specialty.entryTypes) {
+          expect(isValidEntryType(specialty.specialty, entryType.code)).toBe(true);
+        }
+      }
+    });
+
+    it('should reject unknown entry type codes', () => {
+      expect(isValidEntryType(Specialty.GP, 'NOT_A_REAL_TYPE')).toBe(false);
+      expect(isValidEntryType(Specialty.GP, '')).toBe(false);
+    });
+
+    it('should reject all entry types for inactive specialties', () => {
+      expect(isValidEntryType(Specialty.PSYCHIATRY, 'CLINICAL_CASE_REVIEW')).toBe(false);
+      expect(isValidEntryType(Specialty.INTERNAL_MEDICINE, 'CLINICAL_CASE_REVIEW')).toBe(false);
     });
   });
 
@@ -116,7 +157,7 @@ describe('SpecialtyRegistry', () => {
     it.each(allConfigs.map((c) => [c.name, c] as const))(
       '%s: template probe weights should sum to approximately 1.0',
       (_name, config) => {
-        for (const [_, template] of Object.entries(config.templates)) {
+        for (const template of Object.values(config.templates)) {
           const totalWeight = leafProbes(template).reduce((sum, p) => sum + p.weight, 0);
           expect(totalWeight).toBeCloseTo(1.0, 1);
         }

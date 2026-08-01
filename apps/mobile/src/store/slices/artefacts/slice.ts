@@ -11,7 +11,6 @@ import type { RootState } from '../../index';
 import { deleteConversation } from '../conversations/thunks';
 import { fetchInit } from '../dashboard/thunks';
 import {
-  createArtefact,
   deleteArtefact,
   duplicateToReview,
   editArtefact,
@@ -40,7 +39,6 @@ export type { FilterView };
 export type EntityStatus = 'loading' | 'updating' | 'saving';
 
 export interface ArtefactsState {
-  creatingArtefact: boolean;
   statusById: Record<string, EntityStatus>;
   error: TypedError | null;
   stale: boolean;
@@ -79,7 +77,6 @@ const artefactsAdapter = createEntityAdapter<Artefact>({
 const artefactsSlice = createSlice({
   name: 'artefacts',
   initialState: artefactsAdapter.getInitialState<ArtefactsState>({
-    creatingArtefact: false,
     statusById: {},
     error: null,
     stale: false,
@@ -98,22 +95,6 @@ const artefactsSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // createArtefact
-      .addCase(createArtefact.pending, (state) => {
-        state.creatingArtefact = true;
-        state.error = null;
-      })
-      .addCase(createArtefact.fulfilled, (state, action) => {
-        state.creatingArtefact = false;
-        artefactsAdapter.upsertOne(state, action.payload);
-        invalidateView(state, viewKey(ArtefactStatus.IN_CONVERSATION));
-        invalidateView(state, viewKey(null));
-      })
-      .addCase(createArtefact.rejected, (state, action) => {
-        state.creatingArtefact = false;
-        state.error = (action.payload as TypedError) ?? null;
-      })
-
       // fetchArtefacts
       .addCase(fetchArtefacts.pending, (state, action) => {
         const key = viewKey(action.meta.arg?.status);

@@ -21,38 +21,10 @@ const artefactsLogger = logger.createScope('ArtefactsThunks');
 // Thunks
 // ---------------------------------------------------------------------------
 
-/**
- * Create a new artefact with its associated conversation.
- */
+/** Guest hit the artefact cap — surfaced by the API as a structured quota error. */
 function isGuestArtefactLimitError(error: unknown): error is ApiError {
   return error instanceof ApiError && error.code === QuotaErrorCode.GUEST_ARTEFACT_LIMIT_REACHED;
 }
-
-export const createArtefact = createAsyncThunk(
-  'artefacts/createArtefact',
-  async (params: { artefactId: string }, { dispatch, rejectWithValue }) => {
-    artefactsLogger.info('Creating artefact', { artefactId: params.artefactId });
-
-    try {
-      const response = await api.artefacts.createArtefact({
-        artefactId: params.artefactId,
-      });
-      artefactsLogger.info('Artefact created', {
-        artefactId: response.artefactId,
-        conversationId: response.conversation.id,
-      });
-      return response;
-    } catch (error) {
-      if (isGuestArtefactLimitError(error)) {
-        artefactsLogger.info('Guest artefact limit reached', { source: 'create' });
-        dispatch(markGuestArtefactLimitReached());
-      } else {
-        artefactsLogger.error('Failed to create artefact', { error });
-      }
-      return rejectWithValue(classifyError(error));
-    }
-  }
-);
 
 /**
  * Fetch artefacts list with optional status filter and cursor-based pagination.

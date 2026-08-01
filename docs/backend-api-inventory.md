@@ -209,30 +209,32 @@ Invoked via outbox `message.process` handler.
 
 ---
 
-### Module: `portfolio-graph` (largest — 42 files)
+### Module: `portfolio-graph` (largest — 45 files)
 
-**Purpose:** LangGraph-based AI analysis state machine that classifies a portfolio entry, checks completeness, asks follow-ups, tags capabilities, and composes a reflective document + PDP goals.
+**Purpose:** LangGraph-based AI analysis state machine that assesses a portfolio entry against its template, asks follow-ups, tags capabilities, and composes a reflective document + PDP goals. It does **not** classify: the entry type is chosen by the trainee at artefact creation and seeded into state at start.
 
-**Graph structure:** `buildPortfolioGraph` ([portfolio-graph.builder.ts](../apps/api/src/portfolio-graph/portfolio-graph.builder.ts)) defines a 14-node `StateGraph`. Checkpointed in MongoDB via `MongoDBSaver` (`checkpoints`, `checkpoint_writes`). Thread id = `${conversationId}:${runNumber}`.
+**Graph structure:** `buildPortfolioGraph` ([portfolio-graph.builder.ts](../apps/api/src/portfolio-graph/portfolio-graph.builder.ts)) defines a 12-node `StateGraph`. Checkpointed in MongoDB via `MongoDBSaver` (`checkpoints`, `checkpoint_writes`). Thread id = `${conversationId}:${runNumber}`.
 
-**Flow:** START → gather_context → classify → **present_classification** (interrupt) → check_completeness → {generate_followup → **ask_followup** (interrupt) → loop} OR tag_capabilities → **present_capabilities** (interrupt) → elicit_justification → reflect → refine → generate_pdp → save → END. Fourth interrupt: **ask_clarification** (low-confidence/irrelevant).
+**Flow:** START → gather_context → check_completeness → {generate_followup → **ask_followup** (interrupt) → loop back to gather_context} OR tag_capabilities → **present_capabilities** (interrupt) → elicit_justification → reflect → refine → generate_pdp → save → END.
+
+**Three interrupts, two of them resumable.** `ask_followup` and `present_capabilities` resume with typed values. `reject_entry` is **terminal** — reached only from `check_completeness` on the first pass (`followUpRound === 0`) when the transcript is graded not a portfolio entry; it presents no answerable question and the API refuses to resume it. A run that confirms **no capabilities** also produces no entry: `capabilitiesRouter` routes it to `END` rather than into the compose chain.
 
 **Core files:**
 
 | File | Symbol | Purpose |
 | ---- | ------ | ------- |
 | [portfolio-graph.service.ts](../apps/api/src/portfolio-graph/portfolio-graph.service.ts) | `PortfolioGraphService` | `startGraph`, `resumeGraph<N>`, `getPausedNode`, `getInterruptPayload`, `getFinalState`; manages checkpointer |
-| [portfolio-graph.builder.ts](../apps/api/src/portfolio-graph/portfolio-graph.builder.ts) | `buildPortfolioGraph` + routers, `MAX_FOLLOWUP_ROUNDS`, `CONFIDENCE_THRESHOLD`, `MAX_CLARIFICATION_ROUNDS` | Graph topology |
-| [portfolio-graph.state.ts](../apps/api/src/portfolio-graph/portfolio-graph.state.ts) | `PortfolioState` (Annotation.Root) | Identity, content, classification, completeness, readiness, capabilities, reflection state |
+| [portfolio-graph.builder.ts](../apps/api/src/portfolio-graph/portfolio-graph.builder.ts) | `buildPortfolioGraph`, `completenessRouter`, `capabilitiesRouter` | Graph topology |
+| [portfolio-graph.state.ts](../apps/api/src/portfolio-graph/portfolio-graph.state.ts) | `PortfolioState` (Annotation.Root), `DEFAULT_MAX_FOLLOWUP_ROUNDS` | Identity, content, relevance, completeness, readiness, capabilities, reflection state. The round cap is per-run (askable probes × `ATTEMPT_LIMIT`), set by `check_completeness` |
 | [graph-deps.ts](../apps/api/src/portfolio-graph/graph-deps.ts) | `GraphDeps`, `ANALYSIS_STEP_STARTED` | DI object + node-progress event |
 | [completeness.ts](../apps/api/src/portfolio-graph/completeness.ts) | `deriveCompleteness` | Pure: state → Completeness |
 | [readiness-snapshot.ts](../apps/api/src/portfolio-graph/readiness-snapshot.ts) | `buildReadinessSnapshot` | Pure: state → Entry-Card snapshot |
 
-**Nodes** ([nodes/](../apps/api/src/portfolio-graph/nodes/)) — factory pattern (`createXxxNode`): gather-context, classify, present-classification, ask-clarification, check-completeness, generate-followup, ask-followup, tag-capabilities, present-capabilities, elicit-justification, reflect, refine, generate-pdp, save.
+**Nodes** ([nodes/](../apps/api/src/portfolio-graph/nodes/)) — factory pattern (`createXxxNode`): gather-context, check-completeness, reject-entry, generate-followup, ask-followup, tag-capabilities, present-capabilities, elicit-justification, reflect, refine, generate-pdp, save.
 
 **Node utilities:** [capability-grading.util.ts](../apps/api/src/portfolio-graph/nodes/capability-grading.util.ts) (tier vocab + quote matching), [text-tokens.util.ts](../apps/api/src/portfolio-graph/nodes/text-tokens.util.ts) (tokenisation), [compose-verify.util.ts](../apps/api/src/portfolio-graph/nodes/compose-verify.util.ts) (fabrication tripwire on novel numbers/words).
 
-**Tests:** ~21 specs (routers, completeness, + 18 node specs incl. schema-field-order, compose-verify, capability-grading).
+**Tests:** 17 specs (3 graph-level: routers, completeness, elicitation; 14 node specs incl. schema-field-order, compose-verify, capability-grading).
 
 **Dependencies:** Imports Artefacts, Conversations, Database, LLM, PdpGoals (forwardRef). Nodes emit `ANALYSIS_STEP_STARTED`; invoked by outbox `AnalysisStartHandler`/`AnalysisResumeHandler`.
 

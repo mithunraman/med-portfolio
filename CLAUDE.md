@@ -67,7 +67,17 @@ NestJS with MongoDB (Mongoose). All routes prefixed with `/api`. Global guards: 
 
 **Key modules:** auth (JWT/Passport), artefacts, conversations, portfolio-graph, items, media, storage (S3/R2), llm, processing, dashboard, review-periods, pdp-goals, outbox, analysis-runs.
 
-**LangGraph integration** (`portfolio-graph/`): State machine for AI-driven portfolio analysis with MongoDB-checkpointed graph. Three interrupt points: `present_classification`, `ask_followup`, `present_capabilities` — each resumed with typed values. Node implementations in `portfolio-graph/nodes/`.
+**LangGraph integration** (`portfolio-graph/`): State machine for AI-driven portfolio analysis with MongoDB-checkpointed graph. Three interrupt points: `ask_followup` and `present_capabilities` (each resumed with typed values), plus the terminal `reject_entry` (never resumed — the API refuses to resume terminal questions). Node implementations in `portfolio-graph/nodes/`.
+
+The entry type is **chosen by the trainee at artefact creation**, not inferred — `POST /artefacts` requires `entryType`, validates it against the specialty config (`isValidEntryType`), persists it as `artefact.artefactType`, and it is seeded into graph state at start. There is no classification node. `entryType` is immutable for a run: no node writes it, and `artefactType` is absent from `UpdateArtefactData`, so nothing can write it back from graph state after creation — the trainee's choice is the artefact's identity, and that is enforced by the type rather than by convention.
+
+A run that confirms no capabilities produces no entry. `present_capabilities` interrupts with a terminal message (unresumable, so the run parks there), and `capabilitiesRouter` routes a zero-capability run to `END` rather than into the compose chain. That edge — not a sentinel value or per-node guards — is what makes the bail-out skip cleanly.
+
+Because the trainee now picks the type, they can pick the wrong one; the mitigation, if it ever proves necessary, is a soft "this reads more like a CCR" nudge rather than restoring a classifier. The per-entry-type signal phrases that primed the old classifier were deleted along with it — recover them with `git log -S classificationSignals -- apps/api/src/specialties` if that feature lands.
+
+Relevance and prompt-injection screening lives in `check_completeness` (a leading `isRelevant` field on its schema), not in a separate node. The verdict is acted on **only at follow-up round 0** — both in the node and in `completenessRouter` (→ `reject_entry`); later rounds ignore it so one noisy verdict can't kill a journey mid-flight. It fails open: a failed grading call returns `isRelevant: true`.
+
+Separately, `check_completeness` bails on a **globally empty partition after round 0** (`assignments.length === 0`), returning no state update. This is load-bearing: grading an empty partition floors every probe to `missing`, and `ratchetTiers` deliberately honours `missing` as a structural re-partition rather than noise — so it would also overwrite `bestTierByProbe` and wipe the record of everything the trainee had already cleared. The guard is scoped to rounds > 0 because at round 0 that same `missing` floor is exactly what puts every section into the elicitation loop.
 
 **LLM service** (`llm/`): OpenAI structured outputs via `invokeStructured<T>()` with Zod schemas. AssemblyAI for audio transcription with UK-compliant PII redaction.
 

@@ -53,6 +53,7 @@ export async function createTestArtefact(
     status: ArtefactStatus;
     title: string;
     trainingStage: string;
+    artefactType: string;
   }> = {}
 ): Promise<ArtefactDocument> {
   const userId = overrides.userId ?? TEST_USER_ID;
@@ -66,6 +67,8 @@ export async function createTestArtefact(
       trainingStage: overrides.trainingStage ?? 'ST1',
       status: overrides.status ?? ArtefactStatus.IN_CONVERSATION,
       title: overrides.title ?? 'Test Artefact',
+      // Chosen by the trainee at creation; drives the template for the whole run.
+      artefactType: overrides.artefactType ?? 'CLINICAL_CASE_REVIEW',
     },
   ]);
   return doc;

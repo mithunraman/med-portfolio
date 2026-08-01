@@ -87,9 +87,12 @@ function generateLocalId(): string {
 }
 
 export default function ChatScreen() {
-  const { conversationId, isNew } = useLocalSearchParams<{
+  const { conversationId, isNew, entryType } = useLocalSearchParams<{
     conversationId: string;
     isNew?: string;
+    /** Chosen in the entry-type picker before this screen opened; required to
+     * create the artefact on first send. */
+    entryType?: string;
   }>();
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -257,6 +260,25 @@ export default function ChatScreen() {
     }
   }, [isPendingConversation, canCreate, router]);
 
+  // The artefact this conversation is waiting on, or undefined if it already exists.
+  // Built once here so the send handlers just pass it through.
+  const pendingArtefact = useMemo(
+    () =>
+      isPendingConversation && entryType ? { artefactId: conversationId, entryType } : undefined,
+    [isPendingConversation, entryType, conversationId]
+  );
+
+  // Same shape of guard as the quota bounce above, for the other way a route can be
+  // malformed: `?isNew=true` with no entryType (deep link, stale back-stack). Without
+  // this the screen would look usable, then POST the first message to a conversation
+  // id the server has never seen. Bounce before the trainee types anything.
+  useEffect(() => {
+    if (isPendingConversation && !entryType) {
+      chatLogger.error('New conversation opened without an entry type', { conversationId });
+      router.replace('/(tabs)');
+    }
+  }, [isPendingConversation, entryType, conversationId, router]);
+
   // Fetch messages for existing conversations (not newly created ones)
   useEffect(() => {
     if (conversationId && isNew !== 'true') {
@@ -357,8 +379,7 @@ export default function ChatScreen() {
           idempotencyKey: generateIdempotencyKey(),
           recordingUri: recording.uri,
           recordingMime: recording.mime,
-          isNewConversation: isPendingConversation,
-          artefactId: isPendingConversation ? conversationId : undefined,
+          pendingArtefact,
         })
       );
 
@@ -366,13 +387,7 @@ export default function ChatScreen() {
         applyNewConversationIds(result.payload);
       }
     },
-    [
-      conversationId,
-      effectiveConversationId,
-      isPendingConversation,
-      dispatch,
-      applyNewConversationIds,
-    ]
+    [conversationId, effectiveConversationId, pendingArtefact, dispatch, applyNewConversationIds]
   );
 
   const handleSend = useCallback(
@@ -385,8 +400,7 @@ export default function ChatScreen() {
           content: text.trim(),
           localId: generateLocalId(),
           idempotencyKey: generateIdempotencyKey(),
-          isNewConversation: isPendingConversation,
-          artefactId: isPendingConversation ? conversationId : undefined,
+          pendingArtefact,
         })
       );
 
@@ -394,13 +408,7 @@ export default function ChatScreen() {
         applyNewConversationIds(result.payload);
       }
     },
-    [
-      conversationId,
-      effectiveConversationId,
-      isPendingConversation,
-      dispatch,
-      applyNewConversationIds,
-    ]
+    [conversationId, effectiveConversationId, pendingArtefact, dispatch, applyNewConversationIds]
   );
 
   const handleRetry = useCallback(
@@ -414,8 +422,7 @@ export default function ChatScreen() {
           conversationId: opt.conversationId,
           content: opt.content,
           idempotencyKey: opt.idempotencyKey,
-          isNewConversation: opt.isNewConversation,
-          artefactId: opt.artefactId,
+          pendingArtefact: opt.pendingArtefact,
         })
       );
 

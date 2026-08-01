@@ -3,7 +3,6 @@ import {
   ArtefactStatus,
   MessageRole,
   type MultiSelectQuestion,
-  type SingleSelectQuestion,
 } from '@acme/shared';
 import { Types } from 'mongoose';
 import {
@@ -17,7 +16,6 @@ import {
 } from './helpers/factories';
 import {
   allCoveredResponse,
-  classifyResponse,
   refineResponse,
   elicitJustificationResponse,
   generatePdpResponse,
@@ -123,16 +121,16 @@ describe('ARCP Readiness Engine — Integration', () => {
   /**
    * Full new-flow traversal to ARCP-ready, including the new nodes:
    *
-   *   start → classify → present_classification ⏸️
-   *     → (resume) → check_completeness(all rich/adequate → cleared)
+   *   start → check_completeness(all rich/adequate → cleared)
    *     → tag_capabilities → present_capabilities ⏸️
    *     → (resume, select C-06) → elicit_justification → reflect → refine → generate_pdp
    *     → save → END
    *
-   * present_capabilities is the final interrupt — once resumed, the graph runs
-   * straight to completion (no sign-off gate).
+   * The entry type is chosen at artefact creation, so present_capabilities is the
+   * only interrupt on this path — once resumed, the graph runs straight to
+   * completion (no sign-off gate).
    *
-   * LLM call sequence (7): classify, completeness, tag, justification, reflect, refine, pdp.
+   * LLM call sequence (6): completeness, tag, justification, reflect, refine, pdp.
    */
   it('drives the entry to ARCP-ready and persists draftStatus, composedDocument, and justifications', async () => {
     const conv = await createTestConversation();
@@ -143,11 +141,10 @@ describe('ARCP Readiness Engine — Integration', () => {
         'I started metformin and discussed lifestyle changes. We agreed a follow-up plan.'
     );
 
-    llmMock.enqueue(classifyResponse()); // 0: classify
-    llmMock.enqueue(allCoveredResponse()); // 1: check_completeness (rubric clears)
-    llmMock.enqueue(tagCapabilitiesResponse()); // 2: tag_capabilities (C-06, C-08)
+    llmMock.enqueue(allCoveredResponse()); // 0: check_completeness (rubric clears)
+    llmMock.enqueue(tagCapabilitiesResponse()); // 1: tag_capabilities (C-06, C-08)
     llmMock.enqueue(
-      // 3: elicit_justification (for the selected C-06)
+      // 2: elicit_justification (for the selected C-06)
       elicitJustificationResponse([
         {
           code: 'C-06',
@@ -157,34 +154,15 @@ describe('ARCP Readiness Engine — Integration', () => {
         },
       ])
     );
-    llmMock.enqueue(reflectResponse()); // 4: reflect
-    llmMock.enqueue(refineResponse()); // 5: refine (no-op → keeps reflect text)
-    llmMock.enqueue(generatePdpResponse()); // 6: generate_pdp
+    llmMock.enqueue(reflectResponse()); // 3: reflect
+    llmMock.enqueue(refineResponse()); // 4: refine (no-op → keeps reflect text)
+    llmMock.enqueue(generatePdpResponse()); // 5: generate_pdp
 
-    // ── Step 1: Start → classify → present_classification ──
+    // ── Step 1: Start → completeness clears → present_capabilities ──
     await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-    const status1 = await waitForRunStable(harness, conv._id);
-    expect(status1).toEqual({ status: 'awaiting_input', node: 'present_classification' });
-
-    const msgs1 = await getMessagesForConversation(conv._id);
-    const classificationMsg = msgs1.find(
-      (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
-    );
-    assertDefined(classificationMsg);
-    // The full entry-type list is presented (Phase 0), not just the classifier's guesses.
-    const classOptions = (classificationMsg.question as SingleSelectQuestion).options;
-    expect(classOptions.length).toBeGreaterThan(2);
-    expect(classOptions.map((o) => o.key)).toContain('CLINICAL_CASE_REVIEW');
-
-    // ── Step 2: Resume classification → completeness clears → present_capabilities ──
-    await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-      type: 'resume',
-      messageId: classificationMsg.xid,
-      value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
-    });
-    const status2 = await waitForRunStable(harness, conv._id, true);
+    const status2 = await waitForRunStable(harness, conv._id);
     expect(status2).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
-    expect(llmMock.callCount).toBe(3); // classify + completeness + tag (no follow-up loop)
+    expect(llmMock.callCount).toBe(2); // completeness + tag (no follow-up loop)
 
     const msgs2 = await getMessagesForConversation(conv._id);
     const capabilityMsg = msgs2.find(
@@ -208,7 +186,7 @@ describe('ARCP Readiness Engine — Integration', () => {
     });
     const finalStatus = await waitForRunStable(harness, conv._id, true);
     expect(finalStatus).toEqual({ status: 'completed' });
-    expect(llmMock.callCount).toBe(7); // + justification + reflect + refine + pdp
+    expect(llmMock.callCount).toBe(6); // + justification + reflect + refine + pdp
     llmMock.assertAllConsumed();
 
     // ── Final assertions: the persisted artefact carries the new fields ──

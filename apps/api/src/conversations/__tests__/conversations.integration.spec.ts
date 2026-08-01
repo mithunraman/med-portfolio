@@ -6,7 +6,6 @@ import {
   MessageType,
   type FreeTextQuestion,
   type MultiSelectQuestion,
-  type SingleSelectQuestion,
 } from '@acme/shared';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Types } from 'mongoose';
@@ -24,7 +23,7 @@ import {
 } from './helpers/factories';
 import {
   allCoveredResponse,
-  classifyResponse,
+  completenessResponse,
   refineResponse,
   elicitJustificationResponse,
   followupQuestionsResponse,
@@ -173,44 +172,45 @@ describe('Conversations Integration Tests', () => {
     /**
      * A1. Complete graph traversal including the follow-up loop.
      *
-     * Path: start → gather_context → classify → present_classification ⏸️
-     *       → (resume) → check_completeness(missing) → ask_followup ⏸️
+     * The entry type is chosen at artefact creation, so the graph opens straight
+     * into the elicitation loop — there is no classification interrupt.
+     *
+     * Path: start → gather_context → check_completeness(missing) → ask_followup ⏸️
      *       → (user answers + resume) → gather_context → check_completeness(covered)
      *       → tag_capabilities → present_capabilities ⏸️
-     *       → (resume with subset) → reflect → refine → generate_pdp → save → END
+     *       → (resume with subset) → elicit_justification → reflect → refine
+     *       → generate_pdp → save → END
      *
-     * LLM call sequence (9 calls):
-     *   0: classify
-     *   1: check_completeness (missing reflection)
-     *   2: ask_followup (initial)
-     *   3: ask_followup (replay on resume — LangGraph re-executes the node)
-     *   4: check_completeness (all covered)
-     *   5: tag_capabilities
-     *   6: reflect
-     *   7: refine
-     *   8: generate_pdp
+     * LLM call sequence (8 calls):
+     *   0: check_completeness (missing reflection)
+     *   1: generate_followup
+     *   2: check_completeness (all covered)
+     *   3: tag_capabilities
+     *   4: elicit_justification
+     *   5: reflect
+     *   6: refine
+     *   7: generate_pdp
      */
-    it('A1. Full pipeline — classify → follow-up loop → capabilities → reflect → PDP → save', async () => {
+    it('A1. Full pipeline — follow-up loop → capabilities → reflect → PDP → save', async () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(
         conv._id,
         'I saw a 55-year-old patient with poorly controlled type 2 diabetes. HbA1c was 72.'
       );
 
-      // ── Enqueue all 7 LLM responses upfront ──
-      llmMock.enqueue(classifyResponse()); // 0: classify
-      llmMock.enqueue(someMissingResponse(['reflection'])); // 1: check_completeness (missing)
+      // ── Enqueue all 8 LLM responses upfront ──
+      llmMock.enqueue(someMissingResponse(['reflection'])); // 0: check_completeness (missing)
       llmMock.enqueue(
-        // 2: generate_followup
+        // 1: generate_followup
         followupQuestionsResponse([
           { sectionId: 'reflection', question: 'What did you learn from this case?' },
         ])
       );
       // ask_followup is interrupt-only (no LLM call, no replay response needed)
-      llmMock.enqueue(allCoveredResponse()); // 3: check_completeness (all covered)
-      llmMock.enqueue(tagCapabilitiesResponse()); // 4: tag_capabilities
+      llmMock.enqueue(allCoveredResponse()); // 2: check_completeness (all covered)
+      llmMock.enqueue(tagCapabilitiesResponse()); // 3: tag_capabilities
       llmMock.enqueue(
-        // 5: elicit_justification (for selected C-06)
+        // 4: elicit_justification (for selected C-06)
         elicitJustificationResponse([
           {
             code: 'C-06',
@@ -220,49 +220,20 @@ describe('Conversations Integration Tests', () => {
           },
         ])
       );
-      llmMock.enqueue(reflectResponse()); // 6: reflect
-      llmMock.enqueue(refineResponse()); // 7: refine (no-op → keeps reflect text)
-      llmMock.enqueue(generatePdpResponse()); // 8: generate_pdp
+      llmMock.enqueue(reflectResponse()); // 5: reflect
+      llmMock.enqueue(refineResponse()); // 6: refine (no-op → keeps reflect text)
+      llmMock.enqueue(generatePdpResponse()); // 7: generate_pdp
 
-      // ── Step 1: Start analysis → classify → pause at present_classification ──
+      // ── Step 1: Start analysis → completeness(missing) → ask_followup ──
+      // The first thing the trainee sees is a question about their own case, not
+      // an entry-type picker — the type was chosen before the conversation opened.
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      const status1 = await waitForRunStable(harness, conv._id);
-
-      expect(status1).toEqual({ status: 'awaiting_input', node: 'present_classification' });
-      expect(llmMock.callCount).toBe(1); // only classify ran
-
-      // Classification options ASSISTANT message created
-      const msgs1 = await getMessagesForConversation(conv._id);
-      const classificationMsg = msgs1.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
-      );
-      assertDefined(classificationMsg);
-      expect(classificationMsg.status).toBe(MessageStatus.COMPLETE);
-      const classificationMeta = classificationMsg.question as SingleSelectQuestion;
-      expect(classificationMeta.options).toBeInstanceOf(Array);
-
-      // ── Step 2: Resume classification → completeness(missing) → ask_followup ──
-      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-        type: 'resume',
-        messageId: classificationMsg.xid,
-        value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
-      });
-      const status2 = await waitForRunStable(harness, conv._id, true);
+      const status2 = await waitForRunStable(harness, conv._id);
 
       expect(status2).toEqual({ status: 'awaiting_input', node: 'ask_followup' });
-      expect(llmMock.callCount).toBe(3); // classify + completeness + followup
+      expect(llmMock.callCount).toBe(2); // completeness + followup
 
-      // Classification audit message created (now USER text message)
       const msgs2 = await getMessagesForConversation(conv._id);
-      const classificationAudit = msgs2.find(
-        (m) =>
-          m.role === MessageRole.USER &&
-          m.content?.startsWith('Selected:') &&
-          m.content?.includes('Clinical Case Review')
-      );
-      assertDefined(classificationAudit);
-      expect(classificationAudit.content).toBe('Selected: Clinical Case Review');
 
       // Follow-up ASSISTANT message with questions
       const followupMsg = msgs2.find(
@@ -271,7 +242,10 @@ describe('Conversations Integration Tests', () => {
       assertDefined(followupMsg);
       const followupMeta = followupMsg.question as FreeTextQuestion;
       expect(followupMeta.prompts).toHaveLength(1);
-      expect(followupMeta.prompts[0].key).toBe('reflection');
+      // One question per round, picked in template narrative order among live gaps.
+      // clinical_reasoning is also a gap here (someMissingResponse grades it
+      // `adequate`, but its threshold is `strong`) and it leads reflection.
+      expect(followupMeta.prompts[0].key).toBe('clinical_reasoning');
       expect(followupMeta.followUpRound).toBe(1);
 
       // ── Step 3: User answers follow-up → resume → completeness(covered) → tag_capabilities → present_capabilities ──
@@ -292,7 +266,7 @@ describe('Conversations Integration Tests', () => {
       const status3 = await waitForRunStable(harness, conv._id, true);
 
       expect(status3).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
-      expect(llmMock.callCount).toBe(5); // +completeness + tag_capabilities (no followup replay)
+      expect(llmMock.callCount).toBe(4); // +completeness + tag_capabilities (no followup replay)
 
       // Capability options ASSISTANT message created
       const msgs3 = await getMessagesForConversation(conv._id);
@@ -310,8 +284,8 @@ describe('Conversations Integration Tests', () => {
       expect(capOptions[0]).toMatchObject({ key: 'C-06', confidence: 0.9 });
       expect(capOptions[1]).toMatchObject({ key: 'C-08', confidence: 0.7 });
 
-      // tag_capabilities prompt (call index 4) includes transcript and capability codes
-      const tagCall = llmMock.calls[4];
+      // tag_capabilities prompt (call index 3) includes transcript and capability codes
+      const tagCall = llmMock.calls[3];
       const tagSystemMsg = tagCall.messages.find((m) => m._getType() === 'system');
       assertDefined(tagSystemMsg);
       const tagSystemContent = tagSystemMsg.content as string;
@@ -334,7 +308,7 @@ describe('Conversations Integration Tests', () => {
       const finalStatus = await waitForRunStable(harness, conv._id, true);
 
       expect(finalStatus).toEqual({ status: 'completed' });
-      expect(llmMock.callCount).toBe(9); // +elicit_justification + reflect + refine + generate_pdp
+      expect(llmMock.callCount).toBe(8); // +elicit_justification + reflect + refine + generate_pdp
       llmMock.assertAllConsumed();
 
       // ── Final assertions: messages ──
@@ -351,16 +325,16 @@ describe('Conversations Integration Tests', () => {
       assertDefined(capabilityAudit);
       expect(capabilityAudit.content).toBe('Selected: Decision-making and diagnosis');
 
-      // reflect prompt (call index 6) includes selected capability C-06
-      const reflectCall = llmMock.calls[6];
+      // reflect prompt (call index 5) includes selected capability C-06
+      const reflectCall = llmMock.calls[5];
       const reflectSystemMsg = reflectCall.messages.find((m) => m._getType() === 'system');
       assertDefined(reflectSystemMsg);
       const reflectSystem = reflectSystemMsg.content as string;
       expect(reflectSystem).toContain('C-06');
 
-      // generate_pdp prompt (call index 7) receives the rendered entry sections
+      // generate_pdp prompt (call index 6) receives the rendered entry sections
       // (section labels, e.g. "Brief Description"/"Reflection", not probe titles).
-      const pdpCall = llmMock.calls[7];
+      const pdpCall = llmMock.calls[6];
       const pdpHumanMsg = pdpCall.messages.find((m) => m._getType() === 'human');
       assertDefined(pdpHumanMsg);
       const pdpHuman = pdpHumanMsg.content as string;
@@ -401,7 +375,6 @@ describe('Conversations Integration Tests', () => {
 
       // LLM calls include ask_followup replay on each resume (LangGraph re-executes the full node):
       // classify → completeness(missing 3) → followup → followup(replay) → completeness(missing 1) → followup → followup(replay) → completeness(covered)
-      llmMock.enqueue(classifyResponse()); // 1: classify
       llmMock.enqueue(someMissingResponse(['clinical_reasoning', 'reflection', 'outcome'])); // 2: check_completeness
       llmMock.enqueue(
         // 3: generate_followup (round 1)
@@ -426,22 +399,6 @@ describe('Conversations Integration Tests', () => {
       // Start → classify → pause
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForRunStable(harness, conv._id);
-
-      // Find classification question message
-      const msgsAfterClassify = await getMessagesForConversation(conv._id);
-      const classificationMsg = msgsAfterClassify.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
-      );
-      assertDefined(classificationMsg);
-
-      // Select → completeness(missing) → ask_followup
-      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-        type: 'resume',
-        messageId: classificationMsg.xid,
-        value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
-      });
-      await waitForRunStable(harness, conv._id, true);
 
       // Find the first followup question message
       const msgsAfterFollowup1 = await getMessagesForConversation(conv._id);
@@ -504,7 +461,7 @@ describe('Conversations Integration Tests', () => {
       expect((allFollowupMsgs[0].question as FreeTextQuestion).followUpRound).toBe(1);
       expect((allFollowupMsgs[1].question as FreeTextQuestion).followUpRound).toBe(2);
 
-      expect(llmMock.callCount).toBe(7); // no followup replay calls
+      expect(llmMock.callCount).toBe(6); // no followup replay calls
     });
 
     it('A4. Follow-up loop exits when the rubric clears', async () => {
@@ -516,7 +473,6 @@ describe('Conversations Integration Tests', () => {
       //   → completeness(missing) → generate_followup → [interrupt]
       //   → completeness(missing) → generate_followup → [interrupt]
       //   → completeness(still missing, max rounds) → tag_capabilities
-      llmMock.enqueue(classifyResponse()); // 1: classify
       llmMock.enqueue(someMissingResponse(['reflection'])); // 2: check_completeness
       llmMock.enqueue(
         // 3: generate_followup (round 1)
@@ -538,22 +494,6 @@ describe('Conversations Integration Tests', () => {
       // Start → classify → pause
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForRunStable(harness, conv._id);
-
-      // Find classification question message
-      const msgsAfterClassify = await getMessagesForConversation(conv._id);
-      const classificationMsg = msgsAfterClassify.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
-      );
-      assertDefined(classificationMsg);
-
-      // Select → completeness(missing) → ask_followup (round 1)
-      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-        type: 'resume',
-        messageId: classificationMsg.xid,
-        value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
-      });
-      await waitForRunStable(harness, conv._id, true);
 
       // Find round 1 followup question message
       const msgsR1 = await getMessagesForConversation(conv._id);
@@ -643,16 +583,17 @@ describe('Conversations Integration Tests', () => {
       expect(result.content).toBe('Hello, I want to record a case.');
     });
 
-    it('B3. Send message while paused at present_classification — rejected', async () => {
+    it('B3. Send message while paused at a select question — rejected', async () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a diabetic patient.');
 
-      llmMock.enqueue(classifyResponse());
+      llmMock.enqueue(allCoveredResponse());
+      llmMock.enqueue(tagCapabilitiesResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       const status = await waitForRunStable(harness, conv._id);
 
-      expect(status).toEqual({ status: 'awaiting_input', node: 'present_classification' });
+      expect(status).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
 
       await expect(
         harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, { content: 'More info...' })
@@ -663,29 +604,13 @@ describe('Conversations Integration Tests', () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a diabetic patient.');
 
-      llmMock.enqueue(classifyResponse());
       llmMock.enqueue(someMissingResponse(['reflection']));
       llmMock.enqueue(
         followupQuestionsResponse([{ sectionId: 'reflection', question: 'What did you learn?' }])
       );
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForRunStable(harness, conv._id);
-
-      // Find classification question message
-      const msgsAfterClassify = await getMessagesForConversation(conv._id);
-      const classificationMsg = msgsAfterClassify.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
-      );
-      assertDefined(classificationMsg);
-
-      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-        type: 'resume',
-        messageId: classificationMsg.xid,
-        value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
-      });
-      const status = await waitForRunStable(harness, conv._id, true);
+      const status = await waitForRunStable(harness, conv._id);
 
       expect(status).toEqual({ status: 'awaiting_input', node: 'ask_followup' });
 
@@ -699,27 +624,11 @@ describe('Conversations Integration Tests', () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a diabetic patient.');
 
-      llmMock.enqueue(classifyResponse());
       llmMock.enqueue(allCoveredResponse());
       llmMock.enqueue(tagCapabilitiesResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForRunStable(harness, conv._id);
-
-      // Find classification question message
-      const msgsAfterClassify = await getMessagesForConversation(conv._id);
-      const classificationMsg = msgsAfterClassify.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
-      );
-      assertDefined(classificationMsg);
-
-      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-        type: 'resume',
-        messageId: classificationMsg.xid,
-        value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
-      });
-      const status = await waitForRunStable(harness, conv._id, true);
+      const status = await waitForRunStable(harness, conv._id);
 
       expect(status).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
 
@@ -793,7 +702,10 @@ describe('Conversations Integration Tests', () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a patient.');
 
-      llmMock.enqueue(classifyResponse());
+      llmMock.enqueue(someMissingResponse(['reflection']));
+      llmMock.enqueue(
+        followupQuestionsResponse([{ sectionId: 'reflection', question: 'What did you learn?' }])
+      );
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForRunStable(harness, conv._id);
@@ -807,7 +719,6 @@ describe('Conversations Integration Tests', () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a patient.');
 
-      llmMock.enqueue(classifyResponse());
       llmMock.enqueue(someMissingResponse(['reflection']));
       llmMock.enqueue(
         followupQuestionsResponse([{ sectionId: 'reflection', question: 'What did you learn?' }])
@@ -815,21 +726,6 @@ describe('Conversations Integration Tests', () => {
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForRunStable(harness, conv._id);
-
-      // Find classification question message
-      const msgsAfterClassify = await getMessagesForConversation(conv._id);
-      const classificationMsg = msgsAfterClassify.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
-      );
-      assertDefined(classificationMsg);
-
-      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-        type: 'resume',
-        messageId: classificationMsg.xid,
-        value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
-      });
-      await waitForRunStable(harness, conv._id, true);
 
       // Find followup question message
       const msgsAfterFollowup = await getMessagesForConversation(conv._id);
@@ -860,29 +756,13 @@ describe('Conversations Integration Tests', () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a diabetic patient.');
 
-      llmMock.enqueue(classifyResponse());
       llmMock.enqueue(someMissingResponse(['reflection']));
       llmMock.enqueue(
         followupQuestionsResponse([{ sectionId: 'reflection', question: 'What did you learn?' }])
       );
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForRunStable(harness, conv._id);
-
-      // Find classification question message
-      const msgsAfterClassify = await getMessagesForConversation(conv._id);
-      const classificationMsg = msgsAfterClassify.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
-      );
-      assertDefined(classificationMsg);
-
-      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-        type: 'resume',
-        messageId: classificationMsg.xid,
-        value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
-      });
-      const status = await waitForRunStable(harness, conv._id, true);
+      const status = await waitForRunStable(harness, conv._id);
 
       expect(status).toEqual({ status: 'awaiting_input', node: 'ask_followup' });
 
@@ -955,74 +835,113 @@ describe('Conversations Integration Tests', () => {
   });
 
   // ════════════════════════════════════════════════════════════════
-  // Group E: Classification Guards
+  // Group E: Relevance Gate
   // ════════════════════════════════════════════════════════════════
 
-  describe('Group E: Classification Guards', () => {
-    it('E1. Resume classification with invalid entry type — rejected', async () => {
+  describe('Group E: Relevance Gate', () => {
+    it('E1. Non-portfolio content is rejected with a terminal message, no questions asked', async () => {
       const conv = await createTestConversation();
-      await createCompleteUserMessage(conv._id, 'I saw a patient.');
+      await createCompleteUserMessage(conv._id, 'Milk, eggs, bread. Call the plumber back.');
 
-      llmMock.enqueue(classifyResponse());
+      // check_completeness grades the transcript as not a portfolio entry.
+      llmMock.enqueue(completenessResponse([], false));
+
+      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
+      const status = await waitForRunStable(harness, conv._id);
+
+      expect(status).toEqual({ status: 'awaiting_input', node: 'reject_entry' });
+      // One call only — the graph never reached generate_followup, so junk input
+      // costs a single grade rather than a full elicitation loop.
+      expect(llmMock.callCount).toBe(1);
+      llmMock.assertAllConsumed();
+
+      const msgs = await getMessagesForConversation(conv._id);
+      const terminalMsg = msgs.find((m) => m.role === MessageRole.ASSISTANT);
+      assertDefined(terminalMsg);
+      expect(terminalMsg.status).toBe(MessageStatus.COMPLETE);
+      // Terminal messages carry no question — there is nothing to answer.
+      expect(terminalMsg.question).toBeFalsy();
+      expect(terminalMsg.content).toContain("doesn't look like a portfolio entry");
+    });
+
+    it('E2. A rejected run cannot be resumed', async () => {
+      const conv = await createTestConversation();
+      await createCompleteUserMessage(conv._id, 'Milk, eggs, bread.');
+
+      llmMock.enqueue(completenessResponse([], false));
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForRunStable(harness, conv._id);
 
-      // Find classification question message
       const msgs = await getMessagesForConversation(conv._id);
-      const classificationMsg = msgs.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
-      );
-      assertDefined(classificationMsg);
+      const terminalMsg = msgs.find((m) => m.role === MessageRole.ASSISTANT);
+      assertDefined(terminalMsg);
 
       await expect(
         harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
           type: 'resume',
-          messageId: classificationMsg.xid,
-          value: { selectedKey: 'INVALID_TYPE_THAT_DOES_NOT_EXIST' },
+          messageId: terminalMsg.xid,
         })
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('E2. Resume classification with valid entry type — allowed', async () => {
+    it('E4. No capabilities found — terminal message, run parks, artefact unsaved', async () => {
+      const conv = await createTestConversation();
+      await createCompleteUserMessage(conv._id, 'I saw a patient. It was fine.');
+
+      llmMock.enqueue(allCoveredResponse()); // rubric clears
+      // Every capability graded `missing` — the tag node keeps nothing.
+      llmMock.enqueue(
+        tagCapabilitiesResponse({
+          assessments: Array.from({ length: 13 }, (_, i) => ({
+            code: `C-${String(i + 1).padStart(2, '0')}`,
+            tier: 'missing' as const,
+            reasoning: '',
+            quote: '',
+          })),
+        })
+      );
+
+      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
+      const status = await waitForRunStable(harness, conv._id);
+
+      // The interrupt is terminal and unresumable, so the run PARKS here — it does
+      // not run on through the compose chain. Everything after the interrupt in
+      // present_capabilities is therefore unreachable in production.
+      expect(status).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
+      expect(llmMock.callCount).toBe(2); // completeness + tag; no justify/reflect/pdp
+      llmMock.assertAllConsumed();
+
+      const msgs = await getMessagesForConversation(conv._id);
+      const terminalMsg = msgs.find((m) => m.role === MessageRole.ASSISTANT);
+      assertDefined(terminalMsg);
+      expect(terminalMsg.question).toBeFalsy(); // terminal: nothing to answer
+      expect(terminalMsg.content).toContain("wasn't able to identify specific curriculum");
+
+      // No artefact output is persisted on this path.
+      const artefact = await getTestArtefact();
+      assertDefined(artefact);
+      expect(artefact.status).toBe(ArtefactStatus.IN_CONVERSATION);
+      expect(artefact.composedDocument).toBeNull();
+      expect(artefact.capabilities).toBeNull();
+      // The trainee's chosen entry type survives — it is never written back from
+      // graph state, so a bail-out cannot erase it.
+      expect(artefact.artefactType).toBe('CLINICAL_CASE_REVIEW');
+    });
+
+    it('E3. A thin but genuine entry is NOT rejected — thinness is graded, not gated', async () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a patient.');
 
-      llmMock.enqueue(classifyResponse());
-      llmMock.enqueue(allCoveredResponse());
-      llmMock.enqueue(tagCapabilitiesResponse());
+      llmMock.enqueue(someMissingResponse(['reflection'])); // relevant, but incomplete
+      llmMock.enqueue(
+        followupQuestionsResponse([{ sectionId: 'reflection', question: 'What did you learn?' }])
+      );
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-      await waitForRunStable(harness, conv._id);
+      const status = await waitForRunStable(harness, conv._id);
 
-      // Find classification question message
-      const msgs = await getMessagesForConversation(conv._id);
-      const classificationMsg = msgs.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
-      );
-      assertDefined(classificationMsg);
-
-      await expect(
-        harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-          type: 'resume',
-          messageId: classificationMsg.xid,
-          value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
-        })
-      ).resolves.toBeDefined();
-
-      await waitForRunStable(harness, conv._id, true);
-
-      const msgsAfter = await getMessagesForConversation(conv._id);
-      const auditMsg = msgsAfter.find(
-        (m) =>
-          m.role === MessageRole.USER &&
-          m.content?.startsWith('Selected:') &&
-          m.content?.includes('Clinical Case Review')
-      );
-      assertDefined(auditMsg);
-      expect(auditMsg.content).toBe('Selected: Clinical Case Review');
+      expect(status).toEqual({ status: 'awaiting_input', node: 'ask_followup' });
     });
   });
 
@@ -1035,7 +954,10 @@ describe('Conversations Integration Tests', () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a diabetic patient.');
 
-      llmMock.enqueue(classifyResponse());
+      llmMock.enqueue(someMissingResponse(['reflection']));
+      llmMock.enqueue(
+        followupQuestionsResponse([{ sectionId: 'reflection', question: 'What did you learn?' }])
+      );
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForRunStable(harness, conv._id);
@@ -1047,17 +969,16 @@ describe('Conversations Integration Tests', () => {
       expect(assistantMsg.role).toBe(MessageRole.ASSISTANT);
       expect(assistantMsg.status).toBe(MessageStatus.COMPLETE);
       expect(assistantMsg.messageType).toBe(MessageType.TEXT);
-      expect((assistantMsg.question as any)?.questionType).toBe('single_select');
-      const f1Meta = assistantMsg.question as SingleSelectQuestion;
-      expect(f1Meta.options).toBeInstanceOf(Array);
-      expect(f1Meta.options.length).toBeGreaterThan(0);
+      expect((assistantMsg.question as any)?.questionType).toBe('free_text');
+      const f1Meta = assistantMsg.question as FreeTextQuestion;
+      expect(f1Meta.prompts).toBeInstanceOf(Array);
+      expect(f1Meta.prompts.length).toBeGreaterThan(0);
     });
 
     it('F2. Follow-up ASSISTANT messages have questions array', async () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a diabetic patient.');
 
-      llmMock.enqueue(classifyResponse());
       llmMock.enqueue(someMissingResponse(['reflection']));
       llmMock.enqueue(
         followupQuestionsResponse([{ sectionId: 'reflection', question: 'What did you learn?' }])
@@ -1065,21 +986,6 @@ describe('Conversations Integration Tests', () => {
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForRunStable(harness, conv._id);
-
-      // Find classification question message
-      const msgsAfterClassify = await getMessagesForConversation(conv._id);
-      const classificationMsg = msgsAfterClassify.find(
-        (m) =>
-          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
-      );
-      assertDefined(classificationMsg);
-
-      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
-        type: 'resume',
-        messageId: classificationMsg.xid,
-        value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
-      });
-      await waitForRunStable(harness, conv._id, true);
 
       const msgs = await getMessagesForConversation(conv._id);
       const followupMsg = msgs.find(
@@ -1090,44 +996,64 @@ describe('Conversations Integration Tests', () => {
       expect(followupMsg.role).toBe(MessageRole.ASSISTANT);
       const f2Meta = followupMsg.question as FreeTextQuestion;
       expect(f2Meta.prompts).toHaveLength(1);
-      expect(f2Meta.prompts[0].key).toBe('reflection');
+      // See A1: clinical_reasoning is the first live gap in narrative order.
+      expect(f2Meta.prompts[0].key).toBe('clinical_reasoning');
       expect(f2Meta.followUpRound).toBe(1);
       expect(f2Meta.entryType).toBe('CLINICAL_CASE_REVIEW');
     });
 
-    it('F3. USER audit messages on classification selection', async () => {
+    it('F3. USER audit messages on capability selection', async () => {
       const conv = await createTestConversation();
-      await createCompleteUserMessage(conv._id, 'I saw a patient.');
+      // Seed must contain the mock's capability quotes verbatim, or the tag node's
+      // quote gate drops them and present_capabilities goes terminal instead.
+      await createCompleteUserMessage(
+        conv._id,
+        'I saw a 55-year-old patient with poorly controlled type 2 diabetes. ' +
+          'I started metformin and discussed lifestyle changes.'
+      );
 
-      llmMock.enqueue(classifyResponse());
       llmMock.enqueue(allCoveredResponse());
       llmMock.enqueue(tagCapabilitiesResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForRunStable(harness, conv._id);
 
-      // Find classification question message
-      const msgsAfterClassify = await getMessagesForConversation(conv._id);
-      const classificationMsg = msgsAfterClassify.find(
+      const msgs = await getMessagesForConversation(conv._id);
+      const capabilityMsg = msgs.find(
         (m) =>
-          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'single_select'
+          m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'multi_select'
       );
-      assertDefined(classificationMsg);
+      assertDefined(capabilityMsg);
+
+      // Selections are recorded as a generated USER text message for audit.
+      llmMock.enqueue(
+        elicitJustificationResponse([
+          {
+            code: 'C-06',
+            justification: 'I reviewed the diabetes control and started metformin.',
+            justificationTier: 'adequate',
+            sourceQuote: 'I started metformin and discussed lifestyle changes',
+          },
+        ])
+      );
+      llmMock.enqueue(reflectResponse());
+      llmMock.enqueue(refineResponse());
+      llmMock.enqueue(generatePdpResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
         type: 'resume',
-        messageId: classificationMsg.xid,
-        value: { selectedKey: 'CLINICAL_CASE_REVIEW' },
+        messageId: capabilityMsg.xid,
+        value: { selectedKeys: ['C-06'] },
       });
       await waitForRunStable(harness, conv._id, true);
 
-      const msgs = await getMessagesForConversation(conv._id);
-      const selectionMsgs = msgs.filter(
+      const msgsAfter = await getMessagesForConversation(conv._id);
+      const selectionMsgs = msgsAfter.filter(
         (m) => m.role === MessageRole.USER && m.content?.startsWith('Selected:')
       );
 
       expect(selectionMsgs).toHaveLength(1);
-      expect(selectionMsgs[0].content).toBe('Selected: Clinical Case Review');
+      expect(selectionMsgs[0].content).toBe('Selected: Decision-making and diagnosis');
       expect(selectionMsgs[0].status).toBe(MessageStatus.COMPLETE);
     });
 
@@ -1147,14 +1073,16 @@ describe('Conversations Integration Tests', () => {
         status: MessageStatus.COMPLETE,
       });
 
-      llmMock.enqueue(classifyResponse());
+      // Rubric clears on the first pass, so the run pauses at present_capabilities.
+      llmMock.enqueue(allCoveredResponse());
+      llmMock.enqueue(tagCapabilitiesResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForRunStable(harness, conv._id);
 
-      expect(llmMock.calls).toHaveLength(1);
-      const classifyCall = llmMock.calls[0];
-      const humanMsg = classifyCall.messages.find((m) => m._getType() === 'human');
+      expect(llmMock.calls).toHaveLength(2);
+      const completenessCall = llmMock.calls[0];
+      const humanMsg = completenessCall.messages.find((m) => m._getType() === 'human');
       assertDefined(humanMsg);
       const transcriptContent = humanMsg.content as string;
       expect(transcriptContent).toContain('First user message');
@@ -1329,7 +1257,10 @@ describe('Conversations Integration Tests', () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a patient.');
 
-      llmMock.enqueue(classifyResponse());
+      llmMock.enqueue(someMissingResponse(['reflection']));
+      llmMock.enqueue(
+        followupQuestionsResponse([{ sectionId: 'reflection', question: 'What did you learn?' }])
+      );
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForRunStable(harness, conv._id);
@@ -1345,12 +1276,14 @@ describe('Conversations Integration Tests', () => {
       await createCompleteUserMessage(conv._id, 'Message two: examination findings.');
       await createCompleteUserMessage(conv._id, 'Message three: management plan.');
 
-      llmMock.enqueue(classifyResponse());
+      // Rubric clears on the first pass, so the run pauses at present_capabilities.
+      llmMock.enqueue(allCoveredResponse());
+      llmMock.enqueue(tagCapabilitiesResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForRunStable(harness, conv._id);
 
-      expect(llmMock.calls).toHaveLength(1);
+      expect(llmMock.calls).toHaveLength(2);
       const humanMsg = llmMock.calls[0].messages.find((m) => m._getType() === 'human');
       assertDefined(humanMsg);
       const transcript = humanMsg.content as string;
@@ -1363,7 +1296,9 @@ describe('Conversations Integration Tests', () => {
       const conv = await createTestConversation();
       await createCompleteUserMessage(conv._id, 'I saw a patient.');
 
-      llmMock.enqueue(classifyResponse());
+      // Rubric clears on the first pass, so the run pauses at present_capabilities.
+      llmMock.enqueue(allCoveredResponse());
+      llmMock.enqueue(tagCapabilitiesResponse());
 
       await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
       await waitForRunStable(harness, conv._id);

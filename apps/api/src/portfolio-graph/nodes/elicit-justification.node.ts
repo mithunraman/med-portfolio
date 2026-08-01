@@ -137,7 +137,7 @@ export function createElicitJustificationNode(deps: GraphDeps) {
     });
 
     // ── Guards ──
-    if (!state.entryType || state.capabilities.length === 0) {
+    if (state.capabilities.length === 0) {
       return {};
     }
 

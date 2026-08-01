@@ -1,4 +1,10 @@
-import { Specialty, SpecialtyConfig, SpecialtyOption, SpecialtyRegistryEntry } from '@acme/shared';
+import {
+  EntryTypeOption,
+  Specialty,
+  SpecialtyConfig,
+  SpecialtyOption,
+  SpecialtyRegistryEntry,
+} from '@acme/shared';
 import { GP_SPECIALTY_CONFIG } from './gp';
 import { IM_SPECIALTY_CONFIG } from './internal-medicine';
 import { PSYCHIATRY_SPECIALTY_CONFIG } from './psychiatry';
@@ -24,6 +30,7 @@ export function getAllSpecialtyOptions(): SpecialtyOption[] {
       specialty: entry.config.specialty,
       name: entry.config.name,
       trainingStages: entry.config.trainingStages,
+      entryTypes: toEntryTypeOptions(entry.config),
     }));
 }
 
@@ -31,6 +38,26 @@ export function isValidTrainingStage(specialty: Specialty, stageCode: string): b
   const entry = SPECIALTY_CONFIGS[specialty];
   if (!entry || !entry.isActive) return false;
   return entry.config.trainingStages.some((s) => s.code === stageCode);
+}
+
+/**
+ * Whether `code` is an entry type of an ACTIVE specialty. Sibling of
+ * isValidTrainingStage — the boundary check that lets everything downstream treat
+ * an entry type as a trusted value (see `getTemplateForEntryType`, which throws).
+ */
+export function isValidEntryType(specialty: Specialty, code: string): boolean {
+  const entry = SPECIALTY_CONFIGS[specialty];
+  if (!entry || !entry.isActive) return false;
+  return entry.config.entryTypes.some((e) => e.code === code);
+}
+
+/** Project config entry types onto the public option shape (drops server-only fields). */
+function toEntryTypeOptions(config: SpecialtyConfig): EntryTypeOption[] {
+  return config.entryTypes.map((e) => ({
+    code: e.code,
+    label: e.label,
+    description: e.description,
+  }));
 }
 
 export function getTemplateForEntryType(config: SpecialtyConfig, entryTypeCode: string) {

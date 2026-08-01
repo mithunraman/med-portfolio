@@ -14,9 +14,24 @@ The repo has **8 distinct LLM prompts** (6 in the portfolio-graph nodes, 2 in th
 > `refine` nodes not audited here), see [docs/llm/llm-pipeline-stages.md](llm/llm-pipeline-stages.md).
 > This audit is retained for its **curriculum-injection mapping** and the **Part 2 prompt-improvement backlog**, which remain valid.
 
+> **Prompt 1 (Classify) no longer exists.** The classifier was removed — the trainee picks
+> the entry type at artefact creation, so there is no entry-type inference, no
+> `classifyResponseSchema`, and no `classificationSignals` on `EntryTypeDefinition`. Prompt 1
+> below, its row in the curriculum-injection table, and the schema-reorder recommendation for
+> `classifyResponseSchema` are **all void**; the remaining seven prompts are unaffected.
+>
+> Two Part 2 recommendations were **applied elsewhere** and should not be re-raised: the
+> reasoning-before-verdict field ordering is now in force across the graph schemas (see
+> `check_completeness`, where `relevanceReason` precedes `isRelevant` and `tierReason`
+> precedes `tier`), and relevance screening moved into `check_completeness` rather than
+> living in a node of its own.
+
 ### `portfolio-graph/nodes/` — the analysis pipeline
 
-#### 1. Classify entry type — [classify.node.ts:73-101](../apps/api/src/portfolio-graph/nodes/classify.node.ts#L73-L101)
+#### 1. Classify entry type — ~~`classify.node.ts`~~ **REMOVED**
+> Retained as a record of what was audited. The node, its schema, and `classificationSignals`
+> are deleted; the entry type is now the trainee's choice, made before analysis starts.
+
 - **Node**: `classifyNode` → decides which entry type (CCR, SEA, LEA…) a transcript is
 - **Schema**: `classifyResponseSchema` (`isRelevant`, `entryType`, `confidence`, `reasoning`, `signalsFound[]`, `alternatives[]`)
 - **Curriculum injected**:
@@ -38,7 +53,7 @@ The repo has **8 distinct LLM prompts** (6 in the portfolio-graph nodes, 2 in th
 - **Schema**: `tagCapabilitiesResponseSchema` — array of `{code, demonstrated, confidence, reasoning}`
 - **Curriculum injected**:
   - **All `capabilities[]`** via `formatCapabilityBlock()`: `code` (C-01…C-13), `name`, `description`, `domainCode`, `domainName`
-  - The classified `entryType.code` for context
+  - The trainee's chosen `entryType.code` for context
   - `config.name`, training stage context
 - **Notable**: Recognition-based (one yes/no per capability). Post-processing filters by confidence ≥0.5, caps at 5, sorts by confidence.
 
@@ -64,17 +79,17 @@ The repo has **8 distinct LLM prompts** (6 in the portfolio-graph nodes, 2 in th
 - **Schema**: `generatePdpResponseSchema` — array of `{goal, actions: [{action, intendedEvidence}]}`
 - **Curriculum injected**:
   - **User-confirmed `capabilities[]`** via `formatCapabilityBlock()`: `code`, `name`, plus tag-time `reasoning`
-  - The classified `entryType.code`
+  - The trainee's chosen `entryType.code`
   - Reflection sections as text (the trainee's own output, not curriculum)
   - `config.name`, training stage context
 - **Notable**: Only generates from learning needs the trainee explicitly stated — does NOT infer gaps. Hard limits: max 2 goals, max 3 actions.
 
 #### Interrupt-only nodes (no LLM call, no prompts)
 - [gather-context.node.ts](../apps/api/src/portfolio-graph/nodes/gather-context.node.ts) — aggregates messages
-- [ask-clarification.node.ts](../apps/api/src/portfolio-graph/nodes/ask-clarification.node.ts) — pauses for more clinical detail
 - [ask-followup.node.ts](../apps/api/src/portfolio-graph/nodes/ask-followup.node.ts) — presents the questions generated in step 4
-- [present-classification.node.ts](../apps/api/src/portfolio-graph/nodes/present-classification.node.ts) — user confirms entry type
 - [present-capabilities.node.ts](../apps/api/src/portfolio-graph/nodes/present-capabilities.node.ts) — user confirms capabilities
+- [reject-entry.node.ts](../apps/api/src/portfolio-graph/nodes/reject-entry.node.ts) — terminal; transcript graded not a portfolio entry
+- ~~`ask-clarification.node.ts`~~, ~~`present-classification.node.ts`~~ — removed with the classifier
 
 These reuse pre-computed curriculum-derived options from earlier nodes but issue no new LLM call.
 
@@ -96,12 +111,12 @@ These reuse pre-computed curriculum-derived options from earlier nodes but issue
 
 | # | Prompt | `entryTypes` | `templates` (sections) | `capabilities` | `trainingStages` | `specialty.name` |
 |---|---|---|---|---|---|---|
-| 1 | Classify | **all**: code, label, description, classificationSignals | — | — | stage ctx | ✓ |
+| ~~1~~ | ~~Classify~~ | *removed — see notice above* | — | — | — | — |
 | 2 | Check completeness | — | required+askable: id, label, description | — | stage ctx | ✓ |
-| 3 | Tag capabilities | classified code only | — | **all 13**: code, name, description, domainCode, domainName | stage ctx | ✓ |
+| 3 | Tag capabilities | chosen code only | — | **all 13**: code, name, description, domainCode, domainName | stage ctx | ✓ |
 | 4 | Generate follow-up | — | missing/shallow only: id, label, description, extractionQuestion, weight | — | stage ctx | ✓ |
 | 5 | Reflect | — | **all**: id, label, required, description, promptHint | tagged: code, name, reasoning | stage ctx | ✓ |
-| 6 | Generate PDP | classified code only | — | confirmed: code, name, reasoning | stage ctx | ✓ |
+| 6 | Generate PDP | chosen code only | — | confirmed: code, name, reasoning | stage ctx | ✓ |
 | 7 | Cleaning | — | — | — | — | — |
 | 8 | Redaction | — | — | — | — | — |
 
@@ -116,7 +131,7 @@ If you wanted the LLM to respect target word counts, the Reflect / Generate-PDP 
 
 ### Other observations
 
-- **Every analysis-pipeline prompt is curriculum-aware**; only the two pre-graph cleanup prompts (Cleaning, Redaction) are curriculum-free, as expected — they run before classification, so they can't know the specialty's structure.
+- **Every analysis-pipeline prompt is curriculum-aware**; only the two pre-graph cleanup prompts (Cleaning, Redaction) are curriculum-free, as expected — they run before the graph starts, so they can't know the specialty's structure.
 - **`promptHint` is only used by Reflect** (step 5). It's specifically positioned as guidance for generation/organisation, so this matches the design — but it does mean the Check-completeness and Generate-followup nodes are working from `description` alone, not from the richer authoring guidance in `promptHint`.
 - **`extractionQuestion` is used as a seed in Generate-followup**, and as a *filter* in Check-completeness (only sections with a non-null `extractionQuestion` are graded). This makes `extractionQuestion: null` the de-facto "this section is optional and won't be assessed" signal.
 - **`weight` is used only for ranking** sections in Generate-followup (top 3 by weight). It does not flow into any prompt verbatim and isn't currently used for quality scoring at the LLM layer.

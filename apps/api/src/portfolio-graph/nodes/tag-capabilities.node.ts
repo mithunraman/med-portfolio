@@ -246,12 +246,6 @@ export function createTagCapabilitiesNode(deps: GraphDeps) {
     const cid = state.conversationId;
     logger.log(`[${cid}] Tagging capabilities (${TAG_PROMPT_VERSION})`);
 
-    // ── Guard: no entry type (irrelevant content path) — skip LLM call ──
-    if (!state.entryType) {
-      logger.warn(`[${cid}] No entry type — skipping capability tagging`);
-      return { capabilities: [] };
-    }
-
     const specialty = Number(state.specialty) as Specialty;
     const config = getSpecialtyConfig(specialty);
 

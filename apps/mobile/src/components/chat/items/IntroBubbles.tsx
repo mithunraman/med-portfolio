@@ -11,15 +11,15 @@ type IntroBubble = {
 };
 
 // Client-only onboarding tips rendered as the first assistant bubbles at the top
-// of every conversation. Purely presentational — never persisted, sent to the
+// of every conversation. Purely presentational - never persisted, sent to the
 // backend, or included in message grouping / analysis / the edit-lock cut-off.
 const INTRO_BUBBLES: IntroBubble[] = [
   {
-    text: 'Tell me about a recent case — a tricky consultation, a procedure, something you learned. Take as many messages as you need, by voice or text.',
+    text: 'Tell me about a recent case - a tricky consultation, a procedure, something you learned. Take as many messages as you need, by voice or text.',
     variant: 'default',
   },
   {
-    text: "No rush — once there's enough to work with, I can start analysing.",
+    text: "No rush - once there's enough to work with, I can start analysing.",
     variant: 'default',
   },
   {
@@ -27,7 +27,7 @@ const INTRO_BUBBLES: IntroBubble[] = [
     variant: 'default',
   },
   {
-    text: 'Please keep it anonymous — no patient names or identifiable details.',
+    text: 'Please keep it anonymous - no patient names or identifiable details.',
     variant: 'warning',
   },
 ];

@@ -92,7 +92,7 @@ export const MessageList = memo(function MessageList({
 
   // The latest assistant message marks the cut-off: messages sent at/before it
   // have been consumed by an analysis turn and are locked from edit/delete. We
-  // include question-less terminal verdicts — they too mean the AI has responded
+  // include question-less terminal verdicts - they too mean the AI has responded
   // past that point. Mirrors the server's hasLaterAssistantMessage guard.
   const latestAssistantMessageAt = useMemo(() => {
     let latest: string | undefined;

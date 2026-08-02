@@ -3,7 +3,7 @@ import type { RootState } from '../index';
 
 /**
  * Ephemeral, session-scoped UI state. Deliberately NOT persisted to storage and
- * reset on session end (see SESSION_END handling in store/index.ts) — dismissing a
+ * reset on session end (see SESSION_END handling in store/index.ts) - dismissing a
  * banner should last the session, not forever.
  */
 interface UIState {

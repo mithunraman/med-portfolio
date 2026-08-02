@@ -22,7 +22,7 @@ interface AdvisoryCardProps {
   title: string;
   body: string;
   /**
-   * When true, the card is a polite live region — its appearance is gently
+   * When true, the card is a polite live region - its appearance is gently
    * announced by the screen reader. Use for cards that show conditionally (a
    * nudge), NOT for persistent content that's read in normal order on every
    * visit (announcing that on each mount/focus is noise). No `alert` role: these
@@ -33,7 +33,7 @@ interface AdvisoryCardProps {
   onDismiss?: () => void;
 }
 
-/** One guidance card. Presentational — visibility is decided by the parent. */
+/** One guidance card. Presentational - visibility is decided by the parent. */
 function AdvisoryCard({ tone, icon, title, body, announce, onDismiss }: AdvisoryCardProps) {
   const { colors } = useTheme();
   const accent = tone === 'info' ? colors.info : colors.warning;
@@ -66,9 +66,9 @@ function AdvisoryCard({ tone, icon, title, body, announce, onDismiss }: Advisory
  * Guidance for the artefact detail screen while an entry is IN_REVIEW
  * (MOB-064/065). Two independent, stackable cards:
  *
- *  1. "Needs review" — a calm, non-dismissible safety prompt to check the AI's
+ *  1. "Needs review" - a calm, non-dismissible safety prompt to check the AI's
  *     draft. Always shown in review; it's the primary purpose of the state.
- *  2. "Some sections need more detail" — a dismissible nudge naming the thin
+ *  2. "Some sections need more detail" - a dismissible nudge naming the thin
  *     sections, shown only when required sections are still unmet.
  *
  * Self-contained: derives its own visibility from the artefact (status +

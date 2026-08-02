@@ -16,7 +16,7 @@ export interface LocalNote {
   clientId?: string;
 }
 
-// Stable identity for a note — its server xid, else the client draft id. Notes
+// Stable identity for a note - its server xid, else the client draft id. Notes
 // are addressed by this key (not list position) so a re-sort or a sibling draft
 // can't misalign an in-flight edit/delete. Mirrors the capability editor keying
 // on `code` rather than index.
@@ -33,7 +33,7 @@ interface NotesSectionProps {
 }
 
 /**
- * Presentational notes list — renders the count header, top "Add" affordance,
+ * Presentational notes list - renders the count header, top "Add" affordance,
  * truncated cards (newest-first ordering is the caller's concern), per-card
  * delete, and an empty state. State-free: all data and actions come via props.
  */
@@ -61,7 +61,7 @@ export function NotesSection({
       </View>
 
       {/* Notes travel with the entry when it is exported. Disclosed here, at the
-          point of input, rather than only in Settings — a trainee deciding what
+          point of input, rather than only in Settings - a trainee deciding what
           to write needs to know before they write it, not afterwards. */}
       {editable && (
         <Text style={[styles.hint, { color: colors.textSecondary }]}>

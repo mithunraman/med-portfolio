@@ -23,7 +23,7 @@ interface EnsureConversationResult {
 /**
  * The artefact a not-yet-created conversation is waiting on. Present means "create
  * this on first send"; absent means the conversation already exists. Both fields
- * are required together — that is the point of the bundle, and it is why no
+ * are required together - that is the point of the bundle, and it is why no
  * runtime check is needed here for a half-supplied pair.
  */
 export interface PendingArtefact {
@@ -36,7 +36,7 @@ export interface PendingArtefact {
 
 /**
  * If this is a new conversation, create the artefact to get the real conversation ID.
- * Does NOT rekey optimistic messages — the caller (screen) must dispatch
+ * Does NOT rekey optimistic messages - the caller (screen) must dispatch
  * rekeyOptimisticMessages in the same synchronous block as setRealConversationId
  * to avoid an empty-state flash between renders.
  */
@@ -78,7 +78,7 @@ export const fetchMessages = createAsyncThunk(
 /**
  * Edit the text of an existing user message in place. The server redacts the
  * new text (regex-only) and returns the updated message, which we upsert into
- * the store — no optimistic placeholder is needed since the message stays
+ * the store - no optimistic placeholder is needed since the message stays
  * COMPLETE and the round-trip is a single low-latency PATCH.
  */
 export const editMessage = createAsyncThunk(
@@ -158,7 +158,7 @@ export const sendMessageWithRetry = createAsyncThunk(
     const { content, localId, idempotencyKey, pendingArtefact } = params;
     let { conversationId } = params;
 
-    // 1. Optimistic message — INSTANT, before any network call
+    // 1. Optimistic message - INSTANT, before any network call
     const optimistic: OptimisticMessage = {
       localId,
       conversationId,
@@ -260,7 +260,7 @@ export const sendVoiceNoteWithRetry = createAsyncThunk(
     const { localId, idempotencyKey, recordingUri, recordingMime, pendingArtefact } = params;
     let { conversationId } = params;
 
-    // 1. Optimistic bubble — INSTANT, before any network call
+    // 1. Optimistic bubble - INSTANT, before any network call
     const optimistic: OptimisticMessage = {
       localId,
       conversationId,
@@ -282,7 +282,7 @@ export const sendVoiceNoteWithRetry = createAsyncThunk(
       conversationId = result.conversationId;
 
       // Read the recording size once. The file doesn't change between retries, and
-      // file.size is what the native upload sends as Content-Length on the PUT —
+      // file.size is what the native upload sends as Content-Length on the PUT -
       // which must match the value signed into the presigned URL (S3 403s on
       // mismatch). Both derive from the same on-disk file, so they stay consistent.
       const file = new File(recordingUri);
@@ -290,7 +290,7 @@ export const sendVoiceNoteWithRetry = createAsyncThunk(
         throw new Error(`Recording not found at ${recordingUri}`);
       }
       // file.size returns 0 (not null) for a missing/unreadable file, so guard
-      // against an empty recording too — uploading 0 bytes would yield a message
+      // against an empty recording too - uploading 0 bytes would yield a message
       // pointing at empty audio.
       const sizeBytes = file.size;
       if (sizeBytes === 0) {
@@ -306,7 +306,7 @@ export const sendVoiceNoteWithRetry = createAsyncThunk(
           sizeBytes,
         });
 
-        // Native binary PUT — streams the file off the JS thread and avoids RN's
+        // Native binary PUT - streams the file off the JS thread and avoids RN's
         // Blob layer (fetch(fileUri).blob() throws on RN 0.86). Content-Type must
         // match the mime signed into the presigned URL.
         const uploadResult = await file.upload(uploadUrl, {
@@ -314,7 +314,7 @@ export const sendVoiceNoteWithRetry = createAsyncThunk(
           uploadType: UploadType.BINARY_CONTENT,
           headers: { 'Content-Type': recordingMime },
         });
-        // upload() resolves (does not throw) on non-2xx, so check explicitly —
+        // upload() resolves (does not throw) on non-2xx, so check explicitly -
         // otherwise a 403/expired URL would be treated as success and never retried.
         if (uploadResult.status < 200 || uploadResult.status >= 300) {
           throw new Error(`Upload failed with status ${uploadResult.status}`);
@@ -391,7 +391,7 @@ export const resumeAnalysisWithOptimistic = createAsyncThunk(
 
 /**
  * Unified poll: re-fetch the full message list + context for a conversation.
- * Runs silently — no loading state changes.
+ * Runs silently - no loading state changes.
  */
 export const pollConversation = createAsyncThunk(
   'messages/pollConversation',

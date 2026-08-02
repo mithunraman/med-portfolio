@@ -60,7 +60,7 @@ const reviewPeriodsSlice = createSlice({
       })
       .addCase(createReviewPeriod.fulfilled, (state, action) => {
         state.mutating = false;
-        // The backend auto-archives the previous active period — reflect that immediately
+        // The backend auto-archives the previous active period - reflect that immediately
         const previousActive = Object.values(state.entities).find(
           (p) => p && p.status === ReviewPeriodStatus.ACTIVE
         );

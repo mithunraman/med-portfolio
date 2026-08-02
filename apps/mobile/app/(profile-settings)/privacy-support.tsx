@@ -27,7 +27,7 @@ export default function PrivacySupportScreen() {
   };
 
   // Real accounts get the 48h window, so the confirmation is the deletion
-  // banner appearing rather than a screen transition — but the request itself
+  // banner appearing rather than a screen transition - but the request itself
   // is a network call, so it still needs a blocking HUD and a visible failure.
   const scheduleDeletion = async () => {
     showLoading('Scheduling deletion...', { dismissibleAfterSec: 5 });
@@ -50,7 +50,7 @@ export default function PrivacySupportScreen() {
   };
 
   // Guests are deleted straight away and signed out rather than given the 48h
-  // cancellation window — they have no credential to sign back in and cancel
+  // cancellation window - they have no credential to sign back in and cancel
   // with, so the window would only delay the purge. See useGuestDeletion.
   const handleDeleteAccount = () => {
     Alert.alert(
@@ -113,7 +113,7 @@ export default function PrivacySupportScreen() {
           />
         </SettingsSection>
 
-        {/* Danger Zone — shown to guests too: App Store Guideline 5.1.1(v)
+        {/* Danger Zone - shown to guests too: App Store Guideline 5.1.1(v)
             covers automatically generated accounts, and a guest account holds
             real entries on the server. */}
         {!hasPendingDeletion && (

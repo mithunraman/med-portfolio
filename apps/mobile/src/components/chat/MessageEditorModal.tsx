@@ -21,7 +21,7 @@ interface MessageEditorModalProps {
   /** Current message text to pre-fill the editor with. */
   initialText: string;
   /**
-   * Persist the edit. Must reject on failure — the modal stays open (preserving
+   * Persist the edit. Must reject on failure - the modal stays open (preserving
    * the user's draft) and closes only when this resolves.
    */
   onSave: (text: string) => Promise<void>;
@@ -29,7 +29,7 @@ interface MessageEditorModalProps {
 }
 
 /**
- * Full-screen editor for a single chat message. Content-only — unlike the
+ * Full-screen editor for a single chat message. Content-only - unlike the
  * artefact section editor, a message has no title. Save is disabled when the
  * text is empty or unchanged.
  */
@@ -53,7 +53,7 @@ export function MessageEditorModal({
   const canSave = trimmed.length > 0 && trimmed !== initialText.trim();
   const doneEnabled = canSave && !saving;
   // maxLength hard-caps input, so surface a counter as the user nears the limit
-  // — otherwise a pasted overflow would be silently truncated with no feedback.
+  // - otherwise a pasted overflow would be silently truncated with no feedback.
   const showCounter = text.length > MAX_MESSAGE_CONTENT_LENGTH * 0.9;
 
   const handleDone = useCallback(async () => {
@@ -63,7 +63,7 @@ export function MessageEditorModal({
       await onSave(trimmed);
       onClose(); // close only after a successful save
     } catch {
-      // Save failed — keep the modal open so the user's draft is preserved.
+      // Save failed - keep the modal open so the user's draft is preserved.
     } finally {
       setSaving(false);
     }

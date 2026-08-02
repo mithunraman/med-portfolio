@@ -88,7 +88,7 @@ function sortNotesNewestFirst(notes: LocalNote[]): LocalNote[] {
   });
 }
 
-// True when the local notes are identical to the persisted set — used to collapse
+// True when the local notes are identical to the persisted set - used to collapse
 // the edit buffer back to null (e.g. after adding then cancelling a blank draft)
 // so the sticky save bar doesn't appear for a no-op change.
 function notesMatchServer(local: LocalNote[], server: LocalNote[]): boolean {
@@ -134,7 +134,7 @@ export default function EntryDetailScreen() {
   // Notes edit buffer (null = no unsaved note changes). Held in display order.
   const [editedNotes, setEditedNotes] = useState<LocalNote[] | null>(null);
   // The note currently open in the editor, addressed by its stable key
-  // (xid for saved notes, clientId for drafts) — never by list position.
+  // (xid for saved notes, clientId for drafts) - never by list position.
   const [editingNoteKey, setEditingNoteKey] = useState<string | null>(null);
   // Monotonic source of client-side draft ids for the current screen session.
   const draftSeq = useRef(0);
@@ -146,7 +146,7 @@ export default function EntryDetailScreen() {
   const bypassUnsavedPrompt = useRef(false);
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0]));
   // Capability edit/expand state is keyed by capability code (the API's natural
-  // key), not list position — so a future display-time sort/filter can't misalign
+  // key), not list position - so a future display-time sort/filter can't misalign
   // an in-flight edit onto the wrong capability.
   const [expandedCapabilities, setExpandedCapabilities] = useState<Set<string>>(new Set());
   const [goalSelections, setGoalSelections] = useState<Map<string, GoalSelectionState>>(new Map());
@@ -166,7 +166,7 @@ export default function EntryDetailScreen() {
   // Seeds a first-time (create) review from the inline star tap. Ignored on the edit
   // path, where the sheet seeds from the existing review.
   const [reviewSeedRating, setReviewSeedRating] = useState<number | undefined>(undefined);
-  // Editable in review AND completed — completion is a filter, not a lock
+  // Editable in review AND completed - completion is a filter, not a lock
   // (MOB-087). Archived / in-conversation stay read-only.
   const isEditable =
     artefact?.status === ArtefactStatus.IN_REVIEW || artefact?.status === ArtefactStatus.COMPLETED;
@@ -180,7 +180,7 @@ export default function EntryDetailScreen() {
     editedNotes !== null;
 
   // Current displayed values (edited or server). The composed document is the
-  // single source of truth for the entry body — shown and edited in place.
+  // single source of truth for the entry body - shown and edited in place.
   const displayTitle = editedTitle ?? artefact?.title ?? '';
   const displayDocument = editedDocument ?? artefact?.composedDocument ?? [];
   const displayCapabilities = editedCapabilities ?? artefact?.capabilities ?? [];
@@ -189,7 +189,7 @@ export default function EntryDetailScreen() {
       ? displayCapabilities.find((c) => c.code === editingCapabilityCode)
       : undefined;
 
-  // Notes — visible from review onward; editable in any non-archived state
+  // Notes - visible from review onward; editable in any non-archived state
   // (notes are post-creation addenda, unlike the body which locks at completion).
   const serverNotes = useMemo(() => sortNotesNewestFirst(artefact?.notes ?? []), [artefact?.notes]);
   const displayNotes = editedNotes ?? serverNotes;
@@ -250,7 +250,7 @@ export default function EntryDetailScreen() {
   // clobbering the save with null.
   const handleAddNote = useCallback(() => {
     // Prepend an empty draft (newest-first) with a stable client id and open the
-    // editor on it — addressed by key, so a later sibling draft can't shift it.
+    // editor on it - addressed by key, so a later sibling draft can't shift it.
     const clientId = `draft-${(draftSeq.current += 1)}`;
     setEditedNotes((prev) => [{ text: '', clientId }, ...(prev ?? serverNotes)]);
     setEditingNoteKey(clientId);
@@ -263,7 +263,7 @@ export default function EntryDetailScreen() {
   // Opens the delete-confirm dialog (actual removal runs in handleConfirmDeleteNote).
   // Safe to call synchronously from the trash icon, where no other modal is on
   // screen. The "edited to blank" path in handleNoteSave must NOT call this
-  // synchronously — it defers past the editor Modal's dismissal (see there).
+  // synchronously - it defers past the editor Modal's dismissal (see there).
   const confirmDeleteNote = useCallback((key: string) => {
     setDeleteNoteKey(key);
   }, []);
@@ -283,14 +283,14 @@ export default function EntryDetailScreen() {
       const key = editingNoteKey;
 
       // A note can't be saved empty (DTO requires min length 1). Emptying an
-      // existing note is a delete request, not an edit — route it through the
+      // existing note is a delete request, not an edit - route it through the
       // same confirmation as the trash icon rather than silently dropping it.
       // The blank text is NOT applied, so the note is untouched unless confirmed.
       const target = displayNotes.find((n) => noteKey(n) === key);
       if (text.trim().length === 0 && target?.xid !== undefined) {
         // The editor's Done handler fires onSave (this) then onClose in the SAME
         // commit, so opening the confirm dialog here would present AppDialog's RN
-        // Modal while the editor's RN Modal is mid-dismiss — the iOS
+        // Modal while the editor's RN Modal is mid-dismiss - the iOS
         // present-while-dismissing race (deferred the same way in handleDelete/
         // handleArchive). Defer past the dismissal so the dialog actually appears.
         // Do NOT collapse this back into a synchronous confirmDeleteNote(key).
@@ -306,8 +306,8 @@ export default function EntryDetailScreen() {
   );
 
   // On close, drop a never-saved DRAFT left blank (added but never typed). An
-  // existing note can't reach a blank state here — emptying one is handled above
-  // via confirmation — so the xid guard keeps deletion of saved notes confirmed.
+  // existing note can't reach a blank state here - emptying one is handled above
+  // via confirmation - so the xid guard keeps deletion of saved notes confirmed.
   // Functional update reads the post-onSave value, so a real note survives Done.
   const handleNoteEditorClose = useCallback(() => {
     const key = editingNoteKey;
@@ -352,7 +352,7 @@ export default function EntryDetailScreen() {
   // Single save routine reused by every commit action (Save for later / Mark as
   // done / completed Save). Persists body then notes sequentially; returns true
   // on success and false (surfacing an error) otherwise. It does NOT navigate,
-  // toast, or change status — callers decide what happens after a clean save.
+  // toast, or change status - callers decide what happens after a clean save.
   const persistEdits = useCallback(async (): Promise<boolean> => {
     if (!artefactId) return false;
 
@@ -413,8 +413,8 @@ export default function EntryDetailScreen() {
   // ── Unsaved-changes prompt on navigate away ──
 
   // Leaving with unsaved edits is the single discard decision point (there's no
-  // standing discard control). Offer the full three-way choice — save and leave,
-  // drop the edits and leave, or stay — mirroring the canonical iOS unsaved-
+  // standing discard control). Offer the full three-way choice - save and leave,
+  // drop the edits and leave, or stay - mirroring the canonical iOS unsaved-
   // changes dialog. The save label matches the entry's commit vocabulary:
   // "Save for later" in review, plain "Save" once completed.
   useEffect(() => {
@@ -423,7 +423,7 @@ export default function EntryDetailScreen() {
     const saveLabel = artefact?.status === ArtefactStatus.COMPLETED ? 'Save' : 'Save for later';
 
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      // A commit handler is navigating away deliberately after saving — let it
+      // A commit handler is navigating away deliberately after saving - let it
       // through instead of re-prompting for edits it has already persisted.
       if (bypassUnsavedPrompt.current) return;
       e.preventDefault();
@@ -507,7 +507,7 @@ export default function EntryDetailScreen() {
   // ── Commit actions (Save for later / Mark as done / completed Save) ──
 
   // Save for later: persist edits (only if any) and return to the dashboard.
-  // The entry is already IN_REVIEW on the server, so there's no status call —
+  // The entry is already IN_REVIEW on the server, so there's no status call -
   // and with nothing edited it's a pure navigation, no toast (a "Saved" with no
   // write would be a lie).
   const handleSaveForLater = useCallback(async () => {
@@ -520,14 +520,14 @@ export default function EntryDetailScreen() {
   }, [hasChanges, persistEdits, showToast, leaveWithoutPrompt]);
 
   // Completed entries stay editable; saving keeps them COMPLETED (no demotion)
-  // and stays in place with a toast — only ever shown while there are edits.
+  // and stays in place with a toast - only ever shown while there are edits.
   const handleSaveCompleted = useCallback(async () => {
     const ok = await persistEdits();
     if (ok) showToast('Saved');
   }, [persistEdits, showToast]);
 
   // The actual completion: persist pending edits first, then finalise (activates
-  // PDP goals). Save-then-finalise is sequential — if the save fails the status
+  // PDP goals). Save-then-finalise is sequential - if the save fails the status
   // is untouched and edits stay buffered for retry; navigation waits for a
   // fulfilled finalise so a failure never strands the user on the dashboard.
   const runMarkAsDone = useCallback(async () => {
@@ -558,12 +558,12 @@ export default function EntryDetailScreen() {
       showToast('Marked as done');
       leaveWithoutPrompt();
     } else {
-      // persistEdits already committed, so any edits are safe — only the
+      // persistEdits already committed, so any edits are safe - only the
       // finalise failed. Say so, and leave the user on the (still IN_REVIEW)
       // entry to retry.
       Alert.alert(
         'Error',
-        "Couldn't mark this entry as done. Your changes are saved — please try again."
+        "Couldn't mark this entry as done. Your changes are saved - please try again."
       );
     }
   }, [
@@ -776,7 +776,7 @@ export default function EntryDetailScreen() {
         {/* Header */}
         <View style={styles.section}>
           <EditableTitle value={displayTitle} onChange={handleTitleChange} editable={isEditable} />
-          {/* Metadata line — type and date as quiet secondary text; the actionable
+          {/* Metadata line - type and date as quiet secondary text; the actionable
               review state lives in the banner below, not here (MOB-064/065). A
               terminal status word (Completed / Archived) is appended only when
               there's no banner to carry it. */}
@@ -793,10 +793,10 @@ export default function EntryDetailScreen() {
           </Text>
         </View>
 
-        {/* Soft "needs your input" advisory — shows only in review with unmet sections */}
+        {/* Soft "needs your input" advisory - shows only in review with unmet sections */}
         <ArtefactAdvisoryBanner artefactId={artefactId} />
 
-        {/* Entry document — the canonical FourteenFish-shaped output, editable in
+        {/* Entry document - the canonical FourteenFish-shaped output, editable in
             place while in review. Single source of truth for the entry body. */}
         {displayDocument.length > 0 && (
           <View style={styles.section}>
@@ -814,7 +814,7 @@ export default function EntryDetailScreen() {
           </View>
         )}
 
-        {/* Capabilities — only the trainee's justification is shown (the evidence
+        {/* Capabilities - only the trainee's justification is shown (the evidence
             quote is internal provenance). Editable in place, mirroring the entry
             sections: justification text is the trainee's paste-ready own words. */}
         {displayCapabilities.length > 0 && (
@@ -834,9 +834,9 @@ export default function EntryDetailScreen() {
           </View>
         )}
 
-        {/* Full Screen Section Editor — entry sections. hideTitle: the section names
+        {/* Full Screen Section Editor - entry sections. hideTitle: the section names
             are fixed FourteenFish fields (Description / Reflection / Learning needs) and
-            must not be renamed (MOB-066) — the title was already discarded on save, so
+            must not be renamed (MOB-066) - the title was already discarded on save, so
             this removes the misleading editable field and labels the editor with the
             section name. */}
         <FullScreenSectionEditor
@@ -852,7 +852,7 @@ export default function EntryDetailScreen() {
           onClose={() => setEditingSectionIndex(null)}
         />
 
-        {/* Full Screen Section Editor — capability justifications. hideTitle: the
+        {/* Full Screen Section Editor - capability justifications. hideTitle: the
             capability name is fixed taxonomy (not user-editable, same as MOB-066 for
             sections); the name was already discarded on save, so only the justification
             text is editable here. */}
@@ -878,7 +878,7 @@ export default function EntryDetailScreen() {
                       explains why goals start untracked and invites tracking,
                       without gating "Mark as done". */}
                   <Text style={[styles.pdpHint, { color: colors.textSecondary }]}>
-                    Optional — track any goals you&rsquo;d like to follow up later.
+                    Optional - track any goals you&rsquo;d like to follow up later.
                   </Text>
                   <PdpGoalSelector
                     goals={artefact.pdpGoals}
@@ -987,7 +987,7 @@ export default function EntryDetailScreen() {
             </View>
           )}
 
-        {/* Notes — user-authored addenda, editable in any non-archived state
+        {/* Notes - user-authored addenda, editable in any non-archived state
             (read-only when archived). Stays visible while editing, unlike the
             actions below. */}
         {showNotes && (
@@ -1002,7 +1002,7 @@ export default function EntryDetailScreen() {
           </View>
         )}
 
-        {/* Full Screen Section Editor — notes (titleless, freeform) */}
+        {/* Full Screen Section Editor - notes (titleless, freeform) */}
         <FullScreenSectionEditor
           visible={editingNoteKey !== null}
           sectionTitle="Note"
@@ -1013,7 +1013,7 @@ export default function EntryDetailScreen() {
           contentPlaceholder="Write your note…"
         />
 
-        {/* Your rating — hidden until the artefact has AI output to rate */}
+        {/* Your rating - hidden until the artefact has AI output to rate */}
         {!hasChanges && artefact.status !== ArtefactStatus.IN_CONVERSATION && (
           <View style={styles.section}>
             {artefact.review ? (
@@ -1073,7 +1073,7 @@ export default function EntryDetailScreen() {
           </View>
         )}
 
-        {/* Actions — hidden when there are unsaved changes */}
+        {/* Actions - hidden when there are unsaved changes */}
         {!hasChanges && (
           <>
             {/* Navigation links */}
@@ -1120,7 +1120,7 @@ export default function EntryDetailScreen() {
         )}
       </ScrollView>
 
-      {/* Status-driven commit bar — the single save affordance (MOB-086/087/089).
+      {/* Status-driven commit bar - the single save affordance (MOB-086/087/089).
           Renders nothing outside review/completed-with-edits. */}
       <EntryActionBar
         status={artefact.status}
@@ -1175,7 +1175,7 @@ export default function EntryDetailScreen() {
         title="Archive entry"
         message={
           hasActivePdpGoals
-            ? 'This entry will be hidden — you can restore it anytime. It has active PDP goals: keep them, or archive them too?'
+            ? 'This entry will be hidden - you can restore it anytime. It has active PDP goals: keep them, or archive them too?'
             : 'This entry will be hidden. You can restore it anytime from your archive.'
         }
         buttons={

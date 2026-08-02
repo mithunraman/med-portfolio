@@ -15,7 +15,7 @@ export function classifyError(error: unknown): TypedError {
   }
   if (error instanceof ApiError) {
     if (error.status >= 500) {
-      return { kind: 'server', message: 'Server error — try again shortly', status: error.status, retryable: true };
+      return { kind: 'server', message: 'Server error - try again shortly', status: error.status, retryable: true };
     }
     // 408 Request Timeout and 429 Too Many Requests are retryable; other 4xx are not
     const retryable = error.status === 408 || error.status === 429;

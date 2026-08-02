@@ -34,7 +34,7 @@ export function WelcomeModule({
         },
       ]}
     >
-      {/* Hero icon — visual anchor */}
+      {/* Hero icon - visual anchor */}
       <View style={[styles.heroCircle, { backgroundColor: hexToRgba(colors.primary, 0.1) }]}>
         <Ionicons name="book-outline" size={32} color={colors.primary} />
       </View>
@@ -57,7 +57,7 @@ export function WelcomeModule({
         ))}
       </View>
 
-      {/* CTA — direct action to eliminate cognitive gap */}
+      {/* CTA - direct action to eliminate cognitive gap */}
       <TouchableOpacity
         style={[styles.cta, { backgroundColor: colors.primary }]}
         onPress={onStartFirstEntry}

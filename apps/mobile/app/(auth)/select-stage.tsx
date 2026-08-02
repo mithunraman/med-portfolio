@@ -20,7 +20,7 @@ export default function SelectStageScreen() {
   const params = useLocalSearchParams<{ specialty?: string; specialtyName?: string }>();
 
   // GP is the only active specialty today, so onboarding skips the specialty
-  // picker and lands here directly with no params — default to GP. When a
+  // picker and lands here directly with no params - default to GP. When a
   // specialty step is reintroduced (>1 active) it passes these params, which
   // take precedence, and this screen keeps working unchanged.
   const cameFromSpecialtyPicker = params.specialty != null;
@@ -36,7 +36,7 @@ export default function SelectStageScreen() {
   // Explicit load state for the specialties fetch. Modelled directly rather than
   // inferred from `specialties.length === 0`, so a transient fetch failure shows
   // a retryable error instead of an unrecoverable spinner (this screen is the
-  // sole fetcher on the GP-only path — the specialty picker never mounts).
+  // sole fetcher on the GP-only path - the specialty picker never mounts).
   const [loadState, setLoadState] = useState<'loading' | 'error' | 'ready'>(
     specialties.length > 0 ? 'ready' : 'loading'
   );

@@ -21,7 +21,7 @@ const artefactsLogger = logger.createScope('ArtefactsThunks');
 // Thunks
 // ---------------------------------------------------------------------------
 
-/** Guest hit the artefact cap — surfaced by the API as a structured quota error. */
+/** Guest hit the artefact cap - surfaced by the API as a structured quota error. */
 function isGuestArtefactLimitError(error: unknown): error is ApiError {
   return error instanceof ApiError && error.code === QuotaErrorCode.GUEST_ARTEFACT_LIMIT_REACHED;
 }
@@ -176,7 +176,7 @@ export const replaceNotes = createAsyncThunk(
 
 /**
  * Upsert (create or overwrite) the author's private review of an artefact.
- * Plain merge — the returned artefact carries the embedded `review`.
+ * Plain merge - the returned artefact carries the embedded `review`.
  */
 export const upsertReview = createAsyncThunk(
   'artefacts/upsertReview',
@@ -258,7 +258,7 @@ export const deleteArtefact = createAsyncThunk(
 );
 
 /**
- * Finalise an artefact — marks it FINAL and activates/archives PDP goals.
+ * Finalise an artefact - marks it FINAL and activates/archives PDP goals.
  */
 export const finaliseArtefact = createAsyncThunk(
   'artefacts/finaliseArtefact',

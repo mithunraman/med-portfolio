@@ -52,7 +52,7 @@ interface ReviewDatePickerSheetProps {
 
 /**
  * Shared two-step review-date picker: quick-pick chips (+ "Custom") → full calendar,
- * with a "Quick pick" pill to step back. Presentation-only and controlled — the
+ * with a "Quick pick" pill to step back. Presentation-only and controlled - the
  * parent owns `visible` and the value, and receives the chosen `Date` via `onSelect`.
  * Reused by both PDP surfaces (entry-screen selector + standalone goal screen).
  */
@@ -68,7 +68,7 @@ export function ReviewDatePickerSheet({
   const [showCalendar, setShowCalendar] = useState(false);
 
   // Always open on the quick-pick chips (the default entry point). The sheet stays
-  // mounted while hidden (parent only toggles `visible`), so its state persists —
+  // mounted while hidden (parent only toggles `visible`), so its state persists -
   // reset on open so a prior "Custom → calendar" selection doesn't make the next
   // open skip the chips. One place, immune to which exit path closed the sheet.
   useEffect(() => {

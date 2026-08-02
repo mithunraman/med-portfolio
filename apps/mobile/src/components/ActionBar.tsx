@@ -3,7 +3,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme';
 
-// Generic, interchangeable "busy" gerunds — never tied to the actual pipeline step
+// Generic, interchangeable "busy" gerunds - never tied to the actual pipeline step
 // and framed on the entry/text (not clinical judgment on the patient). See MOB-044.
 const THINKING_WORDS = [
   'Thinking',
@@ -45,7 +45,7 @@ function useRotatingText(words: string[], intervalMs = 2500): string {
 // --- Public types ---
 
 export type ActionBarState =
-  // Server-supplied display copy — render as given, never map or branch on it.
+  // Server-supplied display copy - render as given, never map or branch on it.
   // Optional and purely additive: the rotating word above it always renders, so
   // callers with no server-reported label (local send/processing) simply omit it.
   | { mode: 'status'; thinkingLabel?: string | null }
@@ -132,7 +132,7 @@ function ProgressBar({
         />
       </View>
       <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
-        {wordCount} / {threshold} words — keep going
+        {wordCount} / {threshold} words - keep going
       </Text>
     </View>
   );
@@ -148,7 +148,7 @@ function ActionButton({
   colors: { accent: string };
 }) {
   // Single, model-agnostic label for both the first ("start") and follow-up
-  // ("continue") hand-offs to the AI — see MOB-037. "Continue" stays truthful
+  // ("continue") hand-offs to the AI - see MOB-037. "Continue" stays truthful
   // whether the AI then asks a question or finishes, so it survives whichever
   // way the finished-vs-still-adding model (MOB-038) is resolved.
   const label = 'Continue';
@@ -169,7 +169,7 @@ function ActionButton({
   );
 }
 
-// Fixed inner height so both modes occupy the same space — prevents layout shift
+// Fixed inner height so both modes occupy the same space - prevents layout shift
 const INNER_HEIGHT = 48;
 
 // --- Styles ---

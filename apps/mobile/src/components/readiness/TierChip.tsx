@@ -12,7 +12,7 @@ interface Props {
 
 /**
  * Compact pill showing a single section's readiness tier (missing/thin/adequate/strong).
- * Pure presentational — colour is resolved from the active theme.
+ * Pure presentational - colour is resolved from the active theme.
  */
 export const TierChip = memo(function TierChip({ tier, meetsThreshold = true }: Props) {
   const { colors } = useTheme();

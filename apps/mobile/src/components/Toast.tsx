@@ -25,7 +25,7 @@ const ANIM_MS = 200;
 /**
  * Minimal app-wide toast: one message at a time, auto-dismissing, non-blocking.
  *
- * Deliberately tiny — no variants, no queue, no action buttons. It exists to
+ * Deliberately tiny - no variants, no queue, no action buttons. It exists to
  * confirm success ("Saved", "Marked as done") without the interruption of a
  * modal `Alert`. Mounted once at the root, above the navigator so it overlays
  * every screen; `pointerEvents="none"` keeps it from swallowing taps.
@@ -35,7 +35,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
   const [message, setMessage] = useState<string | null>(null);
   // Lazy init so the Animated.Value is constructed once, not rebuilt-and-discarded
-  // on every render (the setter is never called — these are stable drivers).
+  // on every render (the setter is never called - these are stable drivers).
   const [opacity] = useState(() => new Animated.Value(0));
   const [translateY] = useState(() => new Animated.Value(12));
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

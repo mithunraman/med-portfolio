@@ -3,7 +3,7 @@ import { ArtefactStatus, MessageRole, MessageStatus, MessageType } from '@acme/s
 
 /**
  * Client-side gating for editing/deleting a chat message. The backend no longer
- * publishes a per-message capability flag — availability is composed here from
+ * publishes a per-message capability flag - availability is composed here from
  * message facts + the conversation's artefact status. The edit/delete endpoints
  * independently authorize the same rules.
  *
@@ -13,7 +13,7 @@ import { ArtefactStatus, MessageRole, MessageStatus, MessageType } from '@acme/s
  *  - not system-generated
  *  - the artefact is still IN_CONVERSATION
  *  - the AI is not actively analysing
- *  - the AI has not yet responded after this message — i.e. the message was
+ *  - the AI has not yet responded after this message - i.e. the message was
  *    sent after the latest assistant message (including question-less terminal
  *    verdicts). Once the AI has replied past it, the message has been consumed
  *    by an analysis turn and is locked. Mirrors the server's
@@ -40,7 +40,7 @@ function isOwnModifiableMessage(
     MODIFIABLE_TYPES.has(message.messageType) &&
     artefactStatus === ArtefactStatus.IN_CONVERSATION &&
     !isAnalysing &&
-    // createdAt is an ISO string — lexicographic order matches chronological.
+    // createdAt is an ISO string - lexicographic order matches chronological.
     (!latestAssistantMessageAt || message.createdAt > latestAssistantMessageAt)
   );
 }

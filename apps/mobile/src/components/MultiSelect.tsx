@@ -123,7 +123,7 @@ const MultiSelectItem = memo(function MultiSelectItem({
             <Text style={[styles.label, { color: colors.text }]}>{option.label}</Text>
           </View>
         </Pressable>
-        {/* Reasoning disclosure sits where the confidence badge used to be — an
+        {/* Reasoning disclosure sits where the confidence badge used to be - an
             accent underlined link so it clearly reads as tappable. */}
         {option.reasoning && (
           <Pressable
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  // Tap area for toggling the option — checkbox + label only, takes the row's
+  // Tap area for toggling the option - checkbox + label only, takes the row's
   // free width so the confidence box stays pinned to the right.
   selectTarget: {
     flex: 1,

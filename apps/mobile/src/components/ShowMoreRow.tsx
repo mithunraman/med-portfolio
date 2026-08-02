@@ -10,7 +10,7 @@ interface Props {
 
 /**
  * One-way "Show N more" affordance rendered below a collapsed option list.
- * Presentational only — collapse state lives in useCollapsibleOptions.
+ * Presentational only - collapse state lives in useCollapsibleOptions.
  */
 export const ShowMoreRow = memo(function ShowMoreRow({ hiddenCount, onPress }: Props) {
   const { colors } = useTheme();

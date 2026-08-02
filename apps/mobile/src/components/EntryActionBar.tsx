@@ -10,9 +10,9 @@ type CommitAction = 'saveForLater' | 'markAsDone' | 'save';
 
 interface EntryActionBarProps {
   status: ArtefactStatus;
-  /** Whether there are unsaved edits — gates the completed-state "Save". */
+  /** Whether there are unsaved edits - gates the completed-state "Save". */
   hasChanges: boolean;
-  /** A save/finalise is in flight — disables and spins the buttons. */
+  /** A save/finalise is in flight - disables and spins the buttons. */
   busy?: boolean;
   /** Persist edits, keep "Needs review", return to the dashboard. */
   onSaveForLater: () => void;
@@ -25,7 +25,7 @@ interface EntryActionBarProps {
 /**
  * Status-driven commit bar (MOB-086/087/089).
  *
- * The single save affordance for the entry — it replaces both the old
+ * The single save affordance for the entry - it replaces both the old
  * "Complete entry" CTA and the sticky "Save changes" bar, so there is never
  * more than one save pattern on screen at a time:
  *   • IN_REVIEW  → two persistent commits: Save for later (keep) / Mark as done.
@@ -45,7 +45,7 @@ export function EntryActionBar({
   const insets = useSafeAreaInsets();
 
   // Both review buttons share one `busy` flag, so track which one the user
-  // tapped and show the spinner only there — the sibling just disables. Cleared
+  // tapped and show the spinner only there - the sibling just disables. Cleared
   // whenever the request settles.
   const [active, setActive] = useState<CommitAction | null>(null);
   useEffect(() => {

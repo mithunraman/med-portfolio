@@ -35,7 +35,7 @@ export default function WelcomeScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Centred content block */}
       <View style={styles.content}>
-        {/* Logo — app icon */}
+        {/* Logo - app icon */}
         <Image
           source={require('../../assets/images/splash-icon.png')}
           style={styles.logoImage}
@@ -68,7 +68,7 @@ export default function WelcomeScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Secondary: Sign in — text link style */}
+        {/* Secondary: Sign in - text link style */}
         <TouchableOpacity
           style={styles.secondaryButton}
           onPress={handleSignIn}

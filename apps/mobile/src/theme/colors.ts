@@ -5,7 +5,7 @@ export interface ThemeColors {
   textSecondary: string;
   primary: string;
   border: string;
-  /** Off-state track for switches — a mid-gray with real contrast against `surface`, unlike `border`. */
+  /** Off-state track for switches - a mid-gray with real contrast against `surface`, unlike `border`. */
   switchTrackOff: string;
   error: string;
   accent: string;
@@ -14,7 +14,7 @@ export interface ThemeColors {
   warningBorder: string;
   /** Positive/terminal-success accent (e.g. completed state, PDP goal done). */
   success: string;
-  /** Informational accent — calm guidance, below warning on the severity ladder. */
+  /** Informational accent - calm guidance, below warning on the severity ladder. */
   info: string;
   infoBackground: string;
   infoBorder: string;

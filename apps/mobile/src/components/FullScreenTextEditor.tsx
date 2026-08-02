@@ -86,7 +86,7 @@ export function FullScreenSectionEditor({
           contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Title Field — hidden for titleless content (e.g. notes) */}
+          {/* Title Field - hidden for titleless content (e.g. notes) */}
           {!hideTitle && (
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Title</Text>
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     // flex:1 + numberOfLines keeps a long title (e.g. a capability name) from
-    // pushing the Done button off-screen — it takes only the space between Cancel
+    // pushing the Done button off-screen - it takes only the space between Cancel
     // and Done and truncates with an ellipsis rather than overflowing the row.
     flex: 1,
     textAlign: 'center',

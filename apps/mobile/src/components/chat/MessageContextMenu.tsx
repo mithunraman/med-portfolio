@@ -39,7 +39,7 @@ export const MessageContextMenu = memo(function MessageContextMenu({
   const actions = useMemo(() => {
     if (!message) return [COPY_ACTION];
     const items: Action[] = [COPY_ACTION];
-    // Hide (don't disable) inapplicable actions — the global "analysing" state
+    // Hide (don't disable) inapplicable actions - the global "analysing" state
     // and the "AI already replied" lock are conveyed by their absence.
     if (canEditMessage(message, artefactStatus, isAnalysing, latestAssistantMessageAt))
       items.push(EDIT_ACTION);
@@ -61,7 +61,7 @@ export const MessageContextMenu = memo(function MessageContextMenu({
     <Modal visible={message !== null} transparent animationType="fade" onRequestClose={onDismiss}>
       {/* Backdrop */}
       <Pressable style={styles.backdrop} onPress={onDismiss}>
-        {/* Action row — stop propagation so tapping it doesn't dismiss */}
+        {/* Action row - stop propagation so tapping it doesn't dismiss */}
         <Pressable style={styles.menuContainer} onPress={() => {}}>
           {actions.map((action, index) => (
             <Pressable

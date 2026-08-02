@@ -2,7 +2,7 @@
  * Canonical URLs for legal and support surfaces.
  *
  * Kept in one place rather than inline at each call site: these change with the
- * domain, and App Review checks that the in-app Privacy Policy link resolves —
+ * domain, and App Review checks that the in-app Privacy Policy link resolves -
  * a stale literal buried in a settings screen is the kind of thing that only
  * surfaces during submission.
  *

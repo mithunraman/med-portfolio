@@ -18,7 +18,7 @@ export const dismissNotice = createAsyncThunk(
       await api.notices.dismiss(noticeId);
     } catch (error) {
       noticesLogger.warn('Failed to dismiss notice server-side', { noticeId, error: String(error) });
-      // Don't re-add — self-heals on next init
+      // Don't re-add - self-heals on next init
     }
   }
 );

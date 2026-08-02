@@ -10,7 +10,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 /**
  * Lean inline Home notice reminding a guest their work isn't tied to an account
  * (MOB-009). A chronic reminder, so it's a quiet one-line text note (not a promo
- * card) that lives in content between the capture CTA and Recent cases — a top
+ * card) that lives in content between the capture CTA and Recent cases - a top
  * system banner would be crowded out by the quota/offline banners.
  *
  * Self-gating: shown only for a guest with >=1 entry (something to lose) who hasn't
@@ -33,7 +33,7 @@ export function GuestDataBanner() {
 
   const handleSeeWhy = () => router.push('/(tabs)/profile');
 
-  // Minor attention-seeking wash — a warning (caution) tint at low opacity, bumped
+  // Minor attention-seeking wash - a warning (caution) tint at low opacity, bumped
   // slightly in dark mode so it stays perceptible on a dark ground.
   const accent = SEVERITY_COLORS[NoticeSeverity.WARNING];
   const backgroundColor = accent + (isDark ? '2E' : '1F');

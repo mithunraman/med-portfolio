@@ -8,7 +8,7 @@ import { useAppSelector } from './useAppSelector';
  *
  * Shared by the entry-type picker and the chat screen, which needs to turn the
  * `entryType` route param (a code) back into a label for the header. Keeping the
- * lookup in one place stops the two from drifting — the picker showing one name
+ * lookup in one place stops the two from drifting - the picker showing one name
  * and the screen it navigates to showing another.
  *
  * Returns an empty list until `/specialties` has loaded, or if the user's
@@ -25,7 +25,7 @@ export function useEntryTypes(): EntryTypeOption[] {
 }
 
 /**
- * Display label for an entry-type code, or `undefined` if it can't be resolved —
+ * Display label for an entry-type code, or `undefined` if it can't be resolved -
  * config still loading, or a code that is no longer offered.
  */
 export function useEntryTypeLabel(code: string | undefined): string | undefined {

@@ -42,9 +42,9 @@ const SPACING = {
   containerPadding: 16,
   buttonSize: 48,
   iconSize: 22,
-  // Pause is a secondary control — sized to match the delete icon (22) rather than
+  // Pause is a secondary control - sized to match the delete icon (22) rather than
   // the primary Send (48). The small circle keeps a 48pt touch target via a raised
-  // hitSlop on the button (24 + 12pt each side = 48pt — meets Android Material 48dp
+  // hitSlop on the button (24 + 12pt each side = 48pt - meets Android Material 48dp
   // as well as iOS HIG 44pt).
   pauseButtonSize: 24,
   pauseIconSize: 14,
@@ -77,7 +77,7 @@ interface VoiceNoteRecorderBarProps {
 const PULSE_DURATION_MS = 700;
 
 /**
- * The "we are live" affordance. The timer alone reads as a stopwatch — a
+ * The "we are live" affordance. The timer alone reads as a stopwatch - a
  * pulsing red dot is the convention users already know from every other
  * recorder, and it is the only element that survives being viewed at
  * thumbnail size.
@@ -218,7 +218,7 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
           stoppedResultRef.current = result;
         })
         .catch(() => {
-          // Stop failed — user can still retry via send button
+          // Stop failed - user can still retry via send button
         });
     }
   }, [isRecording, duration, stopRecording]);
@@ -227,7 +227,7 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
   const handleDiscard = useCallback(() => {
     // If actively recording, pause while the dialog is open so the timer doesn't
     // eat into the cap and noise from the dialog isn't appended to the clip.
-    // Skip if already paused (user paused manually — don't auto-resume their pause)
+    // Skip if already paused (user paused manually - don't auto-resume their pause)
     // or if recording was auto-stopped at max duration.
     const shouldAutoResume = isRecording;
     if (shouldAutoResume) {

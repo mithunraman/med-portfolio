@@ -3,7 +3,7 @@ import { createEntityAdapter, createSlice, PayloadAction } from '@reduxjs/toolki
 import { deleteConversation, fetchConversations } from './thunks';
 
 const conversationsAdapter = createEntityAdapter<Conversation>({
-  // RTK uses the 'id' field automatically — no selectId needed
+  // RTK uses the 'id' field automatically - no selectId needed
   sortComparer: (a, b) => b.updatedAt.localeCompare(a.updatedAt),
 });
 
@@ -64,7 +64,7 @@ const conversationsSlice = createSlice({
 
 export const { setActiveConversation, clearConversations } = conversationsSlice.actions;
 
-// Unbound selectors — pass the conversations slice state directly.
+// Unbound selectors - pass the conversations slice state directly.
 // Avoids circular deps with RootState.
 // Usage: conversationSelectors.selectAll(useAppSelector(s => s.conversations))
 export const conversationSelectors = conversationsAdapter.getSelectors();

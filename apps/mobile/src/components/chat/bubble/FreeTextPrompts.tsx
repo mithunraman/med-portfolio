@@ -28,7 +28,7 @@ export const FreeTextPrompts = memo(function FreeTextPrompts({ question, isActiv
         <View key={prompt.key}>
           <View style={styles.promptItem}>
             {/* The question is the primary element (H1). Numbering only appears when
-                there is more than one prompt — a lone "1." adds noise. */}
+                there is more than one prompt - a lone "1." adds noise. */}
             <Text style={[styles.promptText, { color: colors.text }]} accessibilityRole="header">
               {question.prompts.length > 1 && (
                 <Text style={[styles.promptNumber, { color: colors.primary }]}>{index + 1}. </Text>

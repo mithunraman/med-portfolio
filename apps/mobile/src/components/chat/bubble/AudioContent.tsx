@@ -44,7 +44,7 @@ export const AudioContent = memo(function AudioContent({ message }: Props) {
 
   return (
     <View style={styles.wrapper}>
-      {/* Text message — primary focus */}
+      {/* Text message - primary focus */}
       {message.content ? (
         <Text style={[styles.textContent, { color: colors.text }]}>{message.content}</Text>
       ) : null}

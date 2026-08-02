@@ -20,7 +20,7 @@ export default function NoticeAndAckScreen() {
   const acknowledgement = useAppSelector(selectAcknowledgement);
 
   // Snapshot the document on mount so the form is insulated from later /init
-  // refreshes — if a new notice version lands mid-form, the user finishes against
+  // refreshes - if a new notice version lands mid-form, the user finishes against
   // the version they started on, and the in-flight POST captures the right
   // version. Route effect (on selectNeedsAcknowledgement) drives navigation.
   const [document] = useState<NoticeDocument | null>(() =>
@@ -65,7 +65,7 @@ export default function NoticeAndAckScreen() {
       // POST succeeded → ack is recorded server-side. Flip local state and let
       // the route effect navigate. Avoids re-running /init's other 4 sub-queries
       // (dashboard, quota, updatePolicy, notices) at a latency-critical moment.
-      // Intentionally leave `submitting=true` — the screen unmounts on the next
+      // Intentionally leave `submitting=true` - the screen unmounts on the next
       // render; keeping the button in its loading state avoids a flicker
       // (loading → enabled → gone) during the navigation transition.
       dispatch(acknowledgementSatisfied());
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
   },
   // ErrorBanner bakes in `marginHorizontal: 24` and `marginBottom: 16` for use
   // at the screen edge. Inside this ScrollView (already `paddingHorizontal: 24`
-  // + `gap: 16`), those margins double up — override them to zero here.
+  // + `gap: 16`), those margins double up - override them to zero here.
   errorBannerOverride: {
     marginHorizontal: 0,
     marginBottom: 0,

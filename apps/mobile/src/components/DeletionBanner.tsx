@@ -19,7 +19,7 @@ export function DeletionBanner() {
     try {
       await dispatch(cancelDeletion()).unwrap();
     } catch {
-      // Error handled by thunk — banner stays visible for retry
+      // Error handled by thunk - banner stays visible for retry
     } finally {
       setCancelling(false);
     }

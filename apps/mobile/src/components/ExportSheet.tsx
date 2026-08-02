@@ -23,7 +23,7 @@ export function ExportSheet({ visible, onClose, artefact }: ExportSheetProps) {
       await shareAsPdf(artefact);
       onClose();
     } catch {
-      // share sheet dismissed or error — no action needed
+      // share sheet dismissed or error - no action needed
     } finally {
       setExporting(false);
     }

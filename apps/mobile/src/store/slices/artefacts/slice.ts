@@ -196,7 +196,7 @@ const artefactsSlice = createSlice({
         delete state.statusById[action.meta.arg.artefactId];
       })
 
-      // editArtefact — content changes only, no view impact
+      // editArtefact - content changes only, no view impact
       .addCase(editArtefact.pending, (state, action) => {
         state.statusById[action.meta.arg.artefactId] = 'saving';
       })
@@ -208,7 +208,7 @@ const artefactsSlice = createSlice({
         delete state.statusById[action.meta.arg.artefactId];
       })
 
-      // replaceNotes — embedded notes change only, no view impact
+      // replaceNotes - embedded notes change only, no view impact
       .addCase(replaceNotes.pending, (state, action) => {
         state.statusById[action.meta.arg.artefactId] = 'saving';
       })
@@ -220,7 +220,7 @@ const artefactsSlice = createSlice({
         delete state.statusById[action.meta.arg.artefactId];
       })
 
-      // upsertReview — embedded review change only, no view impact
+      // upsertReview - embedded review change only, no view impact
       .addCase(upsertReview.pending, (state, action) => {
         state.statusById[action.meta.arg.artefactId] = 'saving';
       })
@@ -233,7 +233,7 @@ const artefactsSlice = createSlice({
       })
 
       // Cross-slice hydration: populate entity store from dashboard init response.
-      // No view insertion — dashboard items are not a complete page for any filter.
+      // No view insertion - dashboard items are not a complete page for any filter.
       .addCase(fetchInit.fulfilled, (state, action) => {
         const items = action.payload.dashboard?.recentEntries.items;
         if (items?.length) {
@@ -241,7 +241,7 @@ const artefactsSlice = createSlice({
         }
       })
 
-      // restoreVersion — content changes only, no view impact
+      // restoreVersion - content changes only, no view impact
       .addCase(restoreVersion.pending, (state, action) => {
         state.statusById[action.meta.arg.artefactId] = 'saving';
       })
@@ -253,7 +253,7 @@ const artefactsSlice = createSlice({
         delete state.statusById[action.meta.arg.artefactId];
       })
 
-      // deleteArtefact — remove from all views that contain it
+      // deleteArtefact - remove from all views that contain it
       .addCase(deleteArtefact.pending, (state, action) => {
         state.statusById[action.meta.arg.artefactId] = 'updating';
       })
@@ -272,7 +272,7 @@ const artefactsSlice = createSlice({
       })
 
       // Cross-slice: deleting a conversation cascades to its artefact server-side.
-      // Guaranteed IN_CONVERSATION — entity scan to find the artefact by conversation ID.
+      // Guaranteed IN_CONVERSATION - entity scan to find the artefact by conversation ID.
       .addCase(deleteConversation.fulfilled, (state, action) => {
         const conversationId = action.payload;
         const artefact = Object.values(state.entities).find(

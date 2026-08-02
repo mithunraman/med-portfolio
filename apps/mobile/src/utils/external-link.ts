@@ -1,7 +1,7 @@
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 
-// Two ways to open URLs externally — picked deliberately, not interchangeably.
+// Two ways to open URLs externally - picked deliberately, not interchangeably.
 //
 //   openSystemLink     → expo-linking.openURL. Hands off to the OS to pick a
 //                        handler. Required for App Store / Play Store URLs,
@@ -11,7 +11,7 @@ import * as WebBrowser from 'expo-web-browser';
 //   openInAppBrowser   → expo-web-browser.openBrowserAsync. Renders in an
 //                        embedded SFSafariViewController (iOS) / Chrome
 //                        Custom Tab (Android). Keeps the user in the app's
-//                        context — Apple's recommended pattern for in-flow
+//                        context - Apple's recommended pattern for in-flow
 //                        legal disclosure (privacy, terms) during signup.
 //                        Only accepts http(s) URLs.
 

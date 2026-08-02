@@ -13,8 +13,8 @@ import {
 } from './thunks';
 
 const messagesAdapter = createEntityAdapter<Message>({
-  // RTK uses the 'id' field automatically — no selectId needed
-  // Newest first — matches the inverted FlatList in GiftedChat
+  // RTK uses the 'id' field automatically - no selectId needed
+  // Newest first - matches the inverted FlatList in GiftedChat
   sortComparer: (a, b) => b.createdAt.localeCompare(a.createdAt),
 });
 
@@ -33,7 +33,7 @@ export interface OptimisticMessage {
   idempotencyKey: string;
   createdAt: string;
   error?: string;
-  /** For voice notes — local recording URI for retry */
+  /** For voice notes - local recording URI for retry */
   recordingUri?: string;
   recordingMime?: string;
   /**
@@ -71,7 +71,7 @@ export function toRenderableMessage(opt: OptimisticMessage): RenderableMessage {
 }
 
 interface MessagesExtraState {
-  // Ordered message IDs per conversation — the index for O(1) per-conversation lookups
+  // Ordered message IDs per conversation - the index for O(1) per-conversation lookups
   idsByConversation: Record<string, string[]>;
   // Server-driven conversation context per conversation
   contextByConversation: Record<string, ConversationContext>;
@@ -149,7 +149,7 @@ const messagesSlice = createSlice({
       state.idsByConversation = {};
       state.contextByConversation = {};
     },
-    // Upsert a single message — used for real-time status updates.
+    // Upsert a single message - used for real-time status updates.
     // If the message is new (not yet in the index), it is prepended as the newest.
     upsertMessage(state, action: PayloadAction<Message>) {
       const msg = action.payload;
@@ -160,7 +160,7 @@ const messagesSlice = createSlice({
       } else if (!ids.includes(msg.id)) {
         state.idsByConversation[msg.conversationId] = [msg.id, ...ids];
       }
-      // If the ID is already present, entity is updated in place — index unchanged ✓
+      // If the ID is already present, entity is updated in place - index unchanged ✓
     },
 
     // ── Optimistic message management ──
@@ -183,7 +183,7 @@ const messagesSlice = createSlice({
     },
     /**
      * Re-key ALL optimistic messages from one conversationId to another.
-     * Used when a new conversation is created — optimistic messages were keyed to a
+     * Used when a new conversation is created - optimistic messages were keyed to a
      * temporary ID and need to switch to the real server-assigned ID.
      *
      * Must be dispatched in the same synchronous block as setRealConversationId
@@ -205,7 +205,7 @@ const messagesSlice = createSlice({
       for (const opt of Object.values(state.optimisticMessages)) {
         if (opt && opt.conversationId === oldConversationId) {
           opt.conversationId = newConversationId;
-          // Artefact was created — drop the pending marker so retry doesn't re-create
+          // Artefact was created - drop the pending marker so retry doesn't re-create
           opt.pendingArtefact = undefined;
         }
       }
@@ -237,7 +237,7 @@ const messagesSlice = createSlice({
         state.sending = false;
         const msg = action.payload;
         messagesAdapter.upsertOne(state, msg);
-        // Prepend — sent message is always the newest in the conversation
+        // Prepend - sent message is always the newest in the conversation
         const ids = state.idsByConversation[msg.conversationId] ?? [];
         state.idsByConversation[msg.conversationId] = [msg.id, ...ids];
       })
@@ -246,7 +246,7 @@ const messagesSlice = createSlice({
         state.error = action.payload as string;
       })
 
-      // Poll conversation — silently replace messages + context (no loading state)
+      // Poll conversation - silently replace messages + context (no loading state)
       .addCase(pollConversation.fulfilled, (state, action) => {
         const { conversationId, messages, context } = action.payload;
         replaceConversationMessages(state, conversationId, messages, context);
@@ -288,7 +288,7 @@ const messagesSlice = createSlice({
         state.contextByConversation[conversationId] = context;
       })
 
-      // Cross-slice: deleting a conversation — clear all messages and context
+      // Cross-slice: deleting a conversation - clear all messages and context
       .addCase(deleteConversation.fulfilled, (state, action) => {
         const conversationId = action.payload;
         const staleIds = state.ids.filter(
@@ -319,7 +319,7 @@ export const {
   rekeyOptimisticMessages,
 } = messagesSlice.actions;
 
-// Unbound selectors — pass the messages slice state directly.
+// Unbound selectors - pass the messages slice state directly.
 // Avoids circular deps with RootState.
 // Usage: messageSelectors.selectAll(useAppSelector(s => s.messages))
 export const messageSelectors = messagesAdapter.getSelectors();

@@ -68,7 +68,7 @@ export const BubbleShell = memo(function BubbleShell({
 
   const metaColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)';
 
-  // Status tick for user messages — delivery status takes precedence over processing status
+  // Status tick for user messages - delivery status takes precedence over processing status
   const tick = (() => {
     if (!isUser) return null;
 
@@ -80,19 +80,19 @@ export const BubbleShell = memo(function BubbleShell({
       return <Ionicons name="alert-circle" size={12} color="#ef4444" />;
     }
 
-    // Server message — existing logic
+    // Server message - existing logic
     if (message.status === MessageStatus.FAILED) {
       return <Ionicons name="close" size={12} color="#ef4444" />;
     }
     if (message.status === MessageStatus.REJECTED) {
-      // Not delivered to the entry — a neutral marker, not the delivered double-tick.
+      // Not delivered to the entry - a neutral marker, not the delivered double-tick.
       return <Ionicons name="information-circle-outline" size={12} color="#8696a0" />;
     }
-    // Fully AI-processed — blue double tick (like "read").
+    // Fully AI-processed - blue double tick (like "read").
     if (isTerminalMessageStatus(message.status)) {
       return <Ionicons name="checkmark-done" size={12} color="#53bdeb" />;
     }
-    // On the server but still processing (PENDING…DEIDENTIFYING) — grey double
+    // On the server but still processing (PENDING…DEIDENTIFYING) - grey double
     // tick ("delivered"). A single tick here reads as "not delivered" (MOB-035).
     return <Ionicons name="checkmark-done" size={12} color="#8696a0" />;
   })();
@@ -126,7 +126,7 @@ export const BubbleShell = memo(function BubbleShell({
         </View>
       </View>
 
-      {/* Tail — only on last message in group */}
+      {/* Tail - only on last message in group */}
       {isLastInGroup &&
         (isUser ? (
           <View style={[styles.tailBase, styles.tailRight, { borderTopColor: bubbleColor }]} />

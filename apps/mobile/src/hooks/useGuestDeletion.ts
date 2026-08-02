@@ -17,8 +17,8 @@ const guestDeletionLogger = logger.createScope('GuestDeletion');
  * clinical content on the server with nothing left that could ever delete it.
  *
  * Sign-out is conditional on the delete succeeding. Signing out regardless
- * would strand exactly that state — data on the server, no session left to
- * delete it from — which is the gap this flow exists to close. On failure the
+ * would strand exactly that state - data on the server, no session left to
+ * delete it from - which is the gap this flow exists to close. On failure the
  * caller stays put with the account intact and can retry.
  *
  * The blocking HUD lives here rather than in the callers so every entry point
@@ -48,7 +48,7 @@ export function useGuestDeletion() {
 
     if (!failure) return true;
 
-    // Alerted after hideLoading — a native alert raised while the HUD's modal
+    // Alerted after hideLoading - a native alert raised while the HUD's modal
     // is still mounted can end up presented behind it.
     guestDeletionLogger.warn('Guest account deletion failed', { error: failure });
     Alert.alert(

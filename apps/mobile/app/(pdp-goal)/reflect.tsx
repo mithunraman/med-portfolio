@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// A single reflective prompt shown as placeholder text — a light scaffold
+// A single reflective prompt shown as placeholder text - a light scaffold
 // ("What did you learn / do differently") to counter blank-page paralysis without
 // changing the single-string `completionReview` data model.
 const REFLECTION_PROMPT =
@@ -46,13 +46,13 @@ export default function PdpGoalReflectScreen() {
     (state) => state.pdpGoals.statusById[goalId ?? ''] === 'updating'
   );
 
-  // Seeded from the store (warm — every entry point comes from the already-fetched
+  // Seeded from the store (warm - every entry point comes from the already-fetched
   // goal detail screen), so editing an existing reflection prefills.
   const [text, setText] = useState(goal?.completionReview ?? '');
 
   // Fail safe if the goal isn't in the store (stale id / cold deep-link) rather
   // than rendering an editor bound to nothing. Route to the goals list (not the
-  // goal detail — its id is the stale part), and don't rely on back() since a cold
+  // goal detail - its id is the stale part), and don't rely on back() since a cold
   // deep-link has no history to pop.
   if (!goal) {
     return (

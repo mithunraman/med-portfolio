@@ -7,7 +7,7 @@ import { fetchInit } from './thunks';
  * Fulfilled action type prefixes for mutations that affect dashboard data.
  * When any of these succeed, the dashboard is marked stale so it refetches on next focus.
  *
- * Most artefact and PDP goal mutations are NOT listed here — they are normalized
+ * Most artefact and PDP goal mutations are NOT listed here - they are normalized
  * into their entity slices, so updates are reflected immediately without refetch.
  * `finaliseArtefact` is the exception: it moves an entry between dashboard buckets,
  * which the entity update alone doesn't capture.
@@ -29,13 +29,13 @@ function isDashboardInvalidatingAction(actionType: string): boolean {
 export type InitStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export interface DashboardState {
-  /** Recent entries — normalized: only IDs stored here, entities in artefacts slice. */
+  /** Recent entries - normalized: only IDs stored here, entities in artefacts slice. */
   recentEntryIds: string[] | null;
   recentEntriesTotal: number;
-  /** PDP goals due soon — normalized: only IDs stored here, entities in pdpGoals slice. */
+  /** PDP goals due soon - normalized: only IDs stored here, entities in pdpGoals slice. */
   pdpGoalsDueIds: string[] | null;
   pdpGoalsDueTotal: number;
-  /** Active review period — still stored as full object (future normalization phase). */
+  /** Active review period - still stored as full object (future normalization phase). */
   activeReviewPeriod: ActiveReviewPeriodSummary | null;
   // Single source of truth for the /init thunk lifecycle. `ready` means
   // fetchInit has fulfilled at least once. Replaces the prior split of

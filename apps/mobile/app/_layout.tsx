@@ -145,7 +145,7 @@ function RootLayoutNav() {
 
   // Hoist /init dispatch into the root layout so the auth flow can read it
   // before any post-login screen mounts. Auth thunks no longer fetch init
-  // themselves — see authSlice docs.
+  // themselves - see authSlice docs.
   useEffect(() => {
     if (isLoggedIn && !initEverLoaded && !initLoading && !initError) {
       dispatch(fetchInit());
@@ -207,8 +207,8 @@ function RootLayoutNav() {
 
   // Onboarding is a sequence of ordered gates over real data, not a state
   // machine over a progress field. Routing logic lives in decideOnboardingRoute
-  // — pure function, unit-testable, each gate tests one condition. Screens
-  // update state and refresh /init — they do not navigate forward themselves.
+  // - pure function, unit-testable, each gate tests one condition. Screens
+  // update state and refresh /init - they do not navigate forward themselves.
   useEffect(() => {
     if (isLoading) return;
     if (isLoggedIn && !initEverLoaded) return;

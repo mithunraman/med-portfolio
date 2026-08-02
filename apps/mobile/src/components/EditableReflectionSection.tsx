@@ -26,7 +26,7 @@ export function EditableReflectionSection({
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
-      {/* Section header — NHS accordion layout: the whole heading (chevron on the
+      {/* Section header - NHS accordion layout: the whole heading (chevron on the
           leading edge + title) is the expand toggle; the edit action is a separate,
           isolated 44pt target on the far right so the two can't be mis-tapped. */}
       <View style={styles.cardHeader}>

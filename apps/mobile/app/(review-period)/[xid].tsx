@@ -95,7 +95,7 @@ function DomainSection({ domain }: { domain: DomainCoverage }) {
         </Text>
       </TouchableOpacity>
 
-      {/* Completeness bar. Carries the domain's standing without expanding it —
+      {/* Completeness bar. Carries the domain's standing without expanding it -
           the counts alone made every domain look identical at a glance. */}
       <View style={[styles.domainBarTrack, { backgroundColor: colors.border }]}>
         <View
@@ -285,7 +285,7 @@ export default function ReviewPeriodDetailScreen() {
           <View style={styles.dateRow}>
             <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
             <Text style={[styles.dateText, { color: colors.textSecondary }]}>
-              {formatDate(period.startDate)} — {formatDate(period.endDate)}
+              {formatDate(period.startDate)} - {formatDate(period.endDate)}
             </Text>
           </View>
         </View>

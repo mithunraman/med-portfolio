@@ -37,15 +37,15 @@ import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } 
 
 // ─── Module A: Start New Entry ────────────────────────────────────────────────
 
-// Fixed primary CTA — a stable, predictable action (no rotation). The rotating
+// Fixed primary CTA - a stable, predictable action (no rotation). The rotating
 // helper line below it carries the varied, conversational sub-prompts.
 const PRIMARY_CTA = 'Talk about your case';
 
 // Rotating sub-prompts under the fixed CTA (MOB-026). Kept mode-neutral (no
-// "mic" — the mic lives on the composer, MOB-124) so they fit voice or text.
+// "mic" - the mic lives on the composer, MOB-124) so they fit voice or text.
 const HELPERS = [
   // Ease / low-friction
-  'Just talk it through — we do the rest.',
+  'Just talk it through - we do the rest.',
   'No forms, just describe what happened.',
   'A few sentences is enough to start.',
   // Value / outcome
@@ -56,7 +56,7 @@ const HELPERS = [
   'A quick note now saves time later.',
   'Capture it now, while it’s fresh.',
   // Mode
-  'Voice or text — your choice.',
+  'Voice or text - your choice.',
   // Gentle nudges
   'Had a tricky consultation lately?',
   'Something you handled well today?',
@@ -83,7 +83,7 @@ function StartNewEntryCard({
       style={[
         styles.captureCard,
         // Dark surface card with a subtle border. The button-ness comes from the
-        // solid mint icon chip + green chevron, not a filled background — which
+        // solid mint icon chip + green chevron, not a filled background - which
         // also lets the title/helper sit on dark (white text passes WCAG easily).
         { backgroundColor: colors.surface, borderColor: colors.border },
         disabled && styles.captureCardDisabled,
@@ -94,7 +94,7 @@ function StartNewEntryCard({
       accessibilityLabel={disabled ? 'Upgrade to start new cases' : 'Talk about your case'}
       accessibilityState={{ disabled }}
     >
-      {/* Rounded-square mint chip with a white glyph — the primary-color accent
+      {/* Rounded-square mint chip with a white glyph - the primary-color accent
           that signals "action" against the neutral card. */}
       <View style={[styles.ctaIconChip, { backgroundColor: colors.primary }]}>
         <Ionicons name={disabled ? 'lock-closed' : 'chatbubbles'} size={26} color="#fff" />
@@ -173,7 +173,7 @@ function RecentEntriesModule({
     );
   }
 
-  // Only offer "See all" when there are more cases than we show inline —
+  // Only offer "See all" when there are more cases than we show inline -
   // otherwise it's a no-op detour to the same rows (the Entries tab still exists).
   const hasMore = total > RECENT_LIMIT;
 
@@ -393,7 +393,7 @@ function ReviewPeriodCoverageModule({
         accessibilityLabel={`Review period: ${period.name}, ${coverage.coveragePercent}% coverage`}
       >
         {/* Medium ring keeps the % (no separate %-text needed); the text block is
-            two lines — name, then count + deadline. Start date is deferred to the
+            two lines - name, then count + deadline. Start date is deferred to the
             detail screen. */}
         <CoverageRing percent={coverage.coveragePercent} size={52} />
         <View style={styles.coverageCardContent}>
@@ -566,7 +566,7 @@ export default function HomeScreen() {
         <NoticeBanner />
         <GuestLimitBanner />
 
-        {/* Review Period Coverage — placed first as a dashboard-style summary of
+        {/* Review Period Coverage - placed first as a dashboard-style summary of
             ARCP capability coverage. Returning, loaded users only (the welcome and
             skeleton states render their own content instead). */}
         {!showWelcome && !isInitialLoad && (
@@ -577,14 +577,14 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* Module A: Start New Entry — hidden in the welcome (first-run) state,
+        {/* Module A: Start New Entry - hidden in the welcome (first-run) state,
             where the WelcomeModule provides the single "Record your first entry"
             CTA. Shown for returning users and during the initial-load skeleton. */}
         {showWelcome ? null : (
           <StartNewEntryCard onPress={handleStartNew} helper={helper} disabled={!canCreate} />
         )}
 
-        {/* Guest data-loss nudge — self-gating (guest + has entries + not dismissed +
+        {/* Guest data-loss nudge - self-gating (guest + has entries + not dismissed +
             not at limit). Sits between the capture CTA and Recent cases. */}
         <GuestDataBanner />
 
@@ -687,7 +687,7 @@ const styles = StyleSheet.create({
   ctaIconChip: {
     width: 52,
     height: 52,
-    // Rounded square (squircle), not a circle — matches the icon-chip layout.
+    // Rounded square (squircle), not a circle - matches the icon-chip layout.
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
@@ -787,7 +787,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Review Period Coverage — shares the CTA's card shell (surface + 1px border,
+  // Review Period Coverage - shares the CTA's card shell (surface + 1px border,
   // radius 18, padding 16, gap 14, 52px leading chip) so the two read as siblings.
   coverageEmptyCard: {
     flexDirection: 'row',
@@ -838,7 +838,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  // A real round separator dot — vertically centred by the row's alignItems,
+  // A real round separator dot - vertically centred by the row's alignItems,
   // avoiding the baseline offset of an enlarged inline "•" glyph.
   statDot: {
     width: 5,

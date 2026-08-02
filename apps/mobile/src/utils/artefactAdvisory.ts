@@ -12,8 +12,8 @@ export interface ArtefactAdvisory {
 /**
  * Pure derivation of the "needs your input" advisory from an artefact.
  *
- * The banner shows only in IN_REVIEW — the one status where the signals exist
- * AND inline editing is enabled — so the nudge is always actionable. After
+ * The banner shows only in IN_REVIEW - the one status where the signals exist
+ * AND inline editing is enabled - so the nudge is always actionable. After
  * COMPLETED (finalised) or before review it stays silent.
  *
  * Two coexisting signals both flag the entry as not-yet-ready (deduped here so

@@ -43,7 +43,7 @@ export function useOtpFlow({ onVerify, alwaysShowName }: UseOtpFlowOptions) {
     remainingRef.current = RESEND_COOLDOWN_SECONDS;
     setResendCooldown(remainingRef.current);
     // Side effects (clearInterval + ref mutation) live in the timer callback, not
-    // in the setState updater — React may call updaters more than once, so they
+    // in the setState updater - React may call updaters more than once, so they
     // must stay pure. Here setResendCooldown only ever receives a plain number.
     cooldownRef.current = setInterval(() => {
       remainingRef.current -= 1;

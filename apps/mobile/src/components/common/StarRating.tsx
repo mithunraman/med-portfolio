@@ -21,7 +21,7 @@ interface StarRatingProps {
 
 /**
  * Presentation-only 1–5 star control. Reused by the inline rating row and the
- * review sheet (and any future supervisor rating) — no redux/thunk awareness.
+ * review sheet (and any future supervisor rating) - no redux/thunk awareness.
  */
 export const StarRating = memo(function StarRating({
   value,

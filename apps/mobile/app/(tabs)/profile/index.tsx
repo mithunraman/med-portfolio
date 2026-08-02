@@ -31,7 +31,7 @@ export default function ProfileScreen() {
 
   // Exiting guest mode deletes the account rather than just dropping the
   // session. A guest can't sign back in, so leaving the session behind would
-  // orphan their entries on the server with no way to ever remove them — and
+  // orphan their entries on the server with no way to ever remove them - and
   // this prompt has always told them the data would be lost.
   const handleLogout = () => {
     Alert.alert(

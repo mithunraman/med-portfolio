@@ -69,7 +69,7 @@ function getPollInterval(
   hasProcessingMessages: boolean,
   hasOptimisticMessages: boolean
 ): number | null {
-  // Messages still processing or optimistic messages pending — poll fast
+  // Messages still processing or optimistic messages pending - poll fast
   if (hasProcessingMessages || hasOptimisticMessages) return 3_000;
 
   switch (phase) {
@@ -82,7 +82,7 @@ function getPollInterval(
     case 'closed':
       return null;
     default:
-      // No context yet (initial load) — poll at moderate rate to pick up context
+      // No context yet (initial load) - poll at moderate rate to pick up context
       return 5_000;
   }
 }
@@ -136,7 +136,7 @@ export default function ChatScreen() {
 
   const { showActionSheetWithOptions } = useActionSheet();
 
-  // Conversation context — server-driven action state
+  // Conversation context - server-driven action state
   const context = useAppSelector((state) =>
     selectContextByConversation(state, effectiveConversationId)
   );
@@ -194,12 +194,12 @@ export default function ChatScreen() {
   const loadingMessages = useAppSelector(selectMessagesLoading);
   const sendingMessage = useAppSelector(selectMessagesSending);
 
-  // Per-component selector instances — stable across renders, memoize per conversationId
+  // Per-component selector instances - stable across renders, memoize per conversationId
   const selectServerMessages = useMemo(() => makeSelectServerMessages(), []);
   const selectOptimisticMessages = useMemo(() => makeSelectOptimisticMessages(), []);
   const selectLatestReadiness = useMemo(() => makeSelectLatestReadiness(), []);
 
-  // Live readiness snapshot — rides on the latest question message. null until
+  // Live readiness snapshot - rides on the latest question message. null until
   // the first readiness-bearing question arrives.
   const latestReadiness = useAppSelector((state) =>
     selectLatestReadiness(state, effectiveConversationId)
@@ -234,13 +234,13 @@ export default function ChatScreen() {
       firstMsgContent: mergedMessages[0]?.content?.slice(0, 50),
     });
     for (const m of mergedMessages) {
-      // Stop at the first assistant message — that's the segment boundary
+      // Stop at the first assistant message - that's the segment boundary
       if (m.role === MessageRole.ASSISTANT) {
         chatLogger.debug('[segmentWordCount] hit assistant message, breaking', { msgId: m.id });
         break;
       }
       // Only count fully-processed messages. In-flight (PENDING…DEIDENTIFYING) and
-      // error/rejected terminals (FAILED/REJECTED) are excluded — their words either
+      // error/rejected terminals (FAILED/REJECTED) are excluded - their words either
       // aren't final yet or never enter the AI transcript.
       if (m.role === MessageRole.USER && m.content && m.status === MessageStatus.COMPLETE) {
         const words = m.content.split(/\s+/).filter(Boolean).length;
@@ -305,7 +305,7 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (!effectiveConversationId || isPendingConversation || pollIntervalMs === null) {
-      chatLogger.debug('[poll] skipping — no polling needed', {
+      chatLogger.debug('[poll] skipping - no polling needed', {
         effectiveConversationId,
         isPendingConversation,
         pollIntervalMs,
@@ -352,7 +352,7 @@ export default function ChatScreen() {
    * Called from fulfilled results of sendMessageWithRetry / sendVoiceNoteWithRetry.
    *
    * Dispatches rekeyOptimisticMessages AND setRealConversationId in the same
-   * synchronous block so React batches both into one render — avoids a flash
+   * synchronous block so React batches both into one render - avoids a flash
    * where the selector can't find the rekeyed message under the old ID.
    */
   const applyNewConversationIds = useCallback(
@@ -439,10 +439,10 @@ export default function ChatScreen() {
     [optimisticMessages, dispatch, applyNewConversationIds]
   );
 
-  // Optimistic flag — gives instant feedback while the HTTP call is in flight
+  // Optimistic flag - gives instant feedback while the HTTP call is in flight
   const [pendingAnalysis, setPendingAnalysis] = useState(false);
 
-  // Track whether voice recorder is open — hides ActionBar to avoid overlap
+  // Track whether voice recorder is open - hides ActionBar to avoid overlap
   const [isRecording, setIsRecording] = useState(false);
 
   // The user message currently being edited (null = editor closed)
@@ -479,19 +479,19 @@ export default function ChatScreen() {
   // Title the screen with the entry type, so the header states which template the
   // conversation is being graded against.
   //
-  // Two sources, ordered by when they become available — not by preference:
+  // Two sources, ordered by when they become available - not by preference:
   //
   //  1. The `entryType` route param, set only on the way in from the picker. It
   //     resolves synchronously, and it is the ONLY source during a brand-new
   //     conversation, because no artefact (and therefore no server context) exists
   //     until the first message is sent.
-  //  2. `context.artefactTypeLabel`, which covers every other path — reopening from
+  //  2. `context.artefactTypeLabel`, which covers every other path - reopening from
   //     the entries list, a deep link, a restored app. Costs one render of 'Chat' on
   //     a cold open, before the first context fetch lands.
   //
   // Context-first would show 'Chat' for the whole pre-first-message window on a new
   // entry and then flip; param-first never regresses, and once both are present they
-  // agree — they resolve through the same registry, server-side and client-side.
+  // agree - they resolve through the same registry, server-side and client-side.
   //
   // Both degrade to 'Chat' rather than rendering a raw code at the trainee: the param
   // path returns undefined for a code no longer offered, and the server path resolves
@@ -523,7 +523,7 @@ export default function ChatScreen() {
     chatLogger.debug('[startAnalysis] thunk resolved', {
       fulfilled: startAnalysis.fulfilled.match(result),
     });
-    // On rejection, clear immediately — no server phase will arrive
+    // On rejection, clear immediately - no server phase will arrive
     if (startAnalysis.rejected.match(result)) setPendingAnalysis(false);
   }, [effectiveConversationId, dispatch]);
 
@@ -543,7 +543,7 @@ export default function ChatScreen() {
       chatLogger.debug('[resumeAnalysis] thunk resolved', {
         fulfilled: resumeAnalysis.fulfilled.match(result),
       });
-      // On rejection, clear immediately — no server phase will arrive
+      // On rejection, clear immediately - no server phase will arrive
       if (resumeAnalysis.rejected.match(result)) setPendingAnalysis(false);
     },
     [effectiveConversationId, context?.activeQuestion?.messageId, dispatch]
@@ -584,14 +584,14 @@ export default function ChatScreen() {
           })
         );
       } else {
-        // Fallback for free_text or unknown question types — no optimistic bubble
+        // Fallback for free_text or unknown question types - no optimistic bubble
         handleResumeAnalysis(messageId, value);
       }
     },
     [mergedMessages, effectiveConversationId, handleResumeAnalysis, dispatch]
   );
 
-  // Single derived bar state — status mode (busy) or action mode (clickable)
+  // Single derived bar state - status mode (busy) or action mode (clickable)
   const actionBarState = useMemo((): ActionBarState | null => {
     chatLogger.debug('[actionBarState] computing', {
       phase,
@@ -604,7 +604,7 @@ export default function ChatScreen() {
       msgCount: mergedMessages.length,
     });
 
-    // No conversation yet — hide the bar entirely
+    // No conversation yet - hide the bar entirely
     if (mergedMessages.length === 0 && !context) return null;
 
     // Local pipeline states take priority (sending / processing)
@@ -631,7 +631,7 @@ export default function ChatScreen() {
       };
     }
 
-    // Word count gate — composing phase uses initial threshold
+    // Word count gate - composing phase uses initial threshold
     if (phase === 'composing' && segmentWordCount < INITIAL_WORD_THRESHOLD) {
       if (segmentWordCount > 0) {
         return { mode: 'progress', wordCount: segmentWordCount, threshold: INITIAL_WORD_THRESHOLD };
@@ -639,12 +639,12 @@ export default function ChatScreen() {
       return null;
     }
 
-    // Action buttons — only shown once word threshold is met
+    // Action buttons - only shown once word threshold is met
     if (canStartAnalysis) {
       return { mode: 'action', variant: 'start', onPress: handleStartAnalysis };
     }
 
-    // Word count gate — free_text follow-ups use follow-up threshold
+    // Word count gate - free_text follow-ups use follow-up threshold
     if (
       canResumeAnalysis &&
       context?.activeQuestion?.questionType === 'free_text' &&
@@ -660,7 +660,7 @@ export default function ChatScreen() {
       return null;
     }
 
-    // Only show "Continue Analysis" for free_text — select questions resume via the inline card
+    // Only show "Continue Analysis" for free_text - select questions resume via the inline card
     if (canResumeAnalysis && context?.activeQuestion?.questionType === 'free_text') {
       return { mode: 'action', variant: 'continue', onPress: () => handleResumeAnalysis() };
     }
@@ -727,10 +727,10 @@ export default function ChatScreen() {
     async (content: string) => {
       if (!editingMessage) return;
       const messageId = editingMessage.id;
-      // Don't close the editor here — the modal closes only when this resolves,
+      // Don't close the editor here - the modal closes only when this resolves,
       // so a failed save keeps the user's draft intact. Rethrow so the modal
       // stays open on error. Progress is shown inline by the editor's own
-      // `saving` state — we deliberately do NOT open the global LoadingHUD here,
+      // `saving` state - we deliberately do NOT open the global LoadingHUD here,
       // since stacking its Modal over the editor Modal and dismissing both at
       // once freezes the screen on iOS (leftover modal container eats touches).
       try {
@@ -759,7 +759,7 @@ export default function ChatScreen() {
         behavior="translate-with-padding"
         keyboardVerticalOffset={headerHeight + bannerOffset}
       >
-        {/* Live readiness meter — pinned above the thread while analysis is active */}
+        {/* Live readiness meter - pinned above the thread while analysis is active */}
         {latestReadiness && (phase === 'analysing' || phase === 'awaiting_input') && (
           <ReadinessHeader readiness={latestReadiness} />
         )}
@@ -817,7 +817,7 @@ export default function ChatScreen() {
         )}
       </KeyboardAvoidingView>
 
-      {/* Safe area spacer — keyboard covers this when open, visible when closed */}
+      {/* Safe area spacer - keyboard covers this when open, visible when closed */}
       <View style={{ height: insets.bottom, backgroundColor: composerBg }} />
 
       <MessageEditorModal

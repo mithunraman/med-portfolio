@@ -88,7 +88,7 @@ export default function IntroScreen() {
   const renderSlide: ListRenderItem<Slide> = useCallback(
     ({ item }) => (
       <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
-        {/* Visual zone — upper half; decorative only, never interactive */}
+        {/* Visual zone - upper half; decorative only, never interactive */}
         <View style={styles.iconZone} importantForAccessibility="no-hide-descendants">
           {item.image ? (
             <Image source={item.image} style={styles.logoImage} resizeMode="contain" />
@@ -97,7 +97,7 @@ export default function IntroScreen() {
           ) : null}
         </View>
 
-        {/* Text zone — lower half */}
+        {/* Text zone - lower half */}
         <View style={styles.textZone}>
           <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
           {item.description ? (
@@ -132,7 +132,7 @@ export default function IntroScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Skip — hidden on the last slide, where the primary CTA completes onboarding.
+      {/* Skip - hidden on the last slide, where the primary CTA completes onboarding.
           A same-size spacer keeps the header height stable so slides don't shift. */}
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         {isLastSlide ? (

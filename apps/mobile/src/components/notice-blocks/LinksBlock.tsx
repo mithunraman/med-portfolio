@@ -27,7 +27,7 @@ export function LinksBlock({ items }: Props) {
             { borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
           ]}
           onPress={() => {
-            // Pressable.onPress is sync — catch the rejection so the failure
+            // Pressable.onPress is sync - catch the rejection so the failure
             // (e.g. tapping a second link while the first browser session is
             // still active) doesn't surface as an unhandled-promise warning.
             openInAppBrowser(item.url).catch((error) => {

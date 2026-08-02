@@ -4,7 +4,7 @@ import { fetchInit } from '../dashboard/thunks';
 
 // Shape-aware comparators below mirror the `shallowEqualUser` / `assignUserIfChanged`
 // pattern in authSlice. Without these, every /init produces fresh object/array
-// references for these fields — defeating Object.is equality in `useSelector`
+// references for these fields - defeating Object.is equality in `useSelector`
 // and the input-reference memoization in `createSelector` (notably for
 // selectBannerNotice / selectModalNotice).
 

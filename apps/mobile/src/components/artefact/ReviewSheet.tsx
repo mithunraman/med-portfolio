@@ -37,7 +37,7 @@ interface ReviewSheetProps {
 /**
  * Bottom-sheet capture surface for the author's private rating + optional comment.
  * Create and edit share this surface (upsert); the only differences are the seed
- * values and the primary button label. Plain-merge submit — on failure the sheet
+ * values and the primary button label. Plain-merge submit - on failure the sheet
  * stays open with the user's input intact rather than rolling back optimistic UI.
  */
 export function ReviewSheet({ visible, onClose, artefact, initialRating }: ReviewSheetProps) {
@@ -104,7 +104,7 @@ export function ReviewSheet({ visible, onClose, artefact, initialRating }: Revie
           >
             <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
-            {/* Pinned header — stays in view no matter how long the comment grows */}
+            {/* Pinned header - stays in view no matter how long the comment grows */}
             <View style={styles.header}>
               <Text style={[styles.title, { color: colors.text }]}>
                 {isEditing ? 'Edit your rating of the AI' : 'How well did the AI do?'}
@@ -114,7 +114,7 @@ export function ReviewSheet({ visible, onClose, artefact, initialRating }: Revie
               </Pressable>
             </View>
 
-            {/* Scrollable body — the comment is the only part that grows; it scrolls
+            {/* Scrollable body - the comment is the only part that grows; it scrolls
                 here (and internally once capped) instead of pushing the sheet off-screen */}
             <ScrollView
               style={styles.body}
@@ -158,7 +158,7 @@ export function ReviewSheet({ visible, onClose, artefact, initialRating }: Revie
               />
             </ScrollView>
 
-            {/* Pinned footer — counter, error and the primary action stay reachable */}
+            {/* Pinned footer - counter, error and the primary action stay reachable */}
             <View style={styles.footer}>
               {showCounter && (
                 <Text style={[styles.counter, { color: colors.textSecondary }]}>
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    // Never exceed the viewport — the body scrolls instead of the sheet growing
+    // Never exceed the viewport - the body scrolls instead of the sheet growing
     // past the top of the screen and hiding the header/close button.
     maxHeight: '90%',
   },

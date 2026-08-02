@@ -30,7 +30,7 @@ export const QuestionContent = memo(function QuestionContent({
   if (!question) return null;
 
   // For free-text, message.content is a conversational lead-in above the question,
-  // so it's demoted (muted + smaller). For select cards it IS the question — keep it
+  // so it's demoted (muted + smaller). For select cards it IS the question - keep it
   // at full strength.
   const isFreeText = question.questionType === 'free_text';
 

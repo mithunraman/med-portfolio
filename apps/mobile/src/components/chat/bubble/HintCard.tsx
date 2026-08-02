@@ -29,13 +29,13 @@ export const HintCard = memo(function HintCard({ hints }: Props) {
 
   return (
     <View style={styles.container}>
-      {/* Example answer — always visible */}
+      {/* Example answer - always visible */}
       <View style={styles.exampleBlock}>
         <Text style={[styles.exampleLabel, { color: muted }]}>Example answer</Text>
         <Text style={[styles.exampleText, { color: muted }]}>{'•'} {firstExample}</Text>
       </View>
 
-      {/* Accordion — only when additional examples exist */}
+      {/* Accordion - only when additional examples exist */}
       {hasMore && (
         <>
           <Pressable

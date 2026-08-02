@@ -8,8 +8,8 @@ interface EmptyStateProps {
   description?: string;
   actionLabel?: string;
   onAction?: () => void;
-  /** 'default' — centred with generous padding, for full sections.
-   *  'compact' — tighter padding, smaller text, for use inside cards. */
+  /** 'default' - centred with generous padding, for full sections.
+   *  'compact' - tighter padding, smaller text, for use inside cards. */
   variant?: 'default' | 'compact';
 }
 

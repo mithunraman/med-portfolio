@@ -2,11 +2,11 @@
  * Completion-card copy for a finished portfolio entry (MOB-063).
  *
  * The message is varied so trainees who log many cases don't see the same six
- * words every time — but the tone stays calm and professional, since these are
+ * words every time - but the tone stays calm and professional, since these are
  * serious clinical cases (no confetti-speak). See also MOB-067 / MOB-071.
  *
  * Selection is *deterministic per entry* (keyed off the artefact id), not random
- * on each render — otherwise the message would flicker whenever the completed
+ * on each render - otherwise the message would flicker whenever the completed
  * screen re-renders.
  */
 export interface CompletionMessage {
@@ -17,7 +17,7 @@ export interface CompletionMessage {
 const MESSAGES: CompletionMessage[] = [
   {
     heading: 'Case ready',
-    supportText: 'Your draft is saved — give it a review before you finish.',
+    supportText: 'Your draft is saved - give it a review before you finish.',
   },
   { heading: 'Draft complete', supportText: "We've turned your case into portfolio evidence." },
   { heading: 'Nicely done', supportText: 'Your case is ready to review.' },

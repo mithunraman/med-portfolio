@@ -34,12 +34,12 @@ interface EntryTypePickerSheetProps {
  * Entry-type picker shown before a new entry is started.
  *
  * The chosen type fixes the template for the whole analysis run, so it is asked
- * up front rather than inferred — there is no classification step in the graph.
+ * up front rather than inferred - there is no classification step in the graph.
  *
  * Options come from the user's specialty config via the cached `/specialties`
  * response already held in the auth slice (the same source as the onboarding
  * stage picker), so there is no hardcoded list here. If that response has not
- * loaded yet — a cold start straight into "new entry" — it is fetched on open,
+ * loaded yet - a cold start straight into "new entry" - it is fetched on open,
  * following the explicit `LoadState` pattern used by `SpecialtyList`.
  */
 export function EntryTypePickerSheet({ visible, onSelect, onDismiss }: EntryTypePickerSheetProps) {
@@ -75,7 +75,7 @@ export function EntryTypePickerSheet({ visible, onSelect, onDismiss }: EntryType
   // Cold start: the sheet can be the first surface that needs specialty config.
   //
   // `loadState` is a one-way transition per attempt (idle → loading → success |
-  // error), and only the `idle` branch dispatches — so a failed fetch cannot
+  // error), and only the `idle` branch dispatches - so a failed fetch cannot
   // re-arm the effect and retry in a loop. The reset below runs only while the
   // sheet is hidden, where the fetch branch is unreachable, so the two branches
   // cannot trigger each other either. Net effect: at most one fetch per open,
@@ -93,7 +93,7 @@ export function EntryTypePickerSheet({ visible, onSelect, onDismiss }: EntryType
   //
   // The list is the first in the app long enough to overflow: with nine GP entry types
   // today only about half fit above the fold, and on a larger phone the fold can land far
-  // enough into a card that it still reads as a complete one — so the list looks
+  // enough into a card that it still reads as a complete one - so the list looks
   // finished when it is not. A flash is the one affordance that fires while the
   // trainee is deciding, since indicators are transient on both platforms and would
   // otherwise only appear after they had already discovered scrolling.
@@ -136,7 +136,7 @@ export function EntryTypePickerSheet({ visible, onSelect, onDismiss }: EntryType
       );
     }
 
-    // Loaded, but nothing to offer — the user's specialty isn't in the response
+    // Loaded, but nothing to offer - the user's specialty isn't in the response
     // (e.g. it is not yet active) or their profile has no specialty set. Distinct
     // from the failure above: retrying will not change it.
     if (entryTypes.length === 0) {
@@ -166,7 +166,7 @@ export function EntryTypePickerSheet({ visible, onSelect, onDismiss }: EntryType
             onPress={() => handleSelect(option.code)}
             accessibilityRole="button"
             // Label only, matching what is rendered. `option.description` is
-            // deliberately not read out either — it is hidden because the copy is not
+            // deliberately not read out either - it is hidden because the copy is not
             // final, not to save space, so surfacing it to screen-reader users would
             // ship the very text we are holding back.
             accessibilityLabel={option.label}
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  /** Unused while descriptions are hidden — kept so restoring them needs no re-tuning. */
+  /** Unused while descriptions are hidden - kept so restoring them needs no re-tuning. */
   optionDescription: {
     fontSize: 12,
     lineHeight: 17,

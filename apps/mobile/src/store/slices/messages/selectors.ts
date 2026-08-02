@@ -4,7 +4,7 @@ import type { RootState } from '../../index';
 import type { OptimisticMessage } from './slice';
 import { messageSelectors } from './slice';
 
-// ── Base selectors (no memoization needed — direct field access) ──
+// ── Base selectors (no memoization needed - direct field access) ──
 
 const selectMessagesSlice = (state: RootState) => state.messages;
 
@@ -54,7 +54,7 @@ export const makeSelectOptimisticMessages = () =>
  *
  * The backend rides the live readiness payload on each question message
  * (`question.readiness`). We pick the snapshot from the latest message
- * (by createdAt) that carries one — robust to server ordering. Returns
+ * (by createdAt) that carries one - robust to server ordering. Returns
  * null until the first readiness-bearing question arrives.
  */
 export const makeSelectLatestReadiness = () =>

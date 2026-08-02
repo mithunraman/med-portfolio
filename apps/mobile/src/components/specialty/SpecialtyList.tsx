@@ -16,7 +16,7 @@ export interface SpecialtyListProps {
 
 /**
  * Presentational + data-loading list of specialties. Shared by the onboarding
- * `select-specialty` screen and the settings `change-specialty` screen — the
+ * `select-specialty` screen and the settings `change-specialty` screen - the
  * two flows differ only in their surrounding chrome and what `onSelect` does.
  */
 export function SpecialtyList({ onSelect }: SpecialtyListProps) {

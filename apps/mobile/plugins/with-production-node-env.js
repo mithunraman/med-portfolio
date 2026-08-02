@@ -6,13 +6,13 @@ const path = require('path');
 //
 // Problem: in the Xcode bundle phase, `expo export:embed` loads `.env.production` but a
 // stale/dev value of EXPO_PUBLIC_API_URL can already be present in the environment, and
-// @expo/env NEVER overrides an already-set variable — so `.env` (dev IP, 192.168.x) gets
+// @expo/env NEVER overrides an already-set variable - so `.env` (dev IP, 192.168.x) gets
 // baked into the release bundle, causing the iOS local-network prompt + "network request
 // failed" against an unreachable LAN address.
 //
 // Fix: BEFORE bundling, source `.env.production` with `set -a` so its values become real
 // exported env vars. A shell assignment overrides any pre-set value, and @expo/env then
-// keeps it — so the production URL always wins, immune to precedence/pre-set quirks.
+// keeps it - so the production URL always wins, immune to precedence/pre-set quirks.
 //
 // Appended to the (gitignored, prebuild-generated) `ios/.xcode.env`, which the
 // "Bundle React Native code and images" phase sources before bundling. Debug builds set

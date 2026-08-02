@@ -82,7 +82,7 @@ export function AppDialog({
   // Layout: ≤2 buttons side-by-side, 3+ stacked (matches iOS/Material defaults).
   // Horizontal convention is dismissive-left / affirmative-right; callers pass the
   // affirmative action first, so reverse for the row (a no-op for a single button).
-  // TODO: make this fully adaptive later — auto-stack even 2 buttons when their
+  // TODO: make this fully adaptive later - auto-stack even 2 buttons when their
   // labels are too long to fit on one line (Material measures text and reverses
   // order when it stacks), and expose a `layout?: 'auto' | 'stacked' | 'horizontal'`
   // override for borderline cases. Count-based is enough for today's dialogs.

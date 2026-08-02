@@ -10,7 +10,7 @@ import { fetchInit } from './dashboard/thunks';
 const authLogger = logger.createScope('AuthSlice');
 
 /**
- * Cheap shallow equality for AuthUser — hot-path reducers avoid churning the
+ * Cheap shallow equality for AuthUser - hot-path reducers avoid churning the
  * reference when the object is materially unchanged, which prevents cascade
  * re-renders in `useSelector(state => state.auth.user)`.
  */
@@ -101,7 +101,7 @@ export interface AuthState {
   guestArtefactLimitReached: boolean;
   /**
    * Per-session dismissal of the guest "entries aren't saved" banner (MOB-009).
-   * Not persisted — the store is rebuilt on each cold start, so the banner
+   * Not persisted - the store is rebuilt on each cold start, so the banner
    * naturally reappears next launch while a guest still has unsaved entries.
    */
   guestBannerDismissed: boolean;
@@ -120,7 +120,7 @@ const initialState: AuthState = {
 
 /**
  * Initialize auth state on app launch.
- * Restores session from local secure storage — no network call.
+ * Restores session from local secure storage - no network call.
  * Token validity is verified on the first API request (e.g. /init fetch from
  * `_layout.tsx`); if the token was revoked, the global onUnauthorized handler
  * redirects to login. Cold-launch network hydration is the root layout's job,
@@ -249,7 +249,7 @@ export const claimGuest = createAsyncThunk(
 
 /**
  * Fetch available specialties and training stages from the backend.
- * Public endpoint — no auth required.
+ * Public endpoint - no auth required.
  */
 export const fetchSpecialties = createAsyncThunk(
   'auth/fetchSpecialties',

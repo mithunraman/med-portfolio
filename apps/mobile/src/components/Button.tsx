@@ -21,7 +21,7 @@ interface ButtonProps {
    * Defaults to the theme primary colour.
    */
   color?: string;
-  /** Render prop — receives the resolved foreground colour so the icon stays in sync. */
+  /** Render prop - receives the resolved foreground colour so the icon stays in sync. */
   icon?: (color: string) => React.ReactNode;
   disabled?: boolean;
   loading?: boolean;

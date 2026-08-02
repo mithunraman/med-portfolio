@@ -5,7 +5,7 @@ import type { AuthUser } from '@acme/shared';
 const storageLogger = logger.createScope('SecureStorage');
 
 /**
- * Centralised SecureStore key names. Import from here — do not hard-code
+ * Centralised SecureStore key names. Import from here - do not hard-code
  * string literals at call sites.
  */
 export const SECURE_STORAGE_KEYS = {
@@ -16,7 +16,7 @@ export const SECURE_STORAGE_KEYS = {
 } as const;
 
 /**
- * Stored user session metadata. `isGuest` is NOT stored — derive it from
+ * Stored user session metadata. `isGuest` is NOT stored - derive it from
  * `user.role === UserRole.USER_GUEST` when needed.
  */
 export interface StoredUserSession {
@@ -89,7 +89,7 @@ class AppSecureStorageService {
 
   /**
    * Clear session-scoped data on logout.
-   * Intentionally does NOT touch DEVICE_ID — that's a per-install identifier
+   * Intentionally does NOT touch DEVICE_ID - that's a per-install identifier
    * that survives logout and only resets on uninstall.
    */
   async clearSession(): Promise<void> {

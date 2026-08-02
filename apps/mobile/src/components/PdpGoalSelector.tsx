@@ -64,7 +64,7 @@ export function PdpGoalSelector({
         if (!sel) return null;
 
         // Untracked (opt-in default): a dashed "ghost" card that reads as
-        // addable — full-opacity text + a Track affordance, the whole card
+        // addable - full-opacity text + a Track affordance, the whole card
         // tappable for a large target. Deliberately NOT dimmed (that would read
         // as disabled).
         if (!sel.selected) {
@@ -89,8 +89,8 @@ export function PdpGoalSelector({
         }
 
         // Tracked: solid card that discloses the review date + actions, with a
-        // tertiary Untrack at the foot. The date chip warns (amber) while unset —
-        // it's required at finalise — and calms to primary once a date is chosen
+        // tertiary Untrack at the foot. The date chip warns (amber) while unset -
+        // it's required at finalise - and calms to primary once a date is chosen
         // (attention, not error: no red before the user tries to finalise).
         const hasDate = sel.reviewDate != null;
         const dateAccent = hasDate ? colors.primary : colors.warning;
@@ -109,7 +109,7 @@ export function PdpGoalSelector({
                 with the untracked ghost card (no layout shift on toggle). */}
             <Text style={[styles.goalText, { color: colors.text }]}>{goal.goal}</Text>
 
-            {/* Review date chip — disclosed on track; required at finalise */}
+            {/* Review date chip - disclosed on track; required at finalise */}
             <Pressable
               onPress={() => setDatePickerGoalId(goal.id)}
               disabled={disabled}
@@ -166,7 +166,7 @@ export function PdpGoalSelector({
               })}
             </View>
 
-            {/* Untrack — tertiary, low-emphasis so it doesn't compete */}
+            {/* Untrack - tertiary, low-emphasis so it doesn't compete */}
             <Pressable
               onPress={() => onToggleGoal(goal.id)}
               disabled={disabled}
@@ -181,7 +181,7 @@ export function PdpGoalSelector({
         );
       })}
 
-      {/* Date picker bottom sheet — one shared instance */}
+      {/* Date picker bottom sheet - one shared instance */}
       <ReviewDatePickerSheet
         visible={datePickerGoalId !== null}
         currentDate={activeGoal?.reviewDate ?? null}

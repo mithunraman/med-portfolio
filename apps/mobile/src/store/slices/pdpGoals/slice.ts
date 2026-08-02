@@ -194,7 +194,7 @@ const pdpGoalsSlice = createSlice({
         delete state.statusById[action.meta.arg.goalId];
       })
 
-      // deletePdpGoal — remove from all views that contain it
+      // deletePdpGoal - remove from all views that contain it
       .addCase(deletePdpGoal.pending, (state, action) => {
         state.statusById[action.meta.arg.goalId] = 'updating';
       })
@@ -249,7 +249,7 @@ export const selectPdpGoalFilterView = (
   key: string
 ): PdpGoalFilterView | undefined => state.pdpGoals.views[key];
 
-// Per-key memoized selectors — one per filter tab to avoid cache thrashing.
+// Per-key memoized selectors - one per filter tab to avoid cache thrashing.
 type ViewSelector = (state: RootState) => PdpGoalEntity[];
 const _viewSelectorCache: Record<string, ViewSelector> = {};
 export const selectPdpGoalsByView = (state: RootState, key: string): PdpGoalEntity[] => {

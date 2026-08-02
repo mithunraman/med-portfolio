@@ -24,7 +24,7 @@ export function getArtefactStatusDisplay(status: ArtefactStatus): StatusDisplay 
  * Only states with no accompanying banner surface a word here: COMPLETED (a
  * positive, success-toned confirmation) and ARCHIVED (a muted note). IN_REVIEW
  * returns `null` because that state is carried by the guidance banner, not the
- * metadata line — which also keeps the word "review" out of the type/date line.
+ * metadata line - which also keeps the word "review" out of the type/date line.
  */
 export function getArtefactStatusMeta(status: ArtefactStatus): {
   word: string | null;

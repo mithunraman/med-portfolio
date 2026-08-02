@@ -59,12 +59,12 @@ export function useMessageGroups(messages: Message[], options: Options = {}): Fl
       }
     }
 
-    // Notice goes at the very end — rendered at the top of the screen (oldest position)
+    // Notice goes at the very end - rendered at the top of the screen (oldest position)
     if (noticeText) {
       items.push({ type: 'notice', text: noticeText });
     }
 
-    // Typing indicator goes at index 0 — rendered at the bottom (newest position)
+    // Typing indicator goes at index 0 - rendered at the bottom (newest position)
     if (isTyping) {
       items.unshift({ type: 'typingIndicator' });
     }

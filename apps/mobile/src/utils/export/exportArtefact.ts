@@ -19,7 +19,7 @@ const exportLogger = logger.createScope('Export');
  * Whitespace is collapsed to hyphens rather than preserved: the name is
  * interpolated into a `file:///` URI (expo-file-system's `File` takes URIs, not
  * paths), and a raw space makes that URI malformed. The share sheet still opens
- * — it does not resolve the item eagerly — but the receiving app's extension
+ * - it does not resolve the item eagerly - but the receiving app's extension
  * cannot read the file and hangs, with no error surfacing back to us.
  */
 function buildFileName(artefact: Artefact): string {
@@ -132,7 +132,7 @@ export async function shareAsPdf(artefact: Artefact): Promise<void> {
       dest.delete();
     }
     tempFile.move(dest);
-    // Share `dest.uri`, not `tempFile.uri` — `dest` points at the destination by
+    // Share `dest.uri`, not `tempFile.uri` - `dest` points at the destination by
     // construction, so this holds whether or not `move()` mutates the receiver.
     await Sharing.shareAsync(dest.uri, {
       mimeType: 'application/pdf',

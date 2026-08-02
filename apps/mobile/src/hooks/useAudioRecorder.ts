@@ -31,7 +31,7 @@ export function useAudioRecorder() {
   const isRecording = recorderState.isRecording;
   const duration = Math.floor(recorderState.durationMillis / 1000);
 
-  // Note: No manual unmount cleanup needed — Expo's useReleasingSharedObject
+  // Note: No manual unmount cleanup needed - Expo's useReleasingSharedObject
   // (used internally by useExpoAudioRecorder) automatically releases the
   // native AudioRecorder and its resources when the component unmounts.
 
@@ -91,7 +91,7 @@ export function useAudioRecorder() {
       recorder.pause();
       setIsPaused(true);
     } catch {
-      // Pause not supported (e.g. Android <24) or recorder already stopped — ignore
+      // Pause not supported (e.g. Android <24) or recorder already stopped - ignore
     }
   }, [recorder, isRecording]);
 
@@ -101,7 +101,7 @@ export function useAudioRecorder() {
       recorder.record();
       setIsPaused(false);
     } catch {
-      // Recorder may have been released — ignore
+      // Recorder may have been released - ignore
     }
   }, [recorder, isPaused]);
 
@@ -141,7 +141,7 @@ export function useAudioRecorder() {
       try {
         await recorder.stop();
       } catch {
-        // Recorder may already be stopped — safe to ignore
+        // Recorder may already be stopped - safe to ignore
       }
     }
     setIsPaused(false);

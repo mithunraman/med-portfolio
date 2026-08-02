@@ -186,7 +186,7 @@ export default function PdpGoalDetailScreen() {
     // Commit the completion first, then carry the user into the reflection screen
     // (MOB-108). Navigating only on the fulfilled update means a failed save never
     // strands them mid-reflection. The reflect screen is a lean composer and not a
-    // confirmation, so we toast the completion here — otherwise a user who taps
+    // confirmation, so we toast the completion here - otherwise a user who taps
     // "Maybe later" would get no success signal. On failure the slice reverts.
     dispatch(updatePdpGoal({ goalId, data: { status: PdpGoalStatus.COMPLETED } }))
       .unwrap()
@@ -321,7 +321,7 @@ export default function PdpGoalDetailScreen() {
       dispatch(updatePdpGoalAction({ goalId, actionId, data: { status: newStatus } }))
         .unwrap()
         .then(() => {
-          // Redux store is now updated — clear optimistic override
+          // Redux store is now updated - clear optimistic override
           setOptimisticStatuses((prev) => {
             const next = { ...prev };
             delete next[actionId];
@@ -602,7 +602,7 @@ export default function PdpGoalDetailScreen() {
         )}
 
         {/* Mark as complete. The button stays full-strength primary and always
-            tappable (validate-on-tap, per MOB-097/098) — a grey/disabled look would
+            tappable (validate-on-tap, per MOB-097/098) - a grey/disabled look would
             be a dead-end. A live precondition hint carries the "not ready yet"
             meaning in text (not colour alone), so users see the gate before tapping
             and the incomplete-actions dialog is only a fallback (MOB-104). */}
@@ -618,7 +618,7 @@ export default function PdpGoalDetailScreen() {
                 {visibleActions.length === 0
                   ? 'Ready to complete'
                   : allActionsDone
-                    ? 'All actions done — ready to complete'
+                    ? 'All actions done - ready to complete'
                     : `${remainingActionCount} action${remainingActionCount === 1 ? '' : 's'} left to complete this goal`}
               </Text>
             </View>

@@ -3,7 +3,7 @@ export type StatusVariant = 'default' | 'processing' | 'warning' | 'success' | '
 export interface StatusColorPair {
   /** Chip background. */
   surface: string;
-  /** Label colour — AA-legible on `surface`. */
+  /** Label colour - AA-legible on `surface`. */
   text: string;
 }
 
@@ -13,7 +13,7 @@ export interface StatusColorPair {
  * Mode-aware but theme-family-independent: a "success" chip is green regardless
  * of whether the app theme is gmail/spotify/forest, so these live in one place
  * rather than being duplicated across every theme. Each mode is hand-picked for
- * AA contrast — the dark values are chosen deliberately, NOT inverted from light
+ * AA contrast - the dark values are chosen deliberately, NOT inverted from light
  * (naive inversion is what produced the muddy "Batman-villain" green).
  *
  * `success`/`info` text is aligned to `colors.success`/`colors.info` so a

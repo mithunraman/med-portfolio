@@ -8,7 +8,7 @@ import { Switch, type SwitchProps } from 'react-native';
  * by the `border` token (light gray on a white surface). This bakes in the
  * `switchTrackOff` token plus `ios_backgroundColor` (which iOS renders behind
  * the track) and an explicit white thumb, so the control reads clearly in both
- * themes. Track/thumb colors are owned here — callers only supply behavior.
+ * themes. Track/thumb colors are owned here - callers only supply behavior.
  */
 type AppSwitchProps = Omit<SwitchProps, 'trackColor' | 'thumbColor' | 'ios_backgroundColor'>;
 

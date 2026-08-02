@@ -70,7 +70,7 @@ function ReviewPeriodListItem({ item, onPress }: { item: ReviewPeriod; onPress: 
           {item.name}
         </Text>
         <Text style={[styles.listItemDates, { color: colors.textSecondary }]}>
-          {formatDate(item.startDate)} — {formatDate(item.endDate)}
+          {formatDate(item.startDate)} - {formatDate(item.endDate)}
         </Text>
       </View>
       <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />

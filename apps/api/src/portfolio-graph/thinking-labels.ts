@@ -13,7 +13,7 @@ const READING = 'Reading your entry';
 const REVIEWING = "Reviewing what you've written";
 const PREPARING_QUESTION = 'Preparing a question';
 const MATCHING = 'Matching capabilities';
-const WRITING_UP = 'Writing up your entry';
+const WRITING_UP = 'Polishing up your entry';
 const FINISHING = 'Finishing up';
 
 // Total over ThinkingStep: adding a graph node must break this build.

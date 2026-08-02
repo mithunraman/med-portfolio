@@ -32,6 +32,23 @@ describe('completenessRouter', () => {
     );
   });
 
+  it('loops back to elicit a borderline adequate section that was never asked', () => {
+    // The rubric reads as met (nothing in missingSections), but learning_needs only just
+    // cleared its bar at the adequate floor and was never asked directly — likely credited
+    // by content that bled in from the reflection answer. The coverage floor forces one ask.
+    expect(
+      completenessRouter(
+        completenessState({
+          hasEnoughInfo: true,
+          missingSections: [],
+          probeReadiness: {
+            learning_needs: { tier: 'adequate', score: 0, meetsThreshold: true },
+          },
+        })
+      )
+    ).toBe('generate_followup');
+  });
+
   // ── Relevance gate (first pass only) ──
 
   it('rejects an irrelevant transcript on the first pass', () => {

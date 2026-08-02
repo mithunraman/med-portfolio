@@ -5,12 +5,16 @@ import {
   isGoodEnough,
   isSectionExhausted,
   shouldContinueElicitation,
+  unconfirmedSections,
 } from '../elicitation.util';
 import type { PortfolioStateType, ReadinessEntry, ReadinessTier } from '../portfolio-graph.state';
 
 const MAX = 8;
 
 const entry = (tier: ReadinessTier): ReadinessEntry => ({ tier, score: 0, meetsThreshold: false });
+
+/** A section that meets its threshold (as `deriveReadiness` would mark a passing probe). */
+const met = (tier: ReadinessTier): ReadinessEntry => ({ tier, score: 0, meetsThreshold: true });
 
 function st(overrides: Partial<PortfolioStateType> = {}): PortfolioStateType {
   return {
@@ -140,6 +144,74 @@ describe('shouldContinueElicitation', () => {
         learning: { count: 1, tierAtLastAsk: 'shallow' },
       },
       probeReadiness: { outcome: entry('missing'), learning: entry('shallow') },
+    });
+    expect(shouldContinueElicitation(s, MAX)).toBe(false);
+  });
+});
+
+describe('unconfirmedSections', () => {
+  it('flags a section that met its bar at the adequate floor but was never asked', () => {
+    const s = st({ probeReadiness: { learning_needs: met('adequate') } });
+    expect(unconfirmedSections(s)).toEqual(['learning_needs']);
+  });
+
+  it('excludes a strong pass (unambiguous — never force-asked)', () => {
+    const s = st({ probeReadiness: { reflection: met('strong') } });
+    expect(unconfirmedSections(s)).toEqual([]);
+  });
+
+  it('excludes an adequate section that has already been asked', () => {
+    const s = st({
+      probeReadiness: { learning_needs: met('adequate') },
+      sectionAttempts: { learning_needs: { count: 1, tierAtLastAsk: 'adequate' } },
+    });
+    expect(unconfirmedSections(s)).toEqual([]);
+  });
+
+  it('excludes a below-threshold adequate (strong-threshold probe not yet passing)', () => {
+    // meetsThreshold=false means the probe needs 'strong' — it is an unmet gap already
+    // carried in missingSections, not a borderline pass to confirm.
+    const s = st({ probeReadiness: { reflection: entry('adequate') } });
+    expect(unconfirmedSections(s)).toEqual([]);
+  });
+});
+
+describe('shouldContinueElicitation — adequate-but-unasked coverage floor', () => {
+  it('forces a first ask for a borderline adequate section even when the rubric is met', () => {
+    // hasEnoughInfo=true (nothing in missingSections), but learning_needs only just met
+    // its bar at adequate and was never asked — likely credited by spilled content.
+    const s = st({
+      hasEnoughInfo: true,
+      missingSections: [],
+      probeReadiness: { learning_needs: met('adequate') },
+    });
+    expect(shouldContinueElicitation(s, MAX)).toBe(true);
+  });
+
+  it('stops once the borderline adequate section has had its one ask', () => {
+    const s = st({
+      hasEnoughInfo: true,
+      missingSections: [],
+      probeReadiness: { learning_needs: met('adequate') },
+      sectionAttempts: { learning_needs: { count: 1, tierAtLastAsk: 'adequate' } },
+    });
+    expect(shouldContinueElicitation(s, MAX)).toBe(false);
+  });
+
+  it('does not force-ask a strong pass', () => {
+    const s = st({
+      hasEnoughInfo: true,
+      missingSections: [],
+      probeReadiness: { reflection: met('strong') },
+    });
+    expect(shouldContinueElicitation(s, MAX)).toBe(false);
+  });
+
+  it('the round cap still wins over the coverage floor (termination guaranteed)', () => {
+    const s = st({
+      followUpRound: MAX,
+      hasEnoughInfo: true,
+      probeReadiness: { learning_needs: met('adequate') },
     });
     expect(shouldContinueElicitation(s, MAX)).toBe(false);
   });

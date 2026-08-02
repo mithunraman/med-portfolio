@@ -34,6 +34,25 @@ export function hasBeenAsked(state: PortfolioStateType, sectionId: string): bool
 }
 
 /**
+ * Sections that met their threshold ONLY at the floor tier ('adequate') and have not
+ * been asked directly yet. Such a section may have been satisfied by content that bled
+ * in from another section's answer (e.g. a reflection clause partitioned into learning
+ * needs), so we still owe it one direct ask before crediting it — "confirm a borderline
+ * pass before shipping it".
+ *
+ * Derivable from readiness alone: `meetsThreshold && tier === 'adequate'` can only hold
+ * when the probe's threshold is 'adequate' — a 'strong'-threshold probe at 'adequate' is
+ * an unmet gap already carried in `missingSections`. So no template/threshold lookup is
+ * needed here. A 'strong' pass is unambiguous and never force-asked.
+ */
+export function unconfirmedSections(state: PortfolioStateType): string[] {
+  const pr = state.probeReadiness ?? {};
+  return Object.keys(pr).filter(
+    (id) => pr[id].meetsThreshold && pr[id].tier === 'adequate' && !hasBeenAsked(state, id)
+  );
+}
+
+/**
  * "Good enough" to compose: overall readiness clears the bar AND every still-unmet
  * section at least has some content (nothing is a zero-content `missing`, which would
  * compose empty). Lets a thin-but-present section pass without looping on it.
@@ -53,26 +72,37 @@ export function isGoodEnough(state: PortfolioStateType): boolean {
 
 /**
  * Whether to run another follow-up round. Exits (returns false) when the rubric is
- * fully met, the round cap is hit, or every remaining gap is exhausted. Otherwise
- * keeps eliciting — and does NOT settle for "good enough" until every required gap has
- * had at least one ask (leverage ranking can otherwise starve a section that looks
- * partly-done — e.g. content that bled in from another section — so it never gets its
- * own question).
+ * fully met AND every section has had its first ask, the round cap is hit, or every
+ * remaining gap is exhausted. Otherwise keeps eliciting.
+ *
+ * Coverage floor: it does NOT settle for "good enough" until every required section has
+ * had at least one DIRECT ask — a below-threshold gap OR a section that only just met
+ * its bar at the 'adequate' floor (which may have been satisfied by content that bled in
+ * from another section's answer, so it never got its own question). This is the guard
+ * that stops a borderline pass shipping un-elicited.
  */
 export function shouldContinueElicitation(
   state: PortfolioStateType,
   maxRounds: number
 ): boolean {
-  if (state.hasEnoughInfo) return false; // every probe met its threshold
-  if (state.followUpRound >= maxRounds) return false; // circuit-breaker backstop
+  // Hard circuit-breaker FIRST — guarantees termination regardless of the coverage floor
+  // below. The cap is assessable sections × ATTEMPT_LIMIT (see check-completeness.node.ts),
+  // which reserves room for every section's one forced first ask; keep the two in lockstep.
+  if (state.followUpRound >= maxRounds) return false;
 
   // Gaps still worth asking about — those the exhaustion cap hasn't retired.
   const liveGaps = state.missingSections.filter((id) => !isSectionExhausted(state, id));
-  if (liveGaps.length === 0) return false; // nothing productive left to ask
 
-  // Coverage floor: give every required gap its first ask before composing.
-  if (liveGaps.some((id) => !hasBeenAsked(state, id))) return true;
+  // Coverage floor: every required section gets ≥1 direct ask before we compose — live
+  // gaps AND sections that only just met their bar at 'adequate'. Bounded to ≤1 forced
+  // ask/section by hasBeenAsked, and the round cap above backstops it.
+  const needsFirstAsk = [...liveGaps, ...unconfirmedSections(state)].filter(
+    (id) => !hasBeenAsked(state, id)
+  );
+  if (needsFirstAsk.length > 0) return true;
 
+  if (state.hasEnoughInfo) return false; // thresholds met AND every section confirmed
+  if (liveGaps.length === 0) return false; // only exhausted gaps remain
   if (isGoodEnough(state)) return false; // complete enough — compose rather than nitpick
 
   return true;

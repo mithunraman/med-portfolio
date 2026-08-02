@@ -255,10 +255,60 @@ describe('GenerateFollowupNode', () => {
     });
   });
 
+  describe('coverage floor — forces a first ask for a borderline adequate section', () => {
+    // Regression for the art3/art4 case: learning_needs graded 'adequate' (met at its
+    // floor threshold) but never asked — credited by content that bled in from the
+    // reflection answer. With no live gaps left, it must still get one direct ask so the
+    // section is elicited rather than composed empty.
+    const borderlineState = () =>
+      makeState({
+        missingSections: [],
+        hasEnoughInfo: true,
+        probeReadiness: {
+          learning_needs: { score: 0.6, tier: 'adequate', meetsThreshold: true },
+        },
+      });
+
+    it('asks the LLM-contextualised question for the unconfirmed adequate section', async () => {
+      const deps = makeDeps();
+      const mock = deps.llmService.invokeStructured as jest.Mock;
+      mock.mockResolvedValue({
+        data: {
+          questions: [
+            { sectionId: 'learning_needs', question: 'What will you do next?', hints: { examples: ['e'] } },
+          ],
+        },
+      });
+
+      const result = await createGenerateFollowupNode(deps)(borderlineState());
+
+      const questions = result.pendingFollowupQuestions ?? [];
+      expect(questions).toHaveLength(1);
+      expect(questions[0].sectionId).toBe('learning_needs');
+      // The forced section is recorded as asked so it is not force-asked a second time.
+      expect(result.sectionAttempts?.learning_needs?.count).toBe(1);
+    });
+
+    it('backfills a default question if the LLM omits the forced section', async () => {
+      const deps = makeDeps();
+      const mock = deps.llmService.invokeStructured as jest.Mock;
+      // LLM returns nothing (the section reads as covered) — the floor must still ask it.
+      mock.mockResolvedValue({ data: { questions: [] } });
+
+      const result = await createGenerateFollowupNode(deps)(borderlineState());
+
+      const questions = result.pendingFollowupQuestions ?? [];
+      expect(questions).toHaveLength(1);
+      expect(questions[0].sectionId).toBe('learning_needs');
+    });
+  });
+
   describe('no askable sections', () => {
     it('should return empty questions when missingSections has no match in template', async () => {
       const node = createGenerateFollowupNode(makeDeps());
-      const state = makeState({ missingSections: ['nonexistent_section'] });
+      // probeReadiness empty so there is no borderline-adequate section to force-confirm
+      // either — this test isolates the "unknown missing id → nothing askable" path.
+      const state = makeState({ missingSections: ['nonexistent_section'], probeReadiness: {} });
 
       const result = await node(state);
 

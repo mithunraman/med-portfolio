@@ -433,6 +433,36 @@ describe('AzureLanguageService', () => {
       expect(result.redactedText).not.toContain('St Mary’s Hospital'); // real site redacted
       expect(result.redactedText).toContain('[ORGANIZATION]');
     });
+
+    it('keeps a compound reference name ("NICE CKS") but redacts the specific practice', async () => {
+      // The live over-redaction: Azure tags "NICE CKS" as ONE Organization span,
+      // which the exact allow-list missed → the guideline reference became
+      // "[ORGANIZATION]" in the trainee's saved PDP. The suffix-aware match keeps it.
+      const INPUT = 'Review the NICE CKS guidance; patient seen at Springfield Medical Practice.';
+      const analyze = fakeAnalyze((text) => [
+        {
+          text: 'NICE CKS',
+          category: 'Organization',
+          offset: text.indexOf('NICE CKS'),
+          length: 'NICE CKS'.length,
+          confidenceScore: 0.9,
+        },
+        {
+          text: 'Springfield Medical Practice',
+          category: 'Organization',
+          offset: text.indexOf('Springfield Medical Practice'),
+          length: 'Springfield Medical Practice'.length,
+          confidenceScore: 0.9,
+        },
+      ]);
+      const service = buildService(analyze);
+
+      const result = await service.redactPhi(INPUT);
+
+      expect(result.redactedText).toContain('NICE CKS'); // reference source kept
+      expect(result.redactedText).not.toContain('Springfield Medical Practice'); // real site redacted
+      expect(result.redactedText).toContain('[ORGANIZATION]');
+    });
   });
 
   describe('overlapping entities (Problem 1: no corrupted placeholders)', () => {
@@ -533,6 +563,40 @@ describe('date classifier', () => {
     it('does not treat a non-age Quantity as an age (falls through to redact)', () => {
       // No Age subcategory and no age phrasing → default behaviour, unchanged.
       expect(shouldRedactEntity('Quantity', '£4,500', keep)).toBe(true);
+    });
+  });
+
+  describe('isNationalBody (deny-by-default allow-list)', () => {
+    // Kept: an enumerated body, or an enumerated body wearing a reference-material
+    // suffix ("NICE CKS", "NICE NG28", "RCGP guidance") — a reference source, not
+    // an identifier.
+    it.each([
+      'NICE',
+      'the NHS',
+      'NICE CKS',
+      'NICE guidance',
+      'NICE NG28',
+      'nice ng28',
+      'BNF',
+      'British National Formulary',
+      'Cochrane',
+      'SIGN 153',
+      'Royal College of Physicians guidance',
+    ])('keeps national reference source: %s', (name) => {
+      expect(isNationalBody(name)).toBe(true);
+    });
+
+    // Redacted: a patient's specific institution never matches — it strips no
+    // suffix, so its head is not enumerated. Guards against over-keeping,
+    // especially the "NHS <place>" shape a prefix-match would have broken.
+    it.each([
+      'Leeds NHS Trust',
+      'NHS Lothian',
+      'Springfield Medical Practice',
+      "St Mary's Hospital",
+      'Acme Care Home',
+    ])('still redacts a specific institution: %s', (name) => {
+      expect(isNationalBody(name)).toBe(false);
     });
   });
 });

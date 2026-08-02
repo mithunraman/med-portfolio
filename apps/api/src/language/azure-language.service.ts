@@ -407,6 +407,10 @@ const NATIONAL_BODIES: readonly string[] = [
   'RCN', 'Royal College of Nursing',
   'RCM', 'Royal College of Midwives',
   'RPS', 'Royal Pharmaceutical Society', 'SIGN',
+  // Tier 5 — national reference works (guidance / formularies), not identifiers
+  'BNF', 'British National Formulary', 'BNFc',
+  'CKS', 'Clinical Knowledge Summaries',
+  'Cochrane',
 ];
 
 /** Normalise an org string for allow-list comparison (case/whitespace/"the"). */
@@ -416,9 +420,34 @@ function normalizeOrg(text: string): string {
 
 const NATIONAL_BODY_SET = new Set(NATIONAL_BODIES.map(normalizeOrg));
 
-/** True if the text is an enumerated national UK body (not an identifier). */
+/**
+ * Reference-material suffixes: a national body wearing one of these is still a
+ * reference SOURCE, never an identifier — Azure tags the whole compound span as
+ * one Organization ("NICE CKS", "NICE NG28", "RCGP guidance"), which the exact
+ * allow-list would otherwise miss. Stripping is safe because no enumerated body
+ * name contains one of these tokens, so it can only ever shorten a compound down
+ * to its national-body head. Guideline references are included in both the
+ * lettered NICE form ("NG28", "CG181", "QS…") and the bare-number SIGN form
+ * ("SIGN 153"); a trailing bare number is only ever stripped down to a head that
+ * must itself be an enumerated body, so "<body> <n>" (a guideline/service number)
+ * is kept while a named institution — which carries no such number — still redacts.
+ */
+const REFERENCE_SUFFIX =
+  /\b(cks|guidance|guideline|guidelines|criteria|pathway|pathways|standard|standards|formulary|(?:ng|cg|qs|ta|ph|ipg|mtg|dg)\d+|\d+)\b/g;
+
+/**
+ * True if the text is an enumerated national UK body (not an identifier). Matches
+ * an exact enumerated name first, then falls back to stripping any trailing
+ * reference-material suffix and re-checking the head — so "NICE CKS" resolves to
+ * "NICE" and is kept, while a specific institution ("Leeds NHS Trust", "NHS
+ * Lothian") strips nothing and still redacts. Deny-by-default is preserved: the
+ * fallback can only ever keep a string whose head is already enumerated.
+ */
 export function isNationalBody(text: string): boolean {
-  return NATIONAL_BODY_SET.has(normalizeOrg(text));
+  const norm = normalizeOrg(text);
+  if (NATIONAL_BODY_SET.has(norm)) return true;
+  const head = norm.replace(REFERENCE_SUFFIX, '').replace(/\s+/g, ' ').trim();
+  return head.length > 0 && NATIONAL_BODY_SET.has(head);
 }
 
 // HIPAA Safe Harbor (45 CFR §164.514(b)(2)) requires "all ages over 89" to be

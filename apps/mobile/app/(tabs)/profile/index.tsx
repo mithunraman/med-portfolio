@@ -1,4 +1,4 @@
-import { AppSwitch, SettingsItem, SettingsSection } from '@/components';
+import { AppSwitch, InviteCard, SettingsItem, SettingsSection } from '@/components';
 import { QuotaUsageSection } from '@/components/QuotaUsageSection';
 import { useAuth, useGuestDeletion } from '@/hooks';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
@@ -160,6 +160,9 @@ export default function ProfileScreen() {
 
         {/* Usage Quota */}
         <QuotaUsageSection />
+
+        {/* Invite a colleague */}
+        <InviteCard />
 
         {/* Navigation Rows */}
         <SettingsSection title="Settings">

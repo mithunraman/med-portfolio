@@ -19,7 +19,7 @@ const ALL_STAGES = Object.values(Stage);
 
 describe('ModelConfigService', () => {
   describe('resolve()', () => {
-    it('resolves every stage for the default OpenAI variant (A)', () => {
+    it('resolves every stage for the OpenAI variant (A)', () => {
       const service = new ModelConfigService(
         configStub({ 'app.llm.variant': 'A', 'app.llm.pools': { [Pool.OpenAI]: [endpoint] } })
       );
@@ -31,10 +31,10 @@ describe('ModelConfigService', () => {
       }
     });
 
-    it('splits variant D across two pools and two models', () => {
+    it('splits variant PROD across two pools and two models', () => {
       const service = new ModelConfigService(
         configStub({
-          'app.llm.variant': 'D',
+          'app.llm.variant': 'PROD',
           'app.llm.pools': {
             [Pool.Interactive]: [endpoint],
             [Pool.Analysis]: [endpoint],
@@ -42,7 +42,7 @@ describe('ModelConfigService', () => {
         })
       );
 
-      expect(service.activeVariant).toBe('D');
+      expect(service.activeVariant).toBe('PROD');
 
       // Cleaning is the interactive path (user-paced, blocks the message
       // appearing) and uses native function calling — the jsonSchema workaround
@@ -79,7 +79,7 @@ describe('ModelConfigService', () => {
     it('reports every distinct Foundry pool a variant draws from', () => {
       const service = new ModelConfigService(
         configStub({
-          'app.llm.variant': 'D',
+          'app.llm.variant': 'PROD',
           'app.llm.pools': {
             [Pool.Interactive]: [endpoint],
             [Pool.Analysis]: [endpoint],
@@ -97,9 +97,9 @@ describe('ModelConfigService', () => {
       );
     });
 
-    it('throws when variant D has no endpoints for the pools it uses', () => {
+    it('throws when variant PROD has no endpoints for the pools it uses', () => {
       // Missing entirely...
-      expect(() => new ModelConfigService(configStub({ 'app.llm.variant': 'D' }))).toThrow(
+      expect(() => new ModelConfigService(configStub({ 'app.llm.variant': 'PROD' }))).toThrow(
         /pool 'interactive' but no endpoints are configured/
       );
 
@@ -108,7 +108,7 @@ describe('ModelConfigService', () => {
         () =>
           new ModelConfigService(
             configStub({
-              'app.llm.variant': 'D',
+              'app.llm.variant': 'PROD',
               'app.llm.pools': { [Pool.Interactive]: [], [Pool.Analysis]: [endpoint] },
             })
           )
@@ -124,7 +124,7 @@ describe('ModelConfigService', () => {
         () =>
           new ModelConfigService(
             configStub({
-              'app.llm.variant': 'D',
+              'app.llm.variant': 'PROD',
               'app.llm.pools': { [Pool.Analysis]: [endpoint] },
             })
           )
@@ -134,7 +134,7 @@ describe('ModelConfigService', () => {
         () =>
           new ModelConfigService(
             configStub({
-              'app.llm.variant': 'D',
+              'app.llm.variant': 'PROD',
               'app.llm.pools': { [Pool.Interactive]: [endpoint] },
             })
           )

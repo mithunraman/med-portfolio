@@ -174,7 +174,7 @@ function reasoningHeadroom(thinkMode?: ThinkMode): number {
  *
  * TODO: `high`/`max` are UNVERIFIED against this Foundry deployment — Foundry may
  * forward them to DeepSeek or validate against OpenAI's enum and 400. Smoke-test
- * before shipping any variant that sets a thinking mode; Variant D uses `off` only.
+ * before shipping any variant that sets a thinking mode; Variant PROD uses `off` only.
  * (The unit test only pins this mapping — it cannot catch an endpoint 400.)
  */
 export function azureFoundryKwargs(

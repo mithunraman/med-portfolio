@@ -7,7 +7,7 @@ import { LLMModule } from '../llm.module';
 import { Pool } from '../llm-pools';
 import { LlmRateLimiterService } from '../llm-rate-limiter.service';
 import { ModelConfigService } from '../model-config.service';
-import { Stage } from '../model-variants';
+import { Stage, type VariantKey } from '../model-variants';
 
 /**
  * End-to-end wiring test for the pooling feature: boots the REAL LLMModule DI
@@ -24,7 +24,7 @@ import { Stage } from '../model-variants';
  * env→config transformation under test is the production one; only the env-schema
  * plumbing (Zod) is bypassed. No network: nothing here calls a provider.
  *
- * This is the nearest offline equivalent of the live Variant D smoke test, which
+ * This is the nearest offline equivalent of the live Variant PROD smoke test, which
  * additionally needs real Azure credentials to confirm the nano deployment
  * accepts `temperature` and honours `functionCalling`.
  */
@@ -35,8 +35,8 @@ const ANALYSIS_URL_2 = 'https://deepseek-2.services.ai.azure.com/openai/v1/';
 
 const OPENAI_URL = 'https://api.openai.com/v1';
 
-/** Env exactly as an operator would set it for Variant D (see .env.example). */
-const VARIANT_D_ENV: NodeJS.ProcessEnv = {
+/** Env exactly as an operator would set it for Variant PROD (see .env.example). */
+const VARIANT_PROD_ENV: NodeJS.ProcessEnv = {
   AZURE_FOUNDRY_INTERACTIVE_API_KEY_1: 'nano-key',
   AZURE_FOUNDRY_INTERACTIVE_BASE_URL_1: INTERACTIVE_URL,
   AZURE_FOUNDRY_ANALYSIS_API_KEY_1: 'deepseek-key-1',
@@ -51,7 +51,10 @@ const VARIANT_A_ENV: NodeJS.ProcessEnv = {
   OPENAI_BASE_URL_1: OPENAI_URL,
 };
 
-async function bootModule(variant: string, env: NodeJS.ProcessEnv) {
+// `variant` is typed as VariantKey, not string: the whole point of this test is
+// that a variant name is a contract across layers, so renaming one in the
+// VARIANTS table must break compilation here rather than at runtime.
+async function bootModule(variant: VariantKey, env: NodeJS.ProcessEnv) {
   const moduleRef = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({
@@ -91,11 +94,11 @@ async function bootModule(variant: string, env: NodeJS.ProcessEnv) {
 }
 
 describe('LLMModule wiring (pool topology end-to-end)', () => {
-  describe('Variant D', () => {
+  describe('Variant PROD', () => {
     let moduleRef: Awaited<ReturnType<typeof bootModule>>;
 
     beforeAll(async () => {
-      moduleRef = await bootModule('D', VARIANT_D_ENV);
+      moduleRef = await bootModule('PROD', VARIANT_PROD_ENV);
     });
 
     afterAll(async () => {
@@ -103,7 +106,7 @@ describe('LLMModule wiring (pool topology end-to-end)', () => {
     });
 
     it('constructs the whole LLM DI graph', () => {
-      expect(moduleRef.get(ModelConfigService).activeVariant).toBe('D');
+      expect(moduleRef.get(ModelConfigService).activeVariant).toBe('PROD');
       expect(moduleRef.get(LlmEndpointResolver)).toBeDefined();
       expect(moduleRef.get(LlmRateLimiterService)).toBeDefined();
     });
@@ -180,7 +183,7 @@ describe('LLMModule wiring (pool topology end-to-end)', () => {
 
   describe('startup validation', () => {
     it('refuses to boot when a pool the variant uses has no credentials', async () => {
-      // Variant D needs BOTH pools. Configuring only analysis used to satisfy a
+      // Variant PROD needs BOTH pools. Configuring only analysis used to satisfy a
       // provider-level check ("some Foundry endpoint exists") while leaving the
       // cleaning stage with no key at all — the failure per-pool validation exists
       // to catch, and it must happen at boot, not on the first cleaning call.
@@ -189,7 +192,7 @@ describe('LLMModule wiring (pool topology end-to-end)', () => {
         AZURE_FOUNDRY_ANALYSIS_BASE_URL_1: ANALYSIS_URL_1,
       };
 
-      await expect(bootModule('D', analysisOnly)).rejects.toThrow(
+      await expect(bootModule('PROD', analysisOnly)).rejects.toThrow(
         /pool 'interactive' but no endpoints are configured.*AZURE_FOUNDRY_INTERACTIVE_API_KEY_1/s
       );
     });

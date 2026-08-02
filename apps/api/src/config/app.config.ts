@@ -66,7 +66,7 @@ export const envSchema = z.object({
 
   // LLM A/B/C/D/E variant selector. Selects a complete stage→model profile from
   // VARIANTS (see llm/model-variants.ts).
-  LLM_VARIANT: z.enum(['A', 'B', 'C', 'D', 'E']).default('A'),
+  LLM_VARIANT: z.enum(['PROD', 'A', 'B', 'C', 'E']),
 
   // Per-POOL rate limits, one per member of the Pool enum. Unlike endpoint
   // cardinality (variable, hence parsed by pattern below), the POOL SET is closed

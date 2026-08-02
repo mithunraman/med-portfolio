@@ -8,6 +8,32 @@
       name="description"
       content="Speak your case. LOGDit turns it into a curriculum-mapped portfolio entry with reflections and PDP goals. Built for UK GP trainees."
     />
+    <!--
+      Link preview card for WhatsApp, iMessage, Slack and Teams - the in-app
+      "invite a colleague" share sends this URL, and the preview sits directly
+      under the user's own message. og:description therefore mirrors the wording
+      of INVITE_MESSAGE (apps/mobile/src/config/share.ts) so the chat bubble
+      reads as one thought rather than a personal note with an advert stapled to
+      it. og:image must be an absolute URL; relative paths are ignored by most
+      scrapers.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="LOGDit" />
+    <meta property="og:url" content="https://logdit.app/" />
+    <meta
+      property="og:title"
+      content="LOGDit - curriculum-mapped portfolio entries from a voice note"
+    />
+    <meta
+      property="og:description"
+      content="Talk through a case and get a curriculum-mapped portfolio entry, with reflections and PDP goals, in about 5 minutes."
+    />
+    <meta property="og:image" content="https://logdit.app/assets/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="LOGDit" />
+    <meta name="twitter:card" content="summary_large_image" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

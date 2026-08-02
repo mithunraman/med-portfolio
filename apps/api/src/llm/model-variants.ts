@@ -20,7 +20,7 @@ export const Stage = {
 export type Stage = (typeof Stage)[keyof typeof Stage];
 
 /** Known variants. */
-export type VariantKey = 'A' | 'B' | 'C' | 'D' | 'E';
+export type VariantKey = 'A' | 'B' | 'C' | 'PROD' | 'E';
 
 /** A variant is a complete stage→target mapping — every stage must be present. */
 export type VariantProfile = Record<Stage, ModelTarget>;
@@ -114,12 +114,12 @@ const gptOss = (
   structuredMethod: 'jsonSchema',
 });
 
-// Variant D: DeepSeek V4 Flash served through Azure AI Foundry's OpenAI-compatible
-// endpoint (a first-party-cloud alternative to the OpenRouter route in B), for D's
+// Variant PROD: DeepSeek V4 Flash served through Azure AI Foundry's OpenAI-compatible
+// endpoint (a first-party-cloud alternative to the OpenRouter route in B), for PROD's
 // eight graph stages. The value is the Foundry *deployment name*, not a catalog
 // slug — set it to whatever the deployment is called in your Foundry resource.
 const DEEPSEEK_FLASH_FOUNDRY = 'DeepSeek-V4-Flash';
-// Variant D: GPT-5.4-nano deployed on Azure Foundry, serving the cleaning stage
+// Variant PROD: GPT-5.4-nano deployed on Azure Foundry, serving the cleaning stage
 // only. Also a Foundry *deployment name*. Unlike DeepSeek it normalizes into
 // OpenAI `tool_calls`, so it uses native function calling (see below).
 const GPT_NANO_FOUNDRY = 'gpt-5.4-nano';
@@ -203,11 +203,7 @@ export const VARIANTS = {
   // burst — separate pools mean a burst can never starve the interactive path.
   // That second reason holds even if the caps later converge, so do NOT collapse
   // these back into one pool on the grounds that the numbers match.
-  //
-  // The eight graph stages run the SAME model as B over a different route, so
-  // B-vs-D is a hosting-path comparison for those — but NOT for cleaning, which
-  // deliberately changes model as well. Don't read D as a like-for-like B.
-  D: {
+  PROD: {
     // Native function calling, not jsonSchema: the DSML workaround is DeepSeek's
     // constraint and nano doesn't share it (see the `foundry` helper).
     cleaning: foundry(GPT_NANO_FOUNDRY, Pool.Interactive, 'off', 'functionCalling'),

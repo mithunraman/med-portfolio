@@ -19,6 +19,7 @@ export { FetchErrorBanner } from './FetchErrorBanner';
 export { FilterPillRow } from './FilterPillRow';
 export { FullScreenSectionEditor } from './FullScreenTextEditor';
 export { HomeSkeleton } from './HomeSkeleton';
+export { InviteCard } from './InviteCard';
 export { LastUpdatedLabel } from './LastUpdatedLabel';
 export { LoadingProvider, useLoading } from './LoadingHUD';
 export { MultiSelect, type MultiSelectOption } from './MultiSelect';

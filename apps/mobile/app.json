@@ -8,9 +8,9 @@
     "scheme": "logdit",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "app.logdit.mobile",
-      "buildNumber": "11",
+      "buildNumber": "12",
       "appleTeamId": "D766Z89ML4",
       "config": {
         "usesNonExemptEncryption": false

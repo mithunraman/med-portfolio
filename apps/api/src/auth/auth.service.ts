@@ -332,7 +332,16 @@ export class AuthService {
 
     const now = new Date();
     user.deletionRequestedAt = now;
-    user.deletionScheduledFor = new Date(now.getTime() + AuthService.DELETION_GRACE_PERIOD_MS);
+    // The grace period exists so someone who deleted by mistake can sign back in
+    // with an OTP and cancel. A guest has no credential to sign back in with —
+    // the session in SecureStore is their only handle on the account, and the
+    // client signs them out immediately after this call — so for a guest the
+    // window is unreachable rather than protective. Queue them for the next
+    // AccountCleanupService sweep instead.
+    user.deletionScheduledFor =
+      user.role === UserRole.USER_GUEST
+        ? now
+        : new Date(now.getTime() + AuthService.DELETION_GRACE_PERIOD_MS);
     await user.save();
 
     return this.toAuthUser(user);

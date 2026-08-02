@@ -64,7 +64,8 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone to record voice notes."
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone to record voice notes.",
+          "enableBackgroundPlayback": false
         }
       ],
       "expo-sharing",

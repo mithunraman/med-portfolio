@@ -302,6 +302,43 @@ describe('AuthService', () => {
     });
   });
 
+  describe('requestDeletion', () => {
+    it('gives a real user the 48h cancellation window', async () => {
+      const doc = makeUserDoc();
+      mockUserModel.findById.mockReturnValue(makeFindByIdMock(doc));
+
+      await service.requestDeletion(userIdStr);
+
+      const requestedAt = (doc as any).deletionRequestedAt as Date;
+      const scheduledFor = (doc as any).deletionScheduledFor as Date;
+      expect(scheduledFor.getTime() - requestedAt.getTime()).toBe(48 * 60 * 60 * 1000);
+      expect(doc.save).toHaveBeenCalled();
+    });
+
+    it('queues a guest immediately — the window is unreachable without a credential', async () => {
+      const doc = makeGuestDoc();
+      mockUserModel.findById.mockReturnValue(makeFindByIdMock(doc));
+
+      await service.requestDeletion(userIdStr);
+
+      const requestedAt = (doc as any).deletionRequestedAt as Date;
+      const scheduledFor = (doc as any).deletionScheduledFor as Date;
+      expect(scheduledFor.getTime()).toBe(requestedAt.getTime());
+      // AccountCleanupService selects on `deletionScheduledFor: { $lte: now }`,
+      // so an already-elapsed timestamp is picked up by the next sweep.
+      expect(scheduledFor.getTime()).toBeLessThanOrEqual(Date.now());
+      expect(doc.save).toHaveBeenCalled();
+    });
+
+    it('rejects a second request for either role', async () => {
+      mockUserModel.findById.mockReturnValue(
+        makeFindByIdMock(makeGuestDoc({ deletionRequestedAt: new Date() }))
+      );
+
+      await expect(service.requestDeletion(userIdStr)).rejects.toThrow(ConflictException);
+    });
+  });
+
   describe('logout / logoutAll / revokeSession', () => {
     it('logout revokes the current session', async () => {
       mockSessionRepo.revoke.mockResolvedValue(ok(undefined));

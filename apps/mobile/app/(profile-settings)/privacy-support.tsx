@@ -1,6 +1,6 @@
-import { SettingsItem, SettingsSection } from '@/components';
+import { SettingsItem, SettingsSection, useLoading } from '@/components';
 import { LEGAL_URLS, SUPPORT_MAILTO } from '@/constants/legal';
-import { useAppDispatch, useAuth } from '@/hooks';
+import { useAppDispatch, useAuth, useGuestDeletion } from '@/hooks';
 import { requestDeletion } from '@/store/slices/authSlice';
 import { useTheme } from '@/theme';
 import { openInAppBrowser, openSystemLink } from '@/utils/external-link';
@@ -13,6 +13,8 @@ export default function PrivacySupportScreen() {
   const dispatch = useAppDispatch();
   const { colors } = useTheme();
   const { user, isGuest } = useAuth();
+  const { deleteGuestAccount } = useGuestDeletion();
+  const { showLoading, hideLoading } = useLoading();
 
   const hasPendingDeletion = !!user?.deletionScheduledFor;
 
@@ -24,17 +26,49 @@ export default function PrivacySupportScreen() {
     });
   };
 
+  // Real accounts get the 48h window, so the confirmation is the deletion
+  // banner appearing rather than a screen transition — but the request itself
+  // is a network call, so it still needs a blocking HUD and a visible failure.
+  const scheduleDeletion = async () => {
+    showLoading('Scheduling deletion...', { dismissibleAfterSec: 5 });
+    let failure: unknown = null;
+    try {
+      await dispatch(requestDeletion()).unwrap();
+    } catch (error) {
+      failure = error;
+    } finally {
+      hideLoading();
+    }
+
+    if (failure) {
+      settingsLogger.warn('Account deletion request failed', { error: failure });
+      Alert.alert(
+        'Could not delete',
+        "We couldn't schedule your account for deletion. Check your connection and try again."
+      );
+    }
+  };
+
+  // Guests are deleted straight away and signed out rather than given the 48h
+  // cancellation window — they have no credential to sign back in and cancel
+  // with, so the window would only delay the purge. See useGuestDeletion.
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account?',
-      'Your data will be permanently deleted after 48 hours. You can cancel this anytime before then.',
+      isGuest
+        ? 'Your entries and data will be permanently deleted and you will be signed out. This cannot be undone.'
+        : 'Your data will be permanently deleted after 48 hours. You can cancel this anytime before then.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete Account',
           style: 'destructive',
           onPress: () => {
-            dispatch(requestDeletion());
+            if (isGuest) {
+              void deleteGuestAccount();
+            } else {
+              void scheduleDeletion();
+            }
           },
         },
       ]
@@ -79,8 +113,10 @@ export default function PrivacySupportScreen() {
           />
         </SettingsSection>
 
-        {/* Danger Zone */}
-        {!isGuest && !hasPendingDeletion && (
+        {/* Danger Zone — shown to guests too: App Store Guideline 5.1.1(v)
+            covers automatically generated accounts, and a guest account holds
+            real entries on the server. */}
+        {!hasPendingDeletion && (
           <SettingsSection title="Manage Account">
             <SettingsItem
               icon="trash-outline"

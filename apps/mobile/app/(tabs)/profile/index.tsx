@@ -1,6 +1,6 @@
 import { AppSwitch, SettingsItem, SettingsSection } from '@/components';
 import { QuotaUsageSection } from '@/components/QuotaUsageSection';
-import { useAuth } from '@/hooks';
+import { useAuth, useGuestDeletion } from '@/hooks';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 import { useTheme } from '@/theme';
 import { hexToRgba } from '@/utils/color';
@@ -23,23 +23,34 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { colors, isDark, toggleMode } = useTheme();
   const { user, isGuest, logout } = useAuth();
+  const { deleteGuestAccount } = useGuestDeletion();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const specialtyLabel = user?.specialty?.name ?? null;
   const stageLabel = user?.specialty?.trainingStage?.code ?? null;
 
+  // Exiting guest mode deletes the account rather than just dropping the
+  // session. A guest can't sign back in, so leaving the session behind would
+  // orphan their entries on the server with no way to ever remove them — and
+  // this prompt has always told them the data would be lost.
   const handleLogout = () => {
     Alert.alert(
       isGuest ? 'Exit Guest Mode' : 'Sign Out',
       isGuest
-        ? 'Are you sure you want to exit? Your guest data will be lost.'
+        ? 'Your entries and data will be permanently deleted. This cannot be undone.'
         : 'Are you sure you want to sign out?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: isGuest ? 'Exit' : 'Sign Out',
+          text: isGuest ? 'Exit and Delete' : 'Sign Out',
           style: 'destructive',
           onPress: async () => {
+            // The guest path raises its own HUD inside useGuestDeletion, so it
+            // deliberately skips this screen's overlay rather than stacking two.
+            if (isGuest) {
+              await deleteGuestAccount();
+              return;
+            }
             setIsLoggingOut(true);
             await logout();
           },
@@ -195,7 +206,7 @@ export default function ProfileScreen() {
           <View style={[styles.overlayContent, { backgroundColor: colors.surface }]}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[styles.overlayText, { color: colors.text }]}>
-              {isGuest ? 'Exiting guest mode...' : 'Signing out...'}
+              Signing out...
             </Text>
           </View>
         </View>

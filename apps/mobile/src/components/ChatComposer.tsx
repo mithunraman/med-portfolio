@@ -125,10 +125,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
 
   const handleSend = useCallback(() => {
     const trimmedText = text.trim();
-    if (trimmedText && !isSending) {
-      onSend(trimmedText);
-      setText('');
-    }
+    if (!trimmedText || isSending) return;
+
+    onSend(trimmedText);
+    setText('');
+    // Fabric measures this TextInput from native-owned TextInputState, not the
+    // `text` prop, so clearing `value` alone can leave the stale multi-line
+    // measurement in place until the next keystroke. clear() pushes an empty
+    // native state directly, forcing the re-measure.
+    inputRef.current?.clear();
   }, [text, isSending, onSend]);
 
   // Voice recorder handlers

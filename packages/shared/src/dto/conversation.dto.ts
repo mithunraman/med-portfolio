@@ -5,7 +5,6 @@ import { ConversationStatus } from '../enums/conversation-status.enum';
 import { MessageRole } from '../enums/message-role.enum';
 import { MessageStatus } from '../enums/message-status.enum';
 import { MessageType } from '../enums/message-type.enum';
-import { ThinkingStep } from '../enums/thinking-step.enum';
 
 // Message media
 export const MessageMediaSchema = z.object({
@@ -293,7 +292,12 @@ export const ConversationContextSchema = z.object({
     .object({
       id: z.string(),
       status: z.nativeEnum(AnalysisRunStatus),
-      thinkingReason: z.nativeEnum(ThinkingStep).nullable().optional(),
+      // Server-owned display copy, already coarsened from the internal graph
+      // step — render it as given, never map or branch on it client-side.
+      // Deliberately a plain string, not an id: the internal step names must
+      // not reach clients, and nothing needs to branch on the stage today.
+      // Null until the first node of a run reports in.
+      thinkingLabel: z.string().nullable().optional(),
     })
     .optional(),
 });

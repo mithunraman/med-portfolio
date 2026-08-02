@@ -6,7 +6,6 @@ import {
   type ConversationContext,
   type ConversationPhase,
   type QuestionType,
-  type ThinkingStep,
 } from '@acme/shared';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
@@ -14,6 +13,7 @@ import { AnalysisRunsService } from '../analysis-runs/analysis-runs.service';
 import type { AnalysisRun } from '../analysis-runs/schemas/analysis-run.schema';
 import { isErr } from '../common/utils/result.util';
 import { OutboxService } from '../outbox/outbox.service';
+import { resolveThinkingLabel } from '../portfolio-graph/thinking-labels';
 import { resolveEntryTypeLabel } from '../specialties/specialty.registry';
 import {
   CONVERSATIONS_REPOSITORY,
@@ -132,7 +132,7 @@ export class ConversationContextService {
       ? {
           id: latestRun.xid,
           status: latestRun.status,
-          thinkingReason: latestRun.currentStep as ThinkingStep | null,
+          thinkingLabel: resolveThinkingLabel(latestRun.currentStep),
         }
       : undefined;
 

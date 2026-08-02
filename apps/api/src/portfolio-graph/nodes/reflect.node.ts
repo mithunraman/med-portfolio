@@ -61,10 +61,13 @@ export const reflectResponseSchema = z.object({
     .string()
     .max(100)
     .describe(
-      'A concise, case-focused title for list views (max 100 chars). Describe the ' +
-        'clinical scenario only — do NOT include the trainee, their training stage ' +
+      'A concise title for list views, around 30 characters and never more than 60 — ' +
+        'it is truncated to a single line in the app. When the entry centres on a ' +
+        'patient, use "<age><sex> - <presentation>", e.g. "72F - dry cough"; omit the ' +
+        'sex letter if the trainee never indicated it ("72 - dry cough"). When there is ' +
+        'no index patient, state the subject alone, e.g. "missed fracture on X-ray", ' +
+        '"statin monitoring recall". Do NOT include the trainee, their training stage ' +
         '(e.g. "ST2"), their role, or the entry type. ' +
-        'Good: "72-year-old woman with a 6-week dry cough". ' +
         'Bad: "ST2 GP trainee managing a 72-year-old lady with a dry cough".'
     ),
 });
@@ -135,11 +138,23 @@ NOT OK: Introducing a new clinical term — "his BP was high" → "his BP was hi
 
 ## Title
 
-Produce a concise, case-focused title describing the clinical scenario only. Do NOT
-prefix it with the trainee, their training stage (e.g. "ST2"), their role, or the entry
-type — that metadata is stored separately and is noise in list views.
-- Good: "72-year-old woman with a 6-week dry cough"
-- Bad: "ST2 GP trainee managing a 72-year-old lady with a dry cough"
+Produce a concise title for list views. Keep it short — aim for about 30 characters and never exceed 60, because it is truncated to a single line in the app. Lead with the clinical content, since that is what survives truncation.
+
+**When the entry centres on a patient**, use \`<age><sex> - <presentation>\`: the age as a bare number, the sex as a single letter, then the presenting problem.
+- Good: "72F - dry cough"
+- Good: "78F - fall, ?postural"
+- Good: "45M - chest pain"
+
+Include the sex letter ONLY when the trainee's own words support it (they said "woman", "he", "lady", etc.). If the trainee never indicated it, give the age alone — "72 - dry cough" — and never infer sex from a name or from the clinical picture. If the trainee described the patient in terms that are not simply male or female, use their wording rather than forcing a letter.
+
+**When there is no index patient** — a significant event review, quality improvement project, tutorial, or similar — drop the demographic prefix entirely and state the subject alone.
+- Good: "missed fracture on X-ray"
+- Good: "statin monitoring recall"
+
+In both cases, do NOT include the trainee, their training stage (e.g. "ST2"), their role, or the entry type — that metadata is stored separately and is noise in list views.
+- Bad: "ST2 GP trainee managing a 72-year-old lady with a dry cough" (far too long, and leads with metadata rather than the case)
+
+You may use abbreviations a UK GP would write in the records (SOB, CP, D&V, "?" for a suspected diagnosis). Never invent an abbreviation, and never use one whose meaning is ambiguous — write it out instead.
 
 ## Capabilities (context only)
 

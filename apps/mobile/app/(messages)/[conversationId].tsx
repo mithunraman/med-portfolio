@@ -621,7 +621,14 @@ export default function ChatScreen() {
         pendingAnalysis,
         phase,
       });
-      return { mode: 'status' };
+      return {
+        mode: 'status',
+        // Only trust the label once the server confirms the run is running.
+        // currentStep isn't cleared at an interrupt, so during the optimistic
+        // pendingAnalysis window it may still describe the *previous* run's last step.
+        thinkingLabel:
+          phase === 'analysing' ? (context?.analysisRun?.thinkingLabel ?? null) : null,
+      };
     }
 
     // Word count gate — composing phase uses initial threshold

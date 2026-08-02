@@ -296,6 +296,8 @@ describe('ConversationContextService', () => {
       expect(ctx.analysisRun).toEqual({
         id: 'run_abc123',
         status: AnalysisRunStatus.FAILED,
+        // No currentStep on the fixture — resolves to an explicit null
+        thinkingLabel: null,
       });
     });
   });
@@ -401,6 +403,8 @@ describe('ConversationContextService', () => {
         expect(ctx.analysisRun).toEqual({
           id: 'run_abc123',
           status: AnalysisRunStatus.AWAITING_INPUT,
+          // No currentStep on the fixture — resolves to an explicit null
+          thinkingLabel: null,
         });
       });
     });
@@ -582,6 +586,8 @@ describe('ConversationContextService', () => {
       expect(ctx.analysisRun).toEqual({
         id: 'run_abc123',
         status: AnalysisRunStatus.COMPLETED,
+        // No currentStep on the fixture — resolves to an explicit null
+        thinkingLabel: null,
       });
     });
   });

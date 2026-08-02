@@ -45,7 +45,10 @@ function useRotatingText(words: string[], intervalMs = 2500): string {
 // --- Public types ---
 
 export type ActionBarState =
-  | { mode: 'status' }
+  // Server-supplied display copy — render as given, never map or branch on it.
+  // Optional and purely additive: the rotating word above it always renders, so
+  // callers with no server-reported label (local send/processing) simply omit it.
+  | { mode: 'status'; thinkingLabel?: string | null }
   | { mode: 'action'; variant: 'start' | 'continue'; onPress: () => void }
   | { mode: 'progress'; wordCount: number; threshold: number };
 
@@ -69,7 +72,7 @@ export const ActionBar = memo(function ActionBar({ state }: ActionBarProps) {
       ]}
     >
       {state.mode === 'status' ? (
-        <StatusBar colors={colors} />
+        <StatusBar thinkingLabel={state.thinkingLabel} colors={colors} />
       ) : state.mode === 'progress' ? (
         <ProgressBar wordCount={state.wordCount} threshold={state.threshold} colors={colors} />
       ) : (
@@ -81,12 +84,26 @@ export const ActionBar = memo(function ActionBar({ state }: ActionBarProps) {
 
 // --- Status mode ---
 
-function StatusBar({ colors }: { colors: { accent: string } }) {
+function StatusBar({
+  thinkingLabel,
+  colors,
+}: {
+  thinkingLabel?: string | null;
+  colors: { accent: string; textSecondary: string };
+}) {
+  // The rotating word is the primary signal and always shows; the server's
+  // label is optional detail beneath it. Null until the first node of a run
+  // reports in, so the second line simply isn't rendered until then.
   const thinkingWord = useRotatingText(THINKING_WORDS);
 
   return (
     <View style={styles.statusRow}>
-      <Text style={[styles.thinkingLabel, { color: colors.accent }]}>{thinkingWord}...</Text>
+      <Text style={[styles.rotatingWord, { color: colors.accent }]}>{thinkingWord}...</Text>
+      {thinkingLabel ? (
+        <Text style={[styles.stageLabel, { color: colors.textSecondary }]}>
+          [ {thinkingLabel} ]
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -170,9 +187,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
   },
-  thinkingLabel: {
+  // The generic rotating gerund (see THINKING_WORDS), not the server's label
+  rotatingWord: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Server-supplied progress copy, rendered in brackets beneath
+  stageLabel: {
+    fontSize: 12,
+    fontWeight: '400',
   },
   // Progress mode
   progressRow: {

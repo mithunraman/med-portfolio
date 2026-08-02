@@ -13,7 +13,6 @@ export * from './pdp-goal-status.enum';
 export * from './analysis-run-status.enum';
 export * from './outbox-status.enum';
 export * from './review-period-status.enum';
-export * from './thinking-step.enum';
 export * from './platform.enum';
 export * from './update-status.enum';
 export * from './notice-type.enum';

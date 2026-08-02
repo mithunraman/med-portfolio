@@ -5,7 +5,7 @@ import { UserRole } from '@acme/shared';
  * Controls how many expensive operations a user can perform per window.
  */
 export const quotaPlans: Record<number, { shortWindow: number; weeklyWindow: number }> = {
-  [UserRole.USER_GUEST]: { shortWindow: 200, weeklyWindow: 500 },
+  [UserRole.USER_GUEST]: { shortWindow: 50, weeklyWindow: 200 },
   [UserRole.USER]: { shortWindow: 200, weeklyWindow: 1000 },
   // Future: [UserRole.PAID]: { shortWindow: 100, weeklyWindow: 800 },
 };
@@ -14,7 +14,7 @@ export const quotaPlans: Record<number, { shortWindow: number; weeklyWindow: num
 export const SHORT_WINDOW_MS = 4 * 60 * 60 * 1000;
 
 /** Maximum lifetime artefacts a guest account can create. */
-export const GUEST_ARTEFACT_LIMIT = 100;
+export const GUEST_ARTEFACT_LIMIT = 10;
 
 export function isGuestAtArtefactLimit(role: UserRole, count: number): boolean {
   return role === UserRole.USER_GUEST && count >= GUEST_ARTEFACT_LIMIT;

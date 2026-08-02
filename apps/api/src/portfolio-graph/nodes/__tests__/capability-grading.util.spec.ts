@@ -76,5 +76,17 @@ describe('capability-grading.util', () => {
       expect(block).toContain('Evidence already found: "I started metformin"');
       expect(block).toContain('Why it was tagged: autonomous decision');
     });
+
+    it('renders the upstream tag tier when supplied (the justification ceiling)', () => {
+      const block = formatCapabilityBlock([
+        { code: 'C-06', name: 'Managing complexity', foundTier: 'adequate' },
+      ]);
+      expect(block).toContain('Tagged at tier: adequate');
+    });
+
+    it('omits the tag-tier line when foundTier is absent', () => {
+      const block = formatCapabilityBlock([{ code: 'C-06', name: 'Managing complexity' }]);
+      expect(block).not.toContain('Tagged at tier:');
+    });
   });
 });

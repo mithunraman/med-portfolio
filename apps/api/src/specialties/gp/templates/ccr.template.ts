@@ -104,9 +104,12 @@ export const CCR_TEMPLATE: ArtefactTemplate = {
         "When tightening, preserve the STRENGTH and MODALITY of the trainee's clinical " +
         'reasoning and evaluative judgements: do NOT weaken an assertive clinical stance ' +
         'into a tentative one (e.g. "you have to assume a GI cause until proven otherwise" ' +
-        'must NOT become "prompting me to consider a GI cause"), and do not drop the ' +
-        'reasoning that discriminated between differentials. Compress wording, never the ' +
-        'force of the judgement.',
+        'must NOT become "prompting me to consider a GI cause"), do NOT harden a hedged one ' +
+        'into a definitive one (e.g. "I was fairly happy this was X" must NOT become "I ' +
+        'diagnosed X"; "pretty much confirmed" must NOT become "confirmed"), and do not drop ' +
+        'the reasoning that discriminated between differentials. Compress wording, never the ' +
+        'force of the judgement: every hedge, intensifier, and qualifier in the source must ' +
+        'survive into any narrative sentence derived from it.',
       probes: CCR_BRIEF_DESCRIPTION_PROBES,
     },
     {

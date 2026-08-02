@@ -144,4 +144,36 @@ describe('refineNode', () => {
     expect(result.composedDocument).toEqual(doc);
     expect(result.refineTrace!.every((t) => t.source === 'fallback')).toBe(true);
   });
+
+  describe('prompt (v2)', () => {
+    async function renderedSystemPrompt(): Promise<string> {
+      const deps = makeDeps({ sections: [] });
+      await createRefineNode(deps)(makeState());
+      const messages = (deps.llmService.invokeStructured as jest.Mock).mock.calls[0][0] as Array<{
+        content: unknown;
+      }>;
+      return String(messages[0].content);
+    }
+
+    it('renders the Output Format JSON with single braces and no stray escapes', async () => {
+      const prompt = await renderedSystemPrompt();
+      expect(prompt).toContain('{\n  "sections": [');
+      expect(prompt).not.toContain('{{');
+      expect(prompt).not.toContain('}}');
+    });
+
+    it('protects the hedge words and scopes the protection to the stance-words', async () => {
+      const prompt = await renderedSystemPrompt();
+      // The exact hedges the upstream compose step must now preserve — refine must not
+      // re-harden them while polishing.
+      expect(prompt).toContain('"fairly happy"');
+      expect(prompt).toContain('"pretty much"');
+      expect(prompt).toContain('it covers the stance-words themselves');
+    });
+
+    it('reframes lazy pass-through as a failure (anti-under-editing)', async () => {
+      const prompt = await renderedSystemPrompt();
+      expect(prompt).toContain('pass-through is not the safe default');
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { createGenerateFollowupNode } from '../generate-followup.node';
+import { contextualisedQuestionSchema, createGenerateFollowupNode } from '../generate-followup.node';
 import { DEFAULT_MAX_FOLLOWUP_ROUNDS } from '../../portfolio-graph.state';
 import type { GraphDeps } from '../../graph-deps';
 import type { PortfolioStateType } from '../../portfolio-graph.state';
@@ -168,6 +168,25 @@ describe('GenerateFollowupNode', () => {
       expect(prefix).not.toContain('Clinical Case Review'); // templateName
       expect(prefix).not.toContain('ST1'); // stage
       expect(prefix).not.toContain('## Context for this entry'); // context block
+    });
+
+    it('renders the Output Format JSON with single braces and every schema coverageState', async () => {
+      const [systemInstructions] = await promptFor(makeState());
+      const prefix = String(systemInstructions.content);
+
+      // The template escapes braces as {{ }} so LangChain's f-string parser leaves them
+      // literal; the model must receive single-brace, valid JSON — and no stray escapes.
+      expect(prefix).toContain('{\n  "questions": [');
+      expect(prefix).not.toContain('{{');
+      expect(prefix).not.toContain('}}');
+
+      // Guard against prompt↔schema drift: the Output Format block must advertise exactly
+      // the coverageState values the enforced Zod enum accepts. Adding/removing an enum
+      // value without updating the prompt fails here.
+      const coverageStates = contextualisedQuestionSchema.shape.coverageState.options;
+      for (const value of coverageStates) {
+        expect(prefix).toContain(`"${value}"`);
+      }
     });
   });
 

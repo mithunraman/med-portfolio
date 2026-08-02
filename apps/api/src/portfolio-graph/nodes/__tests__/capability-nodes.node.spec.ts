@@ -1,8 +1,11 @@
 import { MessageRole } from '@acme/shared';
 import type { GraphDeps } from '../../graph-deps';
 import type { CapabilityTag, PortfolioStateType } from '../../portfolio-graph.state';
-import { createElicitJustificationNode } from '../elicit-justification.node';
-import { createTagCapabilitiesNode } from '../tag-capabilities.node';
+import {
+  createElicitJustificationNode,
+  justificationAssessmentSchema,
+} from '../elicit-justification.node';
+import { capabilityAssessmentSchema, createTagCapabilitiesNode } from '../tag-capabilities.node';
 import { buildTranscript } from '../transcript-format.util';
 
 /**
@@ -59,6 +62,42 @@ function makeState(overrides: Partial<PortfolioStateType> = {}): PortfolioStateT
   } as PortfolioStateType;
 }
 
+describe('tagCapabilitiesNode prompt', () => {
+  async function renderedSystemPrompt(): Promise<string> {
+    const deps = makeDeps({ assessments: [] });
+    await createTagCapabilitiesNode(deps)(makeState());
+    const messages = (deps.llmService.invokeStructured as jest.Mock).mock.calls[0][0] as Array<{
+      content: unknown;
+    }>;
+    return String(messages[0].content);
+  }
+
+  it('renders the Output Format JSON with single braces and no stray escapes', async () => {
+    const prompt = await renderedSystemPrompt();
+    // The template escapes braces as {{ }} so LangChain's f-string parser leaves them
+    // literal; the model must receive single-brace, valid JSON.
+    expect(prompt).toContain('{\n  "assessments": [');
+    expect(prompt).not.toContain('{{');
+    expect(prompt).not.toContain('}}');
+  });
+
+  it('advertises exactly the tier values the schema accepts (prompt↔schema guard)', async () => {
+    const prompt = await renderedSystemPrompt();
+    // Adding/removing a tier in the Zod enum without updating the prompt fails here.
+    for (const tier of capabilityAssessmentSchema.shape.tier.options) {
+      expect(prompt).toContain(`"${tier}"`);
+    }
+  });
+
+  it('keeps the descriptor-less fallback specialty-agnostic (no hardcoded code list)', async () => {
+    const prompt = await renderedSystemPrompt();
+    // The prompt is shared across specialties, so the fallback must key off the block
+    // ("no Descriptor criteria: line"), never a GP-specific enumeration of codes.
+    expect(prompt).toContain('has NO "Descriptor criteria:" line');
+    expect(prompt).not.toContain('C-01, C-02, C-08');
+  });
+});
+
 describe('tagCapabilitiesNode post-validation', () => {
   it('keeps adequate+ capabilities with a verbatim quote and drops the rest', async () => {
     const deps = makeDeps({
@@ -106,6 +145,45 @@ describe('tagCapabilitiesNode post-validation', () => {
     const result = await createTagCapabilitiesNode(deps)(makeState());
 
     expect(result.capabilities!.map((c) => c.code)).toEqual(['C-06', 'C-08']);
+  });
+});
+
+describe('elicitJustificationNode prompt', () => {
+  const taggedAdequate: CapabilityTag = {
+    code: 'C-06',
+    name: 'Managing medical complexity',
+    reasoning: 'Started metformin.',
+    quote: 'I started metformin and discussed lifestyle changes',
+    tier: 'adequate',
+  };
+
+  async function renderedSystemPrompt(): Promise<string> {
+    const deps = makeDeps({ justifications: [] });
+    await createElicitJustificationNode(deps)(makeState({ capabilities: [taggedAdequate] }));
+    const messages = (deps.llmService.invokeStructured as jest.Mock).mock.calls[0][0] as Array<{
+      content: unknown;
+    }>;
+    return String(messages[0].content);
+  }
+
+  it('renders the Output Format JSON with single braces and no stray escapes', async () => {
+    const prompt = await renderedSystemPrompt();
+    expect(prompt).toContain('{\n  "justifications": [');
+    expect(prompt).not.toContain('{{');
+    expect(prompt).not.toContain('}}');
+  });
+
+  it('advertises exactly the tier values the schema accepts (prompt↔schema guard)', async () => {
+    const prompt = await renderedSystemPrompt();
+    for (const tier of justificationAssessmentSchema.shape.justificationTier.options) {
+      expect(prompt).toContain(`"${tier}"`);
+    }
+  });
+
+  it('injects the upstream tag tier into the block so the TIER CEILING rule has data', async () => {
+    const prompt = await renderedSystemPrompt();
+    expect(prompt).toContain('Tagged at tier: adequate');
+    expect(prompt).toContain('TIER CEILING');
   });
 });
 

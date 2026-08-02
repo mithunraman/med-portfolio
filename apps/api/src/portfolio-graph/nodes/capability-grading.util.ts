@@ -89,6 +89,8 @@ export interface CapabilityBlockEntry {
   /** Evidence the upstream tag node already located, threaded into elicit. */
   foundQuote?: string;
   foundReasoning?: string;
+  /** Tier the upstream tag node graded this capability at — the justification ceiling. */
+  foundTier?: ReadinessTier;
 }
 
 /** Render capabilities into the `{capabilityBlock}` the prompts inject. */
@@ -107,6 +109,7 @@ export function formatCapabilityBlock(entries: CapabilityBlockEntry[]): string {
         lines.push(`Evidence already found: "${e.foundQuote}"`);
         if (e.foundReasoning) lines.push(`Why it was tagged: ${e.foundReasoning}`);
       }
+      if (e.foundTier) lines.push(`Tagged at tier: ${e.foundTier}`);
       return lines.join('\n');
     })
     .join('\n\n');

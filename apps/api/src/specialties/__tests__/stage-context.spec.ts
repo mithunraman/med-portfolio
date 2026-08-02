@@ -1,5 +1,5 @@
 import { Specialty } from '@acme/shared';
-import { getStageContext } from '../stage-context';
+import { getFormattingStageContext, getStageContext } from '../stage-context';
 
 const GENERIC_FALLBACK =
   "Adjust your coaching to the trainee's apparent level of experience based on their language and clinical reasoning.";
@@ -56,5 +56,20 @@ describe('getStageContext', () => {
       expect(getStageContext(Specialty.GP, 'CT1')).toBe(GENERIC_FALLBACK);
       expect(getStageContext(Specialty.PSYCHIATRY, 'IMY1')).toBe(GENERIC_FALLBACK);
     });
+  });
+});
+
+describe('getFormattingStageContext', () => {
+  it('returns a terse, neutral one-liner naming the stage — no question phrasing', () => {
+    const context = getFormattingStageContext('General Practice', 'ST2');
+    expect(context).toBe('This trainee is in ST2, training in General Practice.');
+    // The leak this helper exists to prevent must not reappear.
+    expect(context).not.toContain('Ask questions');
+  });
+
+  it('falls back to a neutral calibration line when the stage is empty', () => {
+    expect(getFormattingStageContext('General Practice', '')).toBe(
+      "Calibrate formatting cleanup to the trainee's apparent level of experience."
+    );
   });
 });

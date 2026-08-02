@@ -161,4 +161,36 @@ describe('reflectNode assemble routing', () => {
     expect(prompt).toContain('TRAINEE:');
     expect(prompt).toContain('AI asked:');
   });
+
+  async function renderedSystemPrompt(): Promise<string> {
+    const deps = makeDeps(makeResponse(''));
+    await createReflectNode(deps)(makeState());
+    const messages = (deps.llmService.invokeStructured as jest.Mock).mock.calls[0][0] as Array<{
+      content: unknown;
+    }>;
+    return String(messages[0].content);
+  }
+
+  it('renders the Output Format JSON with single braces and no stray escapes', async () => {
+    const prompt = await renderedSystemPrompt();
+    // The template escapes braces as {{ }} so LangChain leaves them literal; the model
+    // must receive single-brace, valid JSON.
+    expect(prompt).toContain('{\n  "sections": [');
+    expect(prompt).not.toContain('{{');
+    expect(prompt).not.toContain('}}');
+  });
+
+  it('uses a formatting-calibration stage context, not the question-voiced leak', async () => {
+    const prompt = await renderedSystemPrompt();
+    // The reflect prompt formats; it must not carry the follow-up node's question phrasing.
+    expect(prompt).not.toContain('Ask questions that probe');
+    expect(prompt).toContain('calibrate FORMATTING only');
+    expect(prompt).toContain('This trainee is in'); // terse formatting descriptor
+  });
+
+  it('binds the faithfulness rules to the composed narrative (Rule 9 + category-label ban)', async () => {
+    const prompt = await renderedSystemPrompt();
+    expect(prompt).toContain('Rules 1-8 apply EQUALLY to the composed narrative');
+    expect(prompt).toContain('falls prevention advice'); // the category-label example
+  });
 });

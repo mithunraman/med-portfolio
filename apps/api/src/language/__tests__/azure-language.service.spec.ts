@@ -3,6 +3,7 @@ import {
   AzureLanguageService,
   isAbsoluteDate,
   isNationalBody,
+  isPublicServiceNumber,
   mergeOverlaps,
   parseWordedAge,
   shouldRedactEntity,
@@ -465,6 +466,44 @@ describe('AzureLanguageService', () => {
     });
   });
 
+  describe('public service numbers (keep 999/111 safety-netting, redact real phones)', () => {
+    it('keeps public service numbers but still redacts a personal phone', async () => {
+      const INPUT = 'Told her to call 999 if chest pain or ring 111 if worse; my mobile is 07700 900123.';
+      // Azure tags all three as PhoneNumber (the over-redaction shape).
+      const analyze = fakeAnalyze((text) => [
+        {
+          text: '999',
+          category: 'PhoneNumber',
+          offset: text.indexOf('999'),
+          length: '999'.length,
+          confidenceScore: 0.9,
+        },
+        {
+          text: '111',
+          category: 'PhoneNumber',
+          offset: text.indexOf('111'),
+          length: '111'.length,
+          confidenceScore: 0.9,
+        },
+        {
+          text: '07700 900123',
+          category: 'PhoneNumber',
+          offset: text.indexOf('07700 900123'),
+          length: '07700 900123'.length,
+          confidenceScore: 0.9,
+        },
+      ]);
+      const service = buildService(analyze);
+
+      const result = await service.redactPhi(INPUT);
+
+      expect(result.redactedText).toContain('call 999'); // safety-netting kept
+      expect(result.redactedText).toContain('ring 111'); // safety-netting kept
+      expect(result.redactedText).not.toContain('07700 900123'); // real number redacted
+      expect(result.redactedText).toContain('[PHONE_NUMBER]');
+    });
+  });
+
   describe('overlapping entities (Problem 1: no corrupted placeholders)', () => {
     it('masks an NI number tagged by two overlapping categories as ONE clean placeholder', async () => {
       const INPUT = 'NI number AB123456C on file';
@@ -597,6 +636,31 @@ describe('date classifier', () => {
       'Acme Care Home',
     ])('still redacts a specific institution: %s', (name) => {
       expect(isNationalBody(name)).toBe(false);
+    });
+  });
+
+  describe('isPublicServiceNumber (deny-by-default allow-list)', () => {
+    // Kept: short public codes that appear in safety-netting; separators ignored.
+    it.each(['999', '111', '112', '101', '116 123', '116-123'])(
+      'keeps public service number: %s',
+      (num) => {
+        expect(isPublicServiceNumber(num)).toBe(true);
+      }
+    );
+
+    // Redacted: a real personal/landline number is 10–11 digits — can never
+    // collide with the short public codes, so it never matches the allow-list.
+    it.each(['07700 900123', '+44 7700 900123', '020 7946 0018', '0800 123 4567'])(
+      'still redacts a real phone number: %s',
+      (num) => {
+        expect(isPublicServiceNumber(num)).toBe(false);
+      }
+    );
+
+    it('routes PhoneNumber through the carve-out in shouldRedactEntity', () => {
+      const keep: RedactionPolicy = { datePolicy: 'keep-relative', keepPersonType: true };
+      expect(shouldRedactEntity('PhoneNumber', '999', keep)).toBe(false);
+      expect(shouldRedactEntity('PhoneNumber', '07700 900123', keep)).toBe(true);
     });
   });
 });

@@ -141,7 +141,7 @@ No tests. No cross-module dependencies.
 | ---- | ---- |
 | Module | [media.module.ts](../apps/api/src/media/media.module.ts) — imports Database, Storage; exports `MediaService`, `MEDIA_REPOSITORY` |
 | Controller | [media.controller.ts](../apps/api/src/media/media.controller.ts) — POST `/media/initiate` (quota: `upload`), GET `/:mediaId` |
-| Service | [media.service.ts](../apps/api/src/media/media.service.ts) — presigned URLs (1 h), validates ≤100 MB; uses StorageService + MediaRepository |
+| Service | [media.service.ts](../apps/api/src/media/media.service.ts) — presigned URLs (1 h), validates ≤20 MB; uses StorageService + MediaRepository |
 | **Cron** | [media-sweeper.service.ts](../apps/api/src/media/media-sweeper.service.ts) — `@Cron('0 0 * * * *')` hourly; sweeps orphaned/pending-delete media, dead-letters after 24 failed attempts |
 | Repository | [media.repository.ts](../apps/api/src/media/media.repository.ts) + [interface](../apps/api/src/media/media.repository.interface.ts) |
 | Schema | [schemas/media.schema.ts](../apps/api/src/media/schemas/media.schema.ts) — `Media` (`media`): xid, bucket, key, status, polymorphic `refCollection`+`refDocumentId`, mediaType, sizeBytes, durationMs |

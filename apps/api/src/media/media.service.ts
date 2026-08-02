@@ -16,7 +16,7 @@ import { StorageService } from '../storage/storage.service';
 import { IMediaRepository, MEDIA_REPOSITORY } from './media.repository.interface';
 
 const PRESIGNED_URL_EXPIRY_SECONDS = 3600; // 1 hour
-export const MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
+export const MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 
 export interface InitiateUploadResult {
   mediaId: string;

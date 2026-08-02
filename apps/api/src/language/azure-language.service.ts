@@ -450,6 +450,28 @@ export function isNationalBody(text: string): boolean {
   return head.length > 0 && NATIONAL_BODY_SET.has(head);
 }
 
+/**
+ * UK public service numbers — emergency / urgent-care / helpline codes that
+ * appear in clinical safety-netting ("call 999", "ring 111"). They are public,
+ * non-identifying, and short (3–6 digits), so they can NEVER collide with a
+ * personal phone (10–11 digits) — Azure sometimes tags them as `PhoneNumber`,
+ * which would gut the advice ("call [PHONE_NUMBER] if worse"). Hardcoded,
+ * reviewed list; deny-by-default (only these are kept, every other number redacts).
+ */
+const PUBLIC_SERVICE_NUMBERS: ReadonlySet<string> = new Set([
+  '999', // emergency services
+  '112', // EU emergency (works in the UK)
+  '111', // NHS 111 (urgent care)
+  '101', // police non-emergency
+  '105', // power cut
+  '116123', // Samaritans
+]);
+
+/** True if the text is an enumerated public service number (not an identifier). */
+export function isPublicServiceNumber(text: string): boolean {
+  return PUBLIC_SERVICE_NUMBERS.has(text.replace(/\D/g, ''));
+}
+
 // HIPAA Safe Harbor (45 CFR §164.514(b)(2)) requires "all ages over 89" to be
 // removed — aggregated into a single "90 or older" category — so ages 89 and
 // under are NOT identifiers. Azure tags every age as a `Quantity` (subcategory
@@ -575,7 +597,7 @@ function isAgeOver90(text: string): boolean {
 }
 
 /**
- * Whether a detected entity should be redacted under the active policy. Four
+ * Whether a detected entity should be redacted under the active policy. Five
  * categories are carve-outs; every other category always redacts.
  *
  * - `PersonType` (job roles / relationship nouns) is not a HIPAA/ICO identifier,
@@ -585,6 +607,9 @@ function isAgeOver90(text: string): boolean {
  *   colleges, …) are kept — they are not identifiers. A patient's specific
  *   institution (their hospital / practice / employer / care home) is not on the
  *   allow-list and still redacts.
+ * - `PhoneNumber`: enumerated UK public service numbers (999, 111, 116 123, …)
+ *   are kept — they are public, non-identifying, and too short to be a personal
+ *   phone. Any other number (a real mobile / landline) still redacts.
  * - `DateTime`: fail-safe — an ambiguous (non-anchored) date is kept only under
  *   `keep-relative`; anything with an absolute marker, and everything under
  *   `redact-all`, is removed.
@@ -602,6 +627,7 @@ export function shouldRedactEntity(
 ): boolean {
   if (category === 'PersonType') return !policy.keepPersonType;
   if (category === 'Organization') return !isNationalBody(text);
+  if (category === 'PhoneNumber') return !isPublicServiceNumber(text);
   if (category === 'DateTime') {
     if (policy.datePolicy === 'redact-all') return true;
     return isAbsoluteDate(text);

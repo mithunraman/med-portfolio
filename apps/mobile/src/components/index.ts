@@ -3,6 +3,7 @@ export { AppDialog, type DialogButton, type DialogTone } from './AppDialog';
 export { AppSwitch } from './AppSwitch';
 export { ArtefactAdvisoryBanner } from './ArtefactAdvisoryBanner';
 export { Button } from './Button';
+export { Celebration } from './Celebration';
 export { MessageList } from './chat';
 export { ChatComposer } from './ChatComposer';
 export { StarRating } from './common/StarRating';

@@ -100,9 +100,7 @@ function StatusBar({
     <View style={styles.statusRow}>
       <Text style={[styles.rotatingWord, { color: colors.accent }]}>{thinkingWord}...</Text>
       {thinkingLabel ? (
-        <Text style={[styles.stageLabel, { color: colors.textSecondary }]}>
-          [ {thinkingLabel} ]
-        </Text>
+        <Text style={[styles.stageLabel, { color: colors.textSecondary }]}>{thinkingLabel}</Text>
       ) : null}
     </View>
   );
@@ -140,13 +138,7 @@ function ProgressBar({
 
 // --- Action mode ---
 
-function ActionButton({
-  onPress,
-  colors,
-}: {
-  onPress: () => void;
-  colors: { accent: string };
-}) {
+function ActionButton({ onPress, colors }: { onPress: () => void; colors: { accent: string } }) {
   // Single, model-agnostic label for both the first ("start") and follow-up
   // ("continue") hand-offs to the AI - see MOB-037. "Continue" stays truthful
   // whether the AI then asks a question or finishes, so it survives whichever

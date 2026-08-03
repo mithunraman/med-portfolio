@@ -2,6 +2,7 @@ import type { GoalSelectionState, LocalNote } from '@/components';
 import {
   AppDialog,
   ArtefactAdvisoryBanner,
+  Celebration,
   EditableReflectionSection,
   EditableTitle,
   EntryActionBar,
@@ -40,6 +41,7 @@ import type {
 import { ArtefactStatus, PdpGoalStatus } from '@acme/shared';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -157,6 +159,9 @@ export default function EntryDetailScreen() {
   // MOB-097: shown when finalising with a selected PDP goal missing a review date.
   const [reviewDateErrorVisible, setReviewDateErrorVisible] = useState(false);
   const [finaliseConfirmVisible, setFinaliseConfirmVisible] = useState(false);
+  // Plays the full-screen balloon celebration after a confirmed "Mark as done".
+  // The user stays on the (now completed) entry while it runs.
+  const [celebrating, setCelebrating] = useState(false);
   const [archiveDialogVisible, setArchiveDialogVisible] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   // Key of the note awaiting delete confirmation (null = dialog closed). Holds the
@@ -555,8 +560,11 @@ export default function EntryDetailScreen() {
 
     const result = await dispatch(finaliseArtefact({ artefactId, pdpGoalSelections }));
     if (finaliseArtefact.fulfilled.match(result)) {
-      showToast('Marked as done');
-      leaveWithoutPrompt();
+      // Stay on the entry (now COMPLETED - the existing conditional UI re-renders
+      // for the completed state) and celebrate in place. The balloons + haptic are
+      // the success confirmation, so no toast here.
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setCelebrating(true);
     } else {
       // persistEdits already committed, so any edits are safe - only the
       // finalise failed. Say so, and leave the user on the (still IN_REVIEW)
@@ -566,15 +574,7 @@ export default function EntryDetailScreen() {
         "Couldn't mark this entry as done. Your changes are saved - please try again."
       );
     }
-  }, [
-    artefactId,
-    hasChanges,
-    persistEdits,
-    dispatch,
-    goalSelections,
-    showToast,
-    leaveWithoutPrompt,
-  ]);
+  }, [artefactId, hasChanges, persistEdits, dispatch, goalSelections]);
 
   // Mark as done: validate first, then confirm only when there's a real side
   // effect to review (PDP goals will activate); otherwise go straight through.
@@ -1130,6 +1130,10 @@ export default function EntryDetailScreen() {
         onMarkAsDone={handleMarkAsDone}
         onSaveCompleted={handleSaveCompleted}
       />
+
+      {/* Full-screen balloon celebration - plays over the completed entry after
+          "Mark as done" succeeds; non-interactive, so it never blocks taps. */}
+      <Celebration visible={celebrating} onDone={() => setCelebrating(false)} seed={artefactId} />
 
       {canExport && (
         <ExportSheet

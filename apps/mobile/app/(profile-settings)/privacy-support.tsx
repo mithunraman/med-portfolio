@@ -55,9 +55,19 @@ export default function PrivacySupportScreen() {
   //
   // Deleting the account is also how a user WITHDRAWS the Art 9 consent given at
   // signup (`health_data_consent`), which is why both messages point at export
-  // first. Withdrawal must not cost the trainee their portfolio - if the only
+  // first. Withdrawal should not cost the trainee their portfolio - if the only
   // way out destroys their ARCP evidence, the consent was arguably never freely
   // given. The guest copy leans harder because guests get no grace period.
+  //
+  // KNOWN GAP - and it makes that argument thinner than it reads. The only
+  // export is a per-entry PDF share from the entry screen; there is no bulk or
+  // account-level export anywhere in api or mobile, so a trainee with 40 entries
+  // exports 40 times. The friction lands hardest on exactly the person the
+  // protection is for: someone withdrawing because they are unhappy is the least
+  // likely to tap through it. Bulk export is approved and dated - B-23, target
+  // 31 December 2026 - and also closes most of E-9 / gate C-11, since Art 20
+  // portability is fulfilled manually today via privacy@logdit.app. When B-23
+  // ships, revisit this copy: "share it as a PDF" stops being the best advice.
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account?',

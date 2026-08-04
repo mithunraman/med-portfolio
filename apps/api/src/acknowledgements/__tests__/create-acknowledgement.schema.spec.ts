@@ -7,8 +7,8 @@ describe('createAcknowledgementRequestSchema', () => {
   const valid = {
     noticeVersion: 'v1.0',
     acknowledgements: [
-      { id: 'role_uk_trainee' as const, given: true },
       { id: 'patient_anon_duty' as const, given: true },
+      { id: 'health_data_consent' as const, given: true },
     ],
   };
 
@@ -20,8 +20,8 @@ describe('createAcknowledgementRequestSchema', () => {
     const result = createAcknowledgementRequestSchema.safeParse({
       noticeVersion: 'v1.0',
       acknowledgements: [
-        { id: 'role_uk_trainee', given: false },
-        { id: 'role_uk_trainee', given: true },
+        { id: 'patient_anon_duty', given: false },
+        { id: 'patient_anon_duty', given: true },
       ],
     });
     expect(result.success).toBe(false);
@@ -39,13 +39,13 @@ describe('createAcknowledgementRequestSchema', () => {
   });
 
   it('rejects oversize arrays (>20 entries)', () => {
-    // The body also violates `.refine(unique)` since the enum only has 2 values,
+    // The body also violates `.refine(unique)` since the enum only has 3 values,
     // so `success: false` alone wouldn't isolate the .max(20) bound. Assert on
     // the `too_big` issue code to pin the constraint independently.
     const result = createAcknowledgementRequestSchema.safeParse({
       noticeVersion: 'v1.0',
       acknowledgements: Array.from({ length: 21 }, () => ({
-        id: 'role_uk_trainee' as const,
+        id: 'patient_anon_duty' as const,
         given: true,
       })),
     });

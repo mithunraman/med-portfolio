@@ -52,12 +52,18 @@ export default function PrivacySupportScreen() {
   // Guests are deleted straight away and signed out rather than given the 48h
   // cancellation window - they have no credential to sign back in and cancel
   // with, so the window would only delay the purge. See useGuestDeletion.
+  //
+  // Deleting the account is also how a user WITHDRAWS the Art 9 consent given at
+  // signup (`health_data_consent`), which is why both messages point at export
+  // first. Withdrawal must not cost the trainee their portfolio - if the only
+  // way out destroys their ARCP evidence, the consent was arguably never freely
+  // given. The guest copy leans harder because guests get no grace period.
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account?',
       isGuest
-        ? 'Your entries and data will be permanently deleted and you will be signed out. This cannot be undone.'
-        : 'Your data will be permanently deleted after 48 hours. You can cancel this anytime before then.',
+        ? 'Your entries and data will be permanently deleted and you will be signed out. This cannot be undone.\n\nExport anything you want to keep first - open an entry and share it as a PDF.'
+        : 'Your data will be permanently deleted after 48 hours. You can cancel this anytime before then.\n\nExport anything you want to keep first - open an entry and share it as a PDF.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

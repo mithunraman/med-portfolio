@@ -57,8 +57,8 @@ describe('Acknowledgements (integration)', () => {
   const validDto = {
     noticeVersion: 'v1.0',
     acknowledgements: [
-      { id: 'role_uk_trainee' as const, given: true },
       { id: 'patient_anon_duty' as const, given: true },
+      { id: 'health_data_consent' as const, given: true },
       { id: 'accept_privacy_terms' as const, given: true },
     ],
   };
@@ -102,7 +102,7 @@ describe('Acknowledgements (integration)', () => {
           userId,
           {
             noticeVersion: 'v1.0',
-            acknowledgements: [{ id: 'role_uk_trainee', given: true }],
+            acknowledgements: [{ id: 'patient_anon_duty', given: true }],
           }
         )
       ).rejects.toThrow(BadRequestException);
@@ -117,15 +117,15 @@ describe('Acknowledgements (integration)', () => {
       const call = service.create(userId, {
         noticeVersion: 'v1.0',
         acknowledgements: [
-          { id: 'role_uk_trainee', given: true },
-          { id: 'patient_anon_duty', given: false },
+          { id: 'patient_anon_duty', given: true },
+          { id: 'health_data_consent', given: false },
           { id: 'accept_privacy_terms', given: true },
         ],
       });
 
       await expect(call).rejects.toThrow(BadRequestException);
       await expect(call).rejects.toThrow(
-        'Required acknowledgement missing or not given: patient_anon_duty'
+        'Required acknowledgement missing or not given: health_data_consent'
       );
     });
 

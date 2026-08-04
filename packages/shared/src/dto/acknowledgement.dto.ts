@@ -1,8 +1,17 @@
 import { z } from 'zod';
 
 export const acknowledgementIdSchema = z.enum([
-  'role_uk_trainee',
   'patient_anon_duty',
+  // UK GDPR Art 9(2)(a) explicit consent. Deliberately separate from
+  // `accept_privacy_terms`: consent bundled into terms acceptance is not
+  // consent, so these two must never be merged into a single checkbox.
+  'health_data_consent',
+  // Carries BOTH the eligibility warranty and acceptance of the Terms and
+  // Privacy Policy. Combining them is safe precisely because neither is consent
+  // — the unbundling rule in Art 7 constrains consent, not contract mechanics,
+  // so non-consent items may be combined with each other freely. The id is kept
+  // narrow for continuity; the legally operative text is the LABEL, recoverable
+  // from the frozen notice document that `noticeVersion` resolves to.
   'accept_privacy_terms',
 ]);
 export type AcknowledgementId = z.infer<typeof acknowledgementIdSchema>;
@@ -26,7 +35,13 @@ export type NoticeBlock = z.infer<typeof noticeBlockSchema>;
 export const noticeDocumentSchema = z.object({
   version: z.string(),
   // If true, users whose latest acceptance predates this version are re-prompted.
-  // Set by counsel review per version. v1.0 = false (no prior versions exist).
+  //
+  // This is a judgement about MATERIALITY, not a formatting flag: set it true
+  // whenever a new version changes what the user is actually agreeing to — new
+  // processing, a new purpose, a new recipient, or any change to the Art 9
+  // consent item. Typo fixes and reworded prose do not qualify. Getting it wrong
+  // in the false direction means users are bound by terms they never saw.
+  // v1.0 = false (no prior versions exist, so nobody can be stale against it).
   requiresReAckFromPriorVersions: z.boolean(),
   title: z.string(),
   subtitle: z.string().nullable(),

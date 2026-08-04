@@ -683,8 +683,12 @@ export class LLMService {
    *
    * Returns '' (never throws) so it is always safe to interpolate into a log line
    * or a Sentry field — an error shape we didn't anticipate must not become a
-   * second error inside the handler for the first one. Truncated to 500 chars
-   * because some providers echo the entire request body back.
+   * second error inside the handler for the first one.
+   *
+   * **Emits identifiers and status only, never provider response bodies.** This
+   * string leaves the process to both Grafana Cloud and Sentry, neither of which
+   * may receive trainee content — see the note at the `meta.raw` site below for
+   * why, and do not reintroduce those fields.
    *
    * Output is operator-facing only: nothing here feeds control flow. Retry and
    * 429 classification read `error.status`/`statusCode` directly (see
@@ -717,11 +721,30 @@ export class LLMService {
       if (typeof bodyCode === 'string' && bodyCode) parts.push(`code=${bodyCode}`);
       if (meta?.provider_name) parts.push(`upstream=${meta.provider_name}`);
 
-      const raw = meta?.raw ?? meta?.reasons ?? body?.message;
-      if (raw) {
-        const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
-        parts.push(`raw=${text.slice(0, 500)}`);
-      }
+      // DELIBERATELY NOT EMITTED: `meta.raw` / `meta.reasons` / `body.message`.
+      //
+      // Those fields carry the provider's verbatim response, and a content-filter
+      // rejection routinely echoes the offending prompt back inside them. This
+      // string is interpolated into `logger.*` (→ pino → OTLP → Grafana Cloud) and
+      // into a Sentry `extra` field, so emitting them would ship trainee content to
+      // two processors that must not receive it:
+      //
+      //   - Sentry's DPA *prohibits* special category data outright and states its
+      //     obligations "will not apply" to any that is sent — so a leak is both a
+      //     contract breach and data landing with no Art 28 protection at all.
+      //   - Grafana Cloud's log retention is still undetermined, and retention is
+      //     the ONLY erasure mechanism for anything that reaches it — the account
+      //     deletion path touches Mongo and object storage, never logs.
+      //
+      // Redaction does not make this safe: it strips identifiers, not clinical
+      // narrative, and every event here carries a conversation/message id that
+      // links straight back to an identifiable trainee.
+      //
+      // `status=`/`code=`/`upstream=` are what is actually diagnosable — they say
+      // WHAT happened and WHICH provider rejected it. The echoed prompt adds
+      // nothing you cannot get from the request record. If you need the body while
+      // debugging, read it locally via LLM_TRACE (dev-only, gitignored); do not
+      // route it through an exporter.
 
       return parts.length > 0 ? ` [${parts.join(' ')}]` : '';
     } catch {

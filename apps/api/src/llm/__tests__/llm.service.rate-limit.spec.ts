@@ -355,7 +355,46 @@ describe('LLMService rate-limit wiring', () => {
 
       expect(detail).not.toContain('status=');
       expect(detail).not.toContain('code=');
-      expect(detail).toContain('raw=boom'); // the useful part still survives
+      // Nothing identifiable is left, so the whole detail collapses to ''. This
+      // previously asserted `raw=boom` survived; see the next test for why that
+      // changed.
+      expect(detail).toBe('');
+    });
+
+    it('never emits the provider response body — it can echo the trainee’s prompt', async () => {
+      // Regression guard, not a style preference. This string is interpolated into
+      // `logger.*` (→ pino → OTLP → Grafana Cloud) AND into a Sentry `extra` field.
+      // Provider content-filter rejections routinely echo the offending prompt back
+      // in `metadata.raw` / `metadata.reasons` / `error.message`, so emitting them
+      // ships trainee clinical content to two processors that must not receive it —
+      // Sentry's DPA prohibits special category data outright and disapplies its own
+      // obligations for any that is sent, and Grafana's log retention is the only
+      // erasure mechanism for anything that lands there.
+      const secret = 'Patient presented with chest pain and I felt out of my depth';
+
+      const fromMetadataRaw = await detailFor(
+        Object.assign(new Error('wrapped'), {
+          status: 400,
+          metadata: { raw: secret, provider_name: 'DeepInfra' },
+        })
+      );
+      const fromBodyMessage = await detailFor(
+        Object.assign(new Error('wrapped'), { error: { code: 'content_filter', message: secret } })
+      );
+      const fromMetadataReasons = await detailFor(
+        Object.assign(new Error('wrapped'), { status: 400, metadata: { reasons: [secret] } })
+      );
+
+      for (const detail of [fromMetadataRaw, fromBodyMessage, fromMetadataReasons]) {
+        expect(detail).not.toContain(secret);
+        expect(detail).not.toContain('chest pain');
+        expect(detail).not.toContain('raw=');
+      }
+
+      // The diagnosable parts still survive — this is not a blanket silencing.
+      expect(fromMetadataRaw).toContain('status=400');
+      expect(fromMetadataRaw).toContain('upstream=DeepInfra');
+      expect(fromBodyMessage).toContain('code=content_filter');
     });
 
     it('prefers a real top-level status over the body code', async () => {

@@ -350,6 +350,12 @@ footer {
   border-bottom: none;
 }
 
+.table-footnote {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin: -8px 0 24px;
+}
+
 .legal-callout {
   padding: 18px 22px;
   background: var(--color-primary-soft);

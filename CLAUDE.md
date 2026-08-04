@@ -149,6 +149,51 @@ Claimed jobs hold a lock for `DEFAULT_LOCK_DURATION_MS` (`outbox.service.ts`, cu
 
 Snapshot-before-edit: editing an artefact first snapshots the current state. Restoring a version also snapshots current state first, enabling undo. Entity-agnostic service.
 
+### Never send trainee or clinical content to Sentry or Grafana
+
+**Telemetry may carry identifiers and status. It must never carry content.**
+
+Two exporters leave the process, and both are out of bounds for trainee-authored
+or clinical text:
+
+- **Sentry** — `Sentry.captureException()` anywhere, plus `SentryGlobalFilter`,
+  registered as a global `APP_FILTER` in `app.module.ts`, which reports **every
+  unhandled exception app-wide**.
+- **Grafana Cloud** — every `logger.*` call. pino → `PinoInstrumentation` → OTLP
+  (`tracing.ts`). Anything interpolated into a log line is exported.
+
+**Why this is a hard rule, not hygiene:**
+
+- **Sentry's DPA prohibits it outright.** It states that special category data
+  must not be submitted, and that *"our obligations in this DPA will not apply
+  with respect to Sensitive Data."* A leak is therefore both a contract breach
+  **and** data sitting with a US processor under no Art 28 protection at all, for
+  the 90-day retention window.
+- **Grafana retention is the only erasure mechanism for anything that lands
+  there.** The account-deletion path touches MongoDB and object storage; it never
+  touches logs. Content exported to Grafana survives an Art 17 erasure request.
+
+**Redaction does not make content safe to log.** It strips identifiers, not
+clinical narrative, and telemetry events carry conversation/message ids that link
+back to an identifiable trainee through our own records.
+
+**In practice:**
+
+- Log ids, counts, durations, status codes, model/provider/pool labels.
+- Never log message content, `rawContent`, artefact `notes`, transcripts, prompts,
+  completions, or **provider response bodies** — content-filter rejections
+  routinely echo the offending prompt back. See `providerErrorDetail()` in
+  `llm.service.ts`, which deliberately emits `status=`/`code=`/`upstream=` and not
+  `metadata.raw`/`metadata.reasons`/`error.message`; there is a regression test
+  guarding this in `llm.service.rate-limit.spec.ts`.
+- Presigned URLs are bearer credentials — never log them.
+- Need a payload while debugging? Use `LLM_TRACE=1` (dev-only, gitignored output).
+  Do not route it through an exporter.
+
+When adding a `captureException` or a log line in a request path, assume it will
+be read by a third party in another country and retained beyond your control,
+because that is exactly what happens.
+
 ### Mobile logging
 
 Never use raw `console.log/info/warn/error` in mobile app code. Use the structured logger at `apps/mobile/src/utils/logger/` which provides scoped loggers, log-level filtering, and sensitive data redaction. Create a scoped logger per module: `const myLogger = logger.createScope('MyModule')`. For error reporting, use `Sentry.captureException()` with `tags` (static, filterable) and `extra` (dynamic, searchable context).

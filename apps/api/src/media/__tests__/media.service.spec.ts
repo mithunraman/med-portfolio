@@ -128,16 +128,20 @@ describe('MediaService.initiateUpload', () => {
   });
 });
 
-describe('MediaService.getPresignedUrl', () => {
+// Expiries are asserted as literals, not `expect.any(Number)`. Shortening these
+// windows is the whole point of splitting the methods, and a URL's TTL is the
+// only access control on it once minted — so a change to either value should
+// break a test and get looked at, not pass silently.
+describe('MediaService presigned download URLs', () => {
   beforeEach(() => jest.resetAllMocks());
 
-  it('signs a download URL for media owned by the caller', async () => {
+  it('signs a playback URL, scoped to a browsing session', async () => {
     const { service, repo, storage } = createService();
     const media = buildMedia({ status: MediaStatus.ATTACHED });
     repo.findByXid.mockResolvedValue(ok(media));
     storage.generatePresignedDownloadUrl.mockResolvedValue('https://signed.example/get');
 
-    const url = await service.getPresignedUrl(userIdStr, media.xid);
+    const url = await service.getPlaybackUrl(userIdStr, media.xid);
 
     expect(url).toBe('https://signed.example/get');
     // Ownership is enforced at the repo via (xid, userId).
@@ -145,22 +149,42 @@ describe('MediaService.getPresignedUrl', () => {
     expect(storage.generatePresignedDownloadUrl).toHaveBeenCalledWith(
       media.bucket,
       media.key,
-      expect.any(Number)
+      1800
     );
   });
 
-  it('throws NotFoundException and never signs a URL when media is not owned by the caller (IDOR)', async () => {
+  it('signs a transcription URL with a shorter window than playback', async () => {
     const { service, repo, storage } = createService();
-    // Repo scopes by userId → another user's media resolves to null.
-    repo.findByXid.mockResolvedValue(ok(null));
+    const media = buildMedia({ status: MediaStatus.ATTACHED });
+    repo.findByXid.mockResolvedValue(ok(media));
+    storage.generatePresignedDownloadUrl.mockResolvedValue('https://signed.example/get');
 
-    await expect(service.getPresignedUrl(userIdStr, 'med_victim')).rejects.toThrow(
-      NotFoundException
+    // This URL is sent to a third party and unlocks un-redacted audio.
+    await service.getTranscriptionUrl(userIdStr, media.xid);
+
+    expect(storage.generatePresignedDownloadUrl).toHaveBeenCalledWith(
+      media.bucket,
+      media.key,
+      900
     );
-
-    expect(repo.findByXid).toHaveBeenCalledWith('med_victim', userObjectId);
-    expect(storage.generatePresignedDownloadUrl).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['getPlaybackUrl', (s: MediaService) => s.getPlaybackUrl(userIdStr, 'med_victim')],
+    ['getTranscriptionUrl', (s: MediaService) => s.getTranscriptionUrl(userIdStr, 'med_victim')],
+  ])(
+    '%s throws NotFoundException and never signs a URL for media not owned by the caller (IDOR)',
+    async (_name, call) => {
+      const { service, repo, storage } = createService();
+      // Repo scopes by userId → another user's media resolves to null.
+      repo.findByXid.mockResolvedValue(ok(null));
+
+      await expect(call(service)).rejects.toThrow(NotFoundException);
+
+      expect(repo.findByXid).toHaveBeenCalledWith('med_victim', userObjectId);
+      expect(storage.generatePresignedDownloadUrl).not.toHaveBeenCalled();
+    }
+  );
 });
 
 describe('MediaService.validateMediaUpload', () => {

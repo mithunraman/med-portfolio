@@ -87,6 +87,15 @@ export class Note {
   updatedAt!: Date;
 }
 
+/**
+ * ⚠️ Deletion is a tombstone, not a drop: `artefactTombstoneUpdate()` in
+ * `artefacts.repository.ts` overwrites sensitive fields in place and flips
+ * `status` to DELETED. Adding a field here — at any nesting depth — is only
+ * half the change. Decide explicitly whether it carries trainee-authored or
+ * clinical content, and if it does, add it to that payload. A field absent
+ * from the tombstone survives both entry deletion and account deletion, with
+ * nothing to signal it. That is how `notes[].text` went unscrubbed.
+ */
 @Schema({
   collection: 'artefacts',
   timestamps: true,

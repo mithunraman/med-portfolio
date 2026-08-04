@@ -15,7 +15,23 @@ import { isErr, unwrapVoid } from '../common/utils/result.util';
 import { StorageService } from '../storage/storage.service';
 import { IMediaRepository, MEDIA_REPOSITORY } from './media.repository.interface';
 
-const PRESIGNED_URL_EXPIRY_SECONDS = 3600; // 1 hour
+// A presigned URL is a bearer credential: whoever holds the string can use it,
+// with no auth check, no ownership check and no way to revoke. The TTL is the
+// only access control there is, so each purpose gets a window sized to the work
+// it must survive rather than all three sharing the longest one.
+
+// Grants PUT to one key, not read — no confidentiality exposure. Sized for a
+// 20 MB upload on poor mobile data.
+const UPLOAD_URL_EXPIRY_SECONDS = 900;
+// Minted during message-list enrichment, not when the user taps play, so it has
+// to cover a browsing session rather than a single fetch.
+const PLAYBACK_URL_EXPIRY_SECONDS = 1800;
+// The sensitive one: handed to the transcription provider, so it leaves our
+// trust boundary and unlocks un-redacted audio (redaction runs on the
+// transcript, so nothing has de-identified this object yet). Only has to cover
+// the provider's single fetch after job submission.
+const TRANSCRIPTION_URL_EXPIRY_SECONDS = 900;
+
 export const MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 
 export interface InitiateUploadResult {
@@ -92,13 +108,13 @@ export class MediaService {
       key,
       mimeType,
       sizeBytes,
-      PRESIGNED_URL_EXPIRY_SECONDS
+      UPLOAD_URL_EXPIRY_SECONDS
     );
 
     return {
       mediaId: xid,
       uploadUrl,
-      expiresIn: PRESIGNED_URL_EXPIRY_SECONDS,
+      expiresIn: UPLOAD_URL_EXPIRY_SECONDS,
     };
   }
 
@@ -183,7 +199,7 @@ export class MediaService {
       downloadUrl = await this.storageService.generatePresignedDownloadUrl(
         media.bucket,
         media.key,
-        PRESIGNED_URL_EXPIRY_SECONDS
+        PLAYBACK_URL_EXPIRY_SECONDS
       );
     }
 
@@ -198,11 +214,34 @@ export class MediaService {
   }
 
   /**
-   * Get presigned download URL for media. Scoped by userId — the URL grants
-   * unauthenticated access to the underlying object, so ownership is enforced
-   * here rather than trusted from the caller.
+   * Presigned download URL for in-app playback of the user's own audio.
    */
-  async getPresignedUrl(userId: string, mediaId: string): Promise<string> {
+  async getPlaybackUrl(userId: string, mediaId: string): Promise<string> {
+    return this.presignDownload(userId, mediaId, PLAYBACK_URL_EXPIRY_SECONDS);
+  }
+
+  /**
+   * Presigned download URL for the transcription provider's fetch. If
+   * transcription starts failing to retrieve audio, TRANSCRIPTION_URL_EXPIRY_SECONDS
+   * is the first thing to check.
+   */
+  async getTranscriptionUrl(userId: string, mediaId: string): Promise<string> {
+    return this.presignDownload(userId, mediaId, TRANSCRIPTION_URL_EXPIRY_SECONDS);
+  }
+
+  /**
+   * Scoped by userId — the URL grants unauthenticated access to the underlying
+   * object, so ownership is enforced here rather than trusted from the caller.
+   *
+   * Private, with purpose-named wrappers above, so the expiry is chosen by what
+   * the URL is *for* rather than passed in at the call site where it could be
+   * given the wrong window with nothing to catch it.
+   */
+  private async presignDownload(
+    userId: string,
+    mediaId: string,
+    expiresInSeconds: number
+  ): Promise<string> {
     const userObjectId = new Types.ObjectId(userId);
     const findResult = await this.mediaRepository.findByXid(mediaId, userObjectId);
 
@@ -215,7 +254,7 @@ export class MediaService {
     return this.storageService.generatePresignedDownloadUrl(
       media.bucket,
       media.key,
-      PRESIGNED_URL_EXPIRY_SECONDS
+      expiresInSeconds
     );
   }
 

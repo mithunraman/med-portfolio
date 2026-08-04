@@ -119,8 +119,12 @@ export class ProcessingService {
     // Update status to TRANSCRIBING
     if (!(await this.applyUpdate(messageId, { status: MessageStatus.TRANSCRIBING }))) return;
 
-    // Get presigned URL for the audio
-    const audioUrl = await this.mediaService.getPresignedUrl(message.userId.toString(), media.xid);
+    // Get presigned URL for the audio. Short-lived: this URL is sent to the
+    // transcription provider and unlocks un-redacted audio.
+    const audioUrl = await this.mediaService.getTranscriptionUrl(
+      message.userId.toString(),
+      media.xid
+    );
 
     // Stage 1: Transcription
     this.logger.info(`Transcribing audio for message ${message.xid}`);

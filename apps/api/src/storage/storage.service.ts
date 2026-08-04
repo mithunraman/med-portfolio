@@ -54,7 +54,7 @@ export class StorageService {
     key: string,
     contentType: string,
     contentLength: number,
-    expiresIn: number = 3600
+    expiresIn: number
   ): Promise<string> {
     return this.withRetry(async () => {
       const command = new PutObjectCommand({
@@ -74,12 +74,17 @@ export class StorageService {
   }
 
   /**
-   * Generate a presigned URL for downloading a file
+   * Generate a presigned URL for downloading a file.
+   *
+   * `expiresIn` is required rather than defaulted: the URL is a bearer
+   * credential and its lifetime is the only access control on it, so every
+   * call site has to state the window it needs. A default would let a new
+   * caller inherit someone else's risk appetite silently.
    */
   async generatePresignedDownloadUrl(
     bucket: string,
     key: string,
-    expiresIn: number = 3600
+    expiresIn: number
   ): Promise<string> {
     return this.withRetry(async () => {
       const command = new GetObjectCommand({

@@ -14,6 +14,18 @@ export class AcknowledgementEntry {
 
 export const AcknowledgementEntrySchema = SchemaFactory.createForClass(AcknowledgementEntry);
 
+/**
+ * The evidential record that a user was shown a notice version and accepted it.
+ * Rows outlive account deletion deliberately (Art 17(3)(e)) — which is exactly
+ * why they must carry no identifiers of their own. `userId` here points at a
+ * user record that account cleanup has already stripped to an ObjectId, so the
+ * row is anonymous; storing an IP or user-agent would undo that.
+ *
+ * Nothing is lost evidentially: the row was written by an authenticated
+ * request, `noticeVersion` resolves to a frozen notice document, and together
+ * those answer who, when, and what they were shown. An IP identifies a shared
+ * mobile network path, not a person.
+ */
 @Schema({
   collection: 'acknowledgements',
   timestamps: { createdAt: 'recordedAt', updatedAt: false },
@@ -32,12 +44,6 @@ export class Acknowledgement {
 
   @Prop({ required: true, type: [AcknowledgementEntrySchema], default: [] })
   acknowledgements!: AcknowledgementEntry[];
-
-  @Prop({ type: String, default: null })
-  ip!: string | null;
-
-  @Prop({ type: String, default: null })
-  userAgent!: string | null;
 
   recordedAt!: Date;
 }

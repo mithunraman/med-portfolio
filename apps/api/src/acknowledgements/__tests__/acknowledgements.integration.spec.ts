@@ -52,31 +52,36 @@ describe('Acknowledgements (integration)', () => {
     await model.deleteMany({});
   });
 
+  // Must list every required id in NOTICE_V1_0 — the service rejects a partial
+  // set, so adding a required ack to the notice breaks this fixture by design.
   const validDto = {
     noticeVersion: 'v1.0',
     acknowledgements: [
       { id: 'role_uk_trainee' as const, given: true },
       { id: 'patient_anon_duty' as const, given: true },
+      { id: 'accept_privacy_terms' as const, given: true },
     ],
   };
 
   describe('AcknowledgementsService.create', () => {
     it('creates a new row on first call', async () => {
-      const response = await service.create(userId, validDto, '127.0.0.1', 'jest-ua');
+      const response = await service.create(userId, validDto);
 
       expect(response.noticeVersion).toBe('v1.0');
       expect(response.xid).toEqual(expect.any(String));
-      expect(response.acknowledgements).toHaveLength(2);
+      expect(response.acknowledgements).toHaveLength(validDto.acknowledgements.length);
 
       const docs = await model.find({}).lean();
       expect(docs).toHaveLength(1);
-      expect(docs[0].ip).toBe('127.0.0.1');
-      expect(docs[0].userAgent).toBe('jest-ua');
+      // The row carries no identifiers of its own — see the schema doc comment.
+      // It outlives account deletion, so anything stored here outlives it too.
+      expect(docs[0]).not.toHaveProperty('ip');
+      expect(docs[0]).not.toHaveProperty('userAgent');
     });
 
     it('idempotent: duplicate POST returns the same row without inserting another', async () => {
-      const first = await service.create(userId, validDto, '127.0.0.1', 'jest-ua');
-      const second = await service.create(userId, validDto, '127.0.0.1', 'jest-ua');
+      const first = await service.create(userId, validDto);
+      const second = await service.create(userId, validDto);
 
       expect(second.xid).toBe(first.xid);
       const existing = await repository.findByUserAndVersion(userId, 'v1.0');
@@ -87,7 +92,7 @@ describe('Acknowledgements (integration)', () => {
 
     it('rejects unknown noticeVersion', async () => {
       await expect(
-        service.create(userId, { ...validDto, noticeVersion: 'v9.9' }, null, null)
+        service.create(userId, { ...validDto, noticeVersion: 'v9.9' })
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -98,34 +103,36 @@ describe('Acknowledgements (integration)', () => {
           {
             noticeVersion: 'v1.0',
             acknowledgements: [{ id: 'role_uk_trainee', given: true }],
-          },
-          null,
-          null
+          }
         )
       ).rejects.toThrow(BadRequestException);
     });
 
     it('rejects when required ack is given:false', async () => {
-      await expect(
-        service.create(
-          userId,
-          {
-            noticeVersion: 'v1.0',
-            acknowledgements: [
-              { id: 'role_uk_trainee', given: true },
-              { id: 'patient_anon_duty', given: false },
-            ],
-          },
-          null,
-          null
-        )
-      ).rejects.toThrow(BadRequestException);
+      // Every other required id is present and true, so `given: false` is the
+      // ONLY violated precondition — otherwise a weakened guard (e.g. rejecting
+      // only `undefined`) would still throw on a missing id and this would stay
+      // green. Asserting the id in the message pins which check fired, so the
+      // test also survives a reordering of `notices/v1.0.ts`.
+      const call = service.create(userId, {
+        noticeVersion: 'v1.0',
+        acknowledgements: [
+          { id: 'role_uk_trainee', given: true },
+          { id: 'patient_anon_duty', given: false },
+          { id: 'accept_privacy_terms', given: true },
+        ],
+      });
+
+      await expect(call).rejects.toThrow(BadRequestException);
+      await expect(call).rejects.toThrow(
+        'Required acknowledgement missing or not given: patient_anon_duty'
+      );
     });
 
     it('handles concurrent POSTs: one row, both succeed', async () => {
       const [a, b] = await Promise.all([
-        service.create(userId, validDto, null, null),
-        service.create(userId, validDto, null, null),
+        service.create(userId, validDto),
+        service.create(userId, validDto),
       ]);
 
       expect(a.xid).toBe(b.xid);
@@ -148,15 +155,11 @@ describe('Acknowledgements (integration)', () => {
         userId,
         noticeVersion: 'v1.0',
         acknowledgements: [],
-        ip: null,
-        userAgent: null,
       });
       await repository.create({
         userId,
         noticeVersion: 'v1.1',
         acknowledgements: [],
-        ip: null,
-        userAgent: null,
       });
 
       const result = await repository.findAcknowledgedVersions(userId);
@@ -169,8 +172,6 @@ describe('Acknowledgements (integration)', () => {
         userId: otherUserId,
         noticeVersion: 'v1.0',
         acknowledgements: [],
-        ip: null,
-        userAgent: null,
       });
       expect(seed.ok).toBe(true);
 

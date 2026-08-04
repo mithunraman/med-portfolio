@@ -21,19 +21,27 @@ async function bootstrap() {
   const port = configService.get<number>('app.port', 3001);
 
   // Trust N upstream proxy hops so `req.ip` resolves from X-Forwarded-For.
-  // Without this, audit fields (e.g. acknowledgement IP) capture the proxy's
-  // address rather than the client's behind any LB/CDN. Must match deployment
+  // `req.ip` is the rate limiter's tracker key (global ThrottlerGuard), so
+  // behind any LB/CDN without this every request shares the proxy's address and
+  // one client can exhaust the quota for all of them. Must match deployment
   // topology — too-permissive (`true`) lets clients spoof IPs via X-Forwarded-For.
+  //
+  // `req.ip` is not persisted to any domain record — it was deliberately removed
+  // from `acknowledgements`, which survives account deletion. It *is* captured in
+  // request logs (the `req` serializer in app.module.ts, alongside user-agent and
+  // userId) and exported to Grafana Cloud over OTLP — see tracing.ts. That is
+  // security telemetry with its own retention, not application data; do not
+  // conclude from this block that the value goes nowhere.
   const trustProxyHops = configService.get<number>('app.trustProxyHops', 0);
   if (trustProxyHops > 0) {
     app.getHttpAdapter().getInstance().set('trust proxy', trustProxyHops);
   }
   // Surface the resolved value at boot so a deployed-behind-a-proxy misconfig
-  // is visible on the first deploy log rather than discovered later in audit
-  // data. Warn when production + 0 hops — the specific footgun the default invites.
+  // is visible on the first deploy log rather than discovered later as unexplained
+  // rate limiting. Warn when production + 0 hops — the footgun the default invites.
   if (configService.get<boolean>('app.isProduction') && trustProxyHops === 0) {
     logger.warn(
-      'TRUST_PROXY_HOPS=0 in production — req.ip will reflect the immediate upstream (proxy/LB), not the real client. Audit IPs (e.g. acknowledgement IP) will be wrong if any proxy fronts this service.'
+      'TRUST_PROXY_HOPS=0 in production — req.ip will reflect the immediate upstream (proxy/LB), not the real client. If any proxy fronts this service, every client shares one rate-limit bucket.'
     );
   } else {
     logger.log(`Trust proxy hops: ${trustProxyHops}`);

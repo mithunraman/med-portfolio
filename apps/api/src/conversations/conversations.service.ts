@@ -892,7 +892,7 @@ export class ConversationsService {
     const mediaDoc = msg.media as unknown as Media;
     if (mediaDoc.status !== MediaStatus.ATTACHED) return null;
     try {
-      return await this.mediaService.getPresignedUrl(msg.userId.toString(), mediaDoc.xid);
+      return await this.mediaService.getPlaybackUrl(msg.userId.toString(), mediaDoc.xid);
     } catch {
       return null;
     }

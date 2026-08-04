@@ -198,4 +198,63 @@ describe('ArtefactsRepository (integration)', () => {
       expect(after!.notes).toEqual([]);
     });
   });
+
+  // ─── Tombstone (erasure coverage for `notes`) ───
+  //
+  // The tombstone scrubs note text with the all-positional operator
+  // (`notes.$[].text`) rather than dropping the array, so count and timestamps
+  // survive. These cases exist because that operator's behaviour — in
+  // particular on an empty array — is the one assumption in the erasure path
+  // that cannot be verified by reading the code.
+
+  describe('tombstone', () => {
+    const now = new Date('2026-06-23T12:00:00.000Z');
+
+    async function insertWithNotes(status = ArtefactStatus.COMPLETED) {
+      const doc = await insertArtefact(model, { status });
+      await repo.replaceNotes(doc.xid, userId.toString(), [
+        { xid: 'note_1', text: 'Mrs P, biopsy follow-up', createdAt: now, updatedAt: now },
+        { xid: 'note_2', text: 'chase histology', createdAt: now, updatedAt: now },
+      ]);
+      return doc;
+    }
+
+    it('scrubs note text on markDeleted, retaining note identity and timestamps', async () => {
+      const doc = await insertWithNotes();
+
+      const result = await repo.markDeleted([doc._id]);
+      expect(isOk(result)).toBe(true);
+
+      const after = await model.findById(doc._id).lean();
+      expect(after!.status).toBe(ArtefactStatus.DELETED);
+      expect(after!.notes.map((n) => n.text)).toEqual(['[deleted]', '[deleted]']);
+      expect(after!.notes.map((n) => n.xid)).toEqual(['note_1', 'note_2']);
+      expect(after!.notes.map((n) => n.createdAt.toISOString())).toEqual([
+        now.toISOString(),
+        now.toISOString(),
+      ]);
+    });
+
+    it('scrubs note text on markDeletedByUserId (the account-deletion path)', async () => {
+      const doc = await insertWithNotes();
+
+      const result = await repo.markDeletedByUserId(userId);
+      expect(isOk(result)).toBe(true);
+
+      const after = await model.findById(doc._id).lean();
+      expect(after!.status).toBe(ArtefactStatus.DELETED);
+      expect(after!.notes.map((n) => n.text)).toEqual(['[deleted]', '[deleted]']);
+    });
+
+    it('applies to an artefact with no notes — `$[]` is a no-op, not an error', async () => {
+      const doc = await insertArtefact(model);
+
+      const result = await repo.markDeleted([doc._id]);
+
+      expect(isOk(result)).toBe(true);
+      const after = await model.findById(doc._id).lean();
+      expect(after!.status).toBe(ArtefactStatus.DELETED);
+      expect(after!.notes).toEqual([]);
+    });
+  });
 });

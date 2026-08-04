@@ -27,6 +27,10 @@ export function artefactTombstoneUpdate() {
       capabilities: [],
       tags: {},
       review: null,
+      // Scrubbed element-wise rather than dropping the array, so note count and
+      // timestamps survive for analytics. `$[]` is a no-op on an empty array,
+      // and `notes` always exists because the schema defaults it to [].
+      'notes.$[].text': '[deleted]',
       status: ArtefactStatus.DELETED,
     },
   };

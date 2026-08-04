@@ -18,9 +18,7 @@ export class AcknowledgementsService {
 
   async create(
     userId: string,
-    dto: CreateAcknowledgementRequest,
-    ip: string | null,
-    userAgent: string | null
+    dto: CreateAcknowledgementRequest
   ): Promise<AcknowledgementResponse> {
     const noticeEntry = NOTICE_REGISTRY.all.find((v) => v.version === dto.noticeVersion);
     if (!noticeEntry) {
@@ -55,8 +53,6 @@ export class AcknowledgementsService {
       userId,
       noticeVersion: dto.noticeVersion,
       acknowledgements: dto.acknowledgements,
-      ip,
-      userAgent,
     });
 
     if (isErr(createResult)) {

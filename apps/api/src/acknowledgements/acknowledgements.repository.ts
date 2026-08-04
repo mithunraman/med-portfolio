@@ -15,8 +15,6 @@ export interface CreateAcknowledgementData {
   userId: string;
   noticeVersion: string;
   acknowledgements: AcknowledgementEntryInput[];
-  ip: string | null;
-  userAgent: string | null;
 }
 
 export type DuplicateKeyError = { code: 'DUPLICATE_KEY'; message: string };
@@ -38,8 +36,6 @@ export class AcknowledgementsRepository {
         userId: new Types.ObjectId(data.userId),
         noticeVersion: data.noticeVersion,
         acknowledgements: data.acknowledgements,
-        ip: data.ip,
-        userAgent: data.userAgent,
       });
       return ok(doc.toObject());
     } catch (error) {

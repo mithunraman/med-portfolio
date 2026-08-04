@@ -22,6 +22,7 @@ import {
   TEST_USER_ID_STR,
 } from './helpers/factories';
 import {
+  adequateUnaskedResponse,
   allCoveredResponse,
   completenessResponse,
   refineResponse,
@@ -564,6 +565,66 @@ describe('Conversations Integration Tests', () => {
 
       // Rubric cleared after round 3 — loop exits to capabilities (no 4th follow-up)
       expect(finalStatus).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
+    });
+
+    it('A5. Coverage floor — an adequate-but-unasked section forces one confirmatory round', async () => {
+      const conv = await createTestConversation();
+      await createCompleteUserMessage(
+        conv._id,
+        'I saw a 60-year-old with newly diagnosed hypertension — history, exam, reasoning, plan, outcome and reflection all covered.'
+      );
+
+      // The rubric is met, but learning_needs passes only at the adequate floor and
+      // has never been asked → the coverage floor owes it exactly one confirmatory
+      // question before the run may proceed to capabilities. (Guards the graph wiring
+      // that unconfirmedSections/shouldContinueElicitation enforce at the unit level.)
+      llmMock.enqueue(adequateUnaskedResponse(['learning_needs'])); // check_completeness
+      llmMock.enqueue(
+        followupQuestionsResponse([
+          { sectionId: 'learning_needs', question: 'What specific learning need does this highlight?' },
+        ])
+      );
+      llmMock.enqueue(allCoveredResponse()); // check_completeness — now clears
+      llmMock.enqueue(tagCapabilitiesResponse()); // tag_capabilities
+
+      // Start → completeness (rubric met, floor still owes a confirm) → ask_followup
+      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
+      const parked = await waitForRunStable(harness, conv._id);
+      expect(parked).toEqual({ status: 'awaiting_input', node: 'ask_followup' });
+
+      const msgs = await getMessagesForConversation(conv._id);
+      const followupMsgs = msgs.filter(
+        (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'free_text'
+      );
+      // Exactly one forced round, targeting the borderline section.
+      expect(followupMsgs).toHaveLength(1);
+      const q = followupMsgs[0].question as FreeTextQuestion;
+      expect(q.followUpRound).toBe(1);
+      expect(q.prompts[0].key).toBe('learning_needs');
+
+      // Answer it → re-grade clears the floor → proceeds to capabilities (no 2nd round)
+      await harness.service.sendMessage(TEST_USER_ID_STR, conv.xid, {
+        content: 'I need to read up on ambulatory BP monitoring thresholds.',
+      });
+      const afterSend = await getMessagesForConversation(conv._id);
+      const lastUser = afterSend.filter((m) => m.role === MessageRole.USER).pop();
+      assertDefined(lastUser);
+      assertDefined(lastUser.rawContent);
+      await markMessageComplete(lastUser._id, lastUser.rawContent);
+
+      await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, {
+        type: 'resume',
+        messageId: followupMsgs[0].xid,
+      });
+      const proceeded = await waitForRunStable(harness, conv._id, true);
+      expect(proceeded).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
+
+      // The floor forced ONE round, not a per-section cascade — still just one.
+      const finalMsgs = await getMessagesForConversation(conv._id);
+      const finalFollowups = finalMsgs.filter(
+        (m) => m.role === MessageRole.ASSISTANT && (m.question as any)?.questionType === 'free_text'
+      );
+      expect(finalFollowups).toHaveLength(1);
     });
   });
 

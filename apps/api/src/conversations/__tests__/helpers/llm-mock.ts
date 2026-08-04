@@ -162,19 +162,37 @@ export const CCR_ASSESSABLE_SECTIONS = [
 ] as const;
 
 /**
- * Completeness response where all CCR sections clear their readiness threshold.
+ * "Everything covered strongly" — the grade that clears the elicitation rubric AND
+ * the coverage floor, so the run proceeds straight to tag_capabilities.
  *
- * `clinical_reasoning` and `reflection` carry a `strong` threshold (Phase 1), so
- * they need `rich` depth (2+ substantive ideas) to count as met; the factual
- * sections clear at `adequate`.
+ * Must grade every section `rich` (→ strong tier). A section left at `adequate`
+ * meets its bar, but — unasked — is a borderline pass the coverage floor still
+ * forces one confirmatory question on (see `unconfirmedSections`), which would
+ * park the run at ask_followup instead of proceeding. To model that on-purpose,
+ * use `adequateUnaskedResponse()` below.
  */
 export function allCoveredResponse() {
-  const strongThreshold = new Set(['clinical_reasoning', 'reflection']);
+  return completenessResponse(
+    CCR_ASSESSABLE_SECTIONS.map((id) => ({ sectionId: id, covered: true, depth: 'rich' }))
+  );
+}
+
+/**
+ * "Covered, but one section sits at the adequate floor, unasked." Every section
+ * meets its threshold (rubric met), but the given section(s) pass only at
+ * `adequate` and — never having been asked — are borderline passes the coverage
+ * floor forces a confirmatory question on before the run may proceed (see
+ * `unconfirmedSections`). Defaults to a single unconfirmed section so it forces
+ * exactly ONE follow-up round. The other sections are graded `rich` so they are
+ * unambiguous and clear immediately (including the strong-threshold ones).
+ */
+export function adequateUnaskedResponse(adequateSections: readonly string[] = ['learning_needs']) {
+  const adequate = new Set(adequateSections);
   return completenessResponse(
     CCR_ASSESSABLE_SECTIONS.map((id) => ({
       sectionId: id,
       covered: true,
-      depth: strongThreshold.has(id) ? 'rich' : 'adequate',
+      depth: adequate.has(id) ? 'adequate' : 'rich',
     }))
   );
 }

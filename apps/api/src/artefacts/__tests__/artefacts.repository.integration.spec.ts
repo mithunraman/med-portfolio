@@ -246,7 +246,7 @@ describe('ArtefactsRepository (integration)', () => {
       expect(after!.notes.map((n) => n.text)).toEqual(['[deleted]', '[deleted]']);
     });
 
-    it('applies to an artefact with no notes — `$[]` is a no-op, not an error', async () => {
+    it('applies to an artefact with an empty notes array', async () => {
       const doc = await insertArtefact(model);
 
       const result = await repo.markDeleted([doc._id]);
@@ -255,6 +255,43 @@ describe('ArtefactsRepository (integration)', () => {
       const after = await model.findById(doc._id).lean();
       expect(after!.status).toBe(ArtefactStatus.DELETED);
       expect(after!.notes).toEqual([]);
+    });
+
+    it('applies to an artefact whose `notes` field is absent entirely', async () => {
+      // Inserted through the raw driver so Mongoose's `default: []` never runs —
+      // the only way to build the document shape that broke the previous
+      // implementation. `notes.$[].text` errored on this ("The path 'notes' must
+      // exist…"), which is why the tombstone is a pipeline.
+      const doc = await insertArtefact(model);
+      await model.collection.updateOne({ _id: doc._id }, { $unset: { notes: '' } });
+      expect(await model.collection.findOne({ _id: doc._id })).not.toHaveProperty('notes');
+
+      const result = await repo.markDeleted([doc._id]);
+
+      expect(isOk(result)).toBe(true);
+      const after = await model.findById(doc._id).lean();
+      expect(after!.status).toBe(ArtefactStatus.DELETED);
+      expect(after!.notes).toEqual([]);
+    });
+
+    it('tombstones the whole batch even when one document lacks `notes`', async () => {
+      // The regression that matters. updateMany does not roll back, so an error
+      // part-way through left earlier documents tombstoned and later ones intact
+      // — a silently half-erased account, and a permanently wedged cleanup cron.
+      const withNotes = await insertWithNotes();
+      const broken = await insertArtefact(model, { status: ArtefactStatus.IN_REVIEW });
+      await model.collection.updateOne({ _id: broken._id }, { $unset: { notes: '' } });
+      const trailing = await insertWithNotes(ArtefactStatus.IN_REVIEW);
+
+      const result = await repo.markDeletedByUserId(userId);
+      expect(isOk(result)).toBe(true);
+
+      for (const id of [withNotes._id, broken._id, trailing._id]) {
+        const after = await model.findById(id).lean();
+        expect(after!.status).toBe(ArtefactStatus.DELETED);
+        expect(after!.title).toBe('[deleted]');
+        expect(after!.notes.every((n) => n.text === '[deleted]')).toBe(true);
+      }
     });
   });
 });

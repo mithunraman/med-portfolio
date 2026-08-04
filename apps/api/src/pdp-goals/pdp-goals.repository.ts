@@ -22,19 +22,39 @@ import { PdpGoal, PdpGoalDocument } from './schemas/pdp-goal.schema';
 /**
  * Single source of truth for the PdpGoal tombstone payload. Used by every
  * deletion path on this repo. Adding a new sensitive field belongs here.
+ *
+ * An **aggregation pipeline**, not a plain update document — same reasoning as
+ * `artefactTombstoneUpdate()`, which carries the full explanation. Short version:
+ * `'actions.$[].action'` errors outright on a goal whose `actions` field is
+ * absent, and in `updateMany` that aborts the batch part-applied, wedging the
+ * account-deletion flow. `$ifNull` makes absent and empty behave identically.
  */
 export function pdpGoalTombstoneUpdate() {
-  return {
-    $set: {
-      goal: '[deleted]',
-      completionReview: null,
-      status: PdpGoalStatus.DELETED,
-      'actions.$[].action': '[deleted]',
-      'actions.$[].intendedEvidence': '[deleted]',
-      'actions.$[].completionReview': null,
-      'actions.$[].status': PdpGoalStatus.DELETED,
+  return [
+    {
+      $set: {
+        goal: '[deleted]',
+        completionReview: null,
+        status: PdpGoalStatus.DELETED,
+        actions: {
+          $map: {
+            input: { $ifNull: ['$actions', []] },
+            in: {
+              $mergeObjects: [
+                '$$this',
+                {
+                  action: '[deleted]',
+                  intendedEvidence: '[deleted]',
+                  completionReview: null,
+                  status: PdpGoalStatus.DELETED,
+                },
+              ],
+            },
+          },
+        },
+      },
     },
-  };
+  ];
 }
 
 const ARTEFACT_LOOKUP_PIPELINE = [

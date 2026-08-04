@@ -18,22 +18,40 @@ import { Artefact, ArtefactDocument } from './schemas/artefact.schema';
 /**
  * Single source of truth for the Artefact tombstone payload. Used by every
  * deletion path on this repo. Adding a new sensitive field belongs here.
+ *
+ * An **aggregation pipeline**, not a plain update document, because `notes` is
+ * scrubbed element-wise (note count and timestamps survive; only `text` goes).
+ * The obvious way to write that is `'notes.$[].text'`, and it is a trap: the
+ * all-positional operator *errors* on a document where `notes` is absent —
+ * "The path 'notes' must exist in the document in order to apply array updates".
+ * In an `updateMany` that aborts the whole batch mid-scan, leaving documents
+ * before the offending one tombstoned and everything after it untouched, with
+ * no rollback. On the account-deletion path that wedges `markAccountAnonymized`
+ * permanently: the cron retries nightly and fails identically every time.
+ *
+ * `$ifNull` makes absent and empty behave the same, which is the invariant this
+ * needs. `$literal` is required for the empty-object value — a bare `{}` is not
+ * a valid aggregation expression.
  */
 export function artefactTombstoneUpdate() {
-  return {
-    $set: {
-      title: '[deleted]',
-      composedDocument: [],
-      capabilities: [],
-      tags: {},
-      review: null,
-      // Scrubbed element-wise rather than dropping the array, so note count and
-      // timestamps survive for analytics. `$[]` is a no-op on an empty array,
-      // and `notes` always exists because the schema defaults it to [].
-      'notes.$[].text': '[deleted]',
-      status: ArtefactStatus.DELETED,
+  return [
+    {
+      $set: {
+        title: '[deleted]',
+        composedDocument: [],
+        capabilities: [],
+        tags: { $literal: {} },
+        review: null,
+        notes: {
+          $map: {
+            input: { $ifNull: ['$notes', []] },
+            in: { $mergeObjects: ['$$this', { text: '[deleted]' }] },
+          },
+        },
+        status: ArtefactStatus.DELETED,
+      },
     },
-  };
+  ];
 }
 
 /**

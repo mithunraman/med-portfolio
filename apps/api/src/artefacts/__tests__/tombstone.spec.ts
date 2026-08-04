@@ -3,15 +3,35 @@ import { artefactTombstoneUpdate } from '../artefacts.repository';
 
 describe('artefactTombstoneUpdate', () => {
   it('scrubs every sensitive field on an Artefact via $set', () => {
+    const [{ $set }] = artefactTombstoneUpdate();
+
+    expect($set.title).toBe('[deleted]');
+    expect($set.composedDocument).toEqual([]);
+    expect($set.capabilities).toEqual([]);
+    expect($set.tags).toEqual({ $literal: {} });
+    expect($set.review).toBeNull();
+    expect($set.status).toBe(ArtefactStatus.DELETED);
+  });
+
+  it('rewrites note text while preserving the rest of each note', () => {
+    const [{ $set }] = artefactTombstoneUpdate();
+
+    expect($set.notes).toEqual({
+      $map: {
+        input: { $ifNull: ['$notes', []] },
+        in: { $mergeObjects: ['$$this', { text: '[deleted]' }] },
+      },
+    });
+  });
+
+  it('is a pipeline, and never reintroduces the all-positional operator', () => {
+    // `notes.$[].text` errors on a document where `notes` is absent, which in an
+    // updateMany aborts the batch part-applied. The pipeline form exists to avoid
+    // that; a regression would most likely arrive as someone "simplifying" it back.
     const update = artefactTombstoneUpdate();
 
-    expect(update.$set.title).toBe('[deleted]');
-    expect(update.$set.composedDocument).toEqual([]);
-    expect(update.$set.capabilities).toEqual([]);
-    expect(update.$set.tags).toEqual({});
-    expect(update.$set.review).toBeNull();
-    // Note text is scrubbed per element; xid/createdAt/updatedAt are retained.
-    expect(update.$set['notes.$[].text']).toBe('[deleted]');
-    expect(update.$set.status).toBe(ArtefactStatus.DELETED);
+    expect(Array.isArray(update)).toBe(true);
+    const keys = update.flatMap((stage) => Object.keys(stage.$set));
+    expect(keys.filter((k) => k.includes('$[]'))).toEqual([]);
   });
 });

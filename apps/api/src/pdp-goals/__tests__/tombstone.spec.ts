@@ -3,18 +3,41 @@ import { pdpGoalTombstoneUpdate } from '../pdp-goals.repository';
 
 describe('pdpGoalTombstoneUpdate', () => {
   it('scrubs every sensitive field on a PdpGoal via $set', () => {
+    const [{ $set }] = pdpGoalTombstoneUpdate();
+
+    expect($set.goal).toBe('[deleted]');
+    expect($set.completionReview).toBeNull();
+    expect($set.status).toBe(PdpGoalStatus.DELETED);
+  });
+
+  it('scrubs every action subdoc, tolerating an absent `actions` field', () => {
+    const [{ $set }] = pdpGoalTombstoneUpdate();
+
+    expect($set.actions).toEqual({
+      $map: {
+        input: { $ifNull: ['$actions', []] },
+        in: {
+          $mergeObjects: [
+            '$$this',
+            {
+              action: '[deleted]',
+              intendedEvidence: '[deleted]',
+              completionReview: null,
+              status: PdpGoalStatus.DELETED,
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  it('is a pipeline, and never reintroduces the all-positional operator', () => {
+    // `actions.$[].action` errors on a document where `actions` is absent, which
+    // in an updateMany aborts the batch part-applied. See artefactTombstoneUpdate().
     const update = pdpGoalTombstoneUpdate();
 
-    // Top-level goal fields
-    expect(update.$set.goal).toBe('[deleted]');
-    expect(update.$set.completionReview).toBeNull();
-    expect(update.$set.status).toBe(PdpGoalStatus.DELETED);
-
-    // Action subdoc fields (positional-update operators) — now safely
-    // inside $set by construction, not by caller discipline.
-    expect(update.$set['actions.$[].action']).toBe('[deleted]');
-    expect(update.$set['actions.$[].intendedEvidence']).toBe('[deleted]');
-    expect(update.$set['actions.$[].completionReview']).toBeNull();
-    expect(update.$set['actions.$[].status']).toBe(PdpGoalStatus.DELETED);
+    expect(Array.isArray(update)).toBe(true);
+    const keys = update.flatMap((stage) => Object.keys(stage.$set));
+    expect(keys.filter((k) => k.includes('$[]'))).toEqual([]);
   });
 });

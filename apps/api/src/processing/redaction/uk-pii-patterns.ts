@@ -138,6 +138,54 @@ const STRUCTURED_PATTERNS: UkPiiPattern[] = [
     placeholder: '[POSTCODE]',
     pattern: /\b[A-Za-z]{1,2}\d[A-Za-z\d]?\s?\d[A-Za-z]{2}\b/g,
   },
+  // Vehicle registration — CURRENT style only (`AA00 AAA`, 2001 onwards).
+  //
+  // Added after the G-1 run on 2026-08-05 leaked `WK18 ZRT`: Azure does not
+  // recognise UK plates and nothing here matched them. Format-strict rather than
+  // checksum-gated (plates carry no check digit), which is the same contract the
+  // sort-code + account rule above works under.
+  //
+  // **Prefix style (`A000 AAA`, 1983–2001) is deliberately NOT matched.** Its
+  // shape — one letter, one to three digits, three letters — is identical to a
+  // spinal level followed by a short word: "pain at T12 and radiating" would
+  // redact as a registration. C1–C7, T1–T12, L1–L5 and S1–S5 all collide. The
+  // handful of pre-2001 vehicles is not worth mangling every spinal examination
+  // in the corpus, so the gap is recorded rather than closed.
+  //
+  // Runs after POSTCODE so postcodes claim their spans first. The two cannot
+  // actually overlap (a postcode needs a digit after the space, a plate needs a
+  // letter), but the file's specific → generic ordering is cheap to honour.
+  //
+  // `\b` is load-bearing for false positives: it prevents "…ID19 pos" matching
+  // inside "COVID19 pos", because there is no boundary mid-word.
+  {
+    type: 'VEHICLE_REGISTRATION',
+    placeholder: '[VEHICLE_REGISTRATION]',
+    pattern: /\b[A-Za-z]{2}\d{2}\s?[A-Za-z]{3}\b/g,
+  },
+  // Hospital / medical record number — matched by CONTEXT, not by shape.
+  //
+  // NHS hospital numbers are trust-local and have no national format, so a bare
+  // shape rule (`[A-Z0-9-]{6,}`) would shred clinical prose. The anchor phrase
+  // carries the specificity instead — the same technique the DOB rule in
+  // CONTACT_PATTERNS uses, and like DOB the anchor is consumed by the
+  // placeholder, which loses nothing because `[HOSPITAL_NUMBER]` says what was
+  // there.
+  //
+  // The lookahead requiring a digit is what makes this safe. Without it,
+  // "the patient number recorded on the system" matches, because "recorded" is a
+  // long-enough alphanumeric token. Hospital numbers always contain digits;
+  // English words do not.
+  //
+  // Known limit: a hospital number written with no nearby anchor is not caught.
+  // Accepted — the alternative is a shape rule with no way to tell an MRN from a
+  // drug code.
+  {
+    type: 'HOSPITAL_NUMBER',
+    placeholder: '[HOSPITAL_NUMBER]',
+    pattern:
+      /\b(?:(?:hospital|patient|record|case)\s+(?:number|no\.?|#)|MRN)\s*[:#-]?\s*(?=[A-Za-z0-9/-]*\d)[A-Za-z0-9][A-Za-z0-9/-]{3,}\b/gi,
+  },
 ];
 
 // ── Contact / free-form patterns ──────────────────────────────────────────────

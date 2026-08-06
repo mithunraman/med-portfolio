@@ -107,6 +107,62 @@ describe('redactUkStructuredPii', () => {
   });
 });
 
+describe('vehicle registrations and hospital numbers (added 2026-08-05, G-1)', () => {
+  const redact = (t: string) => redactUkStructuredPii(t).redactedText;
+  const types = (t: string) => redactUkStructuredPii(t).entities.map((e) => e.type);
+
+  it('catches a current-style plate, spaced or unspaced', () => {
+    expect(redact('drove himself in the silver estate, WK18 ZRT, two weeks after')).toBe(
+      'drove himself in the silver estate, [VEHICLE_REGISTRATION], two weeks after'
+    );
+    expect(redact('reg WK18ZRT on file')).toBe('reg [VEHICLE_REGISTRATION] on file');
+    expect(types('WK18 ZRT')).toContain('VEHICLE_REGISTRATION');
+  });
+
+  it('does NOT match a spinal level followed by a short word', () => {
+    // Why prefix-style plates (A000 AAA) are deliberately unmatched: their shape
+    // is identical to C1–C7 / T1–T12 / L1–L5 / S1–S5 plus a three-letter word.
+    // Redacting "T12 and" would mangle every spinal examination in the corpus.
+    const clinical = 'tenderness at T12 and radiating pain from L4 down the leg';
+    expect(redact(clinical)).toBe(clinical);
+    expect(types(clinical)).toEqual([]);
+  });
+
+  it('does NOT match inside a longer word', () => {
+    // \b is load-bearing: without it "ID19 pos" matches inside "COVID19 pos".
+    const clinical = 'COVID19 pos, HbA1c 74, CHA2DS2-VASc of 3';
+    expect(redact(clinical)).toBe(clinical);
+  });
+
+  it('does not mistake a postcode for a plate, or the reverse', () => {
+    expect(types('lives at BA11 7XQ')).toEqual(['POSTCODE']);
+    expect(types('reg WK18 ZRT')).toEqual(['VEHICLE_REGISTRATION']);
+  });
+
+  it('catches a hospital number by its anchor phrase', () => {
+    expect(redact('from the trust, hospital number RA7-884211. Treated as a TIA')).toBe(
+      'from the trust, [HOSPITAL_NUMBER]. Treated as a TIA'
+    );
+    expect(types('MRN: 88421/7')).toContain('HOSPITAL_NUMBER');
+    expect(types('patient no. AB4432')).toContain('HOSPITAL_NUMBER');
+  });
+
+  it('requires a digit, so an anchor followed by prose is left alone', () => {
+    // Without the digit lookahead, "recorded" is a long-enough alphanumeric
+    // token and this whole phrase would be redacted.
+    const clinical = 'the patient number recorded on the system was wrong';
+    expect(redact(clinical)).toBe(clinical);
+    expect(types(clinical)).toEqual([]);
+  });
+
+  it('leaves clinical prose containing neither pattern untouched', () => {
+    const clinical =
+      'An 82-year-old with falls, BP 140/90, on amlodipine 500mg TDS, FeverPAIN of 3, seen 10 days ago';
+    expect(redact(clinical)).toBe(clinical);
+    expect(types(clinical)).toEqual([]);
+  });
+});
+
 describe('redactUkOfflinePii (standalone — no Azure ahead)', () => {
   const redact = (t: string) => redactUkOfflinePii(t).redactedText;
   const types = (t: string) => redactUkOfflinePii(t).entities.map((e) => e.type);

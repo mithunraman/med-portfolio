@@ -149,6 +149,33 @@ Claimed jobs hold a lock for `DEFAULT_LOCK_DURATION_MS` (`outbox.service.ts`, cu
 
 Snapshot-before-edit: editing an artefact first snapshots the current state. Restoring a version also snapshots current state first, enabling undo. Entity-agnostic service.
 
+### Nothing reaches `content` without the offline backstop
+
+The message pipeline runs **Redact → Clean** (`processing.service.ts`
+`redactCleanAndComplete`), and cleaning is an **LLM that is the last writer to
+`content`**. That ordering — adopted so the cleaning model never sees raw PHI —
+means cleaning's output is downstream of every redaction layer.
+
+Cleaning can therefore **create** an identifier that nothing inspected. The G-1
+measurement (2026-08-05) found exactly this: a trainee spoke an NHS number
+("nine nine nine one three one…"), Azure did not recognise the spoken form, the
+regex layer saw no digits, and the cleaning model normalised it into numerals.
+Every layer behaved correctly. The gap was in the ordering.
+
+So `redactCleanAndComplete` runs `LocalPiiService.redactLocal()` on the cleaned
+text and persists **that** result. It is offline, deterministic, checksum-gated
+and cannot itself hallucinate — the right shape for a guard on a generative
+stage. Guarded by regression tests in `processing.service.spec.ts`,
+mutation-verified against both removing the pass and running it on the pre-clean
+text.
+
+- **Any new writer to `content` must pass through the backstop.** Adding a stage
+  after cleaning, or a new path that writes `content`, re-opens the same gap.
+- **It does not close the whole class.** An identifier the model garbles into an
+  invalid form still gets through, and phone/email are not in the checksum-gated
+  set. Do not describe this class as closed — see DPIA §6.3 and
+  `docs/compliance/measurements/`.
+
 ### Never send trainee or clinical content to Sentry or Grafana
 
 **Telemetry may carry identifiers and status. It must never carry content.**
@@ -187,6 +214,32 @@ back to an identifiable trainee through our own records.
   `metadata.raw`/`metadata.reasons`/`error.message`; there is a regression test
   guarding this in `llm.service.rate-limit.spec.ts`.
 - Presigned URLs are bearer credentials — never log them.
+
+### Never make an authenticated API response cacheable
+
+Cloudflare fronts `api.logdit.app` as a **reverse proxy** and terminates TLS, so
+every request and response — including un-redacted `rawContent` and drafted
+clinical entries — crosses it in plaintext. Whether Cloudflare is a *transit*
+processor or a **store of clinical content** turns entirely on whether it caches
+those responses.
+
+`applySecurityHeaders()` (`common/security-headers.ts`) therefore sets
+`Cache-Control: no-store` on every response as a **default-deny**. A route may
+opt back in with an explicit `@Header('Cache-Control', ...)`, and that write wins
+because it runs after the middleware — but only do so for routes that are
+`@Public()` and return no personal data. `quota.controller.ts` is the only such
+route today.
+
+Two things follow:
+
+- **Do not add caching headers to authenticated routes**, and do not remove the
+  middleware to "fix" a caching problem.
+- **Never add a Cloudflare Page Rule or Cache Rule covering `api.logdit.app`.**
+  That overrides the origin entirely, and no test in this repo can see it.
+
+This is a compliance control, not a performance default — it was added after the
+compliance record claimed it existed and a regression test proved it did not.
+See `docs/compliance/vendors/cloudflare/` and DPIA Annex J.
 - Need a payload while debugging? Use `LLM_TRACE=1` (dev-only, gitignored output).
   Do not route it through an exporter.
 

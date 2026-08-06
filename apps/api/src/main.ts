@@ -6,10 +6,10 @@ import './tracing';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NextFunction, Request, Response } from 'express';
-import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { AppModule } from './app.module';
+import { applySecurityHeaders } from './common/security-headers';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -47,8 +47,13 @@ async function bootstrap() {
     logger.log(`Trust proxy hops: ${trustProxyHops}`);
   }
 
-  // Security headers
-  app.use(helmet());
+  // Security headers. The `Cache-Control: no-store` these carry is a COMPLIANCE
+  // control, not a performance default — Cloudflare proxies this API and only
+  // this header plus Cloudflare's own no-cache-by-default keep it a transit
+  // processor rather than a store of un-redacted clinical text. Do NOT add
+  // caching headers to authenticated routes. Reasoning and the regression test
+  // live in `common/security-headers.ts`.
+  applySecurityHeaders(app);
 
   // CORS — whitelist specific origins; non-browser clients (mobile, curl) have no Origin header
   const allowedOrigins = configService.get<string[]>('app.allowedOrigins', []);

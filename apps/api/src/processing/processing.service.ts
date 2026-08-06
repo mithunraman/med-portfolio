@@ -17,6 +17,7 @@ import { MediaService } from '../media/media.service';
 import { Media } from '../media/schemas/media.schema';
 import { CleaningStage } from './stages/cleaning.stage';
 import { RedactionStage } from './stages/redaction.stage';
+import { LocalPiiService } from './redaction/local-pii.service';
 import { StageContext } from './stages/stage.interface';
 import { TranscriptionStage, TranscriptionStageResult } from './stages/transcription.stage';
 
@@ -32,7 +33,8 @@ export class ProcessingService {
     private readonly mediaService: MediaService,
     private readonly transcriptionStage: TranscriptionStage,
     private readonly cleaningStage: CleaningStage,
-    private readonly redactionStage: RedactionStage
+    private readonly redactionStage: RedactionStage,
+    private readonly localPii: LocalPiiService
   ) {}
 
   /**
@@ -201,13 +203,44 @@ export class ProcessingService {
       return;
 
     // Stage: Cleaning — runs on redacted text (only ever sees placeholders, never
-    // raw PHI). Also the injection gate and the last writer to `content`.
+    // raw PHI). Also the injection gate.
     this.logger.info(`Cleaning text for message ${messageId}`);
     const cleaningResult = await this.cleaningStage.execute(redaction.text, context);
     if (cleaningResult.injectionDetected) return this.markRejected(messageId);
+
+    // Backstop: re-run the offline structured-identifier redactor on the CLEANED
+    // text, because cleaning is the last writer to `content` and can CREATE an
+    // identifier that neither redaction layer ever saw.
+    //
+    // Found by the G-1 measurement on 2026-08-05. A trainee spoke an NHS number
+    // ("nine nine nine one three one..."); Azure did not recognise the spoken
+    // form, the regex layer saw no digits, and the cleaning model then normalised
+    // it into numerals — downstream of everything that could have removed it.
+    // Every layer behaved correctly; the gap was in the ORDERING, which is a
+    // consequence of the Redact→Clean reorder made for residency.
+    //
+    // Deliberately `redactLocal` (checksum/format-gated: NHS, CHI, NINO,
+    // postcode, sort code + account) rather than the wider `redactStandalone`.
+    // It is offline, deterministic and cannot itself hallucinate — the right
+    // shape for a guard on a generative stage — and it cannot over-redact
+    // clinical prose. It does NOT close the whole class: an identifier the model
+    // garbles into an invalid form still gets through, and phone/email are not in
+    // this set. See DPIA §6.3.
+    //
+    // Runs on whichever text cleaning actually returned, including its degraded
+    // fallback — skipping the anomalous branch would skip exactly the cases most
+    // likely to be wrong.
+    const backstop = await this.localPii.redactLocal(cleaningResult.text);
+    if (backstop.entities.length > 0) {
+      this.logger.warn(
+        `Post-clean backstop removed [${backstop.entities.map((e) => e.type).join(', ')}] ` +
+          `for message ${messageId} — cleaning emitted an identifier redaction never saw`
+      );
+    }
+
     if (
       !(await this.applyUpdate(messageId, {
-        content: cleaningResult.text,
+        content: backstop.redactedText,
         status: MessageStatus.COMPLETE,
       }))
     )

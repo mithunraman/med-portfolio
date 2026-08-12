@@ -45,7 +45,7 @@
       <div class="container">
         <div class="legal-eyebrow">Legal</div>
         <h1>Privacy Policy</h1>
-        <p class="legal-updated">Last updated: 4 August 2026</p>
+        <p class="legal-updated">Last updated: 12 August 2026</p>
 
         <div class="legal-content">
           <p>
@@ -289,10 +289,19 @@
           </p>
 
           <h2>6. PII redaction and AI processing</h2>
+          <!-- The two AI sub-processors are named inline here, and again in section 9, rather
+               than left to the sub-processors page. App Store Guideline 5.1.2(i) requires the
+               recipient of data shared with third-party AI to be identified, and Apple treats a
+               link as insufficient. If either provider changes, update: this paragraph, section
+               9, sub-processors.html, and the consent notice in the app (notices/v1.0.ts). -->
           <p>
-            Your reflection is processed by external speech-to-text and language-model
-            sub-processors (listed on our <a href="sub-processors.html">sub-processors page</a>)
-            to produce a transcript, redact patient identifiers and draft your portfolio entry.
+            Your reflection is processed by two external AI sub-processors.
+            <strong>AssemblyAI, Inc.</strong> turns your audio recording into a transcript; it
+            receives recordings only, and text you type is never sent to it.
+            <strong>Microsoft</strong> (Azure AI) then removes patient identifiers from your
+            text - whether you typed it or we transcribed it - and drafts your portfolio entry.
+            Their processing locations, and every other provider we use, are listed on our
+            <a href="sub-processors.html">sub-processors page</a>.
           </p>
           <p>
             Before any text is used to draft your entry, it passes through automated redaction
@@ -414,6 +423,11 @@
             models</strong>.
           </p>
           <p>
+            Every sub-processor we share your personal data with - including the AI providers
+            named in section 6 - is contractually required to provide the same or equal
+            protection of that data as is set out in this policy.
+          </p>
+          <p>
             A current, named list of our sub-processors - with their purpose and processing
             location - is published at
             <a href="sub-processors.html">logdit.app/sub-processors</a>. Where a sub-processor
@@ -447,12 +461,13 @@
           <p>
             <strong>Which providers see your reflection before patient details are
             removed.</strong> Three do, and we would rather say so than leave you to work it out.
-            Our <strong>transcription provider</strong> is a United States company, and it is the
-            only one that receives your <em>audio recording</em>; it turns it into text before any
-            redaction exists. The <strong>service that removes patient details</strong> necessarily
-            reads the text before it is redacted - that is what it is for - and it stores nothing.
-            And because your app connects to us through a <strong>security and routing
-            provider</strong>, your reflection passes through that provider on its way to us; it
+            Our transcription provider, <strong>AssemblyAI, Inc.</strong>, is a United States
+            company, and it is the only one that receives your <em>audio recording</em>; it turns
+            it into text before any redaction exists. The service that removes patient details,
+            <strong>Microsoft</strong> (Azure AI), necessarily reads the text before it is
+            redacted - that is what it is for - and it stores nothing. And because your app
+            connects to us through a security and routing provider, <strong>Cloudflare,
+            Inc.</strong>, your reflection passes through that provider on its way to us; it
             keeps no copy, and your audio does not go through it at all, because recordings are
             uploaded straight to our storage.
           </p>
@@ -534,6 +549,19 @@
               <a href="https://ico.org.uk" target="_blank" rel="noopener">ico.org.uk</a>.
             </li>
           </ul>
+          <!-- App Store Guideline 5.1.1(i) requires the policy to DESCRIBE HOW a user revokes
+               consent and/or requests deletion, not merely to list the rights. The paragraph
+               below is that description; keep the in-app path accurate if Settings moves. -->
+          <p>
+            <strong>How to withdraw consent and delete your data.</strong> The consent you give
+            at sign-up covers the transcription and AI drafting described in section 6, and you
+            can withdraw it at any time by deleting your account in the app: open
+            <strong>Settings &rarr; Privacy &amp; Support &rarr; Delete Account</strong>. Because
+            that processing is what the Service does, withdrawing consent and closing your
+            account are the same action. Deletion is permanent and follows the 48-hour grace
+            period described in section 7, during which you can cancel. Export anything you want
+            to keep first.
+          </p>
           <p>
             To exercise any of these rights, email
             <a href="mailto:privacy@logdit.app">privacy@logdit.app</a>. We respond within one

@@ -10,8 +10,22 @@
 // rule exists to protect acknowledgement rows already given as evidence, and no
 // PRODUCTION row has ever been written — the app is not live. Dev rows exist but
 // are not evidence of anything. `requiresReAckFromPriorVersions` is therefore
-// moot rather than wrong. This is the last permissible in-place edit: once the
-// first real user acknowledges this document, any further change ships as v1.1.
+// moot rather than wrong.
+//
+// EXCEPTION, 2026-08-12: amended in place again, on the same footing (still no
+// production rows — the app is not live), after App Review rejected build 12
+// under App Store Guidelines 5.1.1(i) and 5.1.2(i). Since 13 Nov 2025 the
+// guideline reads: "You must clearly disclose where personal data will be
+// shared with third parties, INCLUDING WITH THIRD-PARTY AI, and obtain explicit
+// permission before doing so." The screen already obtained permission, but it
+// named no recipient — and Apple's letter states in terms that carrying the
+// names in the Privacy Policy alone is not sufficient. Hence the recipients
+// paragraph in `body` and the parenthetical in the `health_data_consent` label.
+// Both are load-bearing for App Store distribution and guarded by tests in
+// `registry.spec.ts`.
+//
+// This is the last permissible in-place edit: once the first real user
+// acknowledges this document, any further change ships as v1.1.
 import type { NoticeDocument } from '@acme/shared';
 
 export const NOTICE_V1_0: NoticeDocument = {
@@ -22,7 +36,37 @@ export const NOTICE_V1_0: NoticeDocument = {
   body: [
     {
       type: 'paragraph',
-      text: 'Logdit helps UK trainee doctors turn clinical experiences into portfolio entries. We transcribe your recording, automatically remove patient details, then use AI to draft each entry.',
+      text: 'Logdit helps UK trainee doctors turn clinical experiences into portfolio entries. You can speak or type. We transcribe recordings, automatically remove patient details, then use AI to draft each entry.',
+    },
+    // App Store Guideline 5.1.2(i): the recipients must be NAMED, on this
+    // screen, before permission is taken. "AI" on its own is the exact wording
+    // the rejection objects to, and a link to the Privacy Policy does not cure
+    // it. Kept to one sentence: Apple's test is who / what / what-for, and the
+    // rest — US vs UK, EU endpoint, 24-hour deletion, the no-training and
+    // purpose-limitation terms — is layer two, carried by Privacy Policy §6, §8
+    // and §9. Naming a new AI sub-processor means editing this sentence.
+    //
+    // Placed BEFORE the health-data paragraph on purpose, so the Art 7(3)
+    // withdrawal sentence stays immediately above the checkboxes.
+    //
+    // The two input modes have DIFFERENT recipients and the sentence must keep
+    // saying so. A typed message never touches AssemblyAI - `processTextMessage`
+    // goes straight to `redactCleanAndComplete` - so a blanket "your words go to
+    // AssemblyAI and Microsoft" would describe processing that does not happen.
+    // Naming a recipient who never receives the data is as wrong as omitting one
+    // who does, and it gives away a real property of the pipeline: audio is seen
+    // by exactly one provider and never reaches a language model.
+    //
+    // "remove patient details" must stay attached to MICROSOFT. Paragraph one
+    // says patient details are removed but names no actor, so without this the
+    // reader reasonably infers redaction happens before anything leaves us — and
+    // it does not. Azure's redaction is the step that reads the UNREDACTED text,
+    // which is exactly what Privacy Policy §9 declines to leave implicit. Note
+    // the `registry.spec.ts` purposes test will NOT catch its removal: it joins
+    // all paragraphs, and paragraph one satisfies the match on its own.
+    {
+      type: 'paragraph',
+      text: 'Who your words are sent to: your audio goes to AssemblyAI to be transcribed. Your text - typed or transcribed - then goes to Microsoft Azure to remove patient details and draft your entry.',
     },
     // Deliberately short. Only two clauses are load-bearing, and neither may go:
     //   "contain health information" → the Art 9 "informed" limb, and the ICO's
@@ -109,14 +153,21 @@ export const NOTICE_V1_0: NoticeDocument = {
       // and it must not over-claim, but it does not have to litigate.
       //
       // The PURPOSES ("transcribe, remove patient details, draft your entry")
-      // live in the first body paragraph rather than here. That is the layered
+      // live in the body paragraphs rather than here. That is the layered
       // notice working as intended — the detail sits immediately above the box
       // and is unavoidable before ticking it — but it does make this label
-      // DEPENDENT on that paragraph. If the body is ever trimmed further, the
+      // DEPENDENT on those paragraphs. If the body is ever trimmed further, the
       // purposes must survive somewhere the user reads before consenting, or
       // move back into the label.
+      //
+      // The parenthetical is for App Store Guideline 5.1.2(i), not the ICO. The
+      // recipients paragraph above already discloses them, which is arguably
+      // enough — but App Review reads checkboxes, and a box saying only "with
+      // AI" is the phrasing that got build 12 rejected. Four words of insurance
+      // against another round. Do not drop it for brevity; do keep it in step
+      // with the paragraph above if the sub-processors ever change.
       label:
-        'I explicitly consent to Logdit transcribing and analysing my reflections with AI, including any health information they contain.',
+        'I explicitly consent to Logdit transcribing and analysing my reflections with AI (AssemblyAI and Microsoft), including any health information they contain.',
       required: true,
     },
     // Absorbs the former standalone `role_uk_trainee` box. The eligibility

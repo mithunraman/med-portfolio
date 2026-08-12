@@ -3,6 +3,13 @@ import type { CreditInfoItem } from '@acme/shared';
 /**
  * Static content for the "How do credits work?" screen.
  * Ordered array - rendered as a numbered list on mobile.
+ *
+ * Keep this copy free of anything that reads as a purchase or an upgrade tier.
+ * Credits are a free abuse limit, but "credits" is also App Store vocabulary for
+ * consumable IAP, and the earlier wording ("Sign up for more credits... unlock
+ * your full credit allowance") drew a Guideline 2.1(b) business-model query on
+ * the 1.0.0 submission. Nothing in the app is purchasable; say so plainly here
+ * rather than re-answering the question every release.
  */
 export const creditInfoItems: CreditInfoItem[] = [
   {
@@ -16,9 +23,9 @@ export const creditInfoItems: CreditInfoItem[] = [
       'Credits refresh automatically - some refill every few hours, and you get a full weekly reset every Monday. Check your profile to see exactly when.',
   },
   {
-    title: 'Sign up for more credits',
+    title: 'Getting your full allowance',
     description:
-      'Guest accounts have limited credits. Create an account to unlock your full credit allowance.',
+      'Guest accounts have a smaller allowance. Creating an account is free and unlocks your full allowance - there is nothing to pay.',
   },
   {
     title: 'What happens when I run out?',

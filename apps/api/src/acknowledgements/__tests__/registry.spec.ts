@@ -105,3 +105,32 @@ describe('Article 9 explicit consent (active notice)', () => {
     expect(bodyProse()).toMatch(/withdraw/i);
   });
 });
+
+// App Store Guideline 5.1.2(i), in force since 13 Nov 2025: personal data may
+// not be shared with third-party AI without disclosing the recipient and taking
+// explicit permission first. Build 12 was rejected under it because the screen
+// said "AI" and named nobody. These assertions exist because that regression is
+// silent — the app keeps working, the Art 9 tests above keep passing, and the
+// only signal is a rejection weeks later. Naming a new AI sub-processor means
+// updating BOTH the body paragraph and the checkbox label; that is what the
+// second test here is for.
+describe('third-party AI recipients (App Store Guideline 5.1.2(i))', () => {
+  const RECIPIENTS = [/AssemblyAI/, /Microsoft/];
+
+  const bodyProse = () =>
+    NOTICE_REGISTRY.active.body
+      .filter((b): b is { type: 'paragraph'; text: string } => b.type === 'paragraph')
+      .map((b) => b.text)
+      .join(' ');
+
+  it.each(RECIPIENTS)('names %s in the body', (recipient) => {
+    expect(bodyProse()).toMatch(recipient);
+  });
+
+  it.each(RECIPIENTS)('names %s in the consent label, which App Review reads', (recipient) => {
+    const label =
+      NOTICE_REGISTRY.active.acknowledgements.find((a) => a.id === 'health_data_consent')?.label ??
+      '';
+    expect(label).toMatch(recipient);
+  });
+});

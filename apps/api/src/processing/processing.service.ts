@@ -139,6 +139,16 @@ export class ProcessingService {
     // next, so the message enters DEIDENTIFYING.
     const stillAlive = await this.applyUpdate(messageId, {
       rawContent: transcriptionResult.text,
+      // This IS the moment raw content comes into existence for an audio message
+      // — the schema default stamped the anchor at message creation, before the
+      // transcript existed. Bumping it keeps the field honest and starts the
+      // retention clock from the write rather than from the upload.
+      //
+      // It also matters for a reprocessed message: after a scrub the anchor is
+      // null, so without this the row would match the sweep on the very next
+      // tick and could be scrubbed out from under the pipeline that is still
+      // transcribing it.
+      rawContentWrittenAt: new Date(),
       status: MessageStatus.DEIDENTIFYING,
       transcription: transcriptionResult.transcription,
     });
@@ -194,8 +204,15 @@ export class ProcessingService {
     // Stage: PII Redaction (Azure PHI + offline backstop). Runs on raw text.
     this.logger.info(`Redacting PII for message ${messageId}`);
     const redaction = await this.redactionStage.execute(input, context);
+    // Guarded, not a plain applyUpdate: `redactedContent` is DERIVED from
+    // `rawContent`, and the retention sweep can clear `rawContent` while the
+    // Azure call above is in flight. A blind write would then leave a row with
+    // `rawContent: null` and `redactedContent` set — a state the sweep's
+    // predicate keys on `rawContent`, so it can never be found again and the
+    // text is retained forever. The precondition is folded into the query so it
+    // is atomic with the write.
     if (
-      !(await this.applyUpdate(messageId, {
+      !(await this.applyDerivedUpdate(messageId, {
         redactedContent: redaction.text,
         status: MessageStatus.CLEANING,
       }))
@@ -256,16 +273,52 @@ export class ProcessingService {
    * still live, false once it's gone — callers short-circuit to stop spending
    * transcription/LLM budget on a doomed message.
    */
-  private async applyUpdate(
-    messageId: Types.ObjectId,
-    data: UpdateMessageData
-  ): Promise<boolean> {
+  private async applyUpdate(messageId: Types.ObjectId, data: UpdateMessageData): Promise<boolean> {
     const result = await this.conversationsRepository.updateMessage(messageId, data);
     if (isErr(result)) {
       throw new Error(result.error.message);
     }
     if (!result.value) {
       this.logger.warn(`Halting processing for message ${messageId} — deleted mid-pipeline`);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Apply an update that persists content **derived** from `rawContent`, and
+   * that must not land on a row whose `rawContent` has been removed.
+   *
+   * The retention sweep (C-2) can clear `rawContent` at any moment, including
+   * between a pipeline stage reading it and that stage writing its output. A
+   * blind write in that window produces a row with `rawContent: null` and
+   * `redactedContent` populated — and because the sweep's finder keys on
+   * `rawContent`, such a row is invisible to every future sweep and its
+   * redacted text is retained indefinitely. The precondition therefore lives in
+   * the repository query, atomic with the write, rather than in a prior read.
+   *
+   * Unlike `applyUpdate`, a null result is marked FAILED rather than silently
+   * abandoned. Deletion mid-pipeline leaves no row to care about; a scrub
+   * mid-pipeline leaves a live row that would otherwise sit at a non-terminal
+   * status forever. `markFailed` treats a missing row as a no-op success, so the
+   * deleted case stays correct.
+   */
+  private async applyDerivedUpdate(
+    messageId: Types.ObjectId,
+    data: UpdateMessageData
+  ): Promise<boolean> {
+    const result = await this.conversationsRepository.updateMessageIfRawContentPresent(
+      messageId,
+      data
+    );
+    if (isErr(result)) {
+      throw new Error(result.error.message);
+    }
+    if (!result.value) {
+      this.logger.warn(
+        `Halting processing for message ${messageId} — raw content deleted or scrubbed mid-pipeline`
+      );
+      await this.markFailed(messageId, 'Raw content no longer available');
       return false;
     }
     return true;

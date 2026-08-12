@@ -1,4 +1,4 @@
-import { MediaRefCollection, MediaStatus } from '@acme/shared';
+import { MediaRefCollection, MediaStatus, MediaType } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
@@ -145,6 +145,53 @@ export class MediaRepository implements IMediaRepository {
     } catch (error) {
       this.logger.error('Failed to mark media pending delete by user', error);
       return err({ code: 'DB_ERROR', message: 'Failed to mark media pending delete' });
+    }
+  }
+
+  /**
+   * Retention sweep (C-3): move audio past its retention window into the
+   * existing PENDING_DELETE → DELETED pipeline, which already owns the
+   * object-store delete, the retries and the dead-lettering.
+   *
+   * Audio is un-redacted by nature — it is the trainee's voice speaking the
+   * patient's name — so it has to be bounded on a timer, not only on
+   * user-initiated deletion. Until this existed, `markPendingDelete*` fired only
+   * on message or account deletion, so a recording simply left alone was kept
+   * forever.
+   *
+   * Three deliberate choices in the filter:
+   *
+   * - **`mediaType: AUDIO`**, not `refCollection`. MediaRefCollection also
+   *   declares PROFILES and ARTEFACTS; neither is written today, but without
+   *   this clause a future profile avatar would silently start evaporating after
+   *   48 hours. It also states the condition honestly: it is *un-redacted audio*
+   *   that must not persist.
+   * - **PENDING alongside ATTACHED**, to catch orphaned uploads — recorded but
+   *   never sent — which have no message and which nothing else would ever
+   *   delete. Mirrors markPendingDeleteByUser's treatment of the two as "live".
+   * - **`createdAt`**, i.e. upload time, which never changes. Deliberately NOT
+   *   tied to the message's retention anchor: editing a transcript must not
+   *   extend how long the recording survives, because the audio was never
+   *   re-recorded.
+   *
+   * Idempotent by construction — the status it writes is outside the `$in` it
+   * filters on, so the query excludes its own output and the ATTACHED set stays
+   * bounded to roughly one retention window of media.
+   */
+  async expireAudioOlderThan(cutoff: Date): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.mediaModel.updateMany(
+        {
+          mediaType: MediaType.AUDIO,
+          status: { $in: [MediaStatus.PENDING, MediaStatus.ATTACHED] },
+          createdAt: { $lt: cutoff },
+        },
+        { $set: { status: MediaStatus.PENDING_DELETE, pendingDeleteAt: new Date() } }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to expire audio past retention window', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to expire audio' });
     }
   }
 

@@ -18,6 +18,7 @@ function createMockRepo(): jest.Mocked<IMediaRepository> {
     findByUser: jest.fn().mockResolvedValue(ok([])),
     markPendingDeleteByMessageIds: jest.fn().mockResolvedValue(ok(0)),
     markPendingDeleteByUser: jest.fn().mockResolvedValue(ok(0)),
+    expireAudioOlderThan: jest.fn().mockResolvedValue(ok(0)),
     findPendingDeleteBatch: jest.fn().mockResolvedValue(ok([])),
     countDeadLettered: jest.fn().mockResolvedValue(ok(0)),
     markDeleted: jest.fn().mockResolvedValue(ok(0)),

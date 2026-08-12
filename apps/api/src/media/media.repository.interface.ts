@@ -51,6 +51,13 @@ export interface IMediaRepository {
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
 
+  /**
+   * Retention sweep (C-3) — INTENTIONALLY UNSCOPED BY USER, like the other
+   * sweeper methods here. Moves audio uploaded before `cutoff` into the existing
+   * PENDING_DELETE → DELETED pipeline. Returns the number marked.
+   */
+  expireAudioOlderThan(cutoff: Date): Promise<Result<number, DBError>>;
+
   findPendingDeleteBatch(limit: number): Promise<Result<Media[], DBError>>;
 
   countDeadLettered(): Promise<Result<number, DBError>>;

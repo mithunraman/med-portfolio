@@ -153,10 +153,25 @@ describe('ConversationsService.editMessage', () => {
         redactedContent: 'call [PHONE] or [EMAIL]',
         content: 'call [PHONE] or [EMAIL]',
         editedAt: expect.any(Date),
+        rawContentWrittenAt: expect.any(Date),
       },
       null,
     );
     expect(result.id).toBe('msg_abc');
+  });
+
+  it('restarts the retention clock, because an edit writes fresh raw content (C-2)', async () => {
+    // Without this the sweep would key on creation time alone, and a message
+    // edited at hour 47 would have the trainee's brand-new words scrubbed by the
+    // very next hourly tick — 40 minutes after they wrote them.
+    primeHappyPath();
+
+    await service.editMessage(userIdStr, 'conv_abc', 'msg_abc', 'revised reflection');
+
+    const [, update] = mockConversationsRepo.updateMessage.mock.calls[0];
+    // Same instant as editedAt, so the two can never disagree about when the
+    // content was last written.
+    expect(update.rawContentWrittenAt).toEqual(update.editedAt);
   });
 
   it('throws NotFoundException when the conversation does not exist', async () => {

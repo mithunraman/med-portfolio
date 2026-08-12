@@ -89,6 +89,21 @@ export class Message {
   @Prop({ type: Date, default: null })
   editedAt!: Date | null;
 
+  /**
+   * Retention anchor: when `rawContent` was last written. Drives the 48-hour
+   * scrub (C-2), and its absence is the mapper's "raw copy removed" signal.
+   *
+   * Schema default so creation can never forget it. A future write path that
+   * sets `rawContent` without bumping this leaves the anchor OLDER, so the
+   * message is swept sooner rather than never — the control fails closed.
+   *
+   * Deliberately NOT `editedAt`: that field's null-ness drives the mobile
+   * "Edited" label (BubbleShell.tsx), so stamping it at creation would mark
+   * every message in the app as edited.
+   */
+  @Prop({ type: Date, default: () => new Date() })
+  rawContentWrittenAt!: Date | null;
+
   createdAt!: Date;
   updatedAt!: Date;
 }
@@ -102,3 +117,15 @@ MessageSchema.index({ conversation: 1, _id: -1 });
 
 // Compound unique index for idempotency: userId + idempotencyKey.
 MessageSchema.index({ userId: 1, idempotencyKey: 1 }, { unique: true });
+
+// Retention sweep hot path (C-2). The SORT field is the anchor; the INCLUSION
+// predicate is `rawContent`. Those are independent, and the combination is what
+// makes this work: the index holds only documents that still carry raw content —
+// roughly 48h of messages in steady state, not the whole collection — and a
+// scrubbed document leaves it automatically. A plain { rawContentWrittenAt: 1 }
+// index would instead have the sweep scan a range covering nearly every message
+// ever sent, growing without bound.
+MessageSchema.index(
+  { rawContentWrittenAt: 1 },
+  { partialFilterExpression: { rawContent: { $type: 'string' } } }
+);

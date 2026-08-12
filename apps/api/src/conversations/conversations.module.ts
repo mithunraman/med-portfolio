@@ -13,6 +13,7 @@ import { ConversationsRepository } from './conversations.repository';
 import { CONVERSATIONS_REPOSITORY } from './conversations.repository.interface';
 import { ConversationContextService } from './conversation-context.service';
 import { ConversationsService } from './conversations.service';
+import { MessageRetentionService } from './message-retention.service';
 import { Conversation, ConversationSchema } from './schemas/conversation.schema';
 import { Message, MessageSchema } from './schemas/message.schema';
 
@@ -35,6 +36,7 @@ import { Message, MessageSchema } from './schemas/message.schema';
   providers: [
     ConversationsService,
     ConversationContextService,
+    MessageRetentionService,
     {
       provide: CONVERSATIONS_REPOSITORY,
       useClass: ConversationsRepository,

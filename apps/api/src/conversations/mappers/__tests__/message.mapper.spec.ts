@@ -27,6 +27,11 @@ function makeDoc(overrides: Partial<MessageSchema> = {}): MessageSchema {
     idempotencyKey: null,
     generated: false,
     editedAt: null,
+    // Set on every insert by a schema default in production, so the fixture
+    // carries one too. Its absence is the mapper's "retention sweep removed the
+    // raw copies" signal, and a fixture without it would silently exercise the
+    // scrubbed path in every unrelated case.
+    rawContentWrittenAt: now,
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -73,6 +78,60 @@ describe('toMessageDto — content resolution', () => {
   it('returns null content when every content stage is null', () => {
     const dto = toMessageDto(
       makeDoc({ content: null, redactedContent: null, rawContent: null }),
+      CONVERSATION_XID
+    );
+    expect(dto.content).toBeNull();
+  });
+
+  // ── After the retention sweep (C-2) ──
+  //
+  // The sweep nulls rawContent, redactedContent AND the retention anchor in one
+  // atomic $set. The anchor's absence is therefore an exact "raw copy removed"
+  // signal, which is what lets the mapper distinguish a scrubbed message from
+  // one that simply has no content yet.
+  //
+  // Computed here rather than stored on purpose: writing '[deleted]' into
+  // rawContent would make it truthy, and processing.service.ts branches on
+  // exactly that (`else if (message.rawContent)`) — a scrubbed message retried
+  // by the outbox would be redacted, cleaned and marked COMPLETE with the
+  // placeholder as its content.
+
+  it('surfaces a placeholder for a REJECTED message once the sweep has run', () => {
+    // The REJECTED regression guard above depends on rawContent being present.
+    // After 48 hours it is not, and without this fallback the bubble renders its
+    // "not added" caption over an empty body.
+    const dto = toMessageDto(
+      makeDoc({
+        status: MessageStatus.REJECTED,
+        content: null,
+        redactedContent: null,
+        rawContent: null,
+        rawContentWrittenAt: null,
+      }),
+      CONVERSATION_XID
+    );
+    expect(dto.content).toBe('[deleted]');
+  });
+
+  it('leaves a COMPLETE message untouched by the sweep — content survives it', () => {
+    const dto = toMessageDto(
+      makeDoc({ content: 'final', rawContent: null, rawContentWrittenAt: null }),
+      CONVERSATION_XID
+    );
+    expect(dto.content).toBe('final');
+  });
+
+  it('does NOT claim deletion for an in-flight message that has no content yet', () => {
+    // An audio message before transcription has nothing in any content field,
+    // but its anchor is intact. It must render null so the UI shows the
+    // processing state rather than asserting the content was deleted.
+    const dto = toMessageDto(
+      makeDoc({
+        status: MessageStatus.TRANSCRIBING,
+        content: null,
+        redactedContent: null,
+        rawContent: null,
+      }),
       CONVERSATION_XID
     );
     expect(dto.content).toBeNull();

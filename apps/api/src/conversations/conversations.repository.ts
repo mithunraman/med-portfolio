@@ -253,6 +253,32 @@ export class ConversationsRepository implements IConversationsRepository {
     }
   }
 
+  async updateMessageIfRawContentPresent(
+    messageId: Types.ObjectId,
+    data: UpdateMessageData
+  ): Promise<Result<Message | null, DBError>> {
+    try {
+      // `rawContent: { $type: 'string' }` is the precondition, folded into the
+      // filter so it is atomic with the write — the same construction as
+      // MESSAGE_LIVE_FILTER above, and for the same reason. A separate read-then-
+      // write would leave the exact window this exists to close: the retention
+      // sweep landing between a stage reading `rawContent` and writing what it
+      // derived from it, producing a row whose derived content the sweep's
+      // predicate can no longer see.
+      const message = await this.messageModel
+        .findOneAndUpdate(
+          { _id: messageId, rawContent: { $type: 'string' }, ...MESSAGE_LIVE_FILTER },
+          { $set: data },
+          { new: true }
+        )
+        .lean();
+      return ok(message);
+    } catch (error) {
+      this.logger.error('Failed to update message with raw-content precondition', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to update message' });
+    }
+  }
+
   async listMessages(
     query: ListMessagesQuery,
     session?: ClientSession
@@ -544,6 +570,96 @@ export class ConversationsRepository implements IConversationsRepository {
     } catch (error) {
       this.logger.error('Failed to find message ids by conversation ids', error);
       return err({ code: 'DB_ERROR', message: 'Failed to find message ids by conversation ids' });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Retention sweep (C-2)
+  //
+  // Both methods are INTENTIONALLY UNSCOPED BY USER — the documented
+  // system-caller exception in CLAUDE.md. A retention sweep must see every
+  // user's expired content; a userId predicate would defeat its purpose. Never
+  // wire either to a controller route.
+  // ---------------------------------------------------------------------------
+
+  async findExpiredRawContentBatchAcrossAllUsers(
+    cutoff: Date,
+    limit: number
+  ): Promise<Result<Types.ObjectId[], DBError>> {
+    try {
+      // `rawContent: { $type: 'string' }` deliberately mirrors the partial index
+      // predicate on MessageSchema exactly, so the scan stays inside the index
+      // rather than walking the collection. `$type` rather than `$ne: null`
+      // because `$ne` is not a legal partialFilterExpression operator, so the
+      // two would otherwise diverge.
+      //
+      // The `$or` matches a MISSING or NULL anchor as well as an expired one,
+      // and that branch is load-bearing in two ways. Mongo does not match null
+      // against `$lt`, so without it any row holding raw content with a cleared
+      // anchor would be invisible to every future sweep — permanently, silently.
+      // That covers both a half-applied scrub (the anchor is nulled in the same
+      // atomic $set, so this needs a code bug to occur, but the cost of being
+      // wrong is unbounded retention) and documents predating the field, which
+      // would otherwise never be swept at all. Both cases mean the same thing:
+      // raw content whose age we cannot vouch for, which is exactly what should
+      // go first.
+      //
+      // ## Expect a large scrub on the FIRST sweep after this deploys
+      //
+      // `{ field: null }` matches missing as well as null, the anchor is set by a
+      // Mongoose default that only fires on insert, and this branch consults no
+      // `createdAt`. So every row that predates the field is swept on the first
+      // tick regardless of age — a message written a minute before the deploy is
+      // treated like one from last month. A text message still queued in the
+      // outbox at that moment then terminates at `markFailed('No content to
+      // process')`; audio survives, because `processAudioMessage` re-derives
+      // `rawContent` from the recording rather than reading it.
+      //
+      // **This is one-time and intended, not a defect to fix.** One-time because
+      // everything created afterwards carries the default. Intended because the
+      // alternative — narrowing this branch with a `createdAt` fallback, or
+      // backfilling the anchor — buys precision on rows whose age we cannot
+      // independently trust, at the cost of the fail-closed property this branch
+      // exists for. Over-deleting a row of unverifiable age is the correct bias
+      // for a retention control. (A backfill is also foreclosed by CLAUDE.md,
+      // which rules out migrations pre-launch.)
+      const docs = await this.messageModel
+        .find({
+          rawContent: { $type: 'string' },
+          $or: [{ rawContentWrittenAt: { $lt: cutoff } }, { rawContentWrittenAt: null }],
+        })
+        .select('_id')
+        .limit(limit)
+        .lean();
+      return ok(docs.map((doc) => doc._id));
+    } catch (error) {
+      this.logger.error('Failed to find expired raw content batch', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find expired raw content batch' });
+    }
+  }
+
+  async scrubRawContentAcrossAllUsers(ids: Types.ObjectId[]): Promise<Result<number, DBError>> {
+    if (ids.length === 0) return ok(0);
+    try {
+      // MESSAGE_LIVE_FILTER is deliberately NOT applied. It exists to stop a
+      // write resurrecting a tombstone; scrubbing a tombstone is the one write
+      // that should reach it (they hold '[deleted]' strings, which this clears).
+      //
+      // `content` is deliberately absent from this payload. It is the redacted,
+      // cleaned display text — the only copy the trainee ever saw — and keeping
+      // it is what makes DEC-11 hold while the un-redacted copies go.
+      //
+      // The anchor is nulled in the SAME atomic $set, so it can never claim the
+      // content is gone while it is still there. Its absence is the mapper's
+      // "raw copy removed" signal.
+      const result = await this.messageModel.updateMany(
+        { _id: { $in: ids } },
+        { $set: { rawContent: null, redactedContent: null, rawContentWrittenAt: null } }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to scrub expired raw content', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to scrub expired raw content' });
     }
   }
 }

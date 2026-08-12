@@ -1,6 +1,6 @@
-import { MessageStatus } from '@acme/shared';
+import { MediaType, MessageStatus } from '@acme/shared';
 import { Types } from 'mongoose';
-import { err, ok } from '../../common/utils/result.util';
+import { DBError, Result, err, ok } from '../../common/utils/result.util';
 import { LocalPiiService } from '../redaction/local-pii.service';
 import { ProcessingService } from '../processing.service';
 
@@ -49,7 +49,9 @@ function createService(convRepoOverrides: Record<string, jest.Mock> = {}) {
 describe('ProcessingService.markFailed escalation', () => {
   it('rejects when the FAILED write fails, so the outbox retries instead of stranding the message', async () => {
     const { service, conversationsRepository } = createService({
-      updateMessage: jest.fn().mockResolvedValue(err({ code: 'DB_ERROR', message: 'write failed' })),
+      updateMessage: jest
+        .fn()
+        .mockResolvedValue(err({ code: 'DB_ERROR', message: 'write failed' })),
     });
 
     // markFailed must surface the failed write (throw) rather than swallow it —
@@ -70,7 +72,10 @@ describe('ProcessingService.markFailed escalation', () => {
 
     expect(conversationsRepository.updateMessage).toHaveBeenCalledWith(
       expect.any(Types.ObjectId),
-      expect.objectContaining({ status: MessageStatus.FAILED, processingError: 'Conversation not found' })
+      expect.objectContaining({
+        status: MessageStatus.FAILED,
+        processingError: 'Conversation not found',
+      })
     );
   });
 
@@ -89,16 +94,22 @@ describe('ProcessingService.markFailed escalation', () => {
  * Shared by the injection-gate and post-clean-backstop suites, so both exercise
  * the same ordering rather than two subtly different reconstructions of it.
  */
-function makeFullPathService(cleaningResult: { text: string; injectionDetected?: boolean }) {
+function makeFullPathService(
+  cleaningResult: { text: string; injectionDetected?: boolean },
+  // The redaction write is guarded — it only lands while `rawContent` is still
+  // present. Default to "still there"; pass ok(null) to simulate the retention
+  // sweep scrubbing the row mid-pipeline.
+  redactionWriteResult: Result<unknown, DBError> = ok(makeMessage())
+) {
   const updateMessage = jest.fn().mockResolvedValue(ok(makeMessage()));
+  const updateMessageIfRawContentPresent = jest.fn().mockResolvedValue(redactionWriteResult);
   const conversationsRepository = {
     findMessageById: jest
       .fn()
       .mockResolvedValue(ok(makeMessage({ status: MessageStatus.PENDING }))),
-    findConversationById: jest
-      .fn()
-      .mockResolvedValue(ok({ artefact: new Types.ObjectId() })),
+    findConversationById: jest.fn().mockResolvedValue(ok({ artefact: new Types.ObjectId() })),
     updateMessage,
+    updateMessageIfRawContentPresent,
   };
   const artefactsRepository = { findById: jest.fn().mockResolvedValue(ok({ specialty: 100 })) };
   const cleaningStage = { execute: jest.fn().mockResolvedValue(cleaningResult) };
@@ -119,9 +130,14 @@ function makeFullPathService(cleaningResult: { text: string; injectionDetected?:
     new LocalPiiService()
   );
 
-  return { service, updateMessage, redactionStage, cleaningStage };
+  return {
+    service,
+    updateMessage,
+    updateMessageIfRawContentPresent,
+    redactionStage,
+    cleaningStage,
+  };
 }
-
 
 describe('ProcessingService injection gate', () => {
   it('marks REJECTED (not COMPLETE) when cleaning (the last stage) flags injection', async () => {
@@ -147,7 +163,13 @@ describe('ProcessingService injection gate', () => {
   });
 
   it('redacts BEFORE cleaning: redactedContent = redacted text, content = cleaned text', async () => {
-    const { service, updateMessage, redactionStage, cleaningStage } = makeFullPathService({
+    const {
+      service,
+      updateMessage,
+      updateMessageIfRawContentPresent,
+      redactionStage,
+      cleaningStage,
+    } = makeFullPathService({
       text: 'cleaned text',
       injectionDetected: false,
     });
@@ -161,7 +183,10 @@ describe('ProcessingService injection gate', () => {
     // Cleaning operates on the redaction output, not the raw input.
     expect(cleaningStage.execute).toHaveBeenCalledWith('redacted', expect.anything());
     // Field mapping: redacted text → redactedContent (status CLEANING); cleaned text → content.
-    const cleanedWrite = updateMessage.mock.calls.find(
+    // The redaction write goes through the GUARDED path — redactedContent is
+    // derived from rawContent and must never land on a row the retention sweep
+    // has already scrubbed.
+    const cleanedWrite = updateMessageIfRawContentPresent.mock.calls.find(
       (c) => c[1].status === MessageStatus.CLEANING
     );
     expect(cleanedWrite?.[1].redactedContent).toBe('redacted');
@@ -182,6 +207,78 @@ describe('ProcessingService injection gate', () => {
     const statuses = updateMessage.mock.calls.map((c) => c[1].status);
     expect(statuses).toContain(MessageStatus.COMPLETE);
     expect(statuses).not.toContain(MessageStatus.REJECTED);
+  });
+
+  it('stamps the retention anchor when transcription writes rawContent (audio path)', async () => {
+    // For an audio message the transcript IS the moment raw content comes into
+    // existence — the schema default stamped the anchor at message creation,
+    // before there was a transcript. Without this bump a reprocessed message
+    // keeps a null anchor, matches the sweep on the very next tick, and can be
+    // scrubbed out from under the pipeline still transcribing it.
+    const updateMessage = jest.fn().mockResolvedValue(ok(makeMessage()));
+    const conversationsRepository = {
+      findMessageById: jest.fn().mockResolvedValue(
+        ok(
+          makeMessage({
+            status: MessageStatus.PENDING,
+            rawContent: null,
+            media: { xid: 'med_1', mediaType: MediaType.AUDIO },
+          })
+        )
+      ),
+      findConversationById: jest.fn().mockResolvedValue(ok({ artefact: new Types.ObjectId() })),
+      updateMessage,
+      updateMessageIfRawContentPresent: jest.fn().mockResolvedValue(ok(makeMessage())),
+    };
+
+    const service = new ProcessingService(
+      createLogger(),
+      conversationsRepository as never,
+      { findById: jest.fn().mockResolvedValue(ok({ specialty: 100 })) } as never,
+      { getTranscriptionUrl: jest.fn().mockResolvedValue('https://signed') } as never,
+      {
+        execute: jest
+          .fn()
+          .mockResolvedValue({ text: 'spoken words', transcription: { confidence: 0.9 } }),
+      } as never,
+      {
+        execute: jest.fn().mockResolvedValue({ text: 'cleaned', injectionDetected: false }),
+      } as never,
+      { execute: jest.fn().mockResolvedValue({ text: 'redacted' }) } as never,
+      new LocalPiiService()
+    );
+
+    await service.processMessage(new Types.ObjectId());
+
+    const transcriptWrite = updateMessage.mock.calls.find(
+      (c) => c[1].rawContent === 'spoken words'
+    );
+    expect(transcriptWrite).toBeDefined();
+    expect(transcriptWrite?.[1].rawContentWrittenAt).toBeInstanceOf(Date);
+  });
+
+  it('HALTS when the retention sweep scrubs the row mid-pipeline, without writing redactedContent', async () => {
+    // The race this guard exists for: the sweep's updateMany lands between the
+    // redaction stage reading rawContent and this write persisting what it
+    // derived. A blind write would leave rawContent null with redactedContent
+    // set — a state the sweep's finder keys on rawContent, so it could never be
+    // found again and the text would be retained indefinitely.
+    //
+    // ok(null) is what the guarded update returns when the precondition fails.
+    const { service, updateMessage, cleaningStage } = makeFullPathService(
+      { text: 'cleaned text', injectionDetected: false },
+      ok(null)
+    );
+
+    await service.processMessage(new Types.ObjectId());
+
+    // Stops before cleaning — no LLM spend on content whose source is gone.
+    expect(cleaningStage.execute).not.toHaveBeenCalled();
+    // Lands terminal rather than stranded at a processing status.
+    const statuses = updateMessage.mock.calls.map((c) => c[1].status);
+    expect(statuses).toContain(MessageStatus.FAILED);
+    expect(statuses).not.toContain(MessageStatus.COMPLETE);
+    expect(updateMessage.mock.calls.some((c) => c[1].content)).toBe(false);
   });
 
   it('FAILS CLOSED: marks FAILED and never writes content when cleaning throws (e.g. LLM error)', async () => {
@@ -263,7 +360,10 @@ describe('ProcessingService — post-clean backstop', () => {
     // The backstop is checksum/format-gated, so it must be inert on ordinary
     // clinical prose — otherwise it would trade a privacy fix for over-redaction.
     const clean = 'Reviewed [PERSON] this morning, third COPD exacerbation. BP 140/90.';
-    const { service, updateMessage } = makeFullPathService({ text: clean, injectionDetected: false });
+    const { service, updateMessage } = makeFullPathService({
+      text: clean,
+      injectionDetected: false,
+    });
 
     await service.processMessage(new Types.ObjectId());
 
@@ -280,7 +380,9 @@ describe('ProcessingService — post-clean backstop', () => {
 
     await service.processMessage(new Types.ObjectId());
 
-    expect(updateMessage.mock.calls.some((c) => c[1].status === MessageStatus.COMPLETE)).toBe(false);
+    expect(updateMessage.mock.calls.some((c) => c[1].status === MessageStatus.COMPLETE)).toBe(
+      false
+    );
   });
 
   it('sanity: the spoken form the pipeline started from has no digits to match', async () => {

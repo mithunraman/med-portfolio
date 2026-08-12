@@ -279,6 +279,11 @@ export class ConversationsService {
             redactedContent: redactedText,
             content: redactedText,
             editedAt,
+            // An edit writes FRESH raw content, so it restarts the retention
+            // clock (C-2) — otherwise a message edited at hour 47 would be
+            // scrubbed by the very next sweep, 40 minutes after the trainee
+            // wrote it. Reuses the same instant as editedAt so the two agree.
+            rawContentWrittenAt: editedAt,
           },
           session
         );

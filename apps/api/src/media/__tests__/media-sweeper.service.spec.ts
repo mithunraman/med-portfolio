@@ -40,6 +40,7 @@ function createMockRepo(): jest.Mocked<IMediaRepository> {
     findByUser: jest.fn(),
     markPendingDeleteByMessageIds: jest.fn(),
     markPendingDeleteByUser: jest.fn(),
+    expireAudioOlderThan: jest.fn().mockResolvedValue(ok(0)),
     findPendingDeleteBatch: jest.fn().mockResolvedValue(ok([])),
     countDeadLettered: jest.fn().mockResolvedValue(ok(0)),
     markDeleted: jest.fn().mockResolvedValue(ok(0)),
@@ -205,6 +206,87 @@ describe('MediaSweeperService.runSweep', () => {
 
     expect(repo.countDeadLettered).toHaveBeenCalledTimes(1);
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('dead-letter count: 7'));
+    logSpy.mockRestore();
+  });
+});
+
+/**
+ * Launch condition C-3 — audio deleted within the retention window.
+ *
+ * The sweeper already owned deletion; what was missing was anything that MARKED
+ * audio for deletion because time had passed. These cover that arrow.
+ */
+describe('MediaSweeperService.expireAudio (C-3)', () => {
+  beforeEach(() => jest.resetAllMocks());
+
+  it('asks the repository for media older than one retention window', async () => {
+    const repo = createMockRepo();
+    repo.expireAudioOlderThan.mockResolvedValue(ok(4));
+    const { service } = createService(repo);
+
+    const expired = await service.expireAudio(new Date('2026-08-06T12:00:00.000Z'));
+
+    expect(expired).toBe(4);
+    const [cutoff] = repo.expireAudioOlderThan.mock.calls[0];
+    expect((cutoff as Date).toISOString()).toBe('2026-08-04T12:00:00.000Z');
+  });
+
+  it('returns 0 and does not throw when marking fails', async () => {
+    const repo = createMockRepo();
+    repo.expireAudioOlderThan.mockResolvedValue(err({ code: 'DB_ERROR', message: 'boom' }));
+    const { service } = createService(repo);
+
+    await expect(service.expireAudio()).resolves.toBe(0);
+  });
+});
+
+describe('MediaSweeperService.runSweep — mark-then-sweep ordering (C-3)', () => {
+  beforeEach(() => jest.resetAllMocks());
+
+  it('marks BEFORE sweeping, so an object crossing the window dies in the same tick', async () => {
+    // If these ran the other way round, a newly expired object would wait for
+    // the NEXT hourly tick to be deleted — doubling the worst-case overshoot.
+    const order: string[] = [];
+    const repo = createMockRepo();
+    repo.expireAudioOlderThan.mockImplementation(async () => {
+      order.push('mark');
+      return ok(1);
+    });
+    repo.findPendingDeleteBatch.mockImplementation(async () => {
+      order.push('sweep');
+      return ok([]);
+    });
+    repo.countDeadLettered.mockResolvedValue(ok(0));
+    const { service } = createService(repo);
+
+    await service.runSweep();
+
+    expect(order).toEqual(['mark', 'sweep']);
+  });
+
+  it('still sweeps the existing backlog when marking fails', async () => {
+    const repo = createMockRepo();
+    repo.expireAudioOlderThan.mockResolvedValue(err({ code: 'DB_ERROR', message: 'boom' }));
+    repo.findPendingDeleteBatch.mockResolvedValue(ok([]));
+    repo.countDeadLettered.mockResolvedValue(ok(0));
+    const { service } = createService(repo);
+
+    await service.runSweep();
+
+    expect(repo.findPendingDeleteBatch).toHaveBeenCalled();
+  });
+
+  it('reports the number expired in the summary line', async () => {
+    const repo = createMockRepo();
+    repo.expireAudioOlderThan.mockResolvedValue(ok(3));
+    repo.findPendingDeleteBatch.mockResolvedValue(ok([]));
+    repo.countDeadLettered.mockResolvedValue(ok(0));
+    const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    const { service } = createService(repo);
+
+    await service.runSweep();
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('3 expired by retention'));
     logSpy.mockRestore();
   });
 });

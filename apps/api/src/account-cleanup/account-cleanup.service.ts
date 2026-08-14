@@ -20,6 +20,7 @@ import {
   ISessionRepository,
   SESSION_REPOSITORY,
 } from '../auth/sessions.repository.interface';
+import { CRON_SCHEDULES } from '../common/cron.constants';
 import { isErr, unwrapVoid } from '../common/utils/result.util';
 import {
   CONVERSATIONS_REPOSITORY,
@@ -62,7 +63,7 @@ export class AccountCleanupService {
     @Inject(CHECKPOINT_REPOSITORY) private readonly checkpointRepo: ICheckpointRepository
   ) {}
 
-  @Cron('0 0 5 * * *') // Daily at 5:00 AM
+  @Cron(CRON_SCHEDULES.ACCOUNT_CLEANUP)
   async processExpiredDeletions(): Promise<void> {
     if (this.processing) {
       this.logger.debug('Cleanup already in progress, skipping');

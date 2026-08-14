@@ -29,6 +29,13 @@ function createMockRepo() {
     deleteByUserId: jest.fn().mockResolvedValue(ok(0)),
     cancelByUser: jest.fn().mockResolvedValue(ok(0)),
     markPendingDeleteByUser: jest.fn().mockResolvedValue(ok(0)),
+    findThreadIdsByConversationIds: jest.fn().mockResolvedValue(ok([])),
+  };
+}
+
+function createMockCheckpointRepo() {
+  return {
+    purgeThreads: jest.fn().mockResolvedValue(ok({ checkpoints: 0, writes: 0 })),
   };
 }
 
@@ -71,6 +78,7 @@ function createService(
     itemsRepo: createMockRepo(),
     versionHistoryRepo: createMockRepo(),
     outboxRepo: createMockRepo(),
+    checkpointRepo: createMockCheckpointRepo(),
   };
 
   const sessionRepo = {
@@ -90,7 +98,8 @@ function createService(
     repos.itemsRepo as never,
     repos.versionHistoryRepo as never,
     repos.outboxRepo as never,
-    sessionRepo as never
+    sessionRepo as never,
+    repos.checkpointRepo as never
   );
 
   return { service, repos, userModel, sessionRepo };
@@ -235,6 +244,51 @@ describe('AccountCleanupService', () => {
       expect(repos.analysisRunsRepo.markDeletedByConversationIds).toHaveBeenCalledWith([
         convId1,
       ]);
+    });
+
+    it('step 2 hard-deletes LangGraph checkpoint data for the user', async () => {
+      // `checkpoints` / `checkpoint_writes` serialise the full transcript and the
+      // drafted clinical entry at every superstep. They carry no userId, so the
+      // run records' langGraphThreadId is the only route to them — and nothing
+      // else in the cascade or the retention sweeps reaches them.
+      const targetUserId = oid();
+      const convId = oid();
+      const { service, repos } = createService({
+        byId: { [targetUserId.toString()]: flaggedUser(targetUserId) },
+      });
+      repos.conversationsRepo.findConversationIdsByUser.mockResolvedValue(ok([convId]));
+      repos.analysisRunsRepo.findThreadIdsByConversationIds.mockResolvedValue(
+        ok([`${convId.toString()}:1`, `${convId.toString()}:2`])
+      );
+
+      await service.triggerDeletion(targetUserId.toString());
+
+      expect(repos.analysisRunsRepo.findThreadIdsByConversationIds).toHaveBeenCalledWith([convId]);
+      expect(repos.checkpointRepo.purgeThreads).toHaveBeenCalledWith([
+        `${convId.toString()}:1`,
+        `${convId.toString()}:2`,
+      ]);
+    });
+
+    it('leaves the user retryable when thread-id resolution fails', async () => {
+      // Same contract as the conversation-id resolver: returning [] would
+      // silently no-op the purge and mark the account anonymized with trainee
+      // clinical content still on disk.
+      const targetUserId = oid();
+      const { service, repos, userModel } = createService({
+        byId: { [targetUserId.toString()]: flaggedUser(targetUserId) },
+      });
+      repos.analysisRunsRepo.findThreadIdsByConversationIds.mockResolvedValue(
+        err({ code: 'DB_ERROR', message: 'boom' })
+      );
+
+      await expect(service.triggerDeletion(targetUserId.toString())).rejects.toThrow();
+
+      expect(repos.checkpointRepo.purgeThreads).not.toHaveBeenCalled();
+      expect(userModel.updateOne).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ $set: expect.objectContaining({ anonymizedAt: expect.anything() }) })
+      );
     });
 
     it('step 2 runs steps concurrently (Promise.allSettled, not serial await)', async () => {

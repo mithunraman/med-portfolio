@@ -300,6 +300,59 @@ describe('ConversationContextService', () => {
         thinkingLabel: null,
       });
     });
+
+    it('explains the failure so the inert last question is not read as a bug', async () => {
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      expect(ctx.notice?.code).toBe('ANALYSIS_FAILED');
+      expect(ctx.notice?.text).toContain('try again');
+    });
+  });
+
+  // ─── Phase: composing (expired run — reaped by the checkpoint sweeper) ───
+
+  describe('when latest run is EXPIRED', () => {
+    beforeEach(() => {
+      mockAnalysisRunsService.findLatestRun.mockResolvedValue(
+        makeRun({ status: AnalysisRunStatus.EXPIRED })
+      );
+      mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
+      mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
+    });
+
+    it('returns phase "composing"', async () => {
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      expect(ctx.phase).toBe('composing');
+    });
+
+    it('allows startAnalysis — an expired run must not be a dead end', async () => {
+      // Regression guard. Testing `status !== FAILED` here (rather than the
+      // RESTARTABLE set) opens the composer while denying the start action with
+      // "Analysis already started" — a dead end that looks operational.
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      expect(ctx.actions.startAnalysis).toEqual({ allowed: true });
+    });
+
+    it('drops activeQuestion so the stale question stops being interactive', async () => {
+      // The question is seeded deliberately. Two independent layers drop it, and
+      // this one is the service's: `expireStaleRuns` already nulls
+      // `currentQuestion` when it expires the run (covered in
+      // analysis-runs.repository.integration.spec.ts), so with the default
+      // fixture `buildActiveQuestion` returns on its null check and never
+      // reaches the status guard — the test would pass for every status and
+      // assert nothing. Seeding it is what puts the status guard under test.
+      mockAnalysisRunsService.findLatestRun.mockResolvedValue(
+        makeRun({ status: AnalysisRunStatus.EXPIRED, currentQuestion: makeCurrentQuestion() })
+      );
+
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      expect(ctx.activeQuestion).toBeUndefined();
+    });
+
+    it('explains the expiry in neutral, server-owned copy', async () => {
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      expect(ctx.notice?.code).toBe('ANALYSIS_EXPIRED');
+      expect(ctx.notice?.text).toContain('Your messages are saved');
+    });
   });
 
   // ─── Phase: composing (completed run — should deny startAnalysis) ───
@@ -579,6 +632,14 @@ describe('ConversationContextService', () => {
     it('does not include activeQuestion', async () => {
       const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
       expect(ctx.activeQuestion).toBeUndefined();
+    });
+
+    it('carries no notice — the run succeeded and nothing was lost', async () => {
+      // A successful run's checkpoints are purged days later and the trainee is
+      // never told, because there is nothing to tell them. Surfacing a notice on
+      // a non-event trains people to ignore the ones that matter.
+      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      expect(ctx.notice).toBeNull();
     });
 
     it('includes analysisRun summary', async () => {

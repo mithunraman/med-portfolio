@@ -16,7 +16,8 @@ import {
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
-import { Model, Types } from 'mongoose';
+import { Connection, Model, Types } from 'mongoose';
+import { getConnectionToken } from '@nestjs/mongoose';
 import { AnalysisRun, AnalysisRunSchema } from '../../analysis-runs/schemas/analysis-run.schema';
 import { AnalysisRunsRepository } from '../../analysis-runs/analysis-runs.repository';
 import { ANALYSIS_RUNS_REPOSITORY } from '../../analysis-runs/analysis-runs.repository.interface';
@@ -53,6 +54,12 @@ import {
 } from '../../version-history/schemas/version-history.schema';
 import { VersionHistoryRepository } from '../../version-history/version-history.repository';
 import { VERSION_HISTORY_REPOSITORY } from '../../version-history/version-history.repository.interface';
+import {
+  CHECKPOINT_COLLECTION,
+  CHECKPOINT_WRITES_COLLECTION,
+} from '../../checkpoints/checkpoint.constants';
+import { CheckpointRepository } from '../../checkpoints/checkpoint.repository';
+import { CHECKPOINT_REPOSITORY } from '../../checkpoints/checkpoint.repository.interface';
 import { TransactionService } from '../../database/transaction.service';
 import { StorageService } from '../../storage/storage.service';
 import { AccountCleanupService } from '../account-cleanup.service';
@@ -85,6 +92,9 @@ describe('AccountCleanupService (integration)', () => {
   let itemModel: Model<Item>;
   let versionHistoryModel: Model<VersionHistory>;
   let outboxModel: Model<OutboxEntry>;
+  // The checkpointer's collections are written by MongoDBSaver via the raw
+  // driver, so there is no Mongoose model — they are reached off the connection.
+  let connection: Connection;
 
   beforeAll(async () => {
     mongod = await MongoMemoryReplSet.create({
@@ -123,6 +133,10 @@ describe('AccountCleanupService (integration)', () => {
         { provide: ITEMS_REPOSITORY, useClass: ItemsRepository },
         { provide: VERSION_HISTORY_REPOSITORY, useClass: VersionHistoryRepository },
         { provide: OUTBOX_REPOSITORY, useClass: OutboxRepository },
+        // Real repository, not a mock: the point of this suite is that trainee
+        // clinical content is actually gone from the database afterwards, and a
+        // mock would only prove the step was called.
+        { provide: CHECKPOINT_REPOSITORY, useClass: CheckpointRepository },
         { provide: StorageService, useValue: mockStorageService },
       ],
     }).compile();
@@ -140,6 +154,7 @@ describe('AccountCleanupService (integration)', () => {
     itemModel = module.get(getModelToken(Item.name));
     versionHistoryModel = module.get(getModelToken(VersionHistory.name));
     outboxModel = module.get(getModelToken(OutboxEntry.name));
+    connection = module.get(getConnectionToken());
   });
 
   afterAll(async () => {
@@ -162,8 +177,21 @@ describe('AccountCleanupService (integration)', () => {
       itemModel.deleteMany({}),
       versionHistoryModel.deleteMany({}),
       outboxModel.deleteMany({}),
+      connection.db!.collection(CHECKPOINT_COLLECTION).deleteMany({}),
+      connection.db!.collection(CHECKPOINT_WRITES_COLLECTION).deleteMany({}),
     ]);
   });
+
+  /** Rows shaped like MongoDBSaver's, minus the serialised binary payloads. */
+  async function countCheckpointDocs(threadId: string) {
+    const [checkpoints, writes] = await Promise.all([
+      connection.db!.collection(CHECKPOINT_COLLECTION).countDocuments({ thread_id: threadId }),
+      connection
+        .db!.collection(CHECKPOINT_WRITES_COLLECTION)
+        .countDocuments({ thread_id: threadId }),
+    ]);
+    return { checkpoints, writes };
+  }
 
   // ── Seed helpers ──
 
@@ -285,7 +313,19 @@ describe('AccountCleanupService (integration)', () => {
       status: OutboxStatus.PENDING,
     });
 
-    return { convId, artefactOid };
+    // Checkpoint rows for the run above. These carry no userId and no
+    // conversationId — thread_id is the only handle — which is exactly why the
+    // cascade has to resolve them through the run record.
+    const threadId = `thread_${userId}`;
+    await connection.db!.collection(CHECKPOINT_COLLECTION).insertMany([
+      { thread_id: threadId, checkpoint_ns: '', checkpoint_id: 'ckpt-1' },
+      { thread_id: threadId, checkpoint_ns: '', checkpoint_id: 'ckpt-2' },
+    ]);
+    await connection.db!.collection(CHECKPOINT_WRITES_COLLECTION).insertMany([
+      { thread_id: threadId, checkpoint_ns: '', checkpoint_id: 'ckpt-1', task_id: 't1', idx: 0 },
+    ]);
+
+    return { convId, artefactOid, threadId };
   }
 
   // ── Tests ──
@@ -360,7 +400,17 @@ describe('AccountCleanupService (integration)', () => {
       conversationId: convA!._id,
     }).lean();
     expect(runA!.status).toBe(AnalysisRunStatus.DELETED);
-    expect(runA!.langGraphThreadId).toBe('[deleted]');
+    // Preserved on purpose. It is an internal id, not personal data, and it is
+    // the only handle to the checkpoint rows asserted below — clearing it left
+    // that content both retained and unfindable.
+    expect(runA!.langGraphThreadId).toBe(`thread_${userAId}`);
+
+    // The checkpointer's own storage — full transcript and drafted clinical
+    // entry, serialised at every superstep. Hard-deleted, not tombstoned.
+    expect(await countCheckpointDocs(`thread_${userAId}`)).toEqual({
+      checkpoints: 0,
+      writes: 0,
+    });
 
     const outboxA = await outboxModel.findOne({
       'payload.userId': userAId.toString(),
@@ -414,6 +464,12 @@ describe('AccountCleanupService (integration)', () => {
     expect(runB!.status).toBe(AnalysisRunStatus.COMPLETED);
     expect(runB!.langGraphThreadId).toBe(`thread_${userBId}`);
 
+    // The purge is thread-scoped, so another user's checkpoints must be intact.
+    expect(await countCheckpointDocs(`thread_${userBId}`)).toEqual({
+      checkpoints: 2,
+      writes: 1,
+    });
+
     const outboxB = await outboxModel.findOne({
       'payload.userId': userBId.toString(),
     }).lean();
@@ -442,6 +498,12 @@ describe('AccountCleanupService (integration)', () => {
 
     const media = await mediaModel.findOne({ userId: userAId }).lean();
     expect(media!.status).toBe(MediaStatus.ATTACHED);
+
+    // The safety gate runs before the steps array, so nothing was purged.
+    expect(await countCheckpointDocs(`thread_${userAId}`)).toEqual({
+      checkpoints: 2,
+      writes: 1,
+    });
   });
 
   it('should be idempotent — second run is a no-op', async () => {

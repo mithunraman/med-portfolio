@@ -142,21 +142,21 @@ function createHandler(overrides: {
 // ── Tests ──
 
 describe('AnalysisResumeHandler', () => {
-  describe('early exit for terminal runs', () => {
-    it('should return early without throwing when run is FAILED', async () => {
-      const findRunById = jest.fn().mockResolvedValue(makeRun(AnalysisRunStatus.FAILED));
-      const transitionStatus = jest.fn();
-      const resumeGraph = jest.fn();
-
-      const { handler } = createHandler({ findRunById, transitionStatus, resumeGraph });
-
-      await expect(handler.handle(makePayload())).resolves.toBeUndefined();
-      expect(transitionStatus).not.toHaveBeenCalled();
-      expect(resumeGraph).not.toHaveBeenCalled();
-    });
-
-    it('should return early without throwing when run is COMPLETED', async () => {
-      const findRunById = jest.fn().mockResolvedValue(makeRun(AnalysisRunStatus.COMPLETED));
+  describe('early exit when the run is not AWAITING_INPUT', () => {
+    // Mirror of the start handler's table, keyed to this handler's own starting
+    // status. RUNNING is the one that happens without any sweeper involvement:
+    // a graph run outlasting the outbox's 10-minute lock gets its job claimed a
+    // second time, and the old FAILED/COMPLETED guard let that through into an
+    // optimistic-lock throw.
+    it.each([
+      ['FAILED', AnalysisRunStatus.FAILED],
+      ['COMPLETED', AnalysisRunStatus.COMPLETED],
+      ['EXPIRED', AnalysisRunStatus.EXPIRED],
+      ['DELETED', AnalysisRunStatus.DELETED],
+      ['RUNNING', AnalysisRunStatus.RUNNING],
+      ['PENDING', AnalysisRunStatus.PENDING],
+    ])('should return early without throwing when run is %s', async (_label, status) => {
+      const findRunById = jest.fn().mockResolvedValue(makeRun(status));
       const transitionStatus = jest.fn();
       const resumeGraph = jest.fn();
 

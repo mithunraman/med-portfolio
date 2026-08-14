@@ -1,4 +1,8 @@
-import { AnalysisRunStatus } from '@acme/shared';
+import {
+  AnalysisRunStatus,
+  EXECUTING_RUN_STATUSES,
+  NON_TERMINAL_RUN_STATUSES,
+} from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
@@ -11,22 +15,34 @@ import {
 } from './analysis-runs.repository.interface';
 import { AnalysisRun, AnalysisRunDocument } from './schemas/analysis-run.schema';
 
-const TERMINAL_STATUSES = [AnalysisRunStatus.COMPLETED, AnalysisRunStatus.FAILED];
+// Runs still holding their conversation's single active slot. Sourced from the
+// shared set — NOT a local list — so it cannot go stale when a status is added.
+// A local `TERMINAL_STATUSES = [COMPLETED, FAILED]` used to live here and was
+// missed when EXPIRED was introduced, which made an expired run read as active
+// and 409 every attempt to start a new one.
+const ACTIVE_STATUSES = [...NON_TERMINAL_RUN_STATUSES];
 
-// Runs a worker is processing or about to process. AWAITING_INPUT is excluded
-// deliberately: it is parked at an interrupt waiting on the user, with no worker
-// attached, so it is safe to tombstone underneath.
-const EXECUTING_STATUSES = [AnalysisRunStatus.PENDING, AnalysisRunStatus.RUNNING];
+// Runs a worker is processing or about to process — a different concept from
+// ACTIVE_STATUSES above, which includes AWAITING_INPUT. Sourced from the shared
+// set for the same reason: the sweeper's six-hour staleness clock names the same
+// statuses, and a local copy here would let the two drift silently. See the
+// EXECUTING_RUN_STATUSES docblock for what each side breaks when they do.
+const EXECUTING_STATUSES = [...EXECUTING_RUN_STATUSES];
 
 /**
  * Single source of truth for the AnalysisRun tombstone payload. Used by every
  * deletion path on this repo. Adding a new sensitive field belongs here.
+ *
+ * `langGraphThreadId` is deliberately NOT cleared: it is the only handle to that
+ * run's rows in `checkpoints` / `checkpoint_writes`, which hold trainee clinical
+ * content. Keeping it is what lets the account-deletion cascade run this
+ * tombstone and the checkpoint purge concurrently under `Promise.allSettled`
+ * without one destroying the other's input. See `tombstone.spec.ts`.
  */
 export function analysisRunTombstoneUpdate() {
   return {
     $set: {
       status: AnalysisRunStatus.DELETED,
-      langGraphThreadId: '[deleted]',
       currentStep: null,
       currentQuestion: null,
       error: null,
@@ -139,7 +155,7 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
       const run = await this.analysisRunModel
         .findOne({
           conversationId,
-          status: { $nin: TERMINAL_STATUSES },
+          status: { $in: ACTIVE_STATUSES },
         })
         .sort({ createdAt: -1 })
         .lean()
@@ -231,7 +247,7 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
     try {
       const run = await this.analysisRunModel
         .findOneAndUpdate(
-          { conversationId, status: { $nin: TERMINAL_STATUSES } },
+          { conversationId, status: { $in: ACTIVE_STATUSES } },
           { $set: { currentStep: step } },
           { new: true, sort: { createdAt: -1 } }
         )
@@ -257,6 +273,122 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
     } catch (error) {
       this.logger.error('Failed to list analysis runs', error);
       return err({ code: 'DB_ERROR', message: 'Failed to list analysis runs' });
+    }
+  }
+
+  async findRunsForSweepBatch(
+    statuses: AnalysisRunStatus[],
+    cutoff: Date,
+    limit: number
+  ): Promise<Result<Array<Pick<AnalysisRun, '_id' | 'status' | 'langGraphThreadId'>>, DBError>> {
+    try {
+      const runs = await this.analysisRunModel
+        .find({
+          // `$in` on the leading index key produces one interval per value and
+          // stays tightly bounded — measured at 26 keys examined for 25 docs
+          // returned. There is no reason for a caller to issue one query per
+          // status.
+          status: { $in: statuses },
+          updatedAt: { $lt: cutoff },
+          // Must stay identical to the index's partialFilterExpression, or the
+          // planner cannot prove the query is a subset of it and silently falls
+          // back to a collection scan.
+          checkpointsPurgedAt: null,
+        })
+        .select('status langGraphThreadId')
+        .limit(limit)
+        .lean();
+      return ok(runs);
+    } catch (error) {
+      this.logger.error('Failed to find analysis runs for sweep', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to find analysis runs for sweep' });
+    }
+  }
+
+  async expireStaleRuns(
+    statuses: AnalysisRunStatus[],
+    cutoff: Date
+  ): Promise<Result<number, DBError>> {
+    try {
+      const result = await this.analysisRunModel.updateMany(
+        {
+          // This predicate is the optimistic lock. Mongo evaluates it per
+          // document at modification time, so a run that resumed before the
+          // write reached it no longer matches and survives untouched — the same
+          // guarantee the old per-run findOneAndUpdate(_id, status) gave.
+          status: { $in: statuses },
+          updatedAt: { $lt: cutoff },
+          // Semantically redundant (a non-terminal run is never purged) but
+          // required for index eligibility: the sweep index is partial on
+          // `checkpointsPurgedAt: null`, and without the clause the planner
+          // cannot prove the query is a subset of it and falls back to a
+          // collection scan — measured at 20k docs examined vs 3.3k.
+          checkpointsPurgedAt: null,
+        },
+        {
+          $set: {
+            status: AnalysisRunStatus.EXPIRED,
+            // Cleared because they only describe a live run. Dropping
+            // currentQuestion is also what makes the client stop rendering the
+            // stale question as answerable.
+            currentStep: null,
+            currentQuestion: null,
+          },
+        }
+        // NOTE: `timestamps` is deliberately left on. Bumping `updatedAt` here
+        // is load-bearing — the purge grace period is measured from it, so an
+        // expired run becomes collectable a grace window after EXPIRY, not after
+        // whenever the trainee last touched it. Passing `{ timestamps: false }`
+        // would silently make every long-abandoned run purgeable immediately.
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to expire stale analysis runs', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to expire stale analysis runs' });
+    }
+  }
+
+  async markCheckpointsPurged(
+    runIds: Types.ObjectId[],
+    now: Date
+  ): Promise<Result<number, DBError>> {
+    if (runIds.length === 0) return ok(0);
+    try {
+      const result = await this.analysisRunModel.updateMany(
+        { _id: { $in: runIds } },
+        { $set: { checkpointsPurgedAt: now } }
+      );
+      return ok(result.modifiedCount);
+    } catch (error) {
+      this.logger.error('Failed to mark checkpoints purged', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to mark checkpoints purged' });
+    }
+  }
+
+  async findThreadIdsByConversationIds(
+    conversationIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<string[], DBError>> {
+    if (conversationIds.length === 0) return ok([]);
+    try {
+      const runs = await this.analysisRunModel
+        .find({ conversationId: { $in: conversationIds } })
+        .select('langGraphThreadId')
+        .session(session ?? null)
+        .lean();
+      // Unfiltered on purpose. `string[]` — not `(string | null)[]` — is the
+      // guard: if `langGraphThreadId` ever becomes nullable, this line fails to
+      // compile. A `.filter((id): id is string => ...)` here would keep
+      // compiling and silently shrink the set instead, and the set is what
+      // account deletion purges — a dropped id means checkpoint data (full graph
+      // state, trainee clinical content) surviving an erasure request.
+      return ok(runs.map((r) => r.langGraphThreadId));
+    } catch (error) {
+      this.logger.error('Failed to resolve thread ids by conversation ids', error);
+      return err({
+        code: 'DB_ERROR',
+        message: 'Failed to resolve thread ids by conversation ids',
+      });
     }
   }
 

@@ -160,21 +160,25 @@ function createHandler(overrides: {
 // ── Tests ──
 
 describe('AnalysisStartHandler', () => {
-  describe('early exit for terminal runs', () => {
-    it('should return early without throwing when run is FAILED', async () => {
-      const findRunById = jest.fn().mockResolvedValue(makeRun(AnalysisRunStatus.FAILED));
-      const transitionStatus = jest.fn();
-      const startGraph = jest.fn();
-
-      const { handler } = createHandler({ findRunById, transitionStatus, startGraph });
-
-      await expect(handler.handle(makePayload())).resolves.toBeUndefined();
-      expect(transitionStatus).not.toHaveBeenCalled();
-      expect(startGraph).not.toHaveBeenCalled();
-    });
-
-    it('should return early without throwing when run is COMPLETED', async () => {
-      const findRunById = jest.fn().mockResolvedValue(makeRun(AnalysisRunStatus.COMPLETED));
+  describe('early exit when the run is not PENDING', () => {
+    // Every status but PENDING must skip, because PENDING is the only one the
+    // handler's own transition can start from. Anything that falls through
+    // instead throws an optimistic-lock error, which the consumer retries to
+    // exhaustion and dead-letters — an incident-shaped record of a no-op.
+    //
+    // EXPIRED: the sweeper reaped a wedged run whose outbox entry was still
+    // live. RUNNING: this job was claimed twice, which happens whenever a graph
+    // run outlasts the outbox's 10-minute lock. Neither was covered while the
+    // guard enumerated FAILED/COMPLETED.
+    it.each([
+      ['FAILED', AnalysisRunStatus.FAILED],
+      ['COMPLETED', AnalysisRunStatus.COMPLETED],
+      ['EXPIRED', AnalysisRunStatus.EXPIRED],
+      ['DELETED', AnalysisRunStatus.DELETED],
+      ['RUNNING', AnalysisRunStatus.RUNNING],
+      ['AWAITING_INPUT', AnalysisRunStatus.AWAITING_INPUT],
+    ])('should return early without throwing when run is %s', async (_label, status) => {
+      const findRunById = jest.fn().mockResolvedValue(makeRun(status));
       const transitionStatus = jest.fn();
       const startGraph = jest.fn();
 

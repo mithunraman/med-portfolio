@@ -1,5 +1,6 @@
 import type { Message } from '@acme/shared';
 import { useMemo } from 'react';
+import type { StatusVariant } from '../../../theme/statusColors';
 import type { FlatListItem } from '../types';
 
 function toDateKey(dateStr: string): string {
@@ -9,17 +10,26 @@ function toDateKey(dateStr: string): string {
 
 interface Options {
   isTyping?: boolean;
-  noticeText?: string;
+  /**
+   * Notice pinned below the newest message — an explanation of something that
+   * has just become true about the conversation (e.g. its analysis expired), so
+   * it sits immediately after the message it refers to.
+   */
+  trailingNotice?: { text: string; variant: StatusVariant };
 }
 
 export function useMessageGroups(messages: Message[], options: Options = {}): FlatListItem[] {
-  const { isTyping, noticeText } = options;
+  const { isTyping, trailingNotice } = options;
 
   return useMemo(() => {
+    const trailing: FlatListItem | null = trailingNotice
+      ? { type: 'notice', text: trailingNotice.text, variant: trailingNotice.variant }
+      : null;
+
     if (messages.length === 0) {
       const items: FlatListItem[] = [];
       if (isTyping) items.push({ type: 'typingIndicator' });
-      if (noticeText) items.push({ type: 'notice', text: noticeText });
+      if (trailing) items.push(trailing);
       return items;
     }
 
@@ -59,9 +69,10 @@ export function useMessageGroups(messages: Message[], options: Options = {}): Fl
       }
     }
 
-    // Notice goes at the very end - rendered at the top of the screen (oldest position)
-    if (noticeText) {
-      items.push({ type: 'notice', text: noticeText });
+    // The list is inverted, so index 0 renders at the BOTTOM. Unshifted before
+    // the typing indicator so the indicator stays at index 0 (the very bottom).
+    if (trailing) {
+      items.unshift(trailing);
     }
 
     // Typing indicator goes at index 0 - rendered at the bottom (newest position)
@@ -70,5 +81,5 @@ export function useMessageGroups(messages: Message[], options: Options = {}): Fl
     }
 
     return items;
-  }, [messages, isTyping, noticeText]);
+  }, [messages, isTyping, trailingNotice]);
 }

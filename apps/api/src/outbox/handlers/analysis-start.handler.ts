@@ -1,4 +1,4 @@
-import { AnalysisRunStatus } from '@acme/shared';
+import { AnalysisRunStatus, TERMINAL_RUN_STATUSES } from '@acme/shared';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { AnalysisRunsService } from '../../analysis-runs/analysis-runs.service';
@@ -42,14 +42,25 @@ export class AnalysisStartHandler implements OutboxHandler {
     const runId = new Types.ObjectId(data.analysisRunId);
     const threadId = data.langGraphThreadId;
 
-    // Early exit: if run is already terminal, skip — prevents wasted retries
+    // Skip unless the run is in the one status the transition below can start
+    // from. Stated as the expected status rather than a list of finished ones:
+    // the guard's job is "can that transition succeed", and anything else falls
+    // through to an optimistic-lock throw that the consumer retries to
+    // exhaustion and dead-letters — an incident-shaped record of a job that had
+    // nothing to do. Enumerating terminal statuses covers less than it looks:
+    // it misses RUNNING, which a job re-claimed after its 10-minute lock expires
+    // (a graph run outlasting DEFAULT_LOCK_DURATION_MS) sees routinely.
     const run = await this.analysisRunsService.findRunById(runId);
     if (!run) return;
-    if (
-      run.status === AnalysisRunStatus.FAILED ||
-      run.status === AnalysisRunStatus.COMPLETED
-    ) {
-      this.logger.log(`Run ${data.analysisRunId} already ${run.status}, skipping`);
+    if (run.status !== AnalysisRunStatus.PENDING) {
+      // Terminal is routine — a run finished, a queued sibling arrived late.
+      // Anything else means this job was claimed twice, which is worth seeing.
+      const message = `Run ${data.analysisRunId} is ${run.status}, not PENDING — skipping start`;
+      if (TERMINAL_RUN_STATUSES.has(run.status)) {
+        this.logger.log(message);
+      } else {
+        this.logger.warn(`${message} (concurrent claim?)`);
+      }
       return;
     }
 

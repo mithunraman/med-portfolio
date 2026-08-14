@@ -4,6 +4,7 @@ import { AnalysisRunsModule } from '../analysis-runs';
 import { ArtefactsModule } from '../artefacts/artefacts.module';
 import { AuthModule } from '../auth/auth.module';
 import { User, UserSchema } from '../auth/schemas/user.schema';
+import { CheckpointsModule } from '../checkpoints';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { ItemsModule } from '../items/items.module';
 import { MediaModule } from '../media';
@@ -27,6 +28,7 @@ import { AccountCleanupService } from './account-cleanup.service';
     ItemsModule,
     VersionHistoryModule,
     OutboxModule,
+    CheckpointsModule,
   ],
   controllers: [AccountCleanupController],
   providers: [AccountCleanupService],

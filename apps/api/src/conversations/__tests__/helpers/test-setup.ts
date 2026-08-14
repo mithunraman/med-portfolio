@@ -7,6 +7,8 @@ import { Connection, Model } from 'mongoose';
 import { AnalysisRunListener } from '../../../analysis-runs/analysis-run.listener';
 import { AnalysisRunsRepository } from '../../../analysis-runs/analysis-runs.repository';
 import { ANALYSIS_RUNS_REPOSITORY } from '../../../analysis-runs/analysis-runs.repository.interface';
+import { CheckpointRepository } from '../../../checkpoints/checkpoint.repository';
+import { CHECKPOINT_REPOSITORY } from '../../../checkpoints/checkpoint.repository.interface';
 import { AnalysisRunsService } from '../../../analysis-runs/analysis-runs.service';
 import {
   AnalysisRun,
@@ -131,6 +133,13 @@ export async function createTestHarness(llmMock: SequentialLLMMock): Promise<Tes
       {
         provide: ANALYSIS_RUNS_REPOSITORY,
         useClass: AnalysisRunsRepository,
+      },
+      // Real, not a mock: the delete cascade hard-deletes checkpoint rows, and a
+      // mock here would let a broken purge pass. It only needs the Mongoose
+      // connection this harness already has.
+      {
+        provide: CHECKPOINT_REPOSITORY,
+        useClass: CheckpointRepository,
       },
 
       // Outbox — real service + repository + consumer + handlers

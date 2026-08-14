@@ -1,4 +1,4 @@
-import { AnalysisRunStatus } from '@acme/shared';
+import { AnalysisRunStatus, TERMINAL_RUN_STATUSES } from '@acme/shared';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { AnalysisRunsService } from '../../analysis-runs/analysis-runs.service';
@@ -41,14 +41,18 @@ export class AnalysisResumeHandler implements OutboxHandler {
     const runId = new Types.ObjectId(data.analysisRunId);
     const threadId = data.langGraphThreadId;
 
-    // Early exit: if run is already terminal, skip — prevents wasted retries
+    // Same guard as AnalysisStartHandler, keyed to this handler's own starting
+    // status — see the comment there for why it is stated as the expected
+    // status rather than a list of finished ones.
     const run = await this.analysisRunsService.findRunById(runId);
     if (!run) return;
-    if (
-      run.status === AnalysisRunStatus.FAILED ||
-      run.status === AnalysisRunStatus.COMPLETED
-    ) {
-      this.logger.log(`Run ${data.analysisRunId} already ${run.status}, skipping`);
+    if (run.status !== AnalysisRunStatus.AWAITING_INPUT) {
+      const message = `Run ${data.analysisRunId} is ${run.status}, not AWAITING_INPUT — skipping resume`;
+      if (TERMINAL_RUN_STATUSES.has(run.status)) {
+        this.logger.log(message);
+      } else {
+        this.logger.warn(`${message} (concurrent claim?)`);
+      }
       return;
     }
 

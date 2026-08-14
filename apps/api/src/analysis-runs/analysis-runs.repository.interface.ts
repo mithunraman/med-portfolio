@@ -122,6 +122,60 @@ export interface IAnalysisRunsRepository {
   ): Promise<Result<AnalysisRun[], DBError>>;
 
   /**
+   * Terminal runs last touched before `cutoff` whose checkpoint data has not yet
+   * been purged. Drives the sweeper's purge phase.
+   *
+   * Projects only what the purge acts on — `langGraphThreadId` is the handle to
+   * the checkpoint rows, `status` is carried for logging. The documents
+   * themselves hold graph traces there is no reason to pull into memory.
+   */
+  findRunsForSweepBatch(
+    statuses: AnalysisRunStatus[],
+    cutoff: Date,
+    limit: number
+  ): Promise<Result<Array<Pick<AnalysisRun, '_id' | 'status' | 'langGraphThreadId'>>, DBError>>;
+
+  /**
+   * Bulk-transition every run in `statuses` last touched before `cutoff` to
+   * EXPIRED, clearing the fields that only make sense for a live run.
+   *
+   * ## The status predicate IS the optimistic lock
+   *
+   * MongoDB evaluates the filter per document at modification time, so a run
+   * that resumed before this write reached it no longer matches and is left
+   * alone. That is the same guarantee the per-run `findOneAndUpdate(_id, status)`
+   * gave, without the query→write gap or one round trip per run.
+   *
+   * Returns the number of runs actually transitioned.
+   */
+  expireStaleRuns(
+    statuses: AnalysisRunStatus[],
+    cutoff: Date
+  ): Promise<Result<number, DBError>>;
+
+  /**
+   * Stamp `checkpointsPurgedAt`. Idempotent; must only be called AFTER the
+   * checkpoint data is actually gone.
+   */
+  markCheckpointsPurged(
+    runIds: Types.ObjectId[],
+    now: Date
+  ): Promise<Result<number, DBError>>;
+
+  /**
+   * Resolve every LangGraph thread id belonging to the given conversations,
+   * regardless of run status.
+   *
+   * Deliberately unfiltered by status: the account-deletion cascade must reach
+   * checkpoint data for in-flight and already-tombstoned runs alike. Callers are
+   * responsible for having established ownership of the conversations.
+   */
+  findThreadIdsByConversationIds(
+    conversationIds: Types.ObjectId[],
+    session?: ClientSession
+  ): Promise<Result<string[], DBError>>;
+
+  /**
    * Bulk tombstone analysis runs for the given conversations. Idempotent.
    */
   markDeletedByConversationIds(

@@ -21,6 +21,7 @@ import { NoticeItem } from './items/NoticeItem';
 import { TypingIndicator } from './items/TypingIndicator';
 import { ScrollToBottomFAB } from './ScrollToBottomFAB';
 import { useMessageGroups } from './hooks/useMessageGroups';
+import type { StatusVariant } from '../../theme/statusColors';
 import type { ContextMenuAction, FlatListItem } from './types';
 
 const SCROLL_TO_BOTTOM_THRESHOLD = 150;
@@ -29,7 +30,12 @@ export interface MessageListProps {
   messages: Message[];
   currentUserId: string;
   wallpaperSource?: ImageSourcePropType;
-  noticeText?: string;
+  /**
+   * Server-owned explanation pinned below the newest message — currently why a
+   * conversation dropped back to composing (analysis expired or failed). Render
+   * the text as given; the variant is the only thing to branch on.
+   */
+  trailingNotice?: { text: string; variant: StatusVariant };
   isTyping?: boolean;
   unreadCount?: number;
   isLoading?: boolean;
@@ -56,6 +62,9 @@ function keyExtractor(item: FlatListItem): string {
     case 'message':        return item.data.id;
     case 'dateSeparator':  return `sep-${item.date}`;
     case 'typingIndicator':return 'typing';
+    // Unique because there is exactly one notice slot. If a second is ever
+    // added, this must gain a discriminator — duplicate keys silently drop a
+    // row from a FlatList rather than failing.
     case 'notice':         return 'notice';
   }
 }
@@ -64,7 +73,7 @@ export const MessageList = memo(function MessageList({
   messages,
   currentUserId,
   wallpaperSource,
-  noticeText,
+  trailingNotice,
   isTyping,
   unreadCount = 0,
   isLoading = false,
@@ -88,7 +97,7 @@ export const MessageList = memo(function MessageList({
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [menuAnchorY, setMenuAnchorY] = useState(0);
 
-  const items = useMessageGroups(messages, { isTyping, noticeText });
+  const items = useMessageGroups(messages, { isTyping, trailingNotice });
 
   // The latest assistant message marks the cut-off: messages sent at/before it
   // have been consumed by an analysis turn and are locked from edit/delete. We
@@ -163,7 +172,7 @@ export const MessageList = memo(function MessageList({
         case 'typingIndicator':
           return <TypingIndicator />;
         case 'notice':
-          return <NoticeItem text={item.text} />;
+          return <NoticeItem text={item.text} variant={item.variant} />;
       }
     },
     [handleLongPress, activeQuestionMessageId, onAnswerQuestion, onRetry]

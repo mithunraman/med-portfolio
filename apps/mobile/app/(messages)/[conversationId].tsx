@@ -749,6 +749,23 @@ export default function ChatScreen() {
 
   const activeQuestionMessageId = context?.activeQuestion?.messageId;
 
+  // Server-owned explanation for a conversation that fell back to composing
+  // because its run expired or failed. Rendered below the AI's last question,
+  // which by then is inert (the server drops activeQuestion the moment the run
+  // leaves AWAITING_INPUT) and would otherwise look broken rather than finished.
+  //
+  // Expiry reads as time passing, so it takes the neutral `default` pill; a
+  // genuine failure does not. Branch on `code` only — the text is rendered as
+  // given so wording can change server-side without a release.
+  const trailingNotice = useMemo(() => {
+    if (!context?.notice) return undefined;
+    return {
+      text: context.notice.text,
+      variant:
+        context.notice.code === 'ANALYSIS_EXPIRED' ? ('default' as const) : ('warning' as const),
+    };
+  }, [context?.notice]);
+
   const isLoading = loadingMessages && mergedMessages.length === 0 && isNew !== 'true';
   const composerBg = isDark ? colors.surface : colors.background;
 
@@ -768,6 +785,7 @@ export default function ChatScreen() {
           <MessageList
             messages={mergedMessages}
             currentUserId={user?.id ?? ''}
+            trailingNotice={trailingNotice}
             isLoading={isLoading}
             showIntro
             activeQuestionMessageId={activeQuestionMessageId}

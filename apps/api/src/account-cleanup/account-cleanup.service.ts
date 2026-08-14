@@ -13,6 +13,10 @@ import {
 } from '../artefacts/artefacts.repository.interface';
 import { User, UserDocument } from '../auth/schemas/user.schema';
 import {
+  CHECKPOINT_REPOSITORY,
+  ICheckpointRepository,
+} from '../checkpoints/checkpoint.repository.interface';
+import {
   ISessionRepository,
   SESSION_REPOSITORY,
 } from '../auth/sessions.repository.interface';
@@ -54,7 +58,8 @@ export class AccountCleanupService {
     @Inject(VERSION_HISTORY_REPOSITORY)
     private readonly versionHistoryRepo: IVersionHistoryRepository,
     @Inject(OUTBOX_REPOSITORY) private readonly outboxRepo: IOutboxRepository,
-    @Inject(SESSION_REPOSITORY) private readonly sessionRepo: ISessionRepository
+    @Inject(SESSION_REPOSITORY) private readonly sessionRepo: ISessionRepository,
+    @Inject(CHECKPOINT_REPOSITORY) private readonly checkpointRepo: ICheckpointRepository
   ) {}
 
   @Cron('0 0 5 * * *') // Daily at 5:00 AM
@@ -128,11 +133,17 @@ export class AccountCleanupService {
     // STEP 1 — lock the account.
     await this.lockAccountForDeletion(userId);
 
-    // Resolver — used by analysis-runs and outbox steps. Runs AFTER lock so
-    // the account is already PII-wiped on this attempt. Throws on failure
+    // Resolver — used by analysis-runs, outbox and checkpoint steps. Runs AFTER
+    // lock so the account is already PII-wiped on this attempt. Throws on failure
     // (rather than returning [], which would silently no-op the analysis-runs
     // step — analysis_runs has no userId, conversationIds is the only handle).
     const conversationIds = await this.resolveConversationIds(userId);
+
+    // Resolved BEFORE the parallel block: the checkpoint collections have no
+    // userId and no conversationId, so `langGraphThreadId` on the run records is
+    // the only route to them. Resolving up front keeps this step independent of
+    // the analysis-runs tombstone that runs alongside it.
+    const threadIds = await this.resolveThreadIds(conversationIds);
 
     // STEP 2 — purge data concurrently. Independent bulk writes, each idempotent.
     // Trivial steps inline directly; the two named methods below carry real
@@ -140,6 +151,12 @@ export class AccountCleanupService {
     const steps: Array<{ name: string; fn: () => Promise<unknown> }> = [
       { name: 'outbox',         fn: () => this.purgeOutboxEntriesForAccountDeletion(userId, conversationIds) },
       { name: 'analysisRuns',   fn: () => this.purgeAnalysisRunsForAccountDeletion(conversationIds) },
+      // HARD delete, like versionHistory below. LangGraph checkpoints embed the
+      // full transcript and the drafted clinical entry in every superstep; a
+      // tombstone would leave that content in place. Retention has no route here
+      // either — the sweeper only reaps terminal runs, and Grafana-style expiry
+      // does not apply to a Mongo collection.
+      { name: 'checkpoints',    fn: async () => unwrapVoid(await this.checkpointRepo.purgeThreads(threadIds)) },
       { name: 'media',          fn: async () => unwrapVoid(await this.mediaRepo.markPendingDeleteByUser(userId.toString())) },
       { name: 'conversations',  fn: async () => unwrapVoid(await this.conversationsRepo.markDeletedByUserId(userId)) },
       { name: 'artefacts',      fn: async () => unwrapVoid(await this.artefactsRepo.markDeletedByUserId(userId)) },
@@ -216,6 +233,22 @@ export class AccountCleanupService {
       throw new Error(
         `failed to resolve conversation ids for user ${userId.toString()}: ${result.error.message}`
       );
+    }
+    return result.value;
+  }
+
+  /**
+   * Resolve the LangGraph thread ids whose checkpoint data belongs to this user.
+   *
+   * Throws on failure for the same reason `resolveConversationIds` does: an
+   * empty list silently no-ops the purge, and the failure mode is trainee
+   * clinical content surviving an erasure request. Better to leave the user in
+   * the retry set.
+   */
+  private async resolveThreadIds(conversationIds: Types.ObjectId[]): Promise<string[]> {
+    const result = await this.analysisRunsRepo.findThreadIdsByConversationIds(conversationIds);
+    if (isErr(result)) {
+      throw new Error(`failed to resolve thread ids: ${result.error.message}`);
     }
     return result.value;
   }

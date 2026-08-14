@@ -1,4 +1,4 @@
-import { AnalysisRunStatus } from '@acme/shared';
+import { AnalysisRunStatus, NON_TERMINAL_RUN_STATUSES } from '@acme/shared';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../../common/utils/nanoid.util';
@@ -87,6 +87,21 @@ export class AnalysisRun {
   @Prop({ type: [Object], default: null })
   refineTrace!: RefineTrace | null;
 
+  // Set once the sweeper has hard-deleted this run's LangGraph checkpoint data.
+  //
+  // Explicitly defaulted to null rather than left absent: the sweeper's partial
+  // index below selects unpurged rows, and MongoDB rejects `$exists: false` in a
+  // partialFilterExpression (it is a `$not` internally). Equality against null is
+  // supported, so the field has to be present to be matched that way.
+  //
+  // Not bookkeeping: the purge predicate lives here while the data lives in
+  // another collection, so without a marker every tick would re-issue deleteMany
+  // for every terminal run that ever existed, growing with lifetime volume
+  // instead of with work to do. It is also the audit record that checkpoint
+  // retention was actually enforced.
+  @Prop({ type: Date, default: null })
+  checkpointsPurgedAt!: Date | null;
+
   createdAt!: Date;
   updatedAt!: Date;
 }
@@ -106,14 +121,16 @@ AnalysisRunSchema.index({ conversationId: 1, runNumber: 1 }, { unique: true });
 
 // At most one active (non-terminal) run per conversation — prevents race condition
 // where concurrent requests both pass the application-level findActiveRun() check.
+//
+// The status list MUST stay identical to the one findActiveRun uses, or the guard
+// rejects starts this index would have permitted. Both now read the same shared
+// set rather than restating the members, so they cannot drift.
 AnalysisRunSchema.index(
   { conversationId: 1 },
   {
     unique: true,
     partialFilterExpression: {
-      status: {
-        $in: [AnalysisRunStatus.PENDING, AnalysisRunStatus.RUNNING, AnalysisRunStatus.AWAITING_INPUT],
-      },
+      status: { $in: [...NON_TERMINAL_RUN_STATUSES] },
     },
   },
 );
@@ -124,3 +141,21 @@ AnalysisRunSchema.index(
 // exact status. `$ne` itself can't use index bounds, so the second key
 // doesn't accelerate the cascade — it earns its keep on exact-status reads.
 AnalysisRunSchema.index({ artefactId: 1, status: 1 });
+
+// Checkpoint sweeper: both phases filter by status and an `updatedAt` cutoff.
+//
+// The partial filter is what makes the hourly tick free rather than merely
+// cheap: in steady state almost every run has been purged, so the index holds
+// only the work outstanding and shrinks back to near-empty after each sweep.
+// It also, incidentally, serves phase 1 — a non-terminal run is never purged, so
+// it is never marked, so it is always in this index.
+//
+// Equality against null, NOT `$exists: false`: MongoDB rejects the latter in a
+// partialFilterExpression because it desugars to `$not`. The index would simply
+// fail to build, leaving the sweeper on a collection scan with nothing failing
+// loudly. `checkpointsPurgedAt` therefore defaults to null so it is always
+// present to match.
+AnalysisRunSchema.index(
+  { status: 1, updatedAt: 1 },
+  { partialFilterExpression: { checkpointsPurgedAt: null } }
+);

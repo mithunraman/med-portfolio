@@ -2,8 +2,10 @@ import {
   AnalysisRunStatus,
   ConversationStatus,
   MessageRole,
+  RESTARTABLE_RUN_STATUSES,
   type ActionState,
   type ConversationContext,
+  type ConversationNotice,
   type ConversationPhase,
   type QuestionType,
 } from '@acme/shared';
@@ -26,6 +28,31 @@ const denied = (code: string, reason: string): ActionState => ({
   code,
   reason,
 });
+
+/**
+ * Server-owned copy for a conversation that has fallen back to 'composing'
+ * through a restartable terminal run. Lives here, not on the client, so wording
+ * can change without a mobile release — the same rule `thinkingLabel` follows.
+ *
+ * Both say the same operational thing ("start again"); they differ in whether
+ * anything went wrong, which is why the codes are distinct.
+ *
+ * The key set IS the "which statuses get a notice" rule — `buildNotice` reads it
+ * directly rather than re-checking RESTARTABLE_RUN_STATUSES. `Partial` is what
+ * makes a miss type as `undefined`; a bare `Record` would claim every lookup
+ * succeeds (`noUncheckedIndexedAccess` is off) and make the `?? null` there look
+ * unreachable while it is in fact load-bearing.
+ */
+const RESTART_NOTICES: Partial<Record<AnalysisRunStatus, ConversationNotice>> = {
+  [AnalysisRunStatus.EXPIRED]: {
+    code: 'ANALYSIS_EXPIRED',
+    text: 'This analysis paused for too long and has expired. Your messages are saved — start again to pick it back up.',
+  },
+  [AnalysisRunStatus.FAILED]: {
+    code: 'ANALYSIS_FAILED',
+    text: 'Something went wrong with this analysis. Your messages are saved — try again.',
+  },
+};
 
 @Injectable()
 export class ConversationContextService {
@@ -77,6 +104,7 @@ export class ConversationContextService {
           startAnalysis: denied('CONVERSATION_CLOSED', 'This conversation is closed.'),
           resumeAnalysis: denied('CONVERSATION_CLOSED', 'This conversation is closed.'),
         },
+        notice: null,
       };
     }
 
@@ -145,9 +173,36 @@ export class ConversationContextService {
       actions,
       activeQuestion,
       analysisRun,
+      notice: this.buildNotice(latestRun),
     };
   }
 
+  /**
+   * Explain a conversation that is back at 'composing' because its last run
+   * ended in a restartable terminal state. Null in every other case — a run that
+   * merely finished successfully has nothing to explain, and notifying on a
+   * non-event trains people to ignore the notices that matter.
+   */
+  private buildNotice(latestRun: AnalysisRun | null): ConversationNotice | null {
+    return latestRun ? (RESTART_NOTICES[latestRun.status] ?? null) : null;
+  }
+
+  /**
+   * Exhaustive over AnalysisRunStatus, with no `default` — deliberately.
+   *
+   * Returning 'composing' hands the trainee a composer, and `buildActions` then
+   * decides whether the start action behind it actually works by testing
+   * RESTARTABLE_RUN_STATUSES. A status that reaches 'composing' without being in
+   * that set produces an open composer whose start button is denied
+   * 'ANALYSIS_ALREADY_STARTED' — a dead end that looks operational, and the bug
+   * EXPIRED caused when it was first added.
+   *
+   * A `default` arm makes that the silent outcome for every status added later.
+   * Losing it means a new enum member fails the build here until someone decides
+   * which phase it belongs in, and — if 'composing' — whether it is restartable.
+   * That is why FAILED/EXPIRED are spelled out below despite returning what a
+   * catch-all would have: without them the check does not hold.
+   */
   private derivePhase(
     latestRun: AnalysisRun | null,
     hasPendingWork = false
@@ -163,9 +218,22 @@ export class ConversationContextService {
       case AnalysisRunStatus.COMPLETED:
         return 'completed';
       case AnalysisRunStatus.FAILED:
+      case AnalysisRunStatus.EXPIRED:
         return 'composing';
-      default:
+      // Tombstoned by account/conversation deletion. `findLatestRun` does not
+      // filter it out, so it is reachable in principle; in practice the
+      // conversation is gone by then and this never renders.
+      case AnalysisRunStatus.DELETED:
         return 'composing';
+      default: {
+        // Unreachable per the type system; kept because the database can still
+        // hold a value outside the enum. Falls back rather than throwing — this
+        // renders the conversation screen, and a 500 here is worse than a
+        // composer.
+        const unhandled: never = latestRun.status;
+        void unhandled;
+        return 'composing';
+      }
     }
   }
 
@@ -178,11 +246,15 @@ export class ConversationContextService {
   ) {
     switch (phase) {
       case 'composing': {
+        // A restartable run (failed / expired) must NOT deny the start action.
+        // Testing one enum value here instead of the set is what leaves an
+        // expired run in a phase that opens the composer while refusing to
+        // start — a dead end that looks operational.
         const startDeniedReason = hasProcessing
           ? 'MESSAGES_PROCESSING'
           : !hasComplete
             ? 'NO_MESSAGES'
-            : latestRun && latestRun.status !== AnalysisRunStatus.FAILED
+            : latestRun && !RESTARTABLE_RUN_STATUSES.has(latestRun.status)
               ? 'ANALYSIS_ALREADY_STARTED'
               : null;
         this.logger.debug(`[buildActions] composing startAnalysis: ${startDeniedReason ?? 'allowed'} (hasProcessing=${hasProcessing} hasComplete=${hasComplete} latestRunStatus=${latestRun?.status ?? 'none'})`);

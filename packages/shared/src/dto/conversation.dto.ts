@@ -257,6 +257,15 @@ export const ActionStateSchema = z.object({
 });
 export type ActionState = z.infer<typeof ActionStateSchema>;
 
+export const ConversationNoticeCodeSchema = z.enum(['ANALYSIS_EXPIRED', 'ANALYSIS_FAILED']);
+export type ConversationNoticeCode = z.infer<typeof ConversationNoticeCodeSchema>;
+
+export const ConversationNoticeSchema = z.object({
+  code: ConversationNoticeCodeSchema,
+  text: z.string(),
+});
+export type ConversationNotice = z.infer<typeof ConversationNoticeSchema>;
+
 export const ConversationContextSchema = z.object({
   artefactId: z.string(),
   // Lifecycle status of the parent artefact. The client uses this (with message
@@ -300,6 +309,15 @@ export const ConversationContextSchema = z.object({
       thinkingLabel: z.string().nullable().optional(),
     })
     .optional(),
+  // Explanation for a conversation that ended up back at 'composing' through a
+  // restartable terminal run (failed or expired), so the trainee is told why the
+  // AI's last question can no longer be answered.
+  //
+  // `text` is server-owned display copy — render it as given, never map or
+  // rebuild it client-side, for the same reason as `thinkingLabel`: copy changes
+  // must not require a mobile release. Branch on `code` alone, and only for
+  // presentation tone (expiry is neutral, failure is not).
+  notice: ConversationNoticeSchema.nullable(),
 });
 export type ConversationContext = z.infer<typeof ConversationContextSchema>;
 

@@ -1,7 +1,11 @@
 import { AnalysisRunStatus } from '@acme/shared';
-import { ConflictException, Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ClientSession, Types } from 'mongoose';
-import { unwrapVoid } from '../common/utils/result.util';
+import {
+  CHECKPOINT_REPOSITORY,
+  ICheckpointRepository,
+} from '../checkpoints/checkpoint.repository.interface';
+import { isErr, unwrapVoid } from '../common/utils/result.util';
 import {
   ANALYSIS_RUNS_REPOSITORY,
   IAnalysisRunsRepository,
@@ -13,7 +17,9 @@ import type { AnalysisRun } from './schemas/analysis-run.schema';
 export class AnalysisRunsService {
   constructor(
     @Inject(ANALYSIS_RUNS_REPOSITORY)
-    private readonly repository: IAnalysisRunsRepository
+    private readonly repository: IAnalysisRunsRepository,
+    @Inject(CHECKPOINT_REPOSITORY)
+    private readonly checkpointRepository: ICheckpointRepository
   ) {}
 
   /**
@@ -164,17 +170,55 @@ export class AnalysisRunsService {
   }
 
   /**
-   * Cascade entry point: tombstone analysis runs for the given conversations.
+   * Cascade entry point: tombstone analysis runs for the given conversations and
+   * hard-delete their LangGraph checkpoint data.
+   *
+   * ## Why the purge belongs here and not seven days later
+   *
+   * The sibling tombstones in this cascade scrub clinical content synchronously
+   * — `messageTombstoneUpdate` overwrites rawContent/redactedContent/content,
+   * `artefactTombstoneUpdate` wipes the composed document and every note, and
+   * the run tombstone nulls reflectTrace/refineTrace for exactly that reason.
+   * `checkpoints` holds a verbatim copy of the same transcript and drafted entry
+   * at every superstep, reachable through the `langGraphThreadId` the tombstone
+   * deliberately preserves. Leaving it to the sweeper's grace window would make
+   * all of that scrubbing cosmetic for a week.
+   *
+   * Thread ids are resolved BEFORE the tombstone runs only for clarity — the
+   * tombstone keeps `langGraphThreadId`, so either order resolves the same set.
+   *
+   * `checkpointsPurgedAt` is deliberately left null: the sweeper then revisits
+   * these runs once at day 7, deletes nothing, and marks them. That costs a
+   * single batch and buys a standing check that this path actually worked.
    */
   async deleteByConversationIds(
     conversationIds: Types.ObjectId[],
     session?: ClientSession
   ): Promise<void> {
+    const threadIdsResult = await this.repository.findThreadIdsByConversationIds(
+      conversationIds,
+      session
+    );
+    // Throws rather than falling back to []: an empty list here would silently
+    // no-op the purge below and leave the content behind with nothing to show
+    // for it. Same contract as the account-cleanup resolver.
+    if (isErr(threadIdsResult)) {
+      throw new InternalServerErrorException(threadIdsResult.error.message);
+    }
     unwrapVoid(await this.repository.markDeletedByConversationIds(conversationIds, session));
+    // Session forwarded: this is a hard delete, and an aborted cascade must not
+    // leave the graph state destroyed for an entry that still exists.
+    unwrapVoid(await this.checkpointRepository.purgeThreads(threadIdsResult.value, session));
   }
 
   /**
    * Cascade entry point: tombstone analysis runs linked to the given artefacts.
+   *
+   * No checkpoint purge here, deliberately. Every run carries a `conversationId`
+   * and `artefacts.deleteByIds` cascades through `conversationsService` first, so
+   * `deleteByConversationIds` above has already purged everything this could
+   * reach — this call exists to catch runs linked by `artefactId` alone. If one
+   * ever did escape both, the sweeper collects it at the grace window.
    */
   async deleteByArtefactIds(
     artefactIds: Types.ObjectId[],

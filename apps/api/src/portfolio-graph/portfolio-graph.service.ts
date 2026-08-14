@@ -16,6 +16,7 @@ import {
   ARTEFACTS_REPOSITORY,
   IArtefactsRepository,
 } from '../artefacts/artefacts.repository.interface';
+import { CHECKPOINT_COLLECTION, CHECKPOINT_WRITES_COLLECTION } from '../checkpoints';
 import {
   type CreateMessageData,
   CONVERSATIONS_REPOSITORY,
@@ -123,17 +124,26 @@ export class PortfolioGraphService implements OnModuleInit {
     const client = this.connection.getClient() as any;
     const db = this.connection.db;
     if (!db) throw new Error('MongoDB not connected - cannot initialize checkpointer');
-    this.checkpointer = new MongoDBSaver({ client, dbName: db.databaseName });
+    // Collection names are passed explicitly (rather than relying on the saver's
+    // defaults) so the CheckpointRepository that purges them and the saver that
+    // writes them read the same constants and cannot drift apart.
+    this.checkpointer = new MongoDBSaver({
+      client,
+      dbName: db.databaseName,
+      checkpointCollectionName: CHECKPOINT_COLLECTION,
+      checkpointWritesCollectionName: CHECKPOINT_WRITES_COLLECTION,
+    });
 
     // The JS MongoDBSaver doesn't create indexes (unlike the Python version).
     // Add compound indexes matching its query patterns: getTuple() filters by
-    // (thread_id, checkpoint_ns) and sorts by checkpoint_id desc.
+    // (thread_id, checkpoint_ns) and sorts by checkpoint_id desc. Both lead with
+    // thread_id, which is also what the retention purge filters on.
     await Promise.all([
       db
-        .collection('checkpoints')
+        .collection(CHECKPOINT_COLLECTION)
         .createIndex({ thread_id: 1, checkpoint_ns: 1, checkpoint_id: -1 }, { background: true }),
       db
-        .collection('checkpoint_writes')
+        .collection(CHECKPOINT_WRITES_COLLECTION)
         .createIndex({ thread_id: 1, checkpoint_ns: 1, checkpoint_id: 1 }, { background: true }),
     ]);
 

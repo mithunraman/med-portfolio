@@ -22,6 +22,7 @@ export { FullScreenSectionEditor } from './FullScreenTextEditor';
 export { HomeSkeleton } from './HomeSkeleton';
 export { InviteCard } from './InviteCard';
 export { LastUpdatedLabel } from './LastUpdatedLabel';
+export { LinkedEntriesList, type LinkedEntriesStatus } from './LinkedEntriesList';
 export { LoadingProvider, useLoading } from './LoadingHUD';
 export { MultiSelect, type MultiSelectOption } from './MultiSelect';
 export { NotesSection, noteKey, type LocalNote } from './NotesSection';

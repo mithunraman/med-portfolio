@@ -8,6 +8,8 @@ import {
 import { Types } from 'mongoose';
 import { err, ok } from '../../common/utils/result.util';
 import { GUEST_ARTEFACT_LIMIT } from '../../config/quota.config';
+import { PDP_GOAL_SORT_SENTINEL } from '../../pdp-goals/pdp-goal.constants';
+import type { PdpGoal } from '../../pdp-goals/schemas/pdp-goal.schema';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import { ArtefactsService } from '../artefacts.service';
 
@@ -48,18 +50,39 @@ function makeConversationDoc() {
   };
 }
 
-function makePdpGoalDoc(overrides: Record<string, unknown> = {}) {
+// Typed as PdpGoal on purpose: this used to set a scalar `artefactId` that the
+// schema had already replaced with `links`, and an untyped literal let it drift
+// unnoticed. A schema change is now a compile error here.
+function makePdpGoalDoc(overrides: Partial<PdpGoal> = {}): PdpGoal {
   return {
     _id: oid(),
     xid: 'goal_1',
     goal: 'Improve clinical skills',
     userId,
-    artefactId: artefactOid,
-    status: PdpGoalStatus.NOT_STARTED,
+    links: [{ artefactId: artefactOid, linkedAt: new Date(), linkedBy: 'analysis' }],
+    status: PdpGoalStatus.PROPOSED,
     reviewDate: null,
+    // A proposal has no review date, so sortDate is the far-future sentinel.
+    sortDate: PDP_GOAL_SORT_SENTINEL,
+    completedAt: null,
+    completionReview: null,
     actions: [
-      { xid: 'act_1', action: 'Action 1', status: PdpGoalStatus.NOT_STARTED },
-      { xid: 'act_2', action: 'Action 2', status: PdpGoalStatus.NOT_STARTED },
+      {
+        xid: 'act_1',
+        action: 'Action 1',
+        intendedEvidence: '',
+        status: PdpGoalStatus.PROPOSED,
+        dueDate: null,
+        completionReview: null,
+      },
+      {
+        xid: 'act_2',
+        action: 'Action 2',
+        intendedEvidence: '',
+        status: PdpGoalStatus.PROPOSED,
+        dueDate: null,
+        completionReview: null,
+      },
     ],
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -91,8 +114,7 @@ const mockPdpGoalsRepo = {
   findByArtefactId: jest.fn(),
   findByArtefactIds: jest.fn(),
   create: jest.fn(),
-  updateGoalForArtefact: jest.fn(),
-  updateManyByArtefactId: jest.fn(),
+  updateProposalForArtefact: jest.fn(),
   findByUserId: jest.fn(),
   countByUserId: jest.fn(),
 };
@@ -130,7 +152,7 @@ const mockConversationsService = {
 };
 
 const mockPdpGoalsService = {
-  deleteByArtefactIds: jest.fn().mockResolvedValue(undefined),
+  deleteProposalsByArtefactIds: jest.fn().mockResolvedValue(undefined),
 };
 
 const mockAnalysisRunsService = {
@@ -175,7 +197,7 @@ describe('ArtefactsService', () => {
     mockArtefactsRepo.markDeleted.mockResolvedValue(ok(1));
     mockConversationsRepo.findIdsByArtefactIds.mockResolvedValue(ok([]));
     mockConversationsService.deleteByArtefactIds.mockResolvedValue(undefined);
-    mockPdpGoalsService.deleteByArtefactIds.mockResolvedValue(undefined);
+    mockPdpGoalsService.deleteProposalsByArtefactIds.mockResolvedValue(undefined);
     mockAnalysisRunsService.deleteByArtefactIds.mockResolvedValue(undefined);
     mockAnalysisRunsService.findExecutingRun.mockResolvedValue(null);
     mockVersionHistoryService.anonymizeByEntity.mockResolvedValue(undefined);
@@ -252,8 +274,10 @@ describe('ArtefactsService', () => {
         [artefact._id],
         expect.anything(),
       );
-      expect(mockPdpGoalsService.deleteByArtefactIds).toHaveBeenCalledWith(
+      // Owner-scoped: the PDP cascade deletes only this user's unclaimed proposals.
+      expect(mockPdpGoalsService.deleteProposalsByArtefactIds).toHaveBeenCalledWith(
         [artefact._id],
+        userId,
         expect.anything(),
       );
       expect(mockAnalysisRunsService.deleteByArtefactIds).toHaveBeenCalledWith(
@@ -358,7 +382,7 @@ describe('ArtefactsService', () => {
       const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.COMPLETED });
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
-      mockPdpGoalsRepo.updateGoalForArtefact.mockResolvedValue(ok(undefined));
+      mockPdpGoalsRepo.updateProposalForArtefact.mockResolvedValue(ok(undefined));
       setupBuildArtefactDtoMocks();
 
       const reviewDate = '2026-06-01T00:00:00.000Z';
@@ -377,7 +401,7 @@ describe('ArtefactsService', () => {
         ],
       });
 
-      expect(mockPdpGoalsRepo.updateGoalForArtefact).toHaveBeenCalledWith(
+      expect(mockPdpGoalsRepo.updateProposalForArtefact).toHaveBeenCalledWith(
         'goal_1',
         userId, // ownership predicate threaded through to the repository
         artefact._id, // artefact scope — goal must belong to the finalised artefact
@@ -395,7 +419,7 @@ describe('ArtefactsService', () => {
       const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.COMPLETED });
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
-      mockPdpGoalsRepo.updateGoalForArtefact.mockResolvedValue(ok(undefined));
+      mockPdpGoalsRepo.updateProposalForArtefact.mockResolvedValue(ok(undefined));
       setupBuildArtefactDtoMocks();
 
       await service.finaliseArtefact(userIdStr, 'art_abc123', {
@@ -404,7 +428,7 @@ describe('ArtefactsService', () => {
         ],
       });
 
-      expect(mockPdpGoalsRepo.updateGoalForArtefact).toHaveBeenCalledWith(
+      expect(mockPdpGoalsRepo.updateProposalForArtefact).toHaveBeenCalledWith(
         'goal_1',
         userId, // ownership predicate threaded through to the repository
         artefact._id, // artefact scope — goal must belong to the finalised artefact
@@ -419,7 +443,7 @@ describe('ArtefactsService', () => {
       const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.COMPLETED });
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
-      mockPdpGoalsRepo.updateGoalForArtefact.mockResolvedValue(ok(undefined));
+      mockPdpGoalsRepo.updateProposalForArtefact.mockResolvedValue(ok(undefined));
       setupBuildArtefactDtoMocks();
 
       await service.finaliseArtefact(userIdStr, 'art_abc123', {
@@ -434,10 +458,10 @@ describe('ArtefactsService', () => {
         ],
       });
 
-      expect(mockPdpGoalsRepo.updateGoalForArtefact).toHaveBeenCalledTimes(2);
+      expect(mockPdpGoalsRepo.updateProposalForArtefact).toHaveBeenCalledTimes(2);
 
       // First call: activate goal_1
-      expect(mockPdpGoalsRepo.updateGoalForArtefact).toHaveBeenCalledWith(
+      expect(mockPdpGoalsRepo.updateProposalForArtefact).toHaveBeenCalledWith(
         'goal_1',
         userId,
         artefact._id,
@@ -447,7 +471,7 @@ describe('ArtefactsService', () => {
       );
 
       // Second call: archive goal_2
-      expect(mockPdpGoalsRepo.updateGoalForArtefact).toHaveBeenCalledWith(
+      expect(mockPdpGoalsRepo.updateProposalForArtefact).toHaveBeenCalledWith(
         'goal_2',
         userId,
         artefact._id,
@@ -463,7 +487,7 @@ describe('ArtefactsService', () => {
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
       // Repo scopes by userId → a goal belonging to another user yields NOT_FOUND.
-      mockPdpGoalsRepo.updateGoalForArtefact.mockResolvedValue(
+      mockPdpGoalsRepo.updateProposalForArtefact.mockResolvedValue(
         err({ code: 'NOT_FOUND', message: 'PDP goal not found' }),
       );
       setupBuildArtefactDtoMocks();
@@ -482,7 +506,7 @@ describe('ArtefactsService', () => {
       const updatedArtefact = makeArtefactDoc({ status: ArtefactStatus.COMPLETED });
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
-      mockPdpGoalsRepo.updateGoalForArtefact.mockResolvedValue(
+      mockPdpGoalsRepo.updateProposalForArtefact.mockResolvedValue(
         err({ code: 'NOT_FOUND', message: 'PDP goal not found' }),
       );
       setupBuildArtefactDtoMocks();
@@ -501,7 +525,7 @@ describe('ArtefactsService', () => {
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(updatedArtefact));
       // Goal exists and is owned by the caller, but belongs to a *different* artefact.
       // The { xid, userId, artefactId } filter doesn't match → NOT_FOUND.
-      mockPdpGoalsRepo.updateGoalForArtefact.mockResolvedValue(
+      mockPdpGoalsRepo.updateProposalForArtefact.mockResolvedValue(
         err({ code: 'NOT_FOUND', message: 'PDP goal not found' }),
       );
       setupBuildArtefactDtoMocks();
@@ -515,7 +539,7 @@ describe('ArtefactsService', () => {
       ).rejects.toThrow(NotFoundException);
 
       // The finalised artefact's id is passed as the scope on every goal write.
-      expect(mockPdpGoalsRepo.updateGoalForArtefact).toHaveBeenCalledWith(
+      expect(mockPdpGoalsRepo.updateProposalForArtefact).toHaveBeenCalledWith(
         'goal_from_artefact_b',
         userId,
         artefact._id,
@@ -529,79 +553,28 @@ describe('ArtefactsService', () => {
   // ─── updateArtefactStatus (archive path) ───
 
   describe('updateArtefactStatus – archive', () => {
-    it('archives PENDING PDP goals when archiving an artefact', async () => {
+    it('writes nothing to PDP goals when archiving an artefact', async () => {
+      // Archiving an entry is filing it away, not abandoning the development it
+      // evidenced. The relationship is citation, not ownership — goals are archived
+      // from the PDP tab, by the trainee, one at a time.
       const artefact = makeArtefactDoc({ status: ArtefactStatus.IN_REVIEW });
       const archivedArtefact = makeArtefactDoc({ status: ArtefactStatus.ARCHIVED });
       mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
       mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(archivedArtefact));
-      mockPdpGoalsRepo.updateManyByArtefactId.mockResolvedValue(ok(undefined));
       setupBuildArtefactDtoMocks();
 
       await service.updateArtefactStatus(userIdStr, 'art_abc123', {
         status: ArtefactStatus.ARCHIVED,
       });
 
-      // Should always archive PENDING goals
-      expect(mockPdpGoalsRepo.updateManyByArtefactId).toHaveBeenCalledWith(
+      expect(mockArtefactsRepo.updateArtefactById).toHaveBeenCalledWith(
         artefact._id,
-        { statuses: [PdpGoalStatus.NOT_STARTED] },
-        { status: PdpGoalStatus.ARCHIVED },
+        userId,
+        { status: ArtefactStatus.ARCHIVED },
         expect.anything(),
       );
-    });
-
-    it('does NOT archive ACTIVE/COMPLETED goals when archivePdpGoals is false', async () => {
-      const artefact = makeArtefactDoc({ status: ArtefactStatus.IN_REVIEW });
-      const archivedArtefact = makeArtefactDoc({ status: ArtefactStatus.ARCHIVED });
-      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
-      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(archivedArtefact));
-      mockPdpGoalsRepo.updateManyByArtefactId.mockResolvedValue(ok(undefined));
-      setupBuildArtefactDtoMocks();
-
-      await service.updateArtefactStatus(userIdStr, 'art_abc123', {
-        status: ArtefactStatus.ARCHIVED,
-        archivePdpGoals: false,
-      });
-
-      // Only one call: PENDING goals
-      expect(mockPdpGoalsRepo.updateManyByArtefactId).toHaveBeenCalledTimes(1);
-      expect(mockPdpGoalsRepo.updateManyByArtefactId).toHaveBeenCalledWith(
-        artefact._id,
-        { statuses: [PdpGoalStatus.NOT_STARTED] },
-        { status: PdpGoalStatus.ARCHIVED },
-        expect.anything(),
-      );
-    });
-
-    it('archives ACTIVE and COMPLETED goals when archivePdpGoals is true', async () => {
-      const artefact = makeArtefactDoc({ status: ArtefactStatus.IN_REVIEW });
-      const archivedArtefact = makeArtefactDoc({ status: ArtefactStatus.ARCHIVED });
-      mockArtefactsRepo.findByXid.mockResolvedValue(ok(artefact));
-      mockArtefactsRepo.updateArtefactById.mockResolvedValue(ok(archivedArtefact));
-      mockPdpGoalsRepo.updateManyByArtefactId.mockResolvedValue(ok(undefined));
-      setupBuildArtefactDtoMocks();
-
-      await service.updateArtefactStatus(userIdStr, 'art_abc123', {
-        status: ArtefactStatus.ARCHIVED,
-        archivePdpGoals: true,
-      });
-
-      // Two calls: PENDING + ACTIVE/COMPLETED
-      expect(mockPdpGoalsRepo.updateManyByArtefactId).toHaveBeenCalledTimes(2);
-
-      expect(mockPdpGoalsRepo.updateManyByArtefactId).toHaveBeenCalledWith(
-        artefact._id,
-        { statuses: [PdpGoalStatus.NOT_STARTED] },
-        { status: PdpGoalStatus.ARCHIVED },
-        expect.anything(),
-      );
-
-      expect(mockPdpGoalsRepo.updateManyByArtefactId).toHaveBeenCalledWith(
-        artefact._id,
-        { statuses: [PdpGoalStatus.STARTED, PdpGoalStatus.COMPLETED] },
-        { status: PdpGoalStatus.ARCHIVED },
-        expect.anything(),
-      );
+      expect(mockPdpGoalsRepo.updateProposalForArtefact).not.toHaveBeenCalled();
+      expect(mockPdpGoalsService.deleteProposalsByArtefactIds).not.toHaveBeenCalled();
     });
 
     it('performs simple status update for non-archive transitions', async () => {
@@ -622,7 +595,7 @@ describe('ArtefactsService', () => {
         { status: ArtefactStatus.IN_REVIEW },
         expect.anything(),
       );
-      expect(mockPdpGoalsRepo.updateManyByArtefactId).not.toHaveBeenCalled();
+      expect(mockPdpGoalsRepo.updateProposalForArtefact).not.toHaveBeenCalled();
     });
 
     it('returns the accurate versionCount even though a status change creates no version', async () => {

@@ -18,7 +18,7 @@ import { getPdpGoalStatusDisplay } from '@/utils/pdpGoalStatus';
 import { getArtefactStatusDisplay } from '@/utils/artefactStatus';
 
 const GOAL_STATUS_CLASS: Record<PdpGoalStatus, string> = {
-  [PdpGoalStatus.NOT_STARTED]: 'not-started',
+  [PdpGoalStatus.PROPOSED]: 'proposed',
   [PdpGoalStatus.STARTED]: 'in-progress',
   [PdpGoalStatus.COMPLETED]: 'completed',
   [PdpGoalStatus.ARCHIVED]: '',
@@ -280,7 +280,7 @@ export function buildExportHtml(artefact: Artefact): string {
       white-space: nowrap;
     }
 
-    .status-pill.not-started {
+    .status-pill.proposed {
       background: #fef3c7;
       color: #92400e;
     }

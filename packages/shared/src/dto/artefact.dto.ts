@@ -30,6 +30,22 @@ export const PdpGoalSchema = z.object({
 
 export type PdpGoal = z.infer<typeof PdpGoalSchema>;
 
+/**
+ * An entry that evidences a goal. May legitimately be EMPTY: a goal outlives the
+ * entries that cite it, so deleting all of them leaves the goal with none.
+ */
+export const LinkedArtefactRefSchema = z.object({
+  id: z.string(),
+  // Nullable to match the artefact itself: the Mongoose prop defaults to null, and
+  // analysis writes `title: finalState.title` from a graph field that also defaults
+  // to null — in the same transaction that creates the goals citing that artefact.
+  // ArtefactSchema and ArtefactVersionSchema type it the same way.
+  title: z.string().nullable(),
+  linkedAt: z.string().datetime(),
+});
+
+export type LinkedArtefactRef = z.infer<typeof LinkedArtefactRefSchema>;
+
 // Capability schema
 export const CapabilitySchema = z.object({
   code: z.string(),
@@ -177,9 +193,10 @@ export const CreateArtefactRequestSchema = z.object({
 
 export type CreateArtefactRequest = z.infer<typeof CreateArtefactRequestSchema>;
 
+// Archiving an entry writes nothing to its PDP goals; they are archived from the
+// PDP tab by the trainee.
 export const UpdateArtefactStatusRequestSchema = z.object({
   status: z.nativeEnum(ArtefactStatus),
-  archivePdpGoals: z.boolean().optional(),
 });
 
 export type UpdateArtefactStatusRequest = z.infer<typeof UpdateArtefactStatusRequestSchema>;

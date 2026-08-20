@@ -10,6 +10,7 @@ import {
 import { Model, Types } from 'mongoose';
 import { nanoidAlphanumeric } from '../../../common/utils/nanoid.util';
 import { Artefact, ArtefactDocument } from '../../../artefacts/schemas/artefact.schema';
+import { LINK_ARTEFACT_PATH } from '../../../pdp-goals/schemas/pdp-goal.schema';
 import { PdpGoal, PdpGoalDocument } from '../../../pdp-goals/schemas/pdp-goal.schema';
 import { ConversationDocument } from '../../schemas/conversation.schema';
 import { MessageDocument } from '../../schemas/message.schema';
@@ -188,5 +189,5 @@ export async function getMessagesForConversation(
 export async function getPdpGoalsForArtefact(
   artefactId: Types.ObjectId = TEST_ARTEFACT_ID
 ): Promise<PdpGoal[]> {
-  return pdpGoalModel.find({ artefactId }).lean();
+  return pdpGoalModel.find({ [LINK_ARTEFACT_PATH]: artefactId }).lean();
 }

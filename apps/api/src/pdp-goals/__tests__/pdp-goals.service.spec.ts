@@ -1,4 +1,3 @@
-import { PdpGoalStatus } from '@acme/shared';
 import { BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { err, ok } from '../../common/utils/result.util';
@@ -8,27 +7,8 @@ const oid = () => new Types.ObjectId();
 const userId = oid();
 const userIdStr = userId.toString();
 
-function makeGoalWithArtefact(overrides: Record<string, unknown> = {}) {
-  return {
-    xid: 'goal_abc',
-    goal: 'Improve clinical skills',
-    userId,
-    artefactId: oid(),
-    status: PdpGoalStatus.STARTED,
-    reviewDate: null,
-    completedAt: null,
-    completionReview: null,
-    actions: [],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    artefactXid: 'art_abc',
-    artefactTitle: 'Test Entry',
-    ...overrides,
-  };
-}
-
 const mockPdpGoalsRepo = {
-  findOneWithArtefact: jest.fn(),
+  findOneWithArtefacts: jest.fn(),
   anonymizeGoal: jest.fn(),
   findByUserIdWithArtefact: jest.fn(),
   countByUserId: jest.fn(),
@@ -48,23 +28,18 @@ describe('PdpGoalsService', () => {
     service = createService();
   });
 
+  // The service no longer inspects status — anonymizeGoal's filter owns that, and
+  // its boolean is the whole answer. WHICH statuses are deletable is covered at the
+  // repository layer in pdp-goals.repository.integration.spec.ts.
   describe('deleteGoal', () => {
-    it('throws NotFoundException when goal does not exist', async () => {
-      mockPdpGoalsRepo.findOneWithArtefact.mockResolvedValue(ok(null));
-
-      await expect(service.deleteGoal(userIdStr, 'goal_abc')).rejects.toThrow(NotFoundException);
-    });
-
-    it('throws NotFoundException when goal is already DELETED', async () => {
-      mockPdpGoalsRepo.findOneWithArtefact.mockResolvedValue(
-        ok(makeGoalWithArtefact({ status: PdpGoalStatus.DELETED })),
-      );
+    it('throws NotFoundException when nothing matched', async () => {
+      // Missing, already deleted, or owned by someone else — all one signal here.
+      mockPdpGoalsRepo.anonymizeGoal.mockResolvedValue(ok(false));
 
       await expect(service.deleteGoal(userIdStr, 'goal_abc')).rejects.toThrow(NotFoundException);
     });
 
     it('anonymizes goal and returns success message', async () => {
-      mockPdpGoalsRepo.findOneWithArtefact.mockResolvedValue(ok(makeGoalWithArtefact()));
       mockPdpGoalsRepo.anonymizeGoal.mockResolvedValue(ok(true));
 
       const result = await service.deleteGoal(userIdStr, 'goal_abc');
@@ -73,26 +48,13 @@ describe('PdpGoalsService', () => {
       expect(mockPdpGoalsRepo.anonymizeGoal).toHaveBeenCalledWith('goal_abc', userId);
     });
 
-    it('works for COMPLETED goals', async () => {
-      mockPdpGoalsRepo.findOneWithArtefact.mockResolvedValue(
-        ok(makeGoalWithArtefact({ status: PdpGoalStatus.COMPLETED })),
-      );
+    it('does not pre-read the goal', async () => {
       mockPdpGoalsRepo.anonymizeGoal.mockResolvedValue(ok(true));
 
-      const result = await service.deleteGoal(userIdStr, 'goal_abc');
+      await service.deleteGoal(userIdStr, 'goal_abc');
 
-      expect(result).toEqual({ message: 'Goal deleted successfully' });
-    });
-
-    it('works for ARCHIVED goals', async () => {
-      mockPdpGoalsRepo.findOneWithArtefact.mockResolvedValue(
-        ok(makeGoalWithArtefact({ status: PdpGoalStatus.ARCHIVED })),
-      );
-      mockPdpGoalsRepo.anonymizeGoal.mockResolvedValue(ok(true));
-
-      const result = await service.deleteGoal(userIdStr, 'goal_abc');
-
-      expect(result).toEqual({ message: 'Goal deleted successfully' });
+      // The write already answers "did it exist"; a lookup to re-derive it is waste.
+      expect(mockPdpGoalsRepo.findOneWithArtefacts).not.toHaveBeenCalled();
     });
   });
 

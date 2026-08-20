@@ -84,7 +84,7 @@ export const fetchArtefact = createAsyncThunk(
 export const updateArtefactStatus = createAsyncThunk(
   'artefacts/updateArtefactStatus',
   async (
-    params: { artefactId: string; status: ArtefactStatus; archivePdpGoals?: boolean },
+    params: { artefactId: string; status: ArtefactStatus },
     { rejectWithValue }
   ) => {
     artefactsLogger.info('Updating artefact status', params);
@@ -92,7 +92,6 @@ export const updateArtefactStatus = createAsyncThunk(
     try {
       const response = await api.artefacts.updateArtefactStatus(params.artefactId, {
         status: params.status,
-        archivePdpGoals: params.archivePdpGoals,
       });
       artefactsLogger.info('Updated artefact status', { id: response.id, status: response.status });
       return response;

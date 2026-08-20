@@ -7,7 +7,7 @@ interface StatusDisplay {
 }
 
 const STATUS_MAP: Record<number, StatusDisplay> = {
-  [PdpGoalStatus.NOT_STARTED]: { label: 'Not started', variant: 'processing' },
+  [PdpGoalStatus.PROPOSED]: { label: 'Proposed', variant: 'processing' },
   [PdpGoalStatus.STARTED]: { label: 'In progress', variant: 'success' },
   [PdpGoalStatus.COMPLETED]: { label: 'Completed', variant: 'info' },
   [PdpGoalStatus.ARCHIVED]: { label: 'Archived', variant: 'default' },

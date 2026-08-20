@@ -24,7 +24,7 @@ export class DashboardService {
     const now = new Date();
     const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-    const activeStatuses = [PdpGoalStatus.NOT_STARTED, PdpGoalStatus.STARTED];
+    const activeStatuses = [PdpGoalStatus.STARTED];
 
     const [recentEntriesResult, pdpGoalsResult, pdpGoalsTotalResult, activeReviewPeriod] =
       await Promise.all([
@@ -34,7 +34,12 @@ export class DashboardService {
           sortByReviewDate: true,
           dueBefore: thirtyDaysFromNow,
         }),
-        this.pdpGoalsRepository.countByUserId(userObjectId, activeStatuses),
+        // `dueBefore` must match the list's above, or the total describes a wider
+        // set than the items beneath it. buildUserGoalsFilter guarantees both
+        // interpret it the same way; it cannot guarantee both are given it.
+        this.pdpGoalsRepository.countByUserId(userObjectId, activeStatuses, {
+          dueBefore: thirtyDaysFromNow,
+        }),
         this.reviewPeriodsService.getActiveCoverageSummary(userId),
       ]);
 

@@ -49,6 +49,7 @@ import {
   IPdpGoalsRepository,
   PDP_GOALS_REPOSITORY,
   UpdatePdpGoalActionData,
+  UpdateProposalData,
 } from '../pdp-goals/pdp-goals.repository.interface';
 import { PdpGoalsService } from '../pdp-goals/pdp-goals.service';
 import { VersionHistoryService } from '../version-history';
@@ -201,7 +202,7 @@ export class ArtefactsService {
           }
         }
 
-        await this.deleteByIds([artefact._id], session);
+        await this.deleteByIds([artefact._id], userOid, session);
       },
       { context: `deleteArtefact:${xid}` }
     );
@@ -259,7 +260,7 @@ export class ArtefactsService {
         const artefactDoc = await this.findOrThrow(xid, new Types.ObjectId(userId), session);
 
         if (dto.status === ArtefactStatus.ARCHIVED) {
-          return this.archiveArtefact(artefactDoc, dto.archivePdpGoals ?? false, session);
+          return this.archiveArtefact(artefactDoc, session);
         }
 
         // Simple status update (non-archive transitions)
@@ -314,53 +315,49 @@ export class ArtefactsService {
 
         // 2. Apply PDP goal selections (business logic)
         for (const selection of dto.pdpGoalSelections) {
+          let data: UpdateProposalData;
+          let actionUpdates: UpdatePdpGoalActionData[] | undefined;
+
           if (selection.selected) {
+            // The guard stays inside this branch: it is what narrows reviewDate
+            // (string | null | undefined) to string for the Date below. Hoisting
+            // the assignment into a ternary would lose that and cost a `!` on the
+            // one field the guard exists to protect.
             if (!selection.reviewDate) {
               throw new BadRequestException(
                 `Review date is required for selected goal ${selection.goalId}`
               );
             }
 
-            const actionUpdates: UpdatePdpGoalActionData[] = (selection.actions ?? []).map((a) => ({
+            data = {
+              status: PdpGoalStatus.STARTED,
+              reviewDate: new Date(selection.reviewDate),
+            };
+            actionUpdates = (selection.actions ?? []).map((a) => ({
               actionXid: a.actionId,
               status: a.selected ? PdpGoalStatus.STARTED : PdpGoalStatus.ARCHIVED,
             }));
-
-            const result = await this.pdpGoalsRepository.updateGoalForArtefact(
-              selection.goalId,
-              userOid,
-              artefactDoc._id,
-              {
-                status: PdpGoalStatus.STARTED,
-                reviewDate: new Date(selection.reviewDate),
-              },
-              actionUpdates,
-              session
-            );
-
-            if (isErr(result)) {
-              if (result.error.code === 'NOT_FOUND') {
-                throw new NotFoundException(`PDP goal not found: ${selection.goalId}`);
-              }
-              throw new InternalServerErrorException(result.error.message);
-            }
           } else {
-            // Unselected goal → ARCHIVED (cascades to all actions)
-            const result = await this.pdpGoalsRepository.updateGoalForArtefact(
-              selection.goalId,
-              userOid,
-              artefactDoc._id,
-              { status: PdpGoalStatus.ARCHIVED },
-              undefined, // no specific action updates → cascades status to all actions
-              session
-            );
+            // Declined → ARCHIVED. No per-action selections, so the repository
+            // cascades the status to every action.
+            data = { status: PdpGoalStatus.ARCHIVED };
+            actionUpdates = undefined;
+          }
 
-            if (isErr(result)) {
-              if (result.error.code === 'NOT_FOUND') {
-                throw new NotFoundException(`PDP goal not found: ${selection.goalId}`);
-              }
-              throw new InternalServerErrorException(result.error.message);
+          const result = await this.pdpGoalsRepository.updateProposalForArtefact(
+            selection.goalId,
+            userOid,
+            artefactDoc._id,
+            data,
+            actionUpdates,
+            session
+          );
+
+          if (isErr(result)) {
+            if (result.error.code === 'NOT_FOUND') {
+              throw new NotFoundException(`PDP goal not found: ${selection.goalId}`);
             }
+            throw new InternalServerErrorException(result.error.message);
           }
         }
 
@@ -407,13 +404,16 @@ export class ArtefactsService {
     }
   }
 
+  /**
+   * Archiving an entry writes NOTHING to its PDP goals — filing an entry away says
+   * nothing about whether the trainee is still working on what it evidenced. Goals
+   * are archived from the PDP tab, by the trainee.
+   */
   private async archiveArtefact(
     artefactDoc: ArtefactSchema,
-    archiveActivePdpGoals: boolean,
     parentSession?: ClientSession
   ): Promise<Artefact> {
     const doArchive = async (session: ClientSession) => {
-      // 1. Set artefact status to ARCHIVED
       const updateResult = await this.artefactsRepository.updateArtefactById(
         artefactDoc._id,
         artefactDoc.userId,
@@ -423,32 +423,6 @@ export class ArtefactsService {
 
       if (isErr(updateResult)) {
         throw new InternalServerErrorException(updateResult.error.message);
-      }
-
-      // 2. Always archive PENDING goals
-      const pendingResult = await this.pdpGoalsRepository.updateManyByArtefactId(
-        artefactDoc._id,
-        { statuses: [PdpGoalStatus.NOT_STARTED] },
-        { status: PdpGoalStatus.ARCHIVED },
-        session
-      );
-
-      if (isErr(pendingResult)) {
-        throw new InternalServerErrorException(pendingResult.error.message);
-      }
-
-      // 3. Optionally archive ACTIVE + COMPLETED goals (user chose to)
-      if (archiveActivePdpGoals) {
-        const activeResult = await this.pdpGoalsRepository.updateManyByArtefactId(
-          artefactDoc._id,
-          { statuses: [PdpGoalStatus.STARTED, PdpGoalStatus.COMPLETED] },
-          { status: PdpGoalStatus.ARCHIVED },
-          session
-        );
-
-        if (isErr(activeResult)) {
-          throw new InternalServerErrorException(activeResult.error.message);
-        }
       }
 
       return this.buildArtefactDto(updateResult.value._id, updateResult.value, session);
@@ -852,7 +826,7 @@ export class ArtefactsService {
           if (isErr(msgResult)) throw new InternalServerErrorException(msgResult.error.message);
         }
 
-        // Clone non-archived PDP goals (reset to NOT_STARTED)
+        // Clone non-archived PDP goals (reset to PROPOSED)
         const nonArchivedGoals = goalsResult.value.filter(
           (g) => g.status !== PdpGoalStatus.ARCHIVED
         );
@@ -960,16 +934,27 @@ export class ArtefactsService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Bulk tombstone artefacts and cascade into conversations, PDP goals,
-   * analysis runs, and version history.
+   * Bulk tombstone artefacts and cascade into conversations, analysis runs, and
+   * version history.
+   *
+   * PDP goals are deliberately NOT cascaded: an adopted goal is the trainee's own
+   * development record and outlives every entry that cites it. Only unclaimed
+   * PROPOSALS are removed — see `deleteProposalsByArtefactIds`.
+   *
+   * Every id in `ids` must belong to `userId`. The PDP cascade scopes its delete by
+   * owner, so a mixed-owner batch would silently skip the other owners' proposals.
    */
-  async deleteByIds(ids: Types.ObjectId[], session?: ClientSession): Promise<void> {
+  async deleteByIds(
+    ids: Types.ObjectId[],
+    userId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<void> {
     if (ids.length === 0) return;
     // Intentionally sequential — Mongo forbids concurrent ops on a single session.
     const result = await this.artefactsRepository.markDeleted(ids, session);
     if (isErr(result)) throw new InternalServerErrorException(result.error.message);
     await this.conversationsService.deleteByArtefactIds(ids, session);
-    await this.pdpGoalsService.deleteByArtefactIds(ids, session);
+    await this.pdpGoalsService.deleteProposalsByArtefactIds(ids, userId, session);
     await this.analysisRunsService.deleteByArtefactIds(ids, session);
     await this.versionHistoryService.anonymizeByEntity(VersionHistoryEntity.ARTEFACT, ids, session);
   }

@@ -2,8 +2,9 @@ import {
   AppDialog,
   Button,
   EmptyState,
+  LinkedEntriesList,
+  type LinkedEntriesStatus,
   ReviewDatePickerSheet,
-  SkeletonBone,
   StatusPill,
   useToast,
 } from '@/components';
@@ -129,8 +130,9 @@ export default function PdpGoalDetailScreen() {
 
   const goal = useAppSelector((state) => selectPdpGoalById(state, goalId ?? ''));
   const entityStatus = useAppSelector((state) => state.pdpGoals.statusById[goalId ?? '']);
-  const fetching = entityStatus === 'loading';
   const mutating = entityStatus === 'updating';
+  const linkedEntriesStatus: LinkedEntriesStatus =
+    entityStatus === 'loading' ? 'loading' : entityStatus === 'failed' ? 'failed' : 'idle';
 
   useEffect(() => {
     if (goalId) {
@@ -348,10 +350,16 @@ export default function PdpGoalDetailScreen() {
     [goalId, dispatch]
   );
 
-  const handleViewEntry = useCallback(() => {
-    if (!goal?.artefactId) return;
-    router.push(`/(entry)/${goal.artefactId}`);
-  }, [goal?.artefactId, router]);
+  const handleViewEntry = useCallback(
+    (entryId: string) => {
+      router.push(`/(entry)/${entryId}`);
+    },
+    [router]
+  );
+
+  const handleRetryLinks = useCallback(() => {
+    if (goalId) dispatch(fetchPdpGoal({ goalId }));
+  }, [goalId, dispatch]);
 
   if (!goal) {
     return (
@@ -382,30 +390,12 @@ export default function PdpGoalDetailScreen() {
         {/* Goal header */}
         <View style={styles.section}>
           <Text style={[styles.goalText, { color: colors.text }]}>{goal.goal}</Text>
-          {!!goal.artefactId ? (
-            <TouchableOpacity style={styles.provenanceRow} onPress={handleViewEntry}>
-              <Ionicons
-                name="document-text-outline"
-                size={13}
-                color={colors.textSecondary}
-                style={styles.provenanceIcon}
-              />
-              <Text
-                style={[styles.provenanceText, { color: colors.textSecondary }]}
-                numberOfLines={2}
-              >
-                {goal.artefactTitle ?? 'View entry'}
-              </Text>
-              <Ionicons
-                name="chevron-forward"
-                size={13}
-                color={colors.textSecondary}
-                style={styles.provenanceIcon}
-              />
-            </TouchableOpacity>
-          ) : fetching ? (
-            <SkeletonBone width="60%" height={14} style={{ marginTop: 8 }} />
-          ) : null}
+          <LinkedEntriesList
+            entries={goal.linkedArtefacts}
+            status={linkedEntriesStatus}
+            onRetry={handleRetryLinks}
+            onSelectEntry={handleViewEntry}
+          />
           <View style={styles.metaRow}>
             <StatusPill label={statusDisplay.label} variant={statusDisplay.variant} />
             {isCompleted && goal.completedAt && (
@@ -736,20 +726,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     lineHeight: 28,
-  },
-  provenanceRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 4,
-    alignSelf: 'flex-start',
-    maxWidth: '100%',
-  },
-  provenanceText: {
-    fontSize: 12,
-    flexShrink: 1,
-  },
-  provenanceIcon: {
-    marginTop: 1,
   },
   metaRow: {
     flexDirection: 'row',

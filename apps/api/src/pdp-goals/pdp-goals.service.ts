@@ -15,7 +15,7 @@ import { AddPdpGoalActionDto, UpdatePdpGoalActionDto, UpdatePdpGoalDto } from '.
 import {
   IPdpGoalsRepository,
   PDP_GOALS_REPOSITORY,
-  PdpGoalWithArtefact,
+  PdpGoalWithArtefacts,
 } from './pdp-goals.repository.interface';
 import type { PdpGoal, PdpGoalAction } from './schemas/pdp-goal.schema';
 
@@ -32,21 +32,29 @@ function mapActionToDto(a: PdpGoalAction) {
   };
 }
 
-function mapGoalWithArtefactToDto(goal: PdpGoalWithArtefact): PdpGoalResponse {
+/**
+ * The fields the list mapper reads — narrower than `PdpGoal` so that both a raw
+ * document and a `PdpGoalWithArtefacts` satisfy it. The latter is not assignable
+ * to `PdpGoal`: it has no `_id`, `links` or `sortDate`.
+ */
+type PdpGoalListFields = Pick<
+  PdpGoal,
+  'xid' | 'goal' | 'status' | 'reviewDate' | 'completedAt' | 'completionReview' | 'actions'
+>;
+
+/** The list item plus its citations — PdpGoalResponse is PdpGoalSchema.extend. */
+function mapGoalWithArtefactsToDto(goal: PdpGoalWithArtefacts): PdpGoalResponse {
   return {
-    id: goal.xid,
-    goal: goal.goal,
-    status: goal.status,
-    reviewDate: toISOStringOrNull(goal.reviewDate),
-    completedAt: toISOStringOrNull(goal.completedAt),
-    completionReview: goal.completionReview,
-    actions: goal.actions.map(mapActionToDto),
-    artefactId: goal.artefactXid ?? '',
-    artefactTitle: goal.artefactTitle,
+    ...mapGoalToListItem(goal),
+    linkedArtefacts: goal.linkedArtefacts.map((a) => ({
+      id: a.xid,
+      title: a.title,
+      linkedAt: a.linkedAt.toISOString(),
+    })),
   };
 }
 
-function mapGoalToListItem(goal: PdpGoal): PdpGoalListItem {
+function mapGoalToListItem(goal: PdpGoalListFields): PdpGoalListItem {
   return {
     id: goal.xid,
     goal: goal.goal,
@@ -68,14 +76,15 @@ export class PdpGoalsService {
   async deleteGoal(userId: string, goalXid: string): Promise<{ message: string }> {
     const userOid = new Types.ObjectId(userId);
 
-    const result = await this.pdpGoalsRepository.findOneWithArtefact(goalXid, userOid);
-    if (isErr(result)) throw new InternalServerErrorException(result.error.message);
-    if (!result.value || result.value.status === PdpGoalStatus.DELETED) {
-      throw new NotFoundException('PDP goal not found');
-    }
-
     const anonResult = await this.pdpGoalsRepository.anonymizeGoal(goalXid, userOid);
     if (isErr(anonResult)) throw new InternalServerErrorException(anonResult.error.message);
+
+    // No pre-read: anonymizeGoal filters on { xid, userId, status: $ne DELETED } —
+    // exactly the existence check — and its boolean is `modifiedCount > 0`. That is
+    // a faithful proxy for "matched" here, because the filter demands status !==
+    // DELETED and the tombstone sets it, so a matched document always changes.
+    // Without that guarantee this would 404 a delete that actually succeeded.
+    if (!anonResult.value) throw new NotFoundException('PDP goal not found');
 
     return { message: 'Goal deleted successfully' };
   }
@@ -117,7 +126,7 @@ export class PdpGoalsService {
   }
 
   async getGoal(userId: string, goalXid: string): Promise<PdpGoalResponse> {
-    const result = await this.pdpGoalsRepository.findOneWithArtefact(
+    const result = await this.pdpGoalsRepository.findOneWithArtefacts(
       goalXid,
       new Types.ObjectId(userId)
     );
@@ -125,7 +134,7 @@ export class PdpGoalsService {
     if (isErr(result)) throw new InternalServerErrorException(result.error.message);
     if (!result.value) throw new NotFoundException('PDP goal not found');
 
-    return mapGoalWithArtefactToDto(result.value);
+    return mapGoalWithArtefactsToDto(result.value);
   }
 
   async updateGoal(
@@ -135,7 +144,7 @@ export class PdpGoalsService {
   ): Promise<PdpGoalResponse> {
     const userOid = new Types.ObjectId(userId);
 
-    const result = await this.pdpGoalsRepository.findOneWithArtefact(goalXid, userOid);
+    const result = await this.pdpGoalsRepository.findOneWithArtefacts(goalXid, userOid);
 
     if (isErr(result)) throw new InternalServerErrorException(result.error.message);
     if (!result.value) throw new NotFoundException('PDP goal not found');
@@ -172,7 +181,7 @@ export class PdpGoalsService {
       throw new InternalServerErrorException(saveResult.error.message);
     }
 
-    return mapGoalWithArtefactToDto(goal);
+    return mapGoalWithArtefactsToDto(goal);
   }
 
   async addAction(
@@ -182,7 +191,7 @@ export class PdpGoalsService {
   ): Promise<PdpGoalResponse> {
     const userOid = new Types.ObjectId(userId);
 
-    const result = await this.pdpGoalsRepository.findOneWithArtefact(goalXid, userOid);
+    const result = await this.pdpGoalsRepository.findOneWithArtefacts(goalXid, userOid);
 
     if (isErr(result)) throw new InternalServerErrorException(result.error.message);
     if (!result.value) throw new NotFoundException('PDP goal not found');
@@ -192,7 +201,11 @@ export class PdpGoalsService {
       xid: nanoidAlphanumeric(),
       action: dto.action,
       intendedEvidence: '',
-      status: PdpGoalStatus.NOT_STARTED,
+      // STARTED, not PROPOSED: a manually added action on an already-adopted goal
+      // was written by the trainee, not suggested by analysis, and never passes
+      // through finalise. It also matches what the UI already produces — the
+      // action toggle flips between COMPLETED and STARTED, never back to PROPOSED.
+      status: PdpGoalStatus.STARTED,
       dueDate: goal.reviewDate,
       completionReview: null,
     };
@@ -209,7 +222,7 @@ export class PdpGoalsService {
       throw new InternalServerErrorException(saveResult.error.message);
     }
 
-    return mapGoalWithArtefactToDto(goal);
+    return mapGoalWithArtefactsToDto(goal);
   }
 
   async updateAction(
@@ -220,7 +233,7 @@ export class PdpGoalsService {
   ): Promise<PdpGoalResponse> {
     const userOid = new Types.ObjectId(userId);
 
-    const result = await this.pdpGoalsRepository.findOneWithArtefact(goalXid, userOid);
+    const result = await this.pdpGoalsRepository.findOneWithArtefacts(goalXid, userOid);
 
     if (isErr(result)) throw new InternalServerErrorException(result.error.message);
     if (!result.value) throw new NotFoundException('PDP goal not found');
@@ -242,13 +255,20 @@ export class PdpGoalsService {
       throw new InternalServerErrorException(saveResult.error.message);
     }
 
-    return mapGoalWithArtefactToDto(goal);
+    return mapGoalWithArtefactsToDto(goal);
   }
 
   /**
-   * Cascade entry point: tombstone PDP goals linked to the given artefacts.
+   * Deleting an entry does NOT delete its goals (see `PdpGoalLink`). The one
+   * exception, applied here: unclaimed PROPOSALS from those entries are
+   * hard-deleted — they are unreachable in the UI, so the trainee cannot remove
+   * them by hand, and left behind they accumulate against a deleted entry.
    */
-  async deleteByArtefactIds(artefactIds: Types.ObjectId[], session?: ClientSession): Promise<void> {
-    unwrapVoid(await this.pdpGoalsRepository.markDeletedByArtefactIds(artefactIds, session));
+  async deleteProposalsByArtefactIds(
+    artefactIds: Types.ObjectId[],
+    userId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<void> {
+    unwrapVoid(await this.pdpGoalsRepository.deleteUnadoptedProposals(artefactIds, userId, session));
   }
 }

@@ -98,7 +98,7 @@ function createHandler(overrides: {
   findMessageByIdempotencyKey?: jest.Mock;
   createMessage?: jest.Mock;
   updateArtefactById?: jest.Mock;
-  deleteByArtefactId?: jest.Mock;
+  deleteUnadoptedProposals?: jest.Mock;
   pdpCreate?: jest.Mock;
 } = {}) {
   const analysisRunsService = {
@@ -126,7 +126,7 @@ function createHandler(overrides: {
   } as unknown as IArtefactsRepository;
 
   const pdpGoalsRepository = {
-    deleteByArtefactId: overrides.deleteByArtefactId ?? jest.fn().mockResolvedValue({ ok: true, value: 0 }),
+    deleteUnadoptedProposals: overrides.deleteUnadoptedProposals ?? jest.fn().mockResolvedValue({ ok: true, value: 0 }),
     create: overrides.pdpCreate ?? jest.fn().mockResolvedValue({ ok: true, value: [] }),
   } as unknown as IPdpGoalsRepository;
 
@@ -314,7 +314,7 @@ describe('AnalysisStartHandler', () => {
   describe('transactional completion (artefact + PDP goals + status)', () => {
     it('should save artefact, PDP goals, and transition to COMPLETED in one transaction', async () => {
       const updateArtefactById = jest.fn().mockResolvedValue({ ok: true, value: {} });
-      const deleteByArtefactId = jest.fn().mockResolvedValue({ ok: true, value: 0 });
+      const deleteUnadoptedProposals = jest.fn().mockResolvedValue({ ok: true, value: 0 });
       const pdpCreate = jest.fn().mockResolvedValue({ ok: true, value: [] });
       const transitionStatus = jest.fn().mockResolvedValue({});
       const withTransaction = jest.fn((fn) => fn({}));
@@ -324,7 +324,7 @@ describe('AnalysisStartHandler', () => {
         transitionStatus,
         withTransaction,
         updateArtefactById,
-        deleteByArtefactId,
+        deleteUnadoptedProposals,
         pdpCreate,
       });
 
@@ -340,7 +340,7 @@ describe('AnalysisStartHandler', () => {
         expect.anything(), // session
       );
       // Delete-then-create for PDP goals
-      expect(deleteByArtefactId).toHaveBeenCalled();
+      expect(deleteUnadoptedProposals).toHaveBeenCalled();
       expect(pdpCreate).toHaveBeenCalled();
       // Status transitioned to COMPLETED inside transaction
       expect(transitionStatus).toHaveBeenCalledWith(
@@ -357,7 +357,7 @@ describe('AnalysisStartHandler', () => {
       finalState.pdpGoals = [];
 
       const pdpCreate = jest.fn();
-      const deleteByArtefactId = jest.fn().mockResolvedValue({ ok: true, value: 0 });
+      const deleteUnadoptedProposals = jest.fn().mockResolvedValue({ ok: true, value: 0 });
 
       const { handler } = createHandler({
         startGraph: jest.fn().mockResolvedValue(null),
@@ -365,14 +365,14 @@ describe('AnalysisStartHandler', () => {
         transitionStatus: jest.fn().mockResolvedValue({}),
         withTransaction: jest.fn((fn) => fn({})),
         updateArtefactById: jest.fn().mockResolvedValue({ ok: true, value: {} }),
-        deleteByArtefactId,
+        deleteUnadoptedProposals,
         pdpCreate,
       });
 
       await handler.handle(makePayload());
 
       // Delete still called (for idempotency)
-      expect(deleteByArtefactId).toHaveBeenCalled();
+      expect(deleteUnadoptedProposals).toHaveBeenCalled();
       // But create is NOT called when empty
       expect(pdpCreate).not.toHaveBeenCalled();
     });
@@ -387,7 +387,7 @@ describe('AnalysisStartHandler', () => {
         transitionStatus: jest.fn().mockResolvedValue({}),
         withTransaction: jest.fn((fn) => fn({})),
         updateArtefactById: jest.fn().mockResolvedValue({ ok: true, value: {} }),
-        deleteByArtefactId: jest.fn().mockResolvedValue({ ok: true, value: 0 }),
+        deleteUnadoptedProposals: jest.fn().mockResolvedValue({ ok: true, value: 0 }),
       });
 
       const payload = makePayload({ langGraphThreadId: 'conv-123:2' });

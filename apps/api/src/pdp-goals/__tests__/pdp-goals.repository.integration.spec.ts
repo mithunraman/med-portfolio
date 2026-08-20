@@ -1,4 +1,4 @@
-import { PdpGoalStatus } from '@acme/shared';
+import { ArtefactStatus, PdpGoalStatus } from '@acme/shared';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
@@ -10,6 +10,7 @@ import { PDP_GOALS_REPOSITORY } from '../pdp-goals.repository.interface';
 import {
   PdpGoal,
   PdpGoalDocument,
+  PdpGoalLink,
   PdpGoalSchema,
 } from '../schemas/pdp-goal.schema';
 
@@ -18,13 +19,34 @@ import {
 const userId = new Types.ObjectId();
 const artefactId = new Types.ObjectId();
 
+/** A link as analysis would create it — the only kind the product makes today. */
+const analysisLink = (id: Types.ObjectId): PdpGoalLink => ({
+  artefactId: id,
+  linkedAt: new Date(),
+  linkedBy: 'analysis',
+});
+
+/**
+ * A link as a trainee would create it. Unreachable in the product today, which is
+ * exactly why it is worth fixturing: `proposalFilter` must already refuse to touch
+ * goals carrying one, before standalone goal creation ships.
+ */
+const userLink = (id: Types.ObjectId): PdpGoalLink => ({
+  artefactId: id,
+  linkedAt: new Date(),
+  linkedBy: 'user',
+});
+
 async function insertGoal(
   model: Model<PdpGoalDocument>,
   overrides: Partial<{
     xid: string;
     goal: string;
     userId: Types.ObjectId;
+    /** Convenience: seeds a single analysis-created link. */
     artefactId: Types.ObjectId;
+    /** Explicit link set, for multi-link and trainee-created fixtures. */
+    links: PdpGoalLink[];
     status: PdpGoalStatus;
     reviewDate: Date | null;
     actions: Array<{
@@ -41,8 +63,8 @@ async function insertGoal(
       xid: overrides.xid ?? `goal_${new Types.ObjectId().toString().slice(-6)}`,
       goal: overrides.goal ?? 'Test goal',
       userId: overrides.userId ?? userId,
-      artefactId: overrides.artefactId ?? artefactId,
-      status: overrides.status ?? PdpGoalStatus.NOT_STARTED,
+      links: overrides.links ?? [analysisLink(overrides.artefactId ?? artefactId)],
+      status: overrides.status ?? PdpGoalStatus.PROPOSED,
       reviewDate,
       // Maintain the same invariant the repository enforces on writes.
       sortDate: reviewDate ?? PDP_GOAL_SORT_SENTINEL,
@@ -51,18 +73,35 @@ async function insertGoal(
           xid: 'act_default_1',
           action: 'Default action 1',
           intendedEvidence: 'Evidence 1',
-          status: PdpGoalStatus.NOT_STARTED,
+          status: PdpGoalStatus.PROPOSED,
         },
         {
           xid: 'act_default_2',
           action: 'Default action 2',
           intendedEvidence: 'Evidence 2',
-          status: PdpGoalStatus.NOT_STARTED,
+          status: PdpGoalStatus.PROPOSED,
         },
       ],
     },
   ]);
   return doc;
+}
+
+/**
+ * The lookup joins the `artefacts` collection directly, so these fixtures are
+ * written raw — registering the whole Artefact schema here would pull in far more
+ * than the join needs.
+ */
+async function insertArtefact(
+  model: Model<PdpGoalDocument>,
+  overrides: { _id: Types.ObjectId; xid: string; title?: string | null; status?: ArtefactStatus },
+) {
+  await model.db.collection('artefacts').insertOne({
+    _id: overrides._id,
+    xid: overrides.xid,
+    title: overrides.title === undefined ? 'An entry' : overrides.title,
+    status: overrides.status ?? ArtefactStatus.COMPLETED,
+  });
 }
 
 // ── Test suite ──
@@ -143,7 +182,7 @@ describe('PdpGoalsRepository (integration)', () => {
       await insertGoal(model, {
         xid: 'goal_sg2',
         actions: [
-          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.NOT_STARTED },
+          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.PROPOSED },
           { xid: 'act_2', action: 'A2', intendedEvidence: 'E2', status: PdpGoalStatus.ARCHIVED },
         ],
       });
@@ -190,22 +229,22 @@ describe('PdpGoalsRepository (integration)', () => {
     });
   });
 
-  // ─── updateGoalForArtefact (parent-scope boundary + update behaviour) ───
+  // ─── updateProposalForArtefact (parent-scope boundary + update behaviour) ───
 
-  describe('updateGoalForArtefact', () => {
+  describe('updateProposalForArtefact', () => {
     it('updates a goal that belongs to the given artefact', async () => {
       const reviewDate = new Date('2026-06-15');
       await insertGoal(model, {
         xid: 'goal_in_artefact',
         userId,
         artefactId,
-        status: PdpGoalStatus.NOT_STARTED,
+        status: PdpGoalStatus.PROPOSED,
         actions: [
-          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.NOT_STARTED },
+          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.PROPOSED },
         ],
       });
 
-      const result = await repo.updateGoalForArtefact(
+      const result = await repo.updateProposalForArtefact(
         'goal_in_artefact',
         userId,
         artefactId,
@@ -229,12 +268,12 @@ describe('PdpGoalsRepository (integration)', () => {
         userId,
         artefactId,
         actions: [
-          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.NOT_STARTED },
-          { xid: 'act_2', action: 'A2', intendedEvidence: 'E2', status: PdpGoalStatus.NOT_STARTED },
+          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.PROPOSED },
+          { xid: 'act_2', action: 'A2', intendedEvidence: 'E2', status: PdpGoalStatus.PROPOSED },
         ],
       });
 
-      const result = await repo.updateGoalForArtefact(
+      const result = await repo.updateProposalForArtefact(
         'goal_cascade',
         userId,
         artefactId,
@@ -251,18 +290,22 @@ describe('PdpGoalsRepository (integration)', () => {
     });
 
     it('handles actions with mixed target statuses in one call', async () => {
+      // Pins a SINGLE update: the goal fields and both action groups go out as one
+      // $set with two arrayFilters identifiers. Splitting it back into per-status
+      // writes would push those writes outside the proposal guard.
+
       await insertGoal(model, {
         xid: 'goal_mixed',
         userId,
         artefactId,
         actions: [
-          { xid: 'act_a', action: 'A', intendedEvidence: 'E', status: PdpGoalStatus.NOT_STARTED },
-          { xid: 'act_b', action: 'B', intendedEvidence: 'E', status: PdpGoalStatus.NOT_STARTED },
-          { xid: 'act_c', action: 'C', intendedEvidence: 'E', status: PdpGoalStatus.NOT_STARTED },
+          { xid: 'act_a', action: 'A', intendedEvidence: 'E', status: PdpGoalStatus.PROPOSED },
+          { xid: 'act_b', action: 'B', intendedEvidence: 'E', status: PdpGoalStatus.PROPOSED },
+          { xid: 'act_c', action: 'C', intendedEvidence: 'E', status: PdpGoalStatus.PROPOSED },
         ],
       });
 
-      await repo.updateGoalForArtefact(
+      await repo.updateProposalForArtefact(
         'goal_mixed',
         userId,
         artefactId,
@@ -288,15 +331,15 @@ describe('PdpGoalsRepository (integration)', () => {
         xid: 'goal_other_artefact',
         userId,
         artefactId: otherArtefactId,
-        status: PdpGoalStatus.NOT_STARTED,
+        status: PdpGoalStatus.PROPOSED,
         reviewDate,
         actions: [
-          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.NOT_STARTED },
+          { xid: 'act_1', action: 'A1', intendedEvidence: 'E1', status: PdpGoalStatus.PROPOSED },
         ],
       });
 
       // Finalising `artefactId` must not be able to touch `otherArtefactId`'s goal.
-      const result = await repo.updateGoalForArtefact(
+      const result = await repo.updateProposalForArtefact(
         'goal_other_artefact',
         userId,
         artefactId,
@@ -309,9 +352,9 @@ describe('PdpGoalsRepository (integration)', () => {
 
       // The other artefact's goal is untouched — status, reviewDate, and action.
       const other = await model.findOne({ xid: 'goal_other_artefact' }).lean();
-      expect(other!.status).toBe(PdpGoalStatus.NOT_STARTED);
+      expect(other!.status).toBe(PdpGoalStatus.PROPOSED);
       expect(other!.reviewDate!.toISOString()).toBe(reviewDate.toISOString());
-      expect(other!.actions[0].status).toBe(PdpGoalStatus.NOT_STARTED);
+      expect(other!.actions[0].status).toBe(PdpGoalStatus.PROPOSED);
     });
 
     it('does not mutate a goal owned by another user even with a matching artefactId and returns NOT_FOUND', async () => {
@@ -323,7 +366,7 @@ describe('PdpGoalsRepository (integration)', () => {
         status: PdpGoalStatus.STARTED,
       });
 
-      const result = await repo.updateGoalForArtefact(
+      const result = await repo.updateProposalForArtefact(
         'goal_foreign_owner',
         userId,
         artefactId,
@@ -388,131 +431,324 @@ describe('PdpGoalsRepository (integration)', () => {
         expect(result.value.get(artefactB.toString())).toHaveLength(1);
       }
     });
+
+    it('keys a goal under every requested artefact it cites', async () => {
+      const artefactA = new Types.ObjectId();
+      const artefactB = new Types.ObjectId();
+      await insertGoal(model, {
+        xid: 'goal_shared',
+        userId,
+        links: [analysisLink(artefactA), analysisLink(artefactB)],
+      });
+
+      const result = await repo.findByArtefactIds([artefactA, artefactB], userId);
+
+      expect(isOk(result)).toBe(true);
+      if (!isOk(result)) return;
+      // One goal, reachable from both entries — the single-owner grouping this
+      // replaced would have dropped it from whichever key it did not match first.
+      expect(result.value.get(artefactA.toString())![0].xid).toBe('goal_shared');
+      expect(result.value.get(artefactB.toString())![0].xid).toBe('goal_shared');
+    });
   });
 
-  // ─── updateManyByArtefactId ───
+  // ─── findOneWithArtefacts (the citation lookup) ───
 
-  describe('updateManyByArtefactId', () => {
-    it('archives all PENDING goals and their actions for an artefact', async () => {
-      await insertGoal(model, { xid: 'goal_p1', status: PdpGoalStatus.NOT_STARTED });
-      await insertGoal(model, { xid: 'goal_p2', status: PdpGoalStatus.NOT_STARTED });
-      await insertGoal(model, { xid: 'goal_a1', status: PdpGoalStatus.STARTED });
+  describe('findOneWithArtefacts', () => {
+    beforeEach(async () => {
+      await model.db.collection('artefacts').deleteMany({});
+    });
 
-      const result = await repo.updateManyByArtefactId(
-        artefactId,
-        { statuses: [PdpGoalStatus.NOT_STARTED] },
-        { status: PdpGoalStatus.ARCHIVED },
-      );
+    it('surfaces a null title rather than coercing it', async () => {
+      // Artefact titles are nullable: the Mongoose prop defaults to null, and
+      // analysis writes `title: finalState.title` from a graph field that also
+      // defaults to null — in the very transaction that creates the linked goals.
+      // The DTO must carry that through honestly; the client owns the fallback.
+      const artefactOid = new Types.ObjectId();
+      await insertArtefact(model, { _id: artefactOid, xid: 'art_untitled', title: null });
+      await insertGoal(model, { xid: 'goal_untitled', userId, artefactId: artefactOid });
+
+      const result = await repo.findOneWithArtefacts('goal_untitled', userId);
 
       expect(isOk(result)).toBe(true);
-
-      const goals = await model.find({ artefactId }).lean();
-      const pending1 = goals.find((g) => g.xid === 'goal_p1')!;
-      const pending2 = goals.find((g) => g.xid === 'goal_p2')!;
-      const active1 = goals.find((g) => g.xid === 'goal_a1')!;
-
-      // PENDING goals → ARCHIVED
-      expect(pending1.status).toBe(PdpGoalStatus.ARCHIVED);
-      expect(pending1.actions.every((a) => a.status === PdpGoalStatus.ARCHIVED)).toBe(true);
-      expect(pending2.status).toBe(PdpGoalStatus.ARCHIVED);
-
-      // ACTIVE goal untouched
-      expect(active1.status).toBe(PdpGoalStatus.STARTED);
+      if (!isOk(result) || !result.value) return;
+      expect(result.value.linkedArtefacts).toHaveLength(1);
+      expect(result.value.linkedArtefacts[0].title).toBeNull();
+      expect(result.value.linkedArtefacts[0].xid).toBe('art_untitled');
     });
 
-    it('archives ACTIVE and COMPLETED goals when targeted', async () => {
-      await insertGoal(model, { xid: 'goal_act', status: PdpGoalStatus.STARTED });
-      await insertGoal(model, { xid: 'goal_comp', status: PdpGoalStatus.COMPLETED });
-      await insertGoal(model, { xid: 'goal_pend', status: PdpGoalStatus.NOT_STARTED });
+    it('excludes a tombstoned entry but keeps an archived one', async () => {
+      // Links are append-only, so this filter is the ONLY thing keeping a deleted
+      // entry out of a goal's citation list. An archived entry is still evidence.
+      const deletedOid = new Types.ObjectId();
+      const archivedOid = new Types.ObjectId();
+      await insertArtefact(model, {
+        _id: deletedOid,
+        xid: 'art_deleted',
+        status: ArtefactStatus.DELETED,
+      });
+      await insertArtefact(model, {
+        _id: archivedOid,
+        xid: 'art_archived',
+        status: ArtefactStatus.ARCHIVED,
+      });
+      await insertGoal(model, {
+        xid: 'goal_mixed_links',
+        userId,
+        links: [analysisLink(deletedOid), analysisLink(archivedOid)],
+      });
 
-      await repo.updateManyByArtefactId(
-        artefactId,
-        { statuses: [PdpGoalStatus.STARTED, PdpGoalStatus.COMPLETED] },
-        { status: PdpGoalStatus.ARCHIVED },
-      );
+      const result = await repo.findOneWithArtefacts('goal_mixed_links', userId);
 
-      const goals = await model.find({ artefactId }).lean();
-      const active = goals.find((g) => g.xid === 'goal_act')!;
-      const completed = goals.find((g) => g.xid === 'goal_comp')!;
-      const pending = goals.find((g) => g.xid === 'goal_pend')!;
-
-      expect(active.status).toBe(PdpGoalStatus.ARCHIVED);
-      expect(active.actions.every((a) => a.status === PdpGoalStatus.ARCHIVED)).toBe(true);
-      expect(completed.status).toBe(PdpGoalStatus.ARCHIVED);
-
-      // PENDING untouched
-      expect(pending.status).toBe(PdpGoalStatus.NOT_STARTED);
+      expect(isOk(result)).toBe(true);
+      if (!isOk(result) || !result.value) return;
+      expect(result.value.linkedArtefacts.map((a) => a.xid)).toEqual(['art_archived']);
     });
 
-    it('does not affect goals from a different artefact', async () => {
+    it('returns every cited entry, in link order', async () => {
+      const firstOid = new Types.ObjectId();
+      const secondOid = new Types.ObjectId();
+      await insertArtefact(model, { _id: firstOid, xid: 'art_first', title: 'First' });
+      await insertArtefact(model, { _id: secondOid, xid: 'art_second', title: 'Second' });
+      await insertGoal(model, {
+        xid: 'goal_two_links',
+        userId,
+        links: [analysisLink(firstOid), analysisLink(secondOid)],
+      });
+
+      const result = await repo.findOneWithArtefacts('goal_two_links', userId);
+
+      expect(isOk(result)).toBe(true);
+      if (!isOk(result) || !result.value) return;
+      // Order comes from `links`, not from the unordered $lookup result.
+      expect(result.value.linkedArtefacts.map((a) => a.xid)).toEqual(['art_first', 'art_second']);
+    });
+
+    it('returns an empty citation list when every linked entry is gone', async () => {
+      const goneOid = new Types.ObjectId();
+      await insertGoal(model, { xid: 'goal_orphaned', userId, artefactId: goneOid });
+
+      const result = await repo.findOneWithArtefacts('goal_orphaned', userId);
+
+      expect(isOk(result)).toBe(true);
+      if (!isOk(result) || !result.value) return;
+      // The goal survives its entries — an empty list, never a missing goal.
+      expect(result.value.linkedArtefacts).toEqual([]);
+    });
+
+    it('does not return a goal owned by another user', async () => {
+      const artefactOid = new Types.ObjectId();
+      await insertArtefact(model, { _id: artefactOid, xid: 'art_theirs' });
+      await insertGoal(model, {
+        xid: 'goal_theirs',
+        userId: new Types.ObjectId(),
+        artefactId: artefactOid,
+      });
+
+      const result = await repo.findOneWithArtefacts('goal_theirs', userId);
+
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) expect(result.value).toBeNull();
+    });
+  });
+
+  // ─── deleteUnadoptedProposals (proposalFilter — the destructive predicate) ───
+
+  describe('deleteUnadoptedProposals', () => {
+    it('deletes unclaimed proposals produced by the given artefacts', async () => {
+      await insertGoal(model, { xid: 'prop_1', artefactId, status: PdpGoalStatus.PROPOSED });
+      await insertGoal(model, { xid: 'prop_2', artefactId, status: PdpGoalStatus.PROPOSED });
+
+      const result = await repo.deleteUnadoptedProposals([artefactId], userId);
+
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) expect(result.value).toBe(2);
+      expect(await model.countDocuments({ xid: { $in: ['prop_1', 'prop_2'] } })).toBe(0);
+    });
+
+    it('leaves a goal the trainee adopted', async () => {
+      await insertGoal(model, { xid: 'adopted', artefactId, status: PdpGoalStatus.STARTED });
+
+      await repo.deleteUnadoptedProposals([artefactId], userId);
+
+      expect(await model.countDocuments({ xid: 'adopted' })).toBe(1);
+    });
+
+    it('leaves proposals belonging to a different artefact', async () => {
       const otherArtefactId = new Types.ObjectId();
-      await insertGoal(model, { xid: 'goal_same', status: PdpGoalStatus.NOT_STARTED });
+      await insertGoal(model, { xid: 'other_prop', artefactId: otherArtefactId });
+
+      await repo.deleteUnadoptedProposals([artefactId], userId);
+
+      expect(await model.countDocuments({ xid: 'other_prop' })).toBe(1);
+    });
+
+    it('is a no-op for an empty id list', async () => {
+      await insertGoal(model, { xid: 'untouched', artefactId });
+
+      const result = await repo.deleteUnadoptedProposals([], userId);
+
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) expect(result.value).toBe(0);
+      expect(await model.countDocuments({ xid: 'untouched' })).toBe(1);
+    });
+
+    // ── Guards for states the product cannot yet produce ──
+    //
+    // proposalFilter's `linkedBy` and `$size` clauses are inert today: every goal
+    // carries exactly one analysis-created link. The two fixtures below build the
+    // states that standalone goal creation and second-entry linking will produce,
+    // and pin the predicate against them NOW. The failure they prevent is a silent
+    // delete of the trainee's own goals inside a transaction that reports success.
+
+    it('leaves a PROPOSED goal whose link the trainee created (standalone-goal guard)', async () => {
       await insertGoal(model, {
-        xid: 'goal_other',
-        artefactId: otherArtefactId,
-        status: PdpGoalStatus.NOT_STARTED,
+        xid: 'trainee_made',
+        status: PdpGoalStatus.PROPOSED,
+        links: [userLink(artefactId)],
       });
 
-      await repo.updateManyByArtefactId(
-        artefactId,
-        { statuses: [PdpGoalStatus.NOT_STARTED] },
-        { status: PdpGoalStatus.ARCHIVED },
-      );
-
-      const otherGoal = await model.findOne({ xid: 'goal_other' }).lean();
-      expect(otherGoal!.status).toBe(PdpGoalStatus.NOT_STARTED); // unchanged
-    });
-
-    it('is a no-op when no goals match the filter', async () => {
-      await insertGoal(model, { xid: 'goal_active_only', status: PdpGoalStatus.STARTED });
-
-      const result = await repo.updateManyByArtefactId(
-        artefactId,
-        { statuses: [PdpGoalStatus.NOT_STARTED] }, // no PENDING goals exist
-        { status: PdpGoalStatus.ARCHIVED },
-      );
+      const result = await repo.deleteUnadoptedProposals([artefactId], userId);
 
       expect(isOk(result)).toBe(true);
-
-      const goal = await model.findOne({ xid: 'goal_active_only' }).lean();
-      expect(goal!.status).toBe(PdpGoalStatus.STARTED); // unchanged
+      if (isOk(result)) expect(result.value).toBe(0);
+      expect(await model.countDocuments({ xid: 'trainee_made' })).toBe(1);
     });
 
-    // Guards the sortDate invariant on the bulk path — latent today (callers pass
-    // only { status }), but the method handles reviewDate and must keep sortDate in sync.
-    it('derives sortDate when the bulk update sets a reviewDate', async () => {
-      const reviewDate = new Date('2026-08-01');
-      await insertGoal(model, { xid: 'goal_bulk_rd', status: PdpGoalStatus.STARTED });
+    it('does not delete another user\'s proposal for the same artefact id', async () => {
+      const otherUserId = new Types.ObjectId();
+      // Same artefactId, different owner. Artefact _id is internal so this is not
+      // reachable through a controller today — the predicate is defence in depth,
+      // and it is also what lets the delete use { userId, 'links.artefactId' }
+      // instead of scanning the whole collection.
+      await insertGoal(model, { xid: 'mine', userId, artefactId });
+      await insertGoal(model, { xid: 'theirs', userId: otherUserId, artefactId });
 
-      const result = await repo.updateManyByArtefactId(
-        artefactId,
-        { statuses: [PdpGoalStatus.STARTED] },
-        { reviewDate },
-      );
+      const result = await repo.deleteUnadoptedProposals([artefactId], userId);
 
       expect(isOk(result)).toBe(true);
-      const updated = await model.findOne({ xid: 'goal_bulk_rd' }).lean();
-      expect(updated!.reviewDate!.toISOString()).toBe(reviewDate.toISOString());
-      expect(updated!.sortDate.toISOString()).toBe(reviewDate.toISOString());
+      if (isOk(result)) expect(result.value).toBe(1);
+      expect(await model.countDocuments({ xid: 'mine' })).toBe(0);
+      expect(await model.countDocuments({ xid: 'theirs' })).toBe(1);
     });
 
-    it('resets sortDate to the sentinel when the bulk update clears reviewDate', async () => {
+    it('leaves a PROPOSED goal cited by a second entry (multi-link guard)', async () => {
+      const secondArtefactId = new Types.ObjectId();
       await insertGoal(model, {
-        xid: 'goal_bulk_null',
+        xid: 'two_citations',
+        status: PdpGoalStatus.PROPOSED,
+        links: [analysisLink(artefactId), analysisLink(secondArtefactId)],
+      });
+
+      // Either entry replaying its analysis must leave the shared goal intact.
+      expect(isOk(await repo.deleteUnadoptedProposals([artefactId], userId))).toBe(true);
+      expect(isOk(await repo.deleteUnadoptedProposals([secondArtefactId], userId))).toBe(true);
+
+      expect(await model.countDocuments({ xid: 'two_citations' })).toBe(1);
+    });
+  });
+
+  // ─── anonymizeGoal (owns the "is this deletable" decision) ───
+  //
+  // `PdpGoalsService.deleteGoal` no longer pre-reads the goal: it calls this and
+  // trusts the boolean. That moved the status and ownership rules here, so this is
+  // where they are covered.
+
+  describe('anonymizeGoal', () => {
+    it.each([
+      ['PROPOSED', PdpGoalStatus.PROPOSED],
+      ['STARTED', PdpGoalStatus.STARTED],
+      ['COMPLETED', PdpGoalStatus.COMPLETED],
+      ['ARCHIVED', PdpGoalStatus.ARCHIVED],
+    ])('tombstones a %s goal and reports that it matched', async (_label, status) => {
+      await insertGoal(model, { xid: 'goal_del', userId, status, goal: 'Real goal text' });
+
+      const result = await repo.anonymizeGoal('goal_del', userId);
+
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) expect(result.value).toBe(true);
+
+      const doc = await model.findOne({ xid: 'goal_del' }).lean();
+      expect(doc!.status).toBe(PdpGoalStatus.DELETED);
+      expect(doc!.goal).toBe('[deleted]');
+      expect(doc!.actions.every((a) => a.action === '[deleted]')).toBe(true);
+      expect(doc!.actions.every((a) => a.intendedEvidence === '[deleted]')).toBe(true);
+    });
+
+    it('reports false for an already-deleted goal and leaves it alone', async () => {
+      await insertGoal(model, {
+        xid: 'goal_gone',
+        userId,
+        status: PdpGoalStatus.DELETED,
+        goal: '[deleted]',
+      });
+
+      const result = await repo.anonymizeGoal('goal_gone', userId);
+
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) expect(result.value).toBe(false);
+    });
+
+    it('reports false for a goal that does not exist', async () => {
+      const result = await repo.anonymizeGoal('goal_nope', userId);
+
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) expect(result.value).toBe(false);
+    });
+
+    it("does not touch another user's goal", async () => {
+      // Ownership predicate at the persistence layer. With the service's pre-read
+      // gone, this filter is the only thing standing between a client-supplied xid
+      // and someone else's goal.
+      const otherUserId = new Types.ObjectId();
+      await insertGoal(model, {
+        xid: 'goal_theirs',
+        userId: otherUserId,
         status: PdpGoalStatus.STARTED,
-        reviewDate: new Date('2026-08-01'),
+        goal: 'Their goal text',
       });
 
-      const result = await repo.updateManyByArtefactId(
-        artefactId,
-        { statuses: [PdpGoalStatus.STARTED] },
-        { reviewDate: null },
-      );
+      const result = await repo.anonymizeGoal('goal_theirs', userId);
 
       expect(isOk(result)).toBe(true);
-      const updated = await model.findOne({ xid: 'goal_bulk_null' }).lean();
-      expect(updated!.reviewDate).toBeNull();
-      expect(updated!.sortDate.toISOString()).toBe(PDP_GOAL_SORT_SENTINEL.toISOString());
+      if (isOk(result)) expect(result.value).toBe(false);
+
+      const doc = await model.findOne({ xid: 'goal_theirs' }).lean();
+      expect(doc!.status).toBe(PdpGoalStatus.STARTED);
+      expect(doc!.goal).toBe('Their goal text');
+    });
+  });
+
+  // ─── buildUserGoalsFilter (count and list must describe the same set) ───
+
+  describe('buildUserGoalsFilter', () => {
+    it('gives countByUserId and findByUserId the same answer for a due-window query', async () => {
+      const dueBefore = new Date('2026-03-01');
+      await insertGoal(model, {
+        xid: 'due_soon',
+        status: PdpGoalStatus.STARTED,
+        reviewDate: new Date('2026-02-10'),
+      });
+      await insertGoal(model, {
+        xid: 'due_later',
+        status: PdpGoalStatus.STARTED,
+        reviewDate: new Date('2026-09-01'),
+      });
+      // Never due: a proposal carries reviewDate null, so sortDate is the sentinel.
+      await insertGoal(model, { xid: 'a_proposal', status: PdpGoalStatus.PROPOSED });
+
+      const statuses = [PdpGoalStatus.PROPOSED, PdpGoalStatus.STARTED];
+      const list = await repo.findByUserId(userId, statuses, { dueBefore, sortByReviewDate: true });
+      const count = await repo.countByUserId(userId, statuses, { dueBefore });
+
+      expect(isOk(list)).toBe(true);
+      expect(isOk(count)).toBe(true);
+      if (!isOk(list) || !isOk(count)) return;
+
+      expect(list.value.map((g) => g.xid)).toEqual(['due_soon']);
+      // The regression: countByUserId ignored dueBefore entirely and answered 3,
+      // which is how the dashboard came to show a total its own list contradicted.
+      expect(count.value).toBe(list.value.length);
     });
   });
 
@@ -529,13 +765,22 @@ describe('PdpGoalsRepository (integration)', () => {
       expect(created!.reviewDate).toBeNull();
       expect(created!.sortDate.toISOString()).toBe(PDP_GOAL_SORT_SENTINEL.toISOString());
     });
+
+    it('seeds exactly one analysis-created link to the originating artefact', async () => {
+      await repo.create([{ userId, artefactId, goal: 'Linked goal', actions: [] }]);
+
+      const created = await model.findOne({ goal: 'Linked goal' }).lean();
+      expect(created!.links).toHaveLength(1);
+      expect(created!.links[0].artefactId.toString()).toBe(artefactId.toString());
+      expect(created!.links[0].linkedBy).toBe('analysis');
+    });
   });
 
   // ─── findPaginated (null-safe keyset pagination) ───
 
   describe('findPaginated', () => {
     const statuses = [
-      PdpGoalStatus.NOT_STARTED,
+      PdpGoalStatus.PROPOSED,
       PdpGoalStatus.STARTED,
       PdpGoalStatus.COMPLETED,
     ];
@@ -560,7 +805,7 @@ describe('PdpGoalsRepository (integration)', () => {
       // 21 goals, all with null reviewDate → boundary goal (#20) is null.
       // Pre-fix this threw while building the cursor → 500.
       for (let i = 0; i < 21; i++) {
-        await insertGoal(model, { xid: `gnull_${i}`, status: PdpGoalStatus.NOT_STARTED });
+        await insertGoal(model, { xid: `gnull_${i}`, status: PdpGoalStatus.PROPOSED });
       }
 
       const page1 = await repo.findPaginated(userId, statuses, undefined, 20);
@@ -582,7 +827,7 @@ describe('PdpGoalsRepository (integration)', () => {
     it('paginates an all-null-reviewDate set fully, without duplicates or gaps', async () => {
       const xids = Array.from({ length: 25 }, (_, i) => `gall_${i}`);
       for (const xid of xids) {
-        await insertGoal(model, { xid, status: PdpGoalStatus.NOT_STARTED });
+        await insertGoal(model, { xid, status: PdpGoalStatus.PROPOSED });
       }
 
       const seen = await paginateAll(10);

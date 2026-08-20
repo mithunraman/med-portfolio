@@ -32,10 +32,21 @@ import {
 
 export type PdpGoalFilterView = FilterView;
 
-/** List endpoint returns PdpGoalListItem; detail endpoint returns PdpGoalResponse (adds artefact fields). */
-export type PdpGoalEntity = PdpGoalListItem & Partial<Pick<PdpGoalResponse, 'artefactId' | 'artefactTitle'>>;
+/**
+ * List endpoints return PdpGoalListItem; the detail endpoint returns PdpGoalResponse,
+ * which adds the entries citing the goal. `linkedArtefacts` is therefore optional on
+ * the entity — absent means "not fetched yet", not "no entries".
+ */
+export type PdpGoalEntity = PdpGoalListItem &
+  Partial<Pick<PdpGoalResponse, 'linkedArtefacts'>>;
 
-export type PdpGoalEntityStatus = 'loading' | 'updating';
+/**
+ * `failed` is set only by `fetchPdpGoal.rejected` and is what lets the detail
+ * screen offer a retry. It is cleared by any subsequent settled request for the
+ * goal, including a successful mutation — those return a full PdpGoalResponse, so
+ * they repopulate the links the failed read never delivered.
+ */
+export type PdpGoalEntityStatus = 'loading' | 'updating' | 'failed';
 
 export interface PdpGoalsState {
   statusById: Record<string, PdpGoalEntityStatus>;
@@ -50,6 +61,25 @@ export interface PdpGoalsState {
 
 export const pdpGoalViewKey = (status?: PdpGoalStatus | null): string =>
   viewKeyFromStatus(status);
+
+interface HasGoalEntities {
+  entities: Record<string, PdpGoalEntity | undefined>;
+}
+
+/**
+ * Mirror the server after an entry is deleted: links are immutable, so the entry
+ * is only tombstoned and the server's lookup simply stops resolving it. Dropping
+ * it from each cached goal keeps the citation list correct on the next render,
+ * where invalidating would cost a skeleton flash and a refetch to reach the same
+ * answer. Goals with no citations loaded yet are left alone.
+ */
+function dropCitation(state: HasGoalEntities, artefactId: string): void {
+  for (const goal of Object.values(state.entities)) {
+    if (!goal?.linkedArtefacts) continue;
+    const remaining = goal.linkedArtefacts.filter((a) => a.id !== artefactId);
+    if (remaining.length !== goal.linkedArtefacts.length) goal.linkedArtefacts = remaining;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Adapter & Slice
@@ -136,7 +166,12 @@ const pdpGoalsSlice = createSlice({
         pdpGoalsAdapter.upsertOne(state, action.payload);
       })
       .addCase(fetchPdpGoal.rejected, (state, action) => {
-        delete state.statusById[action.meta.arg.goalId];
+        // Recorded rather than cleared. The thunk already wraps the call in
+        // retryRead, so reaching here means a persistent failure worth showing —
+        // and clearing the status left the screen unable to tell "never loaded"
+        // from "failed to load". No global state.error: this is a localised read
+        // failure, not something to raise app-wide.
+        state.statusById[action.meta.arg.goalId] = 'failed';
       })
 
       // updatePdpGoal
@@ -218,16 +253,18 @@ const pdpGoalsSlice = createSlice({
         state.views = {};
       })
 
-      // Cross-slice: deleting an artefact cascades to its PDP goals server-side.
-      .addCase(deleteArtefact.fulfilled, (state) => {
-        state.stale = true;
-        state.views = {};
+      // Cross-slice: deleting an entry does NOT remove adopted goals. The server
+      // deletes only unclaimed PROPOSED proposals, and no list filter surfaces
+      // those (the default is [STARTED, COMPLETED]) — so every cached view is
+      // provably unchanged and neither `stale` nor a view wipe is warranted. What
+      // does change is each goal's citation list.
+      .addCase(deleteArtefact.fulfilled, (state, action) => {
+        dropCitation(state, action.meta.arg.artefactId);
       })
 
-      // Cross-slice: deleting a conversation cascades to artefact + PDP goals.
-      .addCase(deleteConversation.fulfilled, (state) => {
-        state.stale = true;
-        state.views = {};
+      // Deleting a conversation deletes its entry, so the same reasoning applies.
+      .addCase(deleteConversation.fulfilled, (state, action) => {
+        dropCitation(state, action.meta.arg.artefactId);
       });
   },
 });

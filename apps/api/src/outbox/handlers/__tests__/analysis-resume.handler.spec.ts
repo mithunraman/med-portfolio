@@ -80,7 +80,7 @@ function createHandler(overrides: {
   findMessageByIdempotencyKey?: jest.Mock;
   createMessage?: jest.Mock;
   updateArtefactById?: jest.Mock;
-  deleteByArtefactId?: jest.Mock;
+  deleteUnadoptedProposals?: jest.Mock;
   pdpCreate?: jest.Mock;
 } = {}) {
   const analysisRunsService = {
@@ -108,7 +108,7 @@ function createHandler(overrides: {
   } as unknown as IArtefactsRepository;
 
   const pdpGoalsRepository = {
-    deleteByArtefactId: overrides.deleteByArtefactId ?? jest.fn().mockResolvedValue({ ok: true, value: 0 }),
+    deleteUnadoptedProposals: overrides.deleteUnadoptedProposals ?? jest.fn().mockResolvedValue({ ok: true, value: 0 }),
     create: overrides.pdpCreate ?? jest.fn().mockResolvedValue({ ok: true, value: [] }),
   } as unknown as IPdpGoalsRepository;
 
@@ -256,7 +256,7 @@ describe('AnalysisResumeHandler', () => {
   describe('transactional completion (artefact + PDP goals + status)', () => {
     it('should save artefact and transition to COMPLETED in one transaction', async () => {
       const updateArtefactById = jest.fn().mockResolvedValue({ ok: true, value: {} });
-      const deleteByArtefactId = jest.fn().mockResolvedValue({ ok: true, value: 0 });
+      const deleteUnadoptedProposals = jest.fn().mockResolvedValue({ ok: true, value: 0 });
       const transitionStatus = jest.fn().mockResolvedValue({});
       const withTransaction = jest.fn((fn) => fn({}));
 
@@ -265,7 +265,7 @@ describe('AnalysisResumeHandler', () => {
         transitionStatus,
         withTransaction,
         updateArtefactById,
-        deleteByArtefactId,
+        deleteUnadoptedProposals,
       });
 
       await handler.handle(makePayload());
@@ -279,7 +279,7 @@ describe('AnalysisResumeHandler', () => {
         expect.objectContaining({ completeness: { complete: true, unmetSections: [] } }),
         expect.anything(),
       );
-      expect(deleteByArtefactId).toHaveBeenCalled();
+      expect(deleteUnadoptedProposals).toHaveBeenCalled();
       expect(transitionStatus).toHaveBeenCalledWith(
         expect.any(Types.ObjectId),
         AnalysisRunStatus.RUNNING,
@@ -299,7 +299,7 @@ describe('AnalysisResumeHandler', () => {
         transitionStatus: jest.fn().mockResolvedValue({}),
         withTransaction: jest.fn((fn) => fn({})),
         updateArtefactById: jest.fn().mockResolvedValue({ ok: true, value: {} }),
-        deleteByArtefactId: jest.fn().mockResolvedValue({ ok: true, value: 0 }),
+        deleteUnadoptedProposals: jest.fn().mockResolvedValue({ ok: true, value: 0 }),
       });
 
       const payload = makePayload({ langGraphThreadId: 'conv-456:3' });
@@ -321,7 +321,7 @@ describe('AnalysisResumeHandler', () => {
         transitionStatus: jest.fn().mockResolvedValue({}),
         withTransaction: jest.fn((fn) => fn({})),
         updateArtefactById: jest.fn().mockResolvedValue({ ok: true, value: {} }),
-        deleteByArtefactId: jest.fn().mockResolvedValue({ ok: true, value: 0 }),
+        deleteUnadoptedProposals: jest.fn().mockResolvedValue({ ok: true, value: 0 }),
       });
 
       const payload = makePayload({
@@ -342,7 +342,7 @@ describe('AnalysisResumeHandler', () => {
         transitionStatus: jest.fn().mockResolvedValue({}),
         withTransaction: jest.fn((fn) => fn({})),
         updateArtefactById: jest.fn().mockResolvedValue({ ok: true, value: {} }),
-        deleteByArtefactId: jest.fn().mockResolvedValue({ ok: true, value: 0 }),
+        deleteUnadoptedProposals: jest.fn().mockResolvedValue({ ok: true, value: 0 }),
       });
 
       // reject_entry pauses the graph but presents no answerable question. It is a

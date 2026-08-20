@@ -58,8 +58,13 @@ export function artefactTombstoneUpdate() {
  * Canonical "live" filter for read paths — excludes tombstones.
  * Cascade-write call sites keep their inline `$ne` because that's idempotency
  * semantics ("don't re-tombstone"), not the read-time "exclude deleted" rule.
+ *
+ * Consumed cross-module by the PDP citation lookup (`pdp-goals.repository.ts`),
+ * which relies on it excluding tombstones ONLY — archived entries must still
+ * resolve, since a filed entry is still evidence for a goal. Narrowing this to
+ * also exclude ARCHIVED would silently shrink every goal's citation list.
  */
-const ARTEFACT_LIVE_FILTER = { status: { $ne: ArtefactStatus.DELETED } } as const;
+export const ARTEFACT_LIVE_FILTER = { status: { $ne: ArtefactStatus.DELETED } } as const;
 
 @Injectable()
 export class ArtefactsRepository implements IArtefactsRepository {

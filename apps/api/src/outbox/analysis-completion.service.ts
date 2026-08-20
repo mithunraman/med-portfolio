@@ -95,8 +95,16 @@ export class AnalysisCompletionService {
         );
         if (!artefactResult.ok) throw new Error(artefactResult.error.message);
 
-        // Delete-then-create for PDP goals (idempotent on replay)
-        const deleteResult = await this.pdpGoalsRepository.deleteByArtefactId(artefactOid, session);
+        // Replay idempotency: clear this run's own unclaimed proposals before
+        // rewriting them. Scoped by proposalFilter — a replay landing after the
+        // trainee has finalised cannot reach the goals they adopted, so the delete
+        // is safe by construction rather than by the transaction rolling back when
+        // the status compare-and-set below fails.
+        const deleteResult = await this.pdpGoalsRepository.deleteUnadoptedProposals(
+          [artefactOid],
+          userOid,
+          session,
+        );
         if (!deleteResult.ok) throw new Error(deleteResult.error.message);
 
         if (finalState.pdpGoals.length > 0) {

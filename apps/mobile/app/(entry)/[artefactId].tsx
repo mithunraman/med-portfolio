@@ -598,13 +598,6 @@ export default function EntryDetailScreen() {
 
   // ── Archive ──
 
-  const hasActivePdpGoals = useMemo(() => {
-    if (!artefact?.pdpGoals) return false;
-    return artefact.pdpGoals.some(
-      (g) => g.status === PdpGoalStatus.STARTED || g.status === PdpGoalStatus.COMPLETED
-    );
-  }, [artefact?.pdpGoals]);
-
   const handleArchive = useCallback(() => {
     if (!artefactId) return;
     // Opened from the action-sheet callback: defer until the sheet's dismissal
@@ -612,16 +605,11 @@ export default function EntryDetailScreen() {
     InteractionManager.runAfterInteractions(() => setArchiveDialogVisible(true));
   }, [artefactId]);
 
-  const handleConfirmArchive = useCallback(
-    (archivePdpGoals: boolean) => {
-      setArchiveDialogVisible(false);
-      if (!artefactId) return;
-      dispatch(
-        updateArtefactStatus({ artefactId, status: ArtefactStatus.ARCHIVED, archivePdpGoals })
-      );
-    },
-    [artefactId, dispatch]
-  );
+  const handleConfirmArchive = useCallback(() => {
+    setArchiveDialogVisible(false);
+    if (!artefactId) return;
+    dispatch(updateArtefactStatus({ artefactId, status: ArtefactStatus.ARCHIVED }));
+  }, [artefactId, dispatch]);
 
   // ── Delete Entry ──
 
@@ -1177,43 +1165,19 @@ export default function EntryDetailScreen() {
         tone="info"
         icon="archive-outline"
         title="Archive entry"
-        message={
-          hasActivePdpGoals
-            ? 'This entry will be hidden - you can restore it anytime. It has active PDP goals: keep them, or archive them too?'
-            : 'This entry will be hidden. You can restore it anytime from your archive.'
-        }
-        buttons={
-          hasActivePdpGoals
-            ? [
-                {
-                  label: 'Keep goals',
-                  onPress: () => handleConfirmArchive(false),
-                  variant: 'primary',
-                },
-                {
-                  label: 'Archive & remove goals',
-                  onPress: () => handleConfirmArchive(true),
-                  variant: 'destructive',
-                },
-                {
-                  label: 'Cancel',
-                  onPress: () => setArchiveDialogVisible(false),
-                  variant: 'secondary',
-                },
-              ]
-            : [
-                {
-                  label: 'Archive',
-                  onPress: () => handleConfirmArchive(false),
-                  variant: 'primary',
-                },
-                {
-                  label: 'Cancel',
-                  onPress: () => setArchiveDialogVisible(false),
-                  variant: 'secondary',
-                },
-              ]
-        }
+        message="This entry will be hidden. You can restore it anytime from your archive. Any PDP goals it evidences stay in your plan."
+        buttons={[
+          {
+            label: 'Archive',
+            onPress: handleConfirmArchive,
+            variant: 'primary',
+          },
+          {
+            label: 'Cancel',
+            onPress: () => setArchiveDialogVisible(false),
+            variant: 'secondary',
+          },
+        ]}
         onRequestClose={() => setArchiveDialogVisible(false)}
       />
       <AppDialog

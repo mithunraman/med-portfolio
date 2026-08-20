@@ -2,6 +2,7 @@ import { PdpGoalStatus } from '@acme/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
+import { ARTEFACT_LIVE_FILTER } from '../artefacts/artefacts.repository';
 import { nanoidAlphanumeric } from '../common/utils/nanoid.util';
 import { DBError, Result, err, ok } from '../common/utils/result.util';
 import { PdpGoalCursor, buildPdpGoalCursor, parsePdpGoalCursor } from './cursor.util';
@@ -12,12 +13,19 @@ import {
   IPdpGoalsRepository,
   Page,
   PdpGoalErrorCode,
-  PdpGoalWithArtefact,
+  PdpGoalWithArtefacts,
   SaveGoalData,
   UpdatePdpGoalActionData,
-  UpdatePdpGoalData,
+  UpdateProposalData,
+  UserGoalsFilterOptions,
 } from './pdp-goals.repository.interface';
-import { PdpGoal, PdpGoalDocument } from './schemas/pdp-goal.schema';
+import {
+  LINK_ARTEFACT_PATH,
+  PdpGoal,
+  PdpGoalDocument,
+  PdpGoalLink,
+  PdpGoalLinkSource,
+} from './schemas/pdp-goal.schema';
 
 /**
  * Single source of truth for the PdpGoal tombstone payload. Used by every
@@ -57,40 +65,62 @@ export function pdpGoalTombstoneUpdate() {
   ];
 }
 
+/**
+ * Resolve the artefacts a goal cites.
+ *
+ * Tombstoned entries are excluded HERE rather than by pulling the link: links are
+ * append-only, so this filter is the only thing keeping a deleted entry out of a
+ * goal's citation list. Archived entries are deliberately kept — a filed entry is
+ * still evidence.
+ *
+ * The lookup returns artefacts unordered and without `linkedAt`; correlation back
+ * to the links happens in `mapToGoalWithArtefacts`.
+ */
 const ARTEFACT_LOOKUP_PIPELINE = [
   {
     $lookup: {
       from: 'artefacts',
-      localField: 'artefactId',
+      localField: LINK_ARTEFACT_PATH,
       foreignField: '_id',
-      as: '_artefact',
-      pipeline: [{ $project: { xid: 1, title: 1 } }],
+      as: '_linkedArtefacts',
+      pipeline: [
+        { $match: { ...ARTEFACT_LIVE_FILTER } },
+        { $project: { xid: 1, title: 1 } },
+      ],
     },
   },
-  {
-    $addFields: {
-      _artefactDoc: { $arrayElemAt: ['$_artefact', 0] },
-    },
-  },
-  { $project: { _artefact: 0 } },
 ];
 
-function mapToGoalWithArtefact(raw: Record<string, unknown>): PdpGoalWithArtefact {
-  const artefactDoc = raw._artefactDoc as { xid?: string; title?: string } | undefined;
+// Mirrors the $project above. `title` is nullable here for the same reason it is
+// on the artefact itself — this is an unvalidated assertion over aggregation
+// output, so declaring it non-null would silently launder a null through the
+// mapper and into the client.
+type LookedUpArtefact = { _id: Types.ObjectId; xid: string; title: string | null };
+
+function mapToGoalWithArtefacts(raw: Record<string, unknown>): PdpGoalWithArtefacts {
+  const links = (raw.links ?? []) as PdpGoalLink[];
+  const found = (raw._linkedArtefacts ?? []) as LookedUpArtefact[];
+  const byId = new Map(found.map((a) => [a._id.toString(), a]));
+
+  // Iterate `links`, not the lookup result: links are append-only so their order
+  // is citation order, and an id with no match is a tombstoned entry to skip.
+  const linkedArtefacts = links.flatMap((link) => {
+    const artefact = byId.get(link.artefactId.toString());
+    return artefact ? [{ xid: artefact.xid, title: artefact.title, linkedAt: link.linkedAt }] : [];
+  });
+
   return {
     xid: raw.xid as string,
     goal: raw.goal as string,
     userId: raw.userId as Types.ObjectId,
-    artefactId: raw.artefactId as Types.ObjectId | null,
     status: raw.status as PdpGoalStatus,
     reviewDate: raw.reviewDate as Date | null,
     completedAt: raw.completedAt as Date | null,
     completionReview: raw.completionReview as string | null,
-    actions: raw.actions as PdpGoalWithArtefact['actions'],
+    actions: raw.actions as PdpGoalWithArtefacts['actions'],
     createdAt: raw.createdAt as Date,
     updatedAt: raw.updatedAt as Date,
-    artefactXid: artefactDoc?.xid ?? null,
-    artefactTitle: artefactDoc?.title ?? null,
+    linkedArtefacts,
   };
 }
 
@@ -103,6 +133,54 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     private pdpGoalModel: Model<PdpGoalDocument>
   ) {}
 
+  /**
+   * Single source of truth for how a user's-goals query turns options into a
+   * filter, so two methods cannot interpret the same options differently.
+   *
+   * It does NOT make a count agree with the list it summarises — that needs the
+   * caller to pass both the same options. See `dashboard.service.ts`.
+   */
+  private buildUserGoalsFilter(
+    userId: Types.ObjectId,
+    statuses: PdpGoalStatus[],
+    options?: UserGoalsFilterOptions
+  ): Record<string, unknown> {
+    const filter: Record<string, unknown> = { userId, status: { $in: statuses } };
+    // sortDate is never null (unscheduled goals carry the far-future sentinel),
+    // so { $lte } alone excludes them — no explicit $ne: null needed.
+    if (options?.dueBefore) filter.sortDate = { $lte: options.dueBefore };
+    return filter;
+  }
+
+  /**
+   * A proposal = an unclaimed goal whose ONLY link was created by these artefacts'
+   * analysis. Derives what an `originArtefactId` field would have stored, without
+   * a second source of truth that would be null for every standalone goal later.
+   *
+   * The `linkedBy` and `$size` clauses are INERT today — every goal has exactly one
+   * analysis-created link, so both always pass. They are here so that when goals can
+   * be created standalone or carry a second link, this predicate does not silently
+   * widen into deleting or archiving goals the trainee owns.
+   * `pdp-goals.repository.integration.spec.ts` covers both cases.
+   */
+  private proposalFilter(artefactIds: Types.ObjectId[], userId: Types.ObjectId) {
+    return {
+      // userId leads for two reasons. It is the ownership predicate the persistence
+      // layer owes every user-owned record — load-bearing here because this backs a
+      // hard deleteMany on caller-supplied ids. It is also the prefix of
+      // { userId, 'links.artefactId' }: without it no index applies and the delete
+      // degrades to a full collection scan, inside persistCompletion's transaction.
+      userId,
+      status: PdpGoalStatus.PROPOSED,
+      links: {
+        $elemMatch: { artefactId: { $in: artefactIds }, linkedBy: PdpGoalLinkSource.ANALYSIS },
+      },
+      // Safe without an $isArray guard only because the $elemMatch above rejects any
+      // document whose `links` is absent or not an array before this evaluates.
+      $expr: { $eq: [{ $size: '$links' }, 1] },
+    };
+  }
+
   async create(
     goals: CreatePdpGoalData[],
     session?: ClientSession
@@ -111,8 +189,16 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       if (goals.length === 0) return ok([]);
 
       const goalsWithIds = goals.map((g) => ({
-        ...g,
+        userId: g.userId,
+        goal: g.goal,
         xid: nanoidAlphanumeric(),
+        links: [
+          {
+            artefactId: g.artefactId,
+            linkedAt: new Date(),
+            linkedBy: PdpGoalLinkSource.ANALYSIS,
+          },
+        ] satisfies PdpGoalLink[],
         actions: g.actions.map((a) => ({
           ...a,
           xid: nanoidAlphanumeric(),
@@ -138,17 +224,22 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
 
       // Ownership predicate at the persistence layer — defence in depth.
       const goals = await this.pdpGoalModel
-        .find({ artefactId: { $in: ids }, userId })
+        .find({ [LINK_ARTEFACT_PATH]: { $in: ids }, userId })
         .lean()
         .session(session || null);
 
+      // A goal can cite several of the requested artefacts, so it may key under
+      // more than one — iterate its links rather than assuming a single owner.
+      const requested = new Set(ids.map((id) => id.toString()));
       const map = new Map<string, PdpGoal[]>();
       for (const goal of goals) {
-        if (!goal.artefactId) continue;
-        const key = goal.artefactId.toString();
-        const list = map.get(key) || [];
-        list.push(goal);
-        map.set(key, list);
+        for (const link of goal.links ?? []) {
+          const key = link.artefactId.toString();
+          if (!requested.has(key)) continue;
+          const list = map.get(key) || [];
+          list.push(goal);
+          map.set(key, list);
+        }
       }
 
       return ok(map);
@@ -166,7 +257,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     try {
       // Ownership predicate at the persistence layer — defence in depth.
       const goals = await this.pdpGoalModel
-        .find({ artefactId: id, userId })
+        .find({ [LINK_ARTEFACT_PATH]: id, userId })
         .lean()
         .session(session || null);
 
@@ -183,15 +274,8 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     options?: FindByUserOptions
   ): Promise<Result<PdpGoal[], DBError>> {
     try {
-      const filter: Record<string, unknown> = { userId, status: { $in: statuses } };
-      if (options?.dueBefore) {
-        // sortDate is never null (unscheduled goals carry the far-future sentinel),
-        // so { $lte } alone excludes them — no explicit $ne: null needed.
-        filter.sortDate = { $lte: options.dueBefore };
-      }
-
       let query = this.pdpGoalModel
-        .find(filter)
+        .find(this.buildUserGoalsFilter(userId, statuses, options))
         .sort(options?.sortByReviewDate ? { sortDate: 1, _id: 1 } : { createdAt: -1 })
         .lean();
 
@@ -226,14 +310,11 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     }
 
     try {
-      const filter: Record<string, unknown> = { userId, status: { $in: statuses } };
+      const filter = this.buildUserGoalsFilter(userId, statuses);
 
       if (parsedCursor) {
         const { sortDate, id } = parsedCursor;
-        filter.$or = [
-          { sortDate: { $gt: sortDate } },
-          { sortDate, _id: { $gt: id } },
-        ];
+        filter.$or = [{ sortDate: { $gt: sortDate } }, { sortDate, _id: { $gt: id } }];
       }
 
       const fetchLimit = limit + 1;
@@ -257,10 +338,10 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     }
   }
 
-  async findOneWithArtefact(
+  async findOneWithArtefacts(
     goalXid: string,
     userId: Types.ObjectId
-  ): Promise<Result<PdpGoalWithArtefact | null, DBError>> {
+  ): Promise<Result<PdpGoalWithArtefacts | null, DBError>> {
     try {
       const results = await this.pdpGoalModel.aggregate([
         { $match: { xid: goalXid, userId } },
@@ -268,7 +349,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
         { $limit: 1 },
       ]);
 
-      return ok(results.length > 0 ? mapToGoalWithArtefact(results[0]) : null);
+      return ok(results.length > 0 ? mapToGoalWithArtefacts(results[0]) : null);
     } catch (error) {
       this.logger.error(`Failed to find PDP goal ${goalXid}`, error);
       return err({ code: 'DB_ERROR', message: 'Failed to find PDP goal' });
@@ -277,13 +358,13 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
 
   async countByUserId(
     userId: Types.ObjectId,
-    statuses: PdpGoalStatus[]
+    statuses: PdpGoalStatus[],
+    options?: UserGoalsFilterOptions
   ): Promise<Result<number, DBError>> {
     try {
-      const count = await this.pdpGoalModel.countDocuments({
-        userId,
-        status: { $in: statuses },
-      });
+      const count = await this.pdpGoalModel.countDocuments(
+        this.buildUserGoalsFilter(userId, statuses, options)
+      );
       return ok(count);
     } catch (error) {
       this.logger.error('Failed to count PDP goals by user', error);
@@ -324,7 +405,7 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
       }
 
       // Ownership predicate at the persistence layer — defence in depth even if
-      // a future caller forgets to pre-check. Mirrors anonymizeGoal/updateGoal.
+      // a future caller forgets to pre-check. Mirrors anonymizeGoal.
       const result = await this.pdpGoalModel.updateOne({ xid, userId }, { $set: setFields });
       if (result.matchedCount === 0) {
         return err({ code: 'NOT_FOUND', message: 'PDP goal not found' });
@@ -336,39 +417,24 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     }
   }
 
-  async updateGoalForArtefact(
+  async updateProposalForArtefact(
     goalXid: string,
     userId: Types.ObjectId,
     artefactId: Types.ObjectId,
-    data: UpdatePdpGoalData,
+    data: UpdateProposalData,
     actionUpdates?: UpdatePdpGoalActionData[],
     session?: ClientSession
   ): Promise<Result<void, DBError>> {
-    // Ownership predicate at the persistence layer: every write is scoped by
-    // { xid, userId, artefactId } — the goal must belong to both this user and
-    // this artefact. A goal from another of the user's artefacts (or another
-    // user) → matchedCount === 0 → NOT_FOUND, so a finalise flow can only mutate
-    // its own goals. Mirrors saveGoal/anonymizeGoal.
-    const baseFilter = { xid: goalXid, userId, artefactId };
+    const proposalGuard = { xid: goalXid, ...this.proposalFilter([artefactId], userId) };
     try {
-      const goalSetFields: Record<string, unknown> = {};
-      if (data.status !== undefined) goalSetFields.status = data.status;
+      const goalSetFields: Record<string, unknown> = { status: data.status };
       this.setReviewDate(goalSetFields, data);
-      if (data.completionReview !== undefined)
-        goalSetFields.completionReview = data.completionReview;
 
-      if (actionUpdates && actionUpdates.length > 0) {
-        if (Object.keys(goalSetFields).length > 0) {
-          const goalResult = await this.pdpGoalModel.updateOne(
-            baseFilter,
-            { $set: goalSetFields },
-            { session }
-          );
-          if (goalResult.matchedCount === 0) {
-            return err({ code: 'NOT_FOUND', message: 'PDP goal not found' });
-          }
-        }
+      const arrayFilters: Record<string, unknown>[] = [];
 
+      if (actionUpdates?.length) {
+        // Adopt path: per-action selections. Group by target status so each
+        // distinct status costs one $set key rather than one per action.
         const byStatus = new Map<PdpGoalStatus, string[]>();
         for (const au of actionUpdates) {
           const xids = byStatus.get(au.status) || [];
@@ -376,32 +442,34 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
           byStatus.set(au.status, xids);
         }
 
+        // The $set key and its filter are pushed together on purpose: MongoDB
+        // rejects the entire update if an arrayFilters identifier is not
+        // referenced by some $set key ("array filter for identifier 'x' was not
+        // used in the update"). Building the two independently would break the
+        // moment a group could be empty.
+        let i = 0;
         for (const [targetStatus, xids] of byStatus) {
-          const actionResult = await this.pdpGoalModel.updateOne(
-            baseFilter,
-            { $set: { 'actions.$[elem].status': targetStatus } },
-            { session, arrayFilters: [{ 'elem.xid': { $in: xids } }] }
-          );
-          if (actionResult.matchedCount === 0) {
-            return err({ code: 'NOT_FOUND', message: 'PDP goal not found' });
-          }
+          const id = `s${i++}`;
+          goalSetFields[`actions.$[${id}].status`] = targetStatus;
+          arrayFilters.push({ [`${id}.xid`]: { $in: xids } });
         }
       } else {
-        // Cascade: update goal fields and propagate status to all actions
-        if (data.status !== undefined) {
-          goalSetFields['actions.$[].status'] = data.status;
-        }
+        // Decline path: no per-action selections, so the goal's status cascades
+        // to every action.
+        goalSetFields['actions.$[].status'] = data.status;
+      }
 
-        if (Object.keys(goalSetFields).length > 0) {
-          const goalResult = await this.pdpGoalModel.updateOne(
-            baseFilter,
-            { $set: goalSetFields },
-            { session }
-          );
-          if (goalResult.matchedCount === 0) {
-            return err({ code: 'NOT_FOUND', message: 'PDP goal not found' });
-          }
-        }
+      // ONE write, entirely inside the proposal guard — goal fields and every
+      // action status together. Do not split it: this $set moves status off
+      // PROPOSED, so proposalFilter stops matching its own target, and any
+      // follow-up write would have to fall back to a weaker predicate.
+      const result = await this.pdpGoalModel.updateOne(
+        proposalGuard,
+        { $set: goalSetFields },
+        arrayFilters.length ? { session, arrayFilters } : { session }
+      );
+      if (result.matchedCount === 0) {
+        return err({ code: 'NOT_FOUND', message: 'PDP goal not found' });
       }
 
       return ok(undefined);
@@ -411,44 +479,19 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     }
   }
 
-  async updateManyByArtefactId(
-    artefactId: Types.ObjectId,
-    filter: { statuses: PdpGoalStatus[] },
-    data: UpdatePdpGoalData,
-    session?: ClientSession
-  ): Promise<Result<void, DBError>> {
-    try {
-      const setFields: Record<string, unknown> = {};
-      if (data.status !== undefined) {
-        setFields.status = data.status;
-        setFields['actions.$[].status'] = data.status;
-      }
-      this.setReviewDate(setFields, data);
-
-      if (Object.keys(setFields).length > 0) {
-        await this.pdpGoalModel.updateMany(
-          { artefactId, status: { $in: filter.statuses } },
-          { $set: setFields },
-          { session }
-        );
-      }
-
-      return ok(undefined);
-    } catch (error) {
-      this.logger.error('Failed to bulk-update PDP goals', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to bulk-update PDP goals' });
-    }
-  }
-
-  async deleteByArtefactId(
-    artefactId: Types.ObjectId,
+  async deleteUnadoptedProposals(
+    artefactIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>> {
+    if (artefactIds.length === 0) return ok(0);
     try {
-      const result = await this.pdpGoalModel.deleteMany({ artefactId }, { session });
+      const result = await this.pdpGoalModel.deleteMany(this.proposalFilter(artefactIds, userId), {
+        session,
+      });
       return ok(result.deletedCount);
     } catch (error) {
-      this.logger.error(`Failed to delete PDP goals for artefact ${artefactId}`, error);
+      this.logger.error('Failed to delete unadopted PDP proposals', error);
       return err({ code: 'DB_ERROR', message: 'Failed to delete PDP goals' });
     }
   }
@@ -481,27 +524,6 @@ export class PdpGoalsRepository implements IPdpGoalsRepository {
     } catch (error) {
       this.logger.error('Failed to anonymize PDP goals', error);
       return err({ code: 'DB_ERROR', message: 'Failed to anonymize PDP goals' });
-    }
-  }
-
-  async markDeletedByArtefactIds(
-    artefactIds: Types.ObjectId[],
-    session?: ClientSession
-  ): Promise<Result<number, DBError>> {
-    if (artefactIds.length === 0) return ok(0);
-    try {
-      const result = await this.pdpGoalModel.updateMany(
-        { artefactId: { $in: artefactIds }, status: { $ne: PdpGoalStatus.DELETED } },
-        pdpGoalTombstoneUpdate(),
-        { session }
-      );
-      return ok(result.modifiedCount);
-    } catch (error) {
-      this.logger.error('Failed to mark PDP goals deleted by artefact ids', error);
-      return err({
-        code: 'DB_ERROR',
-        message: 'Failed to mark PDP goals deleted by artefact ids',
-      });
     }
   }
 }

@@ -261,13 +261,13 @@ describe('AccountCleanupService (integration)', () => {
       userId,
       artefactId: artefactOid,
       goal: `Goal for ${userId}`,
-      status: PdpGoalStatus.NOT_STARTED,
+      status: PdpGoalStatus.PROPOSED,
       actions: [
         {
           xid: `act_${userId.toString().slice(-6)}`,
           action: `Action for ${userId}`,
           intendedEvidence: `Evidence for ${userId}`,
-          status: PdpGoalStatus.NOT_STARTED,
+          status: PdpGoalStatus.PROPOSED,
         },
       ],
     });
@@ -443,7 +443,7 @@ describe('AccountCleanupService (integration)', () => {
 
     const goalB = await pdpGoalModel.findOne({ userId: userBId }).lean();
     expect(goalB!.goal).toBe(`Goal for ${userBId}`);
-    expect(goalB!.status).toBe(PdpGoalStatus.NOT_STARTED);
+    expect(goalB!.status).toBe(PdpGoalStatus.PROPOSED);
     expect(goalB!.actions[0].action).toBe(`Action for ${userBId}`);
 
     const rpB = await reviewPeriodModel.findOne({ userId: userBId }).lean();

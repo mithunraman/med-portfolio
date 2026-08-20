@@ -38,3 +38,4 @@ coverage/
 *.tsbuildinfo
 
 docs/compliance/*
+docs/app-store/*

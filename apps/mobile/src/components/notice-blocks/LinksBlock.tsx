@@ -1,8 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme';
 import { openInAppBrowser } from '@/utils/external-link';
 import { logger } from '@/utils/logger';
+import { Ionicons } from '@expo/vector-icons';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 const linksLogger = logger.createScope('LinksBlock');
 
@@ -53,13 +53,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
   },
   label: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
   },
 });

@@ -1,8 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
-import type { AcknowledgementId, NoticeDocument } from '@acme/shared';
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '@/api/client';
 import { Button, ErrorBanner } from '@/components';
 import { NoticeBlocks } from '@/components/notice-blocks';
@@ -10,6 +5,11 @@ import { useAppDispatch, useAppSelector } from '@/hooks';
 import { acknowledgementSatisfied, selectAcknowledgement } from '@/store';
 import { useTheme } from '@/theme';
 import { logger } from '@/utils/logger';
+import type { AcknowledgementId, NoticeDocument } from '@acme/shared';
+import { Ionicons } from '@expo/vector-icons';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const screenLogger = logger.createScope('NoticeAndAck');
 
@@ -29,9 +29,9 @@ export default function NoticeAndAckScreen() {
 
   const [ackState, setAckState] = useState<Partial<Record<AcknowledgementId, boolean>>>(() => {
     if (!document) return {};
-    return Object.fromEntries(
-      document.acknowledgements.map((a) => [a.id, false])
-    ) as Partial<Record<AcknowledgementId, boolean>>;
+    return Object.fromEntries(document.acknowledgements.map((a) => [a.id, false])) as Partial<
+      Record<AcknowledgementId, boolean>
+    >;
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,11 +78,18 @@ export default function NoticeAndAckScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top + 16 }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colors.background, paddingTop: insets.top + 16 },
+      ]}
+    >
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={[styles.title, { color: colors.text }]}>{document.title}</Text>
         {document.subtitle ? (
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{document.subtitle}</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            {document.subtitle}
+          </Text>
         ) : null}
 
         <NoticeBlocks blocks={document.body} />
@@ -120,11 +127,7 @@ export default function NoticeAndAckScreen() {
         </View>
 
         {error ? (
-          <ErrorBanner
-            message={error}
-            onRetry={handleSubmit}
-            style={styles.errorBannerOverride}
-          />
+          <ErrorBanner message={error} onRetry={handleSubmit} style={styles.errorBannerOverride} />
         ) : null}
 
         <Text style={[styles.disclaimer, { color: colors.textSecondary }]}>
@@ -154,7 +157,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   title: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: 'bold',
   },
   subtitle: {
@@ -162,7 +165,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   checkboxes: {
-    gap: 12,
+    gap: 8,
   },
   checkboxRow: {
     flexDirection: 'row',
@@ -183,8 +186,8 @@ const styles = StyleSheet.create({
   },
   checkboxLabel: {
     flex: 1,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
   },
   // ErrorBanner bakes in `marginHorizontal: 24` and `marginBottom: 16` for use
   // at the screen edge. Inside this ScrollView (already `paddingHorizontal: 24`

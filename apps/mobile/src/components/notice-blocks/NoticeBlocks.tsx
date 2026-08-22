@@ -1,5 +1,5 @@
 import type { NoticeBlock } from '@acme/shared';
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { LinksBlock } from './LinksBlock';
 import { ParagraphBlock } from './ParagraphBlock';
 
@@ -29,6 +29,6 @@ export function NoticeBlocks({ blocks }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    gap: 20,
+    gap: 10,
   },
 });

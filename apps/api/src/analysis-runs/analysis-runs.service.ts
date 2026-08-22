@@ -113,15 +113,23 @@ export class AnalysisRunsService {
    * Update the currentStep field on the active run for a conversation.
    * Used by the event listener to track graph node progress.
    */
+  /**
+   * Returns whether a run was actually updated. A `false` here is not an error —
+   * the filter requires an ACTIVE run for this (conversation, owner) pair, and a
+   * terminated run legitimately matches nothing. But it must not be reported as
+   * success: the caller previously logged "Updated currentStep" unconditionally,
+   * which turned a no-match into a false positive in the logs.
+   */
   async updateCurrentStep(
     conversationId: Types.ObjectId,
     userId: Types.ObjectId,
     step: string
-  ): Promise<void> {
+  ): Promise<boolean> {
     const result = await this.repository.updateCurrentStep(conversationId, userId, step);
     if (!result.ok) {
       throw new Error(result.error.message);
     }
+    return result.value !== null;
   }
 
   async findLatestRun(

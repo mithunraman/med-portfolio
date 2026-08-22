@@ -1,4 +1,5 @@
 import { Types } from 'mongoose';
+import { toObjectId } from '../../common/utils/objectid.util';
 
 /**
  * Read a required ObjectId field off an outbox payload, throwing if it is absent.
@@ -44,12 +45,5 @@ export function requiredObjectId(
   field: string,
   jobType: string
 ): Types.ObjectId {
-  const raw = payload[field];
-  if (typeof raw !== 'string') {
-    throw new Error(
-      `${jobType}: payload.${field} is missing or not a string (got ${raw === null ? 'null' : typeof raw})`
-    );
-  }
-  // A malformed hex string throws BSONError here, which is the behaviour we want.
-  return new Types.ObjectId(raw);
+  return toObjectId(payload[field], `${jobType}: payload.${field}`);
 }

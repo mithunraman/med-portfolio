@@ -91,21 +91,25 @@ export class ConversationsService {
    * generated, cross-conversation) surfaces a generic 404 so message xids in
    * other conversations the user owns can't be enumerated.
    */
+  /**
+   * Takes the AUTHENTICATED principal, already converted by the public method.
+   *
+   * Two rules this signature enforces. Every ownership predicate below is
+   * `userOid` — never a `userId` read off a record this method just fetched,
+   * which would re-assert a field of a document already in hand and match by
+   * construction. And the string→ObjectId conversion happens once per public
+   * entry point, not again here; the repo interface still declares `userId` as
+   * ObjectId, and a follow-up should push userId-as-string into it to remove
+   * the conversion entirely (see CLAUDE.md).
+   */
   private async assertModifiableUserMessage(
-    userId: string,
+    userOid: Types.ObjectId,
     conversationXid: string,
     messageXid: string,
     allowedStatuses: MessageStatus[],
     action: 'edit' | 'delete',
     session: ClientSession
   ): Promise<MessageSchema> {
-    // Single ObjectId conversion for both edit and delete. The conversations
-    // repo interface still declares userId as ObjectId (shared with sendMessage,
-    // listMessages, etc.); converting once here keeps it out of the individual
-    // edit/delete methods. A follow-up should push userId-as-string into the
-    // repo interface to remove this conversion entirely (see CLAUDE.md).
-    const userOid = new Types.ObjectId(userId);
-
     const convResult = await this.conversationsRepository.findConversationByXid(
       conversationXid,
       userOid,
@@ -218,7 +222,7 @@ export class ConversationsService {
     await this.transactionService.withTransaction(
       async (session) => {
         const message = await this.assertModifiableUserMessage(
-          userId,
+          userOid,
           conversationXid,
           messageXid,
           // REJECTED is deletable alongside FAILED (a message that never entered the
@@ -263,7 +267,7 @@ export class ConversationsService {
     const { updated, populated } = await this.transactionService.withTransaction(
       async (session) => {
         const message = await this.assertModifiableUserMessage(
-          userId,
+          userOid,
           conversationXid,
           messageXid,
           // COMPLETE only — REJECTED is intentionally excluded. Edit runs redaction
@@ -518,10 +522,10 @@ export class ConversationsService {
 
     // 3. Branch on action type
     if (dto.type === 'start') {
-      await this.handleStart(userId, convIdStr, conversation);
+      await this.handleStart(userOid, convIdStr, conversation);
     } else {
       await this.handleResume(
-        userId,
+        userOid,
         convIdStr,
         conversation._id,
         dto.messageId,
@@ -541,12 +545,11 @@ export class ConversationsService {
    * Uses idempotency key (conversationId-scoped) to prevent duplicate runs.
    */
   private async handleStart(
-    userId: string,
+    userOid: Types.ObjectId,
     convIdStr: string,
     conversation: { _id: Types.ObjectId; artefact: Types.ObjectId },
     idempotencyKey?: string
   ): Promise<void> {
-    const userOid = new Types.ObjectId(userId);
     const effectiveIdempotencyKey = idempotencyKey || generateXid();
 
     await this.transactionService.withTransaction(
@@ -599,7 +602,7 @@ export class ConversationsService {
               analysisRunId: run._id.toString(),
               conversationId: convIdStr,
               artefactId: conversation.artefact.toString(),
-              userId,
+              userId: userOid.toString(),
               specialty: artefact.specialty.toString(),
               trainingStage: artefact.trainingStage ?? '',
               entryType: artefact.artefactType,
@@ -621,14 +624,13 @@ export class ConversationsService {
    * validates the response shape using questionType, and maps generic → domain values.
    */
   private async handleResume(
-    userId: string,
+    userOid: Types.ObjectId,
     convIdStr: string,
     conversationOid: Types.ObjectId,
     messageId: string,
     value?: Record<string, unknown>
   ): Promise<void> {
     // 1. Look up the ASSISTANT question message by xid
-    const userOid = new Types.ObjectId(userId);
     const msgResult = await this.conversationsRepository.findMessagesByXids([messageId], userOid);
     if (isErr(msgResult)) throw new InternalServerErrorException(msgResult.error.message);
     const message = msgResult.value[0];
@@ -802,7 +804,7 @@ export class ConversationsService {
             payload: {
               analysisRunId: activeRun._id.toString(),
               conversationId: convIdStr,
-              userId,
+              userId: userOid.toString(),
               node,
               resumeValue,
               langGraphThreadId: activeRun.langGraphThreadId,

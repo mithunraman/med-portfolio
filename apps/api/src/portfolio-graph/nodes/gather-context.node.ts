@@ -1,7 +1,8 @@
 import { MessageStatus, MessageRole } from '@acme/shared';
 import { Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
-import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
+import { GraphDeps, emitStepStarted } from '../graph-deps';
+import { ThinkingStep } from '../thinking-step.enum';
 import { PortfolioStateType } from '../portfolio-graph.state';
 import { buildTranscript } from './transcript-format.util';
 
@@ -23,7 +24,7 @@ export function createGatherContextNode(deps: GraphDeps) {
   return async function gatherContextNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, userId: state.userId, step: 'gather_context' });
+    emitStepStarted(deps, state, ThinkingStep.GATHER_CONTEXT);
     const cid = state.conversationId;
     logger.log(`[${cid}] Gathering context`);
 

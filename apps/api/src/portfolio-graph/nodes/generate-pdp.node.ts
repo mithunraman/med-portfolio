@@ -5,7 +5,8 @@ import { z } from 'zod';
 import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
 import { getFormattingStageContext } from '../../specialties/stage-context';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
-import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
+import { GraphDeps, emitStepStarted } from '../graph-deps';
+import { ThinkingStep } from '../thinking-step.enum';
 import { PdpGoal, PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('GeneratePdpNode');
@@ -230,11 +231,7 @@ export function createGeneratePdpNode(deps: GraphDeps) {
   return async function generatePdpNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
-      conversationId: state.conversationId,
-      userId: state.userId,
-      step: 'generate_pdp',
-    });
+    emitStepStarted(deps, state, ThinkingStep.GENERATE_PDP);
     const cid = state.conversationId;
     logger.log(`[${cid}] Generating PDP`);
 

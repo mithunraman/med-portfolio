@@ -4,7 +4,8 @@ import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
-import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
+import { GraphDeps, emitStepStarted } from '../graph-deps';
+import { ThinkingStep } from '../thinking-step.enum';
 import { CapabilityTag, PortfolioStateType, ReadinessTier } from '../portfolio-graph.state';
 import {
   CAPABILITY_TIERS,
@@ -161,11 +162,7 @@ export function createElicitJustificationNode(deps: GraphDeps) {
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
     const cid = state.conversationId;
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
-      conversationId: cid,
-      userId: state.userId,
-      step: 'elicit_justification',
-    });
+    emitStepStarted(deps, state, ThinkingStep.ELICIT_JUSTIFICATION);
 
     // ── Guards ──
     if (state.capabilities.length === 0) {

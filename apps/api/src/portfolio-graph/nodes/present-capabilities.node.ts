@@ -1,7 +1,8 @@
 import type { CapabilityOption } from '@acme/shared';
 import { interrupt } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
-import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
+import { GraphDeps, emitStepStarted } from '../graph-deps';
+import { ThinkingStep } from '../thinking-step.enum';
 import { PortfolioStateType } from '../portfolio-graph.state';
 import { tierToConfidence } from './capability-grading.util';
 
@@ -38,11 +39,7 @@ export function createPresentCapabilitiesNode(deps: GraphDeps) {
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
     const cid = state.conversationId;
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
-      conversationId: cid,
-      userId: state.userId,
-      step: 'present_capabilities',
-    });
+    emitStepStarted(deps, state, ThinkingStep.PRESENT_CAPABILITIES);
     logger.log(`[${cid}] Presenting capabilities`);
 
     // ── Empty capabilities: interrupt with empty options for terminal message ──

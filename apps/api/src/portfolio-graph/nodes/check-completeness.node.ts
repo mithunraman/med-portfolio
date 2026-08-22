@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { getGradingStageContext } from '../../specialties/stage-context';
 import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
-import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
+import { GraphDeps, emitStepStarted } from '../graph-deps';
+import { ThinkingStep } from '../thinking-step.enum';
 import {
   PortfolioStateType,
   ReadinessEntry,
@@ -389,11 +390,7 @@ export function createCheckCompletenessNode(deps: GraphDeps) {
   return async function checkCompletenessNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
-      conversationId: state.conversationId,
-      userId: state.userId,
-      step: 'check_completeness',
-    });
+    emitStepStarted(deps, state, ThinkingStep.CHECK_COMPLETENESS);
     const cid = state.conversationId;
     logger.log(`[${cid}] Checking completeness (type: ${state.entryType})`);
 

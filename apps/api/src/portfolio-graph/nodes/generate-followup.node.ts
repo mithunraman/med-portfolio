@@ -5,7 +5,8 @@ import { z } from 'zod';
 import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
-import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
+import { GraphDeps, emitStepStarted } from '../graph-deps';
+import { ThinkingStep } from '../thinking-step.enum';
 import { hasBeenAsked, isSectionExhausted, unconfirmedSections } from '../elicitation.util';
 import { pickFollowupLine, resolveFollowupTier } from '../followup-copy';
 import { PortfolioStateType, ReadinessEntry, SectionAttempt } from '../portfolio-graph.state';
@@ -285,11 +286,7 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
     }
 
     const cid = state.conversationId;
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
-      conversationId: cid,
-      userId: state.userId,
-      step: 'generate_followup',
-    });
+    emitStepStarted(deps, state, ThinkingStep.GENERATE_FOLLOWUP);
     logger.log(
       `[${cid}] Generating follow-up questions (round ${state.followUpRound + 1}, ` +
         `missing: [${state.missingSections.join(', ')}])`

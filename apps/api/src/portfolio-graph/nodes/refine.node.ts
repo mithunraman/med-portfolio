@@ -2,7 +2,8 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
-import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
+import { GraphDeps, emitStepStarted } from '../graph-deps';
+import { ThinkingStep } from '../thinking-step.enum';
 import { RefineTrace, PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('RefineNode');
@@ -188,11 +189,7 @@ export function createRefineNode(deps: GraphDeps) {
   return async function refineNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
-      conversationId: state.conversationId,
-      userId: state.userId,
-      step: 'refine',
-    });
+    emitStepStarted(deps, state, ThinkingStep.REFINE);
     const cid = state.conversationId;
     const document = state.composedDocument ?? [];
 

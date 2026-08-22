@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 import { AnalysisStepStartedEvent } from '../../portfolio-graph/graph-deps';
+import { ThinkingStep } from '../../portfolio-graph/thinking-step.enum';
 import { AnalysisRunListener } from '../analysis-run.listener';
 import { AnalysisRunsService } from '../analysis-runs.service';
 
@@ -38,7 +39,7 @@ describe('AnalysisRunListener', () => {
   const event = (overrides: Partial<AnalysisStepStartedEvent> = {}): AnalysisStepStartedEvent => ({
     conversationId,
     userId,
-    step: 'reflect',
+    step: ThinkingStep.REFLECT,
     ...overrides,
   });
 
@@ -55,7 +56,7 @@ describe('AnalysisRunListener', () => {
     const [convOid, userOid, step] = updateCurrentStep.mock.calls[0];
     expect(convOid.toString()).toBe(conversationId);
     expect(userOid.toString()).toBe(userId);
-    expect(step).toBe('reflect');
+    expect(step).toBe(ThinkingStep.REFLECT);
     expect(debug).toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
   });

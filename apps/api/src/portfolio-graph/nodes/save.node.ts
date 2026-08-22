@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
-import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
+import { GraphDeps, emitStepStarted } from '../graph-deps';
+import { ThinkingStep } from '../thinking-step.enum';
 import { DraftStatus, PortfolioStateType } from '../portfolio-graph.state';
 
 /**
@@ -15,11 +16,7 @@ export function createSaveNode(deps: GraphDeps) {
   const logger = new Logger('SaveNode');
 
   return async (state: PortfolioStateType): Promise<Partial<PortfolioStateType>> => {
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
-      conversationId: state.conversationId,
-      userId: state.userId,
-      step: 'save',
-    });
+    emitStepStarted(deps, state, ThinkingStep.SAVE);
 
     const cid = state.conversationId;
 

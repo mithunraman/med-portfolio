@@ -5,7 +5,8 @@ import { z } from 'zod';
 import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { getFormattingStageContext } from '../../specialties/stage-context';
-import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
+import { GraphDeps, emitStepStarted } from '../graph-deps';
+import { ThinkingStep } from '../thinking-step.enum';
 import { PortfolioStateType, ReflectTrace } from '../portfolio-graph.state';
 import { verifyComposed } from './compose-verify.util';
 
@@ -336,11 +337,7 @@ export function createReflectNode(deps: GraphDeps) {
   return async function reflectNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
-      conversationId: state.conversationId,
-      userId: state.userId,
-      step: 'reflect',
-    });
+    emitStepStarted(deps, state, ThinkingStep.REFLECT);
     const cid = state.conversationId;
     logger.log(`[${cid}] Organising reflection (type: ${state.entryType})`);
 

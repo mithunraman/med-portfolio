@@ -1,6 +1,7 @@
 import { interrupt } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
-import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
+import { GraphDeps, emitStepStarted } from '../graph-deps';
+import { ThinkingStep } from '../thinking-step.enum';
 import { PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('AskFollowupNode');
@@ -20,11 +21,7 @@ export function createAskFollowupNode(deps: GraphDeps) {
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
     const cid = state.conversationId;
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
-      conversationId: cid,
-      userId: state.userId,
-      step: 'ask_followup',
-    });
+    emitStepStarted(deps, state, ThinkingStep.ASK_FOLLOWUP);
     logger.log(
       `[${cid}] Presenting follow-up questions (round ${state.followUpRound}, ` +
         `${state.pendingFollowupQuestions.length} questions)`

@@ -1,6 +1,7 @@
 import { interrupt } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
-import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
+import { GraphDeps, emitStepStarted } from '../graph-deps';
+import { ThinkingStep } from '../thinking-step.enum';
 import { PortfolioStateType } from '../portfolio-graph.state';
 
 const logger = new Logger('RejectEntryNode');
@@ -26,11 +27,7 @@ export function createRejectEntryNode(deps: GraphDeps) {
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
     const cid = state.conversationId;
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
-      conversationId: cid,
-      userId: state.userId,
-      step: 'reject_entry',
-    });
+    emitStepStarted(deps, state, ThinkingStep.REJECT_ENTRY);
     logger.warn(`[${cid}] Rejecting entry — transcript is not a portfolio entry`);
 
     interrupt({ type: 'rejected' });

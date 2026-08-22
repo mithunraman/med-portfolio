@@ -4,7 +4,8 @@ import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { getSpecialtyConfig } from '../../specialties/specialty.registry';
 import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
-import { ANALYSIS_STEP_STARTED, GraphDeps } from '../graph-deps';
+import { GraphDeps, emitStepStarted } from '../graph-deps';
+import { ThinkingStep } from '../thinking-step.enum';
 import { CapabilityTag, PortfolioStateType, ReadinessTier } from '../portfolio-graph.state';
 import {
   byTierDescending,
@@ -269,11 +270,7 @@ export function createTagCapabilitiesNode(deps: GraphDeps) {
   return async function tagCapabilitiesNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
-      conversationId: state.conversationId,
-      userId: state.userId,
-      step: 'tag_capabilities',
-    });
+    emitStepStarted(deps, state, ThinkingStep.TAG_CAPABILITIES);
     const cid = state.conversationId;
     logger.log(`[${cid}] Tagging capabilities (${TAG_PROMPT_VERSION})`);
 

@@ -312,11 +312,10 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
     }
   }
 
-  // ─── Deliberately NOT owner-scoped ───
-  //
-  // The three sweeper methods below run on the retention cron and must cross every
-  // user by design. `userId` is absent from their filters on purpose — do not add it.
-
+  /**
+   * Deliberately cross-user: runs on the retention cron and must reach every
+   * account. `userId` is absent from the filter on purpose — do not add it.
+   */
   async findRunsForSweepBatch(
     statuses: AnalysisRunStatus[],
     cutoff: Date,
@@ -346,6 +345,10 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
     }
   }
 
+  /**
+   * Deliberately cross-user: runs on the retention cron and must reach every
+   * account. `userId` is absent from the filter on purpose — do not add it.
+   */
   async expireStaleRuns(
     statuses: AnalysisRunStatus[],
     cutoff: Date
@@ -389,6 +392,10 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
     }
   }
 
+  /**
+   * Deliberately cross-user: runs on the retention cron and must reach every
+   * account. `userId` is absent from the filter on purpose — do not add it.
+   */
   async markCheckpointsPurged(
     runIds: Types.ObjectId[],
     now: Date

@@ -49,8 +49,13 @@ export class AnalysisRun {
   // enforced in the filter rather than assumed from the caller. Written once by
   // `createRun`; no update path touches it.
   //
-  // No standalone index: every owner-scoped query also names `conversationId`,
-  // which prefixes the compound indexes below, so `userId` is a residual filter.
+  // No standalone index: `userId` is never the selective key. Every owner-scoped
+  // query leads with `_id`, `conversationId` or `artefactId` — all indexed — so
+  // `userId` only ever narrows an already-bounded set.
+  //
+  // Stated as a rule rather than an inventory on purpose: if a query is ever
+  // added that filters by `userId` alone, that is the point to revisit this and
+  // justify an index, rather than assuming this note still covers it.
   @Prop({ required: true, type: Types.ObjectId, ref: 'User' })
   userId!: Types.ObjectId;
 

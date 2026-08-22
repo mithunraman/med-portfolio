@@ -28,6 +28,7 @@ export function createRejectEntryNode(deps: GraphDeps) {
     const cid = state.conversationId;
     deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
       conversationId: cid,
+      userId: state.userId,
       step: 'reject_entry',
     });
     logger.warn(`[${cid}] Rejecting entry — transcript is not a portfolio entry`);

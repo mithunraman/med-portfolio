@@ -46,6 +46,7 @@ export class AnalysisCompletionService {
    */
   async persistCompletion(
     runId: Types.ObjectId,
+    userId: Types.ObjectId,
     threadId: string,
     context: string,
   ): Promise<void> {
@@ -59,6 +60,7 @@ export class AnalysisCompletionService {
       );
       await this.analysisRunsService.transitionStatus(
         runId,
+        userId,
         AnalysisRunStatus.RUNNING,
         AnalysisRunStatus.COMPLETED,
         { currentStep: null },
@@ -127,6 +129,7 @@ export class AnalysisCompletionService {
         // are written here as immutable debug/eval provenance on the run record.
         await this.analysisRunsService.transitionStatus(
           runId,
+          userId,
           AnalysisRunStatus.RUNNING,
           AnalysisRunStatus.COMPLETED,
           {

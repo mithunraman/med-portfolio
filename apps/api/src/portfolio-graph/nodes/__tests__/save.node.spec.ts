@@ -106,7 +106,7 @@ describe('SaveNode (validation-only)', () => {
 
     expect(deps.eventEmitter.emit).toHaveBeenCalledWith(
       'analysis.step.started',
-      { conversationId: 'conv-1', step: 'save' },
+      { conversationId: 'conv-1', userId: 'user-1', step: 'save' },
     );
   });
 });

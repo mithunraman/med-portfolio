@@ -23,19 +23,18 @@ export function createGatherContextNode(deps: GraphDeps) {
   return async function gatherContextNode(
     state: PortfolioStateType
   ): Promise<Partial<PortfolioStateType>> {
-    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, step: 'gather_context' });
+    deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, { conversationId: state.conversationId, userId: state.userId, step: 'gather_context' });
     const cid = state.conversationId;
     logger.log(`[${cid}] Gathering context`);
 
     const conversationId = new Types.ObjectId(state.conversationId);
 
     // Fetch all messages — conversations are <50 messages.
-    // SYSTEM READ: runs inside the graph off a server-set state.conversationId
-    // (never request input); the conversation's owner is verified upstream before
-    // the run starts. Unscoped by userId by design — see CLAUDE.md's ownership-
-    // predicate carve-out.
+    // Scoped by the run's owner: state.userId is server-set at run start, so the
+    // read cannot cross tenants even if state.conversationId were ever wrong.
     const result = await deps.conversationsRepository.listMessages({
       conversation: conversationId,
+      userId: new Types.ObjectId(state.userId),
     });
 
     if (!result.ok) {

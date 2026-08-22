@@ -301,6 +301,7 @@ describe('AccountCleanupService (integration)', () => {
     await analysisRunModel.create({
       xid: `run_${userId.toString().slice(-6)}`,
       conversationId: convId,
+      userId,
       runNumber: 1,
       status: AnalysisRunStatus.COMPLETED,
       idempotencyKey: `idem_run_${userId}`,

@@ -13,15 +13,22 @@ import { AnalysisResumeHandler, type AnalysisResumePayload } from '../analysis-r
 
 const oid = () => new Types.ObjectId();
 
+/**
+ * The literal is annotated INSIDE the function, matching `analysis-start.handler.spec.ts`:
+ * annotating only the return type would check nothing, so a newly-required field
+ * would silently go missing from every test here and surface as `undefined` at
+ * runtime rather than as a build error. `userId` did exactly that.
+ */
 function makePayload(overrides: Partial<AnalysisResumePayload> = {}): Record<string, unknown> {
-  return {
+  const payload: AnalysisResumePayload = {
     analysisRunId: oid().toString(),
     conversationId: oid().toString(),
+    userId: oid().toString(),
     node: 'present_capabilities',
     resumeValue: { selectedCodes: ['C-01'] },
     langGraphThreadId: 'conv:1',
-    ...overrides,
   };
+  return { ...payload, ...overrides };
 }
 
 function makeRun(status: AnalysisRunStatus) {
@@ -282,6 +289,7 @@ describe('AnalysisResumeHandler', () => {
       expect(deleteUnadoptedProposals).toHaveBeenCalled();
       expect(transitionStatus).toHaveBeenCalledWith(
         expect.any(Types.ObjectId),
+        expect.any(Types.ObjectId),
         AnalysisRunStatus.RUNNING,
         AnalysisRunStatus.COMPLETED,
         { currentStep: null },
@@ -355,5 +363,32 @@ describe('AnalysisResumeHandler', () => {
       await expect(handler.handle(payload)).rejects.toThrow(/terminal node/);
       expect(resumeGraph).not.toHaveBeenCalled();
     });
+  });
+
+  /**
+   * `new Types.ObjectId(undefined)` mints a random id rather than throwing, so a
+   * payload missing a field used to yield a valid-looking id that matched no run.
+   * The handler then hit `if (!run) return`, and the consumer marked the job
+   * COMPLETED — a broken job laundered into a success, leaving the run
+   * non-terminal and the conversation stuck "analysing" with nothing to show for
+   * it. Rejecting routes into the outbox's bounded-retry → dead-letter → Sentry
+   * path instead (visibility, not availability — the run is stranded either way).
+   */
+  describe('payload validation', () => {
+    it.each(['userId', 'analysisRunId'])(
+      'rejects and never looks up the run when %s is absent',
+      async (field) => {
+        const findRunById = jest.fn();
+        const { handler } = createHandler({ findRunById });
+
+        const payload = makePayload();
+        delete payload[field];
+
+        await expect(handler.handle(payload)).rejects.toThrow(
+          `analysis.resume: payload.${field} is missing or not a string`
+        );
+        expect(findRunById).not.toHaveBeenCalled();
+      }
+    );
   });
 });

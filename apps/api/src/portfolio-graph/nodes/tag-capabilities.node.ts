@@ -271,6 +271,7 @@ export function createTagCapabilitiesNode(deps: GraphDeps) {
   ): Promise<Partial<PortfolioStateType>> {
     deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
       conversationId: state.conversationId,
+      userId: state.userId,
       step: 'tag_capabilities',
     });
     const cid = state.conversationId;

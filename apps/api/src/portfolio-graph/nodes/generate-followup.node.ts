@@ -287,6 +287,7 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
     const cid = state.conversationId;
     deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
       conversationId: cid,
+      userId: state.userId,
       step: 'generate_followup',
     });
     logger.log(

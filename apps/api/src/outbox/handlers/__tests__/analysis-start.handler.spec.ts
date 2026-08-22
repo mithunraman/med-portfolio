@@ -345,6 +345,7 @@ describe('AnalysisStartHandler', () => {
       // Status transitioned to COMPLETED inside transaction
       expect(transitionStatus).toHaveBeenCalledWith(
         expect.any(Types.ObjectId),
+        expect.any(Types.ObjectId),
         AnalysisRunStatus.RUNNING,
         AnalysisRunStatus.COMPLETED,
         { currentStep: null },
@@ -400,5 +401,32 @@ describe('AnalysisStartHandler', () => {
       // getFinalState uses threadId
       expect(getFinalState).toHaveBeenCalledWith('conv-123:2');
     });
+  });
+
+  /**
+   * `new Types.ObjectId(undefined)` mints a random id rather than throwing, so a
+   * payload missing a field used to yield a valid-looking id that matched no run.
+   * The handler then hit `if (!run) return`, and the consumer marked the job
+   * COMPLETED — a broken job laundered into a success, leaving the run
+   * non-terminal and the conversation stuck "analysing" with nothing to show for
+   * it. Rejecting routes into the outbox's bounded-retry → dead-letter → Sentry
+   * path instead (visibility, not availability — the run is stranded either way).
+   */
+  describe('payload validation', () => {
+    it.each(['userId', 'analysisRunId'])(
+      'rejects and never looks up the run when %s is absent',
+      async (field) => {
+        const findRunById = jest.fn();
+        const { handler } = createHandler({ findRunById });
+
+        const payload = makePayload();
+        delete payload[field];
+
+        await expect(handler.handle(payload)).rejects.toThrow(
+          `analysis.start: payload.${field} is missing or not a string`
+        );
+        expect(findRunById).not.toHaveBeenCalled();
+      }
+    );
   });
 });

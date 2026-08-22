@@ -278,7 +278,7 @@ describe('Message retention sweep (C-2) — integration', () => {
         await service.sweep(NOW); // rawContent, redactedContent and anchor all null
 
         // The pipeline, resuming with a redaction result computed before the sweep.
-        const written = await repo.updateMessageIfRawContentPresent(doc._id, {
+        const written = await repo.updateMessageIfRawContentPresent(doc._id, userId, {
           redactedContent: 'Saw [PERSON] at [ADDRESS].',
           status: MessageStatus.CLEANING,
         });
@@ -293,7 +293,7 @@ describe('Message retention sweep (C-2) — integration', () => {
         // The guard must not break the ordinary path it sits on.
         const doc = await seed({ createdAt: hoursAgo(1) });
 
-        const written = await repo.updateMessageIfRawContentPresent(doc._id, {
+        const written = await repo.updateMessageIfRawContentPresent(doc._id, userId, {
           redactedContent: 'Saw [PERSON] at [ADDRESS].',
           status: MessageStatus.CLEANING,
         });
@@ -312,7 +312,7 @@ describe('Message retention sweep (C-2) — integration', () => {
           content: '[deleted]',
         });
 
-        const written = await repo.updateMessageIfRawContentPresent(doc._id, {
+        const written = await repo.updateMessageIfRawContentPresent(doc._id, userId, {
           redactedContent: 'leaked',
           status: MessageStatus.CLEANING,
         });

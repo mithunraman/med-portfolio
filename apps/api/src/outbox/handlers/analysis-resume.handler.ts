@@ -13,10 +13,12 @@ import {
 } from '../../portfolio-graph/portfolio-graph.service';
 import { AnalysisCompletionService } from '../analysis-completion.service';
 import type { OutboxHandler } from '../outbox.consumer';
+import { requiredObjectId } from './payload.util';
 
 export interface AnalysisResumePayload {
   analysisRunId: string;
   conversationId: string;
+  userId: string;
   node: InterruptNode;
   resumeValue?: Record<string, unknown> | true;
   langGraphThreadId: string;
@@ -38,13 +40,16 @@ export class AnalysisResumeHandler implements OutboxHandler {
 
   async handle(payload: Record<string, unknown>): Promise<void> {
     const data = payload as unknown as AnalysisResumePayload;
-    const runId = new Types.ObjectId(data.analysisRunId);
+    // Validated, not cast — see `requiredObjectId`. An absent id would otherwise
+    // be minted, match no run, and complete the job as a no-op.
+    const runId = requiredObjectId(payload, 'analysisRunId', this.type);
+    const userOid = requiredObjectId(payload, 'userId', this.type);
     const threadId = data.langGraphThreadId;
 
     // Same guard as AnalysisStartHandler, keyed to this handler's own starting
     // status — see the comment there for why it is stated as the expected
     // status rather than a list of finished ones.
-    const run = await this.analysisRunsService.findRunById(runId);
+    const run = await this.analysisRunsService.findRunById(runId, userOid);
     if (!run) return;
     if (run.status !== AnalysisRunStatus.AWAITING_INPUT) {
       const message = `Run ${data.analysisRunId} is ${run.status}, not AWAITING_INPUT — skipping resume`;
@@ -59,6 +64,7 @@ export class AnalysisResumeHandler implements OutboxHandler {
     // Transition run: AWAITING_INPUT → RUNNING
     await this.analysisRunsService.transitionStatus(
       runId,
+      userOid,
       AnalysisRunStatus.AWAITING_INPUT,
       AnalysisRunStatus.RUNNING,
       { currentQuestion: null, currentStep: null }
@@ -101,10 +107,11 @@ export class AnalysisResumeHandler implements OutboxHandler {
       }
 
       if (pausedNode) {
-        await this.handleInterrupt(runId, threadId);
+        await this.handleInterrupt(runId, userOid, threadId);
       } else {
         await this.completionService.persistCompletion(
           runId,
+          userOid,
           threadId,
           'resume-handler-completion',
         );
@@ -116,6 +123,7 @@ export class AnalysisResumeHandler implements OutboxHandler {
       try {
         await this.analysisRunsService.transitionStatus(
           runId,
+          userOid,
           AnalysisRunStatus.RUNNING,
           AnalysisRunStatus.FAILED,
           { error: { code: 'GRAPH_RESUME_FAILED', message: errorMessage }, currentStep: null }
@@ -134,6 +142,7 @@ export class AnalysisResumeHandler implements OutboxHandler {
    */
   private async handleInterrupt(
     runId: Types.ObjectId,
+    userOid: Types.ObjectId,
     threadId: string,
   ): Promise<void> {
     const interruptPayload = await this.portfolioGraphService.getInterruptPayload(threadId);
@@ -155,6 +164,7 @@ export class AnalysisResumeHandler implements OutboxHandler {
       );
       await this.analysisRunsService.transitionStatus(
         runId,
+        userOid,
         AnalysisRunStatus.RUNNING,
         AnalysisRunStatus.AWAITING_INPUT,
         {
@@ -177,6 +187,7 @@ export class AnalysisResumeHandler implements OutboxHandler {
 
         await this.analysisRunsService.transitionStatus(
           runId,
+          userOid,
           AnalysisRunStatus.RUNNING,
           AnalysisRunStatus.AWAITING_INPUT,
           {

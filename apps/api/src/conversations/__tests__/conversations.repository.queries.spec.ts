@@ -101,7 +101,7 @@ describe('ConversationsRepository — deleted message filtering', () => {
       await insertMessage({ status: MessageStatus.COMPLETE });
       await insertMessage({ status: MessageStatus.DELETED, content: '[deleted]' });
 
-      const result = await repo.hasProcessingMessages(conversationId);
+      const result = await repo.hasProcessingMessages(conversationId, userId);
       expect(result.ok).toBe(true);
       expect(result.value).toBe(false);
     });
@@ -110,7 +110,7 @@ describe('ConversationsRepository — deleted message filtering', () => {
       await insertMessage({ status: MessageStatus.COMPLETE });
       await insertMessage({ status: MessageStatus.PENDING });
 
-      const result = await repo.hasProcessingMessages(conversationId);
+      const result = await repo.hasProcessingMessages(conversationId, userId);
       expect(result.ok).toBe(true);
       expect(result.value).toBe(true);
     });
@@ -120,7 +120,7 @@ describe('ConversationsRepository — deleted message filtering', () => {
       // ordinal (400) is above CLEANING (300). Membership, not an ordinal range.
       await insertMessage({ status: MessageStatus.DEIDENTIFYING });
 
-      const result = await repo.hasProcessingMessages(conversationId);
+      const result = await repo.hasProcessingMessages(conversationId, userId);
       expect(result.ok).toBe(true);
       expect(result.value).toBe(true);
     });
@@ -129,7 +129,7 @@ describe('ConversationsRepository — deleted message filtering', () => {
       await insertMessage({ status: MessageStatus.FAILED });
       await insertMessage({ status: MessageStatus.REJECTED });
 
-      const result = await repo.hasProcessingMessages(conversationId);
+      const result = await repo.hasProcessingMessages(conversationId, userId);
       expect(result.ok).toBe(true);
       expect(result.value).toBe(false);
     });
@@ -147,7 +147,7 @@ describe('ConversationsRepository — deleted message filtering', () => {
         { $set: { status: MessageStatus.DELETED } },
       );
 
-      const result = await repo.getLastMessageRole(conversationId);
+      const result = await repo.getLastMessageRole(conversationId, userId);
       expect(result.ok).toBe(true);
       expect(result.value).toBe(MessageRole.USER);
     });
@@ -164,7 +164,7 @@ describe('ConversationsRepository — deleted message filtering', () => {
         { $set: { status: MessageStatus.DELETED, content: '[deleted]' } },
       );
 
-      const result = await repo.listMessages({ conversation: conversationId });
+      const result = await repo.listMessages({ conversation: conversationId, userId });
       expect(result.ok).toBe(true);
       expect(result.value!.messages).toHaveLength(1);
       expect(result.value!.messages[0].content).toBe('visible');
@@ -180,7 +180,7 @@ describe('ConversationsRepository — deleted message filtering', () => {
         { $set: { status: MessageStatus.DELETED, content: '[deleted]' } },
       );
 
-      const result = await repo.updateMessage(msg._id, {
+      const result = await repo.updateMessage(msg._id, userId, {
         content: 'real redacted transcript',
         status: MessageStatus.COMPLETE,
       });
@@ -197,7 +197,7 @@ describe('ConversationsRepository — deleted message filtering', () => {
     it('updates a live message and returns the new document', async () => {
       const msg = await insertMessage({ status: MessageStatus.CLEANING });
 
-      const result = await repo.updateMessage(msg._id, {
+      const result = await repo.updateMessage(msg._id, userId, {
         content: 'cleaned',
         status: MessageStatus.COMPLETE,
       });
@@ -272,7 +272,7 @@ describe('ConversationsRepository — deleted message filtering', () => {
       ]);
       const conversation = await insertConversation({ artefact: artefact._id });
 
-      const result = await repo.findArtefactRefByConversationId(conversation._id);
+      const result = await repo.findArtefactRefByConversationId(conversation._id, userId);
 
       expect(result.ok).toBe(true);
       expect(result.value).toEqual({
@@ -286,7 +286,7 @@ describe('ConversationsRepository — deleted message filtering', () => {
     it('returns null when the artefact is missing', async () => {
       const conversation = await insertConversation({ artefact: new Types.ObjectId() });
 
-      const result = await repo.findArtefactRefByConversationId(conversation._id);
+      const result = await repo.findArtefactRefByConversationId(conversation._id, userId);
 
       expect(result.ok).toBe(true);
       expect(result.value).toBeNull();

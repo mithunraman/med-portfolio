@@ -117,4 +117,33 @@ describe('MediaRepository (integration)', () => {
       expect(victim!.refCollection).toBeNull();
     });
   });
+
+  // ─── Ownership scoping ───
+
+  describe('markPendingDeleteByMessageIds — ownership predicate', () => {
+    const otherUserId = new Types.ObjectId();
+
+    /** Attach a media row to a message so the cascade filter can reach it. */
+    async function attachTo(messageId: Types.ObjectId, owner: Types.ObjectId) {
+      const doc = await insertMedia(model, { userId: owner, status: MediaStatus.ATTACHED });
+      await model.updateOne(
+        { _id: doc._id },
+        { $set: { refDocumentId: messageId, refCollection: MediaRefCollection.MESSAGES } },
+      );
+      return doc;
+    }
+
+    it("leaves another user's media attached to a message in the batch", async () => {
+      const messageId = new Types.ObjectId();
+      const mine = await attachTo(messageId, userId);
+      const theirs = await attachTo(messageId, otherUserId);
+      const before = await model.findById(theirs._id).lean();
+
+      const result = await repo.markPendingDeleteByMessageIds([messageId], userId);
+
+      expect(result).toEqual({ ok: true, value: 1 });
+      expect((await model.findById(mine._id).lean())!.status).toBe(MediaStatus.PENDING_DELETE);
+      expect(await model.findById(theirs._id).lean()).toEqual(before);
+    });
+  });
 });

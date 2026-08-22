@@ -77,11 +77,12 @@ export class ArtefactsRepository implements IArtefactsRepository {
 
   async findById(
     id: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Artefact | null, DBError>> {
     try {
       const artefact = await this.artefactModel
-        .findOne({ _id: id, ...ARTEFACT_LIVE_FILTER })
+        .findOne({ userId, _id: id, ...ARTEFACT_LIVE_FILTER })
         .session(session ?? null)
         .lean();
       return ok(artefact);
@@ -304,12 +305,13 @@ export class ArtefactsRepository implements IArtefactsRepository {
 
   async markDeleted(
     ids: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>> {
     if (ids.length === 0) return ok(0);
     try {
       const result = await this.artefactModel.updateMany(
-        { _id: { $in: ids }, status: { $ne: ArtefactStatus.DELETED } },
+        { userId, _id: { $in: ids }, status: { $ne: ArtefactStatus.DELETED } },
         artefactTombstoneUpdate(),
         { session }
       );

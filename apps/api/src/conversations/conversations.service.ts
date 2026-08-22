@@ -117,7 +117,11 @@ export class ConversationsService {
 
     // Artefact must still be in the conversation phase (excludes IN_REVIEW /
     // COMPLETED entries — these the run-state check below can't catch).
-    const artefactResult = await this.artefactsRepository.findById(conversation.artefact, session);
+    const artefactResult = await this.artefactsRepository.findById(
+      conversation.artefact,
+      userOid,
+      session
+    );
     if (isErr(artefactResult))
       throw new InternalServerErrorException(artefactResult.error.message);
     if (!artefactResult.value || artefactResult.value.status !== ArtefactStatus.IN_CONVERSATION) {
@@ -127,7 +131,11 @@ export class ConversationsService {
     }
 
     // Block only while the graph is actively executing.
-    const executingRun = await this.analysisRunsService.findExecutingRun(conversation._id, session);
+    const executingRun = await this.analysisRunsService.findExecutingRun(
+      conversation._id,
+      userOid,
+      session
+    );
     if (executingRun) {
       throw new ConflictException(`Cannot ${action} messages while analysis is in progress`);
     }
@@ -190,6 +198,7 @@ export class ConversationsService {
     const laterMessageResult = await this.conversationsRepository.hasLaterAssistantMessage(
       conversation._id,
       message._id,
+      userOid,
       session
     );
     if (isErr(laterMessageResult))
@@ -204,6 +213,8 @@ export class ConversationsService {
   }
 
   async deleteMessage(userId: string, conversationXid: string, messageXid: string): Promise<void> {
+    const userOid = new Types.ObjectId(userId);
+
     await this.transactionService.withTransaction(
       async (session) => {
         const message = await this.assertModifiableUserMessage(
@@ -217,7 +228,7 @@ export class ConversationsService {
           session
         );
         // Cascade-delete the message (tombstones + media cleanup).
-        await this.deleteMessagesByIds([message._id], session);
+        await this.deleteMessagesByIds([message._id], userOid, session);
       },
       { context: `deleteMessage:${conversationXid}:${messageXid}` }
     );
@@ -246,6 +257,7 @@ export class ConversationsService {
     messageXid: string,
     content: string
   ): Promise<Message> {
+    const userOid = new Types.ObjectId(userId);
     const editedAt = new Date();
 
     const { updated, populated } = await this.transactionService.withTransaction(
@@ -274,6 +286,7 @@ export class ConversationsService {
 
         const updateResult = await this.conversationsRepository.updateMessage(
           message._id,
+          userOid,
           {
             rawContent: content,
             redactedContent: redactedText,
@@ -363,7 +376,7 @@ export class ConversationsService {
     const conversation = conversationResult.value;
 
     // Guard: reject messages when the conversation or analysis state doesn't accept them
-    await this.assertCanSendMessage(conversation._id, conversation.status);
+    await this.assertCanSendMessage(conversation._id, userOid, conversation.status);
 
     // Validate media upload if provided (S3 HEAD + content-type check)
     let validatedMedia: Awaited<ReturnType<MediaService['validateMediaUpload']>> | null = null;
@@ -423,7 +436,10 @@ export class ConversationsService {
         await this.outboxService.enqueue(
           {
             type: 'message.process',
-            payload: { messageId: createdMessage._id.toString() },
+            payload: {
+              messageId: createdMessage._id.toString(),
+              userId: createdMessage.userId.toString(),
+            },
             maxAttempts: 3,
           },
           session
@@ -465,10 +481,12 @@ export class ConversationsService {
     conversationId: string,
     dto: AnalysisActionRequest
   ): Promise<ConversationContext> {
+    const userOid = new Types.ObjectId(userId);
+
     // 1. Validate conversation ownership
     const conversationResult = await this.conversationsRepository.findConversationByXid(
       conversationId,
-      new Types.ObjectId(userId)
+      userOid
     );
 
     if (isErr(conversationResult))
@@ -487,7 +505,8 @@ export class ConversationsService {
 
     // 2b. Guard: reject if any user messages are still being processed
     const processingResult = await this.conversationsRepository.hasProcessingMessages(
-      conversation._id
+      conversation._id,
+      userOid
     );
     if (isErr(processingResult))
       throw new InternalServerErrorException(processingResult.error.message);
@@ -511,7 +530,7 @@ export class ConversationsService {
     }
 
     // 4. Compute and return updated context (run is now PENDING → phase = 'analysing')
-    return this.contextService.computeContext(conversation._id, conversation.status);
+    return this.contextService.computeContext(conversation._id, userOid, conversation.status);
   }
 
   /**
@@ -527,6 +546,7 @@ export class ConversationsService {
     conversation: { _id: Types.ObjectId; artefact: Types.ObjectId },
     idempotencyKey?: string
   ): Promise<void> {
+    const userOid = new Types.ObjectId(userId);
     const effectiveIdempotencyKey = idempotencyKey || generateXid();
 
     await this.transactionService.withTransaction(
@@ -534,6 +554,7 @@ export class ConversationsService {
         // Guard: require at least one COMPLETE user message before starting
         const completeResult = await this.conversationsRepository.hasCompleteMessages(
           conversation._id,
+          userOid,
           session
         );
         if (isErr(completeResult))
@@ -542,7 +563,11 @@ export class ConversationsService {
           throw new BadRequestException('Cannot start analysis without any completed messages.');
 
         // Check for existing active run (e.g. user already triggered analysis)
-        const existingRun = await this.analysisRunsService.findActiveRun(conversation._id, session);
+        const existingRun = await this.analysisRunsService.findActiveRun(
+          conversation._id,
+          userOid,
+          session
+        );
         if (existingRun) {
           throw new ConflictException(
             'An analysis run is already in progress for this conversation.'
@@ -552,6 +577,7 @@ export class ConversationsService {
         // Look up artefact to get specialty, trainingStage + entry type for the graph
         const artefactResult = await this.artefactsRepository.findById(
           conversation.artefact,
+          userOid,
           session
         );
         if (isErr(artefactResult) || !artefactResult.value) {
@@ -561,6 +587,7 @@ export class ConversationsService {
 
         const { run } = await this.analysisRunsService.createRun(
           conversation._id,
+          userOid,
           effectiveIdempotencyKey,
           session
         );
@@ -610,7 +637,7 @@ export class ConversationsService {
       throw new BadRequestException('Message is not a question');
 
     // 2. Get node from analysis run (source of truth — scales to multiple nodes per questionType)
-    const activeRun = await this.analysisRunsService.findActiveRun(conversationOid);
+    const activeRun = await this.analysisRunsService.findActiveRun(conversationOid, userOid);
     if (!activeRun?.currentQuestion) throw new ConflictException('No active question');
     if (activeRun.currentQuestion.messageId.toString() !== message._id.toString())
       throw new ConflictException('This question is no longer the current question');
@@ -640,7 +667,7 @@ export class ConversationsService {
       case 'free_text': {
         // Guard: last message must be USER (they answered the follow-up)
         const lastRoleResult =
-          await this.conversationsRepository.getLastMessageRole(conversationOid);
+          await this.conversationsRepository.getLastMessageRole(conversationOid, userOid);
         if (isErr(lastRoleResult))
           throw new InternalServerErrorException(lastRoleResult.error.message);
         if (lastRoleResult.value !== MessageRole.USER)
@@ -756,12 +783,14 @@ export class ConversationsService {
         if (questionType === 'single_select' && selectedKey) {
           await this.conversationsRepository.updateMessage(
             message._id,
+            userOid,
             { answer: { selectedKey } },
             session
           );
         } else if (questionType === 'multi_select' && selectedKeys) {
           await this.conversationsRepository.updateMessage(
             message._id,
+            userOid,
             { answer: { selectedKeys } },
             session
           );
@@ -773,6 +802,7 @@ export class ConversationsService {
             payload: {
               analysisRunId: activeRun._id.toString(),
               conversationId: convIdStr,
+              userId,
               node,
               resumeValue,
               langGraphThreadId: activeRun.langGraphThreadId,
@@ -791,9 +821,14 @@ export class ConversationsService {
    */
   private async assertCanSendMessage(
     conversationOid: Types.ObjectId,
+    userOid: Types.ObjectId,
     conversationStatus: ConversationStatus
   ): Promise<void> {
-    const context = await this.contextService.computeContext(conversationOid, conversationStatus);
+    const context = await this.contextService.computeContext(
+      conversationOid,
+      userOid,
+      conversationStatus
+    );
     if (!context.actions.sendMessage.allowed) {
       throw new ConflictException(
         context.actions.sendMessage.reason || 'Cannot send messages at this time.'
@@ -802,10 +837,12 @@ export class ConversationsService {
   }
 
   async listMessages(userId: string, conversationId: string): Promise<MessageListResponse> {
+    const userOid = new Types.ObjectId(userId);
+
     // Find conversation by xid
     const conversationResult = await this.conversationsRepository.findConversationByXid(
       conversationId,
-      new Types.ObjectId(userId)
+      userOid
     );
 
     if (isErr(conversationResult)) {
@@ -821,6 +858,7 @@ export class ConversationsService {
     // Get all messages (no pagination — conversations are <50 messages)
     const messagesResult = await this.conversationsRepository.listMessages({
       conversation: conversation._id,
+      userId: userOid,
     });
 
     if (isErr(messagesResult)) {
@@ -841,6 +879,7 @@ export class ConversationsService {
     // artefact ref (xid + status) internally.
     let context = await this.contextService.computeContext(
       conversation._id,
+      userOid,
       conversation.status
     );
 
@@ -919,10 +958,14 @@ export class ConversationsService {
   /**
    * Bulk tombstone messages by their IDs, including media cleanup.
    */
-  async deleteMessagesByIds(ids: Types.ObjectId[], session?: ClientSession): Promise<void> {
+  async deleteMessagesByIds(
+    ids: Types.ObjectId[],
+    userId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<void> {
     if (ids.length === 0) return;
-    await this.mediaService.markPendingDeleteByMessageIds(ids, session);
-    const result = await this.conversationsRepository.markDeletedMessagesByIds(ids, session);
+    await this.mediaService.markPendingDeleteByMessageIds(ids, userId, session);
+    const result = await this.conversationsRepository.markDeletedMessagesByIds(ids, userId, session);
     if (isErr(result)) throw new InternalServerErrorException(result.error.message);
   }
 
@@ -932,6 +975,7 @@ export class ConversationsService {
    */
   async deleteMessagesByConversationIds(
     conversationIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<void> {
     if (conversationIds.length === 0) return;
@@ -943,9 +987,10 @@ export class ConversationsService {
     if (isErr(messageIdsResult)) {
       throw new InternalServerErrorException(messageIdsResult.error.message);
     }
-    await this.mediaService.markPendingDeleteByMessageIds(messageIdsResult.value, session);
+    await this.mediaService.markPendingDeleteByMessageIds(messageIdsResult.value, userId, session);
     const result = await this.conversationsRepository.markDeletedMessagesByConversationIds(
       conversationIds,
+      userId,
       session
     );
     if (isErr(result)) throw new InternalServerErrorException(result.error.message);
@@ -955,13 +1000,17 @@ export class ConversationsService {
    * Bulk tombstone conversations and cascade into their messages, analysis
    * runs, and outbox entries.
    */
-  async deleteByIds(ids: Types.ObjectId[], session?: ClientSession): Promise<void> {
+  async deleteByIds(
+    ids: Types.ObjectId[],
+    userId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<void> {
     if (ids.length === 0) return;
     // Intentionally sequential — Mongo forbids concurrent ops on a single session.
-    const result = await this.conversationsRepository.markDeleted(ids, session);
+    const result = await this.conversationsRepository.markDeleted(ids, userId, session);
     if (isErr(result)) throw new InternalServerErrorException(result.error.message);
-    await this.deleteMessagesByConversationIds(ids, session);
-    await this.analysisRunsService.deleteByConversationIds(ids, session);
+    await this.deleteMessagesByConversationIds(ids, userId, session);
+    await this.analysisRunsService.deleteByConversationIds(ids, userId, session);
     await this.outboxService.cancelByConversationIds(ids, session);
   }
 
@@ -970,14 +1019,16 @@ export class ConversationsService {
    */
   async deleteByArtefactIds(
     artefactIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<void> {
     if (artefactIds.length === 0) return;
     const idsResult = await this.conversationsRepository.findIdsByArtefactIds(
       artefactIds,
+      userId,
       session
     );
     if (isErr(idsResult)) throw new InternalServerErrorException(idsResult.error.message);
-    return this.deleteByIds(idsResult.value, session);
+    return this.deleteByIds(idsResult.value, userId, session);
   }
 }

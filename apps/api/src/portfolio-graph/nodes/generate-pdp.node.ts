@@ -232,6 +232,7 @@ export function createGeneratePdpNode(deps: GraphDeps) {
   ): Promise<Partial<PortfolioStateType>> {
     deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
       conversationId: state.conversationId,
+      userId: state.userId,
       step: 'generate_pdp',
     });
     const cid = state.conversationId;

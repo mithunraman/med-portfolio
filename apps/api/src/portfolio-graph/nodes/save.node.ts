@@ -17,6 +17,7 @@ export function createSaveNode(deps: GraphDeps) {
   return async (state: PortfolioStateType): Promise<Partial<PortfolioStateType>> => {
     deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
       conversationId: state.conversationId,
+      userId: state.userId,
       step: 'save',
     });
 

@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Types } from 'mongoose';
 import { ProcessingService } from '../../processing/processing.service';
 import type { OutboxHandler } from '../outbox.consumer';
+import { requiredObjectId } from './payload.util';
 
 export interface MessageProcessingPayload {
   messageId: string;
+  /** Owner of the message — every repository write in the pipeline is scoped by it. */
+  userId: string;
 }
 
 @Injectable()
@@ -15,8 +17,13 @@ export class MessageProcessingHandler implements OutboxHandler {
   constructor(private readonly processingService: ProcessingService) {}
 
   async handle(payload: Record<string, unknown>): Promise<void> {
-    const data = payload as unknown as MessageProcessingPayload;
-    this.logger.log(`Processing message ${data.messageId} via outbox`);
-    await this.processingService.processMessage(new Types.ObjectId(data.messageId));
+    // Validated, not cast: `new Types.ObjectId(undefined)` mints a random id
+    // rather than throwing, which would turn a broken job into a silent success.
+    // See `requiredObjectId`.
+    const messageId = requiredObjectId(payload, 'messageId', this.type);
+    const userId = requiredObjectId(payload, 'userId', this.type);
+
+    this.logger.log(`Processing message ${messageId.toString()} via outbox`);
+    await this.processingService.processMessage(messageId, userId);
   }
 }

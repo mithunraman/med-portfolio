@@ -43,6 +43,7 @@ export interface IMediaRepository {
 
   markPendingDeleteByMessageIds(
     messageIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
 

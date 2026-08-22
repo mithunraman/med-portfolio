@@ -67,6 +67,7 @@ export class ConversationContextService {
 
   async computeContext(
     conversationOid: Types.ObjectId,
+    userOid: Types.ObjectId,
     conversationStatus: ConversationStatus,
   ): Promise<ConversationContext> {
     // Resolve the artefact ref (xid + status) once. The client uses
@@ -75,7 +76,7 @@ export class ConversationContextService {
     // leave artefactStatus null so the client withholds edit/delete rather than
     // offering an action the server would reject.
     const refResult =
-      await this.conversationsRepository.findArtefactRefByConversationId(conversationOid);
+      await this.conversationsRepository.findArtefactRefByConversationId(conversationOid, userOid);
     if (isErr(refResult)) {
       this.logger.warn(
         `[computeContext] failed to resolve artefact ref for ${conversationOid}: ${refResult.error.message}`
@@ -108,7 +109,7 @@ export class ConversationContextService {
       };
     }
 
-    const latestRun = await this.analysisRunsService.findLatestRun(conversationOid);
+    const latestRun = await this.analysisRunsService.findLatestRun(conversationOid, userOid);
     this.logger.debug(`[computeContext] conversationId=${conversationOid} latestRun=${latestRun ? JSON.stringify({ status: latestRun.status, xid: latestRun.xid }) : 'null'}`);
 
     // Check for queued outbox work only when the run is AWAITING_INPUT —
@@ -133,16 +134,16 @@ export class ConversationContextService {
 
     if (phase === 'composing') {
       const [processingResult, completeResult] = await Promise.all([
-        this.conversationsRepository.hasProcessingMessages(conversationOid),
-        this.conversationsRepository.hasCompleteMessages(conversationOid),
+        this.conversationsRepository.hasProcessingMessages(conversationOid, userOid),
+        this.conversationsRepository.hasCompleteMessages(conversationOid, userOid),
       ]);
       hasProcessing = !isErr(processingResult) && processingResult.value;
       hasComplete = !isErr(completeResult) && completeResult.value;
       this.logger.debug(`[computeContext] composing checks: hasProcessing=${hasProcessing} hasComplete=${hasComplete}`);
     } else if (isFreeTextAwait) {
       const [processingResult, lastRoleResult] = await Promise.all([
-        this.conversationsRepository.hasProcessingMessages(conversationOid),
-        this.conversationsRepository.getLastMessageRole(conversationOid),
+        this.conversationsRepository.hasProcessingMessages(conversationOid, userOid),
+        this.conversationsRepository.getLastMessageRole(conversationOid, userOid),
       ]);
       hasProcessing = !isErr(processingResult) && processingResult.value;
       lastMessageIsUser = !isErr(lastRoleResult) && lastRoleResult.value === MessageRole.USER;
@@ -155,7 +156,7 @@ export class ConversationContextService {
       hasComplete,
       lastMessageIsUser
     );
-    const activeQuestion = await this.buildActiveQuestion(latestRun);
+    const activeQuestion = await this.buildActiveQuestion(latestRun, userOid);
     const analysisRun = latestRun
       ? {
           id: latestRun.xid,
@@ -333,7 +334,8 @@ export class ConversationContextService {
   }
 
   private async buildActiveQuestion(
-    latestRun: AnalysisRun | null
+    latestRun: AnalysisRun | null,
+    userOid: Types.ObjectId
   ): Promise<{ messageId: string; questionType: QuestionType } | undefined> {
     if (!latestRun?.currentQuestion) return undefined;
     if (latestRun.status !== AnalysisRunStatus.AWAITING_INPUT) return undefined;
@@ -341,7 +343,8 @@ export class ConversationContextService {
 
     // Resolve xid — the mobile client uses xid as message id
     const msgResult = await this.conversationsRepository.findMessageById(
-      latestRun.currentQuestion.messageId
+      latestRun.currentQuestion.messageId,
+      userOid
     );
     if (isErr(msgResult) || !msgResult.value) return undefined;
 

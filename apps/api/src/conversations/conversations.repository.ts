@@ -192,15 +192,14 @@ export class ConversationsRepository implements IConversationsRepository {
     }
   }
 
-  // SYSTEM READ — intentionally unscoped by userId; messageId is a server-derived
-  // internal id, never request input. See interface doc + CLAUDE.md.
   async findMessageById(
     messageId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Message | null, DBError>> {
     try {
       const message = await this.messageModel
-        .findById(messageId)
+        .findOne({ userId, _id: messageId })
         .populate('media')
         .lean()
         .session(session || null);
@@ -232,6 +231,7 @@ export class ConversationsRepository implements IConversationsRepository {
 
   async updateMessage(
     messageId: Types.ObjectId,
+    userId: Types.ObjectId,
     data: UpdateMessageData,
     session?: ClientSession
   ): Promise<Result<Message | null, DBError>> {
@@ -243,7 +243,11 @@ export class ConversationsRepository implements IConversationsRepository {
       // with the write. Returns null when the message is missing or deleted —
       // callers treat that as a no-op.
       const message = await this.messageModel
-        .findOneAndUpdate({ _id: messageId, ...MESSAGE_LIVE_FILTER }, { $set: data }, { new: true })
+        .findOneAndUpdate(
+          { userId, _id: messageId, ...MESSAGE_LIVE_FILTER },
+          { $set: data },
+          { new: true }
+        )
         .lean()
         .session(session || null);
       return ok(message);
@@ -255,6 +259,7 @@ export class ConversationsRepository implements IConversationsRepository {
 
   async updateMessageIfRawContentPresent(
     messageId: Types.ObjectId,
+    userId: Types.ObjectId,
     data: UpdateMessageData
   ): Promise<Result<Message | null, DBError>> {
     try {
@@ -267,7 +272,7 @@ export class ConversationsRepository implements IConversationsRepository {
       // predicate can no longer see.
       const message = await this.messageModel
         .findOneAndUpdate(
-          { _id: messageId, rawContent: { $type: 'string' }, ...MESSAGE_LIVE_FILTER },
+          { userId, _id: messageId, rawContent: { $type: 'string' }, ...MESSAGE_LIVE_FILTER },
           { $set: data },
           { new: true }
         )
@@ -285,7 +290,7 @@ export class ConversationsRepository implements IConversationsRepository {
   ): Promise<Result<ListMessagesResult, DBError>> {
     try {
       const messages = await this.messageModel
-        .find({ conversation: query.conversation, ...MESSAGE_LIVE_FILTER })
+        .find({ userId: query.userId, conversation: query.conversation, ...MESSAGE_LIVE_FILTER })
         .populate('media')
         .sort({ _id: -1 })
         .lean()
@@ -300,11 +305,13 @@ export class ConversationsRepository implements IConversationsRepository {
 
   async hasCompleteMessages(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<boolean, DBError>> {
     try {
       const count = await this.messageModel
         .countDocuments({
+          userId,
           conversation: conversationId,
           role: MessageRole.USER,
           status: MessageStatus.COMPLETE,
@@ -321,11 +328,13 @@ export class ConversationsRepository implements IConversationsRepository {
 
   async hasProcessingMessages(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<boolean, DBError>> {
     try {
       const count = await this.messageModel
         .countDocuments({
+          userId,
           conversation: conversationId,
           role: MessageRole.USER,
           // Explicit membership, not an ordinal range: correct regardless of the
@@ -344,11 +353,12 @@ export class ConversationsRepository implements IConversationsRepository {
 
   async getLastMessageRole(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<MessageRole | null, DBError>> {
     try {
       const lastMessage = await this.messageModel
-        .findOne({ conversation: conversationId, ...MESSAGE_LIVE_FILTER })
+        .findOne({ userId, conversation: conversationId, ...MESSAGE_LIVE_FILTER })
         .sort({ _id: -1 })
         .select('role')
         .lean()
@@ -364,6 +374,7 @@ export class ConversationsRepository implements IConversationsRepository {
   async hasLaterAssistantMessage(
     conversationId: Types.ObjectId,
     messageId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<boolean, DBError>> {
     try {
@@ -376,6 +387,7 @@ export class ConversationsRepository implements IConversationsRepository {
       // the existing { conversation: 1, _id: -1 } compound index.
       const existing = await this.messageModel
         .exists({
+          userId,
           conversation: conversationId,
           role: MessageRole.ASSISTANT,
           ...MESSAGE_LIVE_FILTER,
@@ -407,16 +419,14 @@ export class ConversationsRepository implements IConversationsRepository {
     }
   }
 
-  // SYSTEM READ — intentionally unscoped by userId; conversationId is a
-  // server-derived internal id from user-agnostic context computation. See
-  // interface doc + CLAUDE.md.
   async findArtefactRefByConversationId(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<ArtefactRef | null, DBError>> {
     try {
       const conversation = await this.conversationModel
-        .findById(conversationId)
+        .findOne({ userId, _id: conversationId })
         // Projection, not an extra read: this populate already runs on every
         // context computation. artefactType/specialty ride along for free.
         .populate('artefact', 'xid status artefactType specialty')
@@ -473,12 +483,13 @@ export class ConversationsRepository implements IConversationsRepository {
 
   async markDeleted(
     ids: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>> {
     if (ids.length === 0) return ok(0);
     try {
       const result = await this.conversationModel.updateMany(
-        { _id: { $in: ids }, status: { $ne: ConversationStatus.DELETED } },
+        { userId, _id: { $in: ids }, status: { $ne: ConversationStatus.DELETED } },
         conversationTombstoneUpdate(),
         { session }
       );
@@ -496,15 +507,21 @@ export class ConversationsRepository implements IConversationsRepository {
    * conversation may already be DELETED while its children (messages, media)
    * are not. Re-cascading through them requires the tombstoned IDs.
    * Do not add a status filter "for consistency" with other finders.
+   *
+   * Owner-scoped despite being a read: its output is the target list for a HARD
+   * delete of LangGraph checkpoints further down the cascade, which has no
+   * `userId` of its own to filter on. A foreign id surviving this query is
+   * unrecoverable data loss, not a leak — see `ArtefactsService.deleteByIds`.
    */
   async findIdsByArtefactIds(
     artefactIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Types.ObjectId[], DBError>> {
     if (artefactIds.length === 0) return ok([]);
     try {
       const ids = await this.conversationModel
-        .find({ artefact: { $in: artefactIds } })
+        .find({ userId, artefact: { $in: artefactIds } })
         .distinct('_id')
         .session(session ?? null);
       return ok(ids);
@@ -516,12 +533,13 @@ export class ConversationsRepository implements IConversationsRepository {
 
   async markDeletedMessagesByIds(
     ids: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>> {
     if (ids.length === 0) return ok(0);
     try {
       const result = await this.messageModel.updateMany(
-        { _id: { $in: ids }, status: { $ne: MessageStatus.DELETED } },
+        { userId, _id: { $in: ids }, status: { $ne: MessageStatus.DELETED } },
         messageTombstoneUpdate(),
         { session }
       );
@@ -534,12 +552,14 @@ export class ConversationsRepository implements IConversationsRepository {
 
   async markDeletedMessagesByConversationIds(
     conversationIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>> {
     if (conversationIds.length === 0) return ok(0);
     try {
       const result = await this.messageModel.updateMany(
         {
+          userId,
           conversation: { $in: conversationIds },
           status: { $ne: MessageStatus.DELETED },
         },

@@ -190,6 +190,7 @@ export function createRefineNode(deps: GraphDeps) {
   ): Promise<Partial<PortfolioStateType>> {
     deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
       conversationId: state.conversationId,
+      userId: state.userId,
       step: 'refine',
     });
     const cid = state.conversationId;

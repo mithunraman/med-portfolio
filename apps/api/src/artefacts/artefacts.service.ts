@@ -189,13 +189,14 @@ export class ArtefactsService {
         if (artefact.status === ArtefactStatus.IN_CONVERSATION) {
           const convIdsResult = await this.conversationsRepository.findIdsByArtefactIds(
             [artefact._id],
+            userOid,
             session
           );
           if (isErr(convIdsResult)) {
             throw new InternalServerErrorException(convIdsResult.error.message);
           }
           for (const convId of convIdsResult.value) {
-            const executingRun = await this.analysisRunsService.findExecutingRun(convId, session);
+            const executingRun = await this.analysisRunsService.findExecutingRun(convId, userOid, session);
             if (executingRun) {
               throw new ConflictException('Cannot delete entry while analysis is in progress');
             }
@@ -750,7 +751,7 @@ export class ArtefactsService {
         if (!convResult.value) throw new NotFoundException('Source conversation not found');
 
         const messagesResult = await this.conversationsRepository.listMessages(
-          { conversation: convResult.value._id },
+          { conversation: convResult.value._id, userId: userOid },
           session
         );
         if (isErr(messagesResult))
@@ -941,8 +942,19 @@ export class ArtefactsService {
    * development record and outlives every entry that cites it. Only unclaimed
    * PROPOSALS are removed — see `deleteProposalsByArtefactIds`.
    *
-   * Every id in `ids` must belong to `userId`. The PDP cascade scopes its delete by
-   * owner, so a mixed-owner batch would silently skip the other owners' proposals.
+   * Every write below is scoped by `userId` at the persistence layer, so a
+   * mixed-owner batch touches only this user's records rather than trusting the
+   * caller to have pre-filtered them.
+   *
+   * The one write that CANNOT enforce this itself is the LangGraph checkpoint
+   * purge reached via `conversationsService.deleteByArtefactIds`. It is a hard
+   * delete, and the `checkpoints` / `checkpoint_writes` collections carry no
+   * `userId` to filter on — they are written by `MongoDBSaver` through the raw
+   * driver. Its scoping therefore lives in the two resolvers that produce its
+   * target list (`findIdsByArtefactIds`, `findThreadIdsByConversationIds`),
+   * both of which are owner-scoped for exactly this reason. If either ever
+   * loses its `userId` predicate, this cascade silently destroys another
+   * user's graph state with no tombstone and no error.
    */
   async deleteByIds(
     ids: Types.ObjectId[],
@@ -951,11 +963,16 @@ export class ArtefactsService {
   ): Promise<void> {
     if (ids.length === 0) return;
     // Intentionally sequential — Mongo forbids concurrent ops on a single session.
-    const result = await this.artefactsRepository.markDeleted(ids, session);
+    const result = await this.artefactsRepository.markDeleted(ids, userId, session);
     if (isErr(result)) throw new InternalServerErrorException(result.error.message);
-    await this.conversationsService.deleteByArtefactIds(ids, session);
+    await this.conversationsService.deleteByArtefactIds(ids, userId, session);
     await this.pdpGoalsService.deleteProposalsByArtefactIds(ids, userId, session);
-    await this.analysisRunsService.deleteByArtefactIds(ids, session);
-    await this.versionHistoryService.anonymizeByEntity(VersionHistoryEntity.ARTEFACT, ids, session);
+    await this.analysisRunsService.deleteByArtefactIds(ids, userId, session);
+    await this.versionHistoryService.anonymizeByEntity(
+      VersionHistoryEntity.ARTEFACT,
+      ids,
+      userId,
+      session
+    );
   }
 }

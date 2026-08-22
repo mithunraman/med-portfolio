@@ -116,12 +116,13 @@ export class VersionHistoryRepository implements IVersionHistoryRepository {
   async anonymizeByEntity(
     entityType: VersionHistoryEntity,
     entityIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>> {
     if (entityIds.length === 0) return ok(0);
     try {
       const result = await this.versionHistoryModel.updateMany(
-        { entityType, entityId: { $in: entityIds } },
+        { userId, entityType, entityId: { $in: entityIds } },
         { $set: { snapshot: {} } },
         { session }
       );

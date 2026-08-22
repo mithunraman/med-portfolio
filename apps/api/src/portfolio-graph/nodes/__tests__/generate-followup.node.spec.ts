@@ -570,7 +570,7 @@ describe('GenerateFollowupNode', () => {
 
       expect(deps.eventEmitter.emit).toHaveBeenCalledWith(
         'analysis.step.started',
-        { conversationId: 'conv-123', step: 'generate_followup' }
+        { conversationId: 'conv-123', userId: 'user-123', step: 'generate_followup' }
       );
     });
   });

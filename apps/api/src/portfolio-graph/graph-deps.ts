@@ -10,6 +10,8 @@ export const ANALYSIS_STEP_STARTED = 'analysis.step.started';
 
 export interface AnalysisStepStartedEvent {
   conversationId: string;
+  /** Owner of the conversation — the listener scopes its write by it. */
+  userId: string;
   step: string;
 }
 

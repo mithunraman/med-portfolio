@@ -114,10 +114,11 @@ export class VersionHistoryService {
   async anonymizeByEntity(
     entityType: VersionHistoryEntity,
     entityIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<void> {
     unwrapVoid(
-      await this.versionHistoryRepository.anonymizeByEntity(entityType, entityIds, session)
+      await this.versionHistoryRepository.anonymizeByEntity(entityType, entityIds, userId, session)
     );
   }
 }

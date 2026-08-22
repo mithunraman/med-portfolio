@@ -13,6 +13,7 @@ import { ConversationContextService } from '../conversation-context.service';
 // ── Helpers ──
 
 const oid = () => new Types.ObjectId();
+const userOid = new Types.ObjectId();
 const conversationOid = oid();
 
 function makeRun(overrides: Partial<AnalysisRun> = {}): AnalysisRun {
@@ -90,7 +91,7 @@ describe('ConversationContextService', () => {
 
   describe('when conversation is CLOSED', () => {
     it('returns phase "closed" with all actions denied', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.CLOSED);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.CLOSED);
 
       expect(ctx.phase).toBe('closed');
       expect(ctx.actions.sendMessage).toEqual({
@@ -116,7 +117,7 @@ describe('ConversationContextService', () => {
     });
 
     it('does not query analysis runs or messages', async () => {
-      await service.computeContext(conversationOid, ConversationStatus.CLOSED);
+      await service.computeContext(conversationOid, userOid, ConversationStatus.CLOSED);
 
       expect(mockAnalysisRunsService.findLatestRun).not.toHaveBeenCalled();
       expect(mockRepo.hasProcessingMessages).not.toHaveBeenCalled();
@@ -127,7 +128,7 @@ describe('ConversationContextService', () => {
       // This branch returns early and builds its own context object, so it is the
       // one that silently loses new fields. A closed conversation still has a type
       // and still needs a title.
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.CLOSED);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.CLOSED);
 
       expect(ctx.artefactType).toBe('CLINICAL_CASE_REVIEW');
       expect(ctx.artefactTypeLabel).toBe('Clinical Case Review');
@@ -145,7 +146,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.phase).toBe('composing');
     });
 
@@ -153,7 +154,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.actions.sendMessage).toEqual({ allowed: true });
       expect(ctx.actions.sendAudio).toEqual({ allowed: true });
     });
@@ -162,7 +163,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.actions.startAnalysis).toEqual({ allowed: true });
     });
 
@@ -170,7 +171,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.artefactStatus).toBe(ArtefactStatus.IN_CONVERSATION);
     });
 
@@ -181,7 +182,7 @@ describe('ConversationContextService', () => {
         err({ code: 'DB_ERROR', message: 'boom' })
       );
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.artefactStatus).toBeNull();
     });
 
@@ -189,7 +190,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.artefactType).toBe('CLINICAL_CASE_REVIEW');
       expect(ctx.artefactTypeLabel).toBe('Clinical Case Review');
     });
@@ -208,7 +209,7 @@ describe('ConversationContextService', () => {
         })
       );
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.artefactTypeLabel).toBe('LEARNING_EVENT');
     });
 
@@ -219,7 +220,7 @@ describe('ConversationContextService', () => {
         err({ code: 'DB_ERROR', message: 'boom' })
       );
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.artefactType).toBeNull();
       expect(ctx.artefactTypeLabel).toBeNull();
     });
@@ -228,7 +229,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(true));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.actions.startAnalysis).toEqual({
         allowed: false,
         code: 'MESSAGES_PROCESSING',
@@ -240,7 +241,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(false));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.actions.startAnalysis).toEqual({
         allowed: false,
         code: 'NO_MESSAGES',
@@ -252,7 +253,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.actions.resumeAnalysis).toEqual({
         allowed: false,
         code: 'NO_ACTIVE_QUESTION',
@@ -264,7 +265,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.analysisRun).toBeUndefined();
       expect(ctx.activeQuestion).toBeUndefined();
     });
@@ -282,17 +283,17 @@ describe('ConversationContextService', () => {
     });
 
     it('returns phase "composing" (allows retry)', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.phase).toBe('composing');
     });
 
     it('allows startAnalysis (retry after failure)', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.actions.startAnalysis).toEqual({ allowed: true });
     });
 
     it('includes analysisRun summary', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.analysisRun).toEqual({
         id: 'run_abc123',
         status: AnalysisRunStatus.FAILED,
@@ -302,7 +303,7 @@ describe('ConversationContextService', () => {
     });
 
     it('explains the failure so the inert last question is not read as a bug', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.notice?.code).toBe('ANALYSIS_FAILED');
       expect(ctx.notice?.text).toContain('try again');
     });
@@ -320,7 +321,7 @@ describe('ConversationContextService', () => {
     });
 
     it('returns phase "composing"', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.phase).toBe('composing');
     });
 
@@ -328,7 +329,7 @@ describe('ConversationContextService', () => {
       // Regression guard. Testing `status !== FAILED` here (rather than the
       // RESTARTABLE set) opens the composer while denying the start action with
       // "Analysis already started" — a dead end that looks operational.
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.actions.startAnalysis).toEqual({ allowed: true });
     });
 
@@ -344,12 +345,12 @@ describe('ConversationContextService', () => {
         makeRun({ status: AnalysisRunStatus.EXPIRED, currentQuestion: makeCurrentQuestion() })
       );
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.activeQuestion).toBeUndefined();
     });
 
     it('explains the expiry in neutral, server-owned copy', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.notice?.code).toBe('ANALYSIS_EXPIRED');
       expect(ctx.notice?.text).toContain('Your messages are saved');
     });
@@ -366,12 +367,12 @@ describe('ConversationContextService', () => {
     });
 
     it('returns phase "completed"', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.phase).toBe('completed');
     });
 
     it('does not query message state (not in composing phase)', async () => {
-      await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(mockRepo.hasProcessingMessages).not.toHaveBeenCalled();
       expect(mockRepo.hasCompleteMessages).not.toHaveBeenCalled();
     });
@@ -388,12 +389,12 @@ describe('ConversationContextService', () => {
     });
 
     it('returns phase "analysing"', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.phase).toBe('analysing');
     });
 
     it('denies all actions', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.actions.sendMessage.allowed).toBe(false);
       expect(ctx.actions.sendAudio.allowed).toBe(false);
       expect(ctx.actions.startAnalysis.allowed).toBe(false);
@@ -401,7 +402,7 @@ describe('ConversationContextService', () => {
     });
 
     it('does not query message state', async () => {
-      await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(mockRepo.hasProcessingMessages).not.toHaveBeenCalled();
     });
   });
@@ -421,30 +422,30 @@ describe('ConversationContextService', () => {
       });
 
       it('returns phase "awaiting_input"', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
         expect(ctx.phase).toBe('awaiting_input');
       });
 
       it('allows sendMessage and sendAudio for free_text', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
         expect(ctx.actions.sendMessage).toEqual({ allowed: true });
         expect(ctx.actions.sendAudio).toEqual({ allowed: true });
       });
 
       it('allows resumeAnalysis', async () => {
         mockRepo.getLastMessageRole.mockResolvedValue(ok(MessageRole.USER));
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
         expect(ctx.actions.resumeAnalysis).toEqual({ allowed: true });
       });
 
       it('denies startAnalysis', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
         expect(ctx.actions.startAnalysis.allowed).toBe(false);
         expect(ctx.actions.startAnalysis.code).toBe('ANALYSIS_RUNNING');
       });
 
       it('includes activeQuestion with messageId and questionType', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
         expect(ctx.activeQuestion).toEqual({
           messageId: expect.any(String),
           questionType: 'free_text',
@@ -452,7 +453,7 @@ describe('ConversationContextService', () => {
       });
 
       it('includes analysisRun summary', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
         expect(ctx.analysisRun).toEqual({
           id: 'run_abc123',
           status: AnalysisRunStatus.AWAITING_INPUT,
@@ -473,7 +474,7 @@ describe('ConversationContextService', () => {
       });
 
       it('denies sendMessage and sendAudio for structured input', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
         expect(ctx.actions.sendMessage).toEqual({
           allowed: false,
           code: 'STRUCTURED_INPUT_REQUIRED',
@@ -487,12 +488,12 @@ describe('ConversationContextService', () => {
       });
 
       it('still allows resumeAnalysis', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
         expect(ctx.actions.resumeAnalysis).toEqual({ allowed: true });
       });
 
       it('returns correct activeQuestion type', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
         expect(ctx.activeQuestion?.questionType).toBe('single_select');
       });
     });
@@ -508,13 +509,13 @@ describe('ConversationContextService', () => {
       });
 
       it('denies sendMessage for structured input', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
         expect(ctx.actions.sendMessage.allowed).toBe(false);
         expect(ctx.actions.sendMessage.code).toBe('STRUCTURED_INPUT_REQUIRED');
       });
 
       it('returns correct activeQuestion type', async () => {
-        const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+        const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
         expect(ctx.activeQuestion?.questionType).toBe('multi_select');
       });
     });
@@ -534,12 +535,12 @@ describe('ConversationContextService', () => {
     });
 
     it('returns phase "analysing" instead of "awaiting_input"', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.phase).toBe('analysing');
     });
 
     it('denies all actions (same as analysing phase)', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.actions.sendMessage.allowed).toBe(false);
       expect(ctx.actions.sendAudio.allowed).toBe(false);
       expect(ctx.actions.startAnalysis.allowed).toBe(false);
@@ -553,7 +554,7 @@ describe('ConversationContextService', () => {
         makeRun({ status: AnalysisRunStatus.RUNNING })
       );
 
-      await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(mockOutboxService.hasPendingForConversation).not.toHaveBeenCalled();
     });
 
@@ -562,7 +563,7 @@ describe('ConversationContextService', () => {
         makeRun({ status: AnalysisRunStatus.PENDING })
       );
 
-      await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(mockOutboxService.hasPendingForConversation).not.toHaveBeenCalled();
     });
 
@@ -571,7 +572,7 @@ describe('ConversationContextService', () => {
         makeRun({ status: AnalysisRunStatus.COMPLETED })
       );
 
-      await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(mockOutboxService.hasPendingForConversation).not.toHaveBeenCalled();
     });
 
@@ -580,7 +581,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(mockOutboxService.hasPendingForConversation).not.toHaveBeenCalled();
     });
 
@@ -594,7 +595,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockOutboxService.hasPendingForConversation.mockResolvedValue(false);
 
-      await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(mockOutboxService.hasPendingForConversation).toHaveBeenCalledWith(
         conversationOid.toString()
       );
@@ -611,12 +612,12 @@ describe('ConversationContextService', () => {
     });
 
     it('returns phase "completed"', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.phase).toBe('completed');
     });
 
     it('denies all actions', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.actions.sendMessage.allowed).toBe(false);
       expect(ctx.actions.sendAudio.allowed).toBe(false);
       expect(ctx.actions.startAnalysis.allowed).toBe(false);
@@ -624,13 +625,13 @@ describe('ConversationContextService', () => {
     });
 
     it('uses ANALYSIS_COMPLETE codes', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.actions.sendMessage.code).toBe('ANALYSIS_COMPLETE');
       expect(ctx.actions.startAnalysis.code).toBe('ANALYSIS_COMPLETE');
     });
 
     it('does not include activeQuestion', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.activeQuestion).toBeUndefined();
     });
 
@@ -638,12 +639,12 @@ describe('ConversationContextService', () => {
       // A successful run's checkpoints are purged days later and the trainee is
       // never told, because there is nothing to tell them. Surfacing a notice on
       // a non-event trains people to ignore the ones that matter.
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.notice).toBeNull();
     });
 
     it('includes analysisRun summary', async () => {
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.analysisRun).toEqual({
         id: 'run_abc123',
         status: AnalysisRunStatus.COMPLETED,
@@ -664,7 +665,7 @@ describe('ConversationContextService', () => {
         })
       );
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.activeQuestion).toBeUndefined();
     });
 
@@ -676,7 +677,7 @@ describe('ConversationContextService', () => {
         })
       );
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.activeQuestion).toBeUndefined();
     });
 
@@ -692,7 +693,7 @@ describe('ConversationContextService', () => {
         })
       );
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       expect(ctx.activeQuestion).toBeUndefined();
     });
   });
@@ -708,7 +709,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(err({ code: 'DB_ERROR', message: 'fail' }));
       mockRepo.hasCompleteMessages.mockResolvedValue(ok(true));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       // hasProcessing = false (error), hasComplete = true → startAnalysis allowed
       expect(ctx.actions.startAnalysis).toEqual({ allowed: true });
     });
@@ -717,7 +718,7 @@ describe('ConversationContextService', () => {
       mockRepo.hasProcessingMessages.mockResolvedValue(ok(false));
       mockRepo.hasCompleteMessages.mockResolvedValue(err({ code: 'DB_ERROR', message: 'fail' }));
 
-      const ctx = await service.computeContext(conversationOid, ConversationStatus.ACTIVE);
+      const ctx = await service.computeContext(conversationOid, userOid, ConversationStatus.ACTIVE);
       // hasProcessing = false, hasComplete = false (error) → NO_MESSAGES
       expect(ctx.actions.startAnalysis.code).toBe('NO_MESSAGES');
     });

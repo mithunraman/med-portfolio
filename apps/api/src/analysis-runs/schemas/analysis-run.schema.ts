@@ -45,6 +45,15 @@ export class AnalysisRun {
   @Prop({ required: true, type: Types.ObjectId, ref: Conversation.name })
   conversationId!: Types.ObjectId;
 
+  // Denormalised from the parent conversation so the ownership predicate can be
+  // enforced in the filter rather than assumed from the caller. Written once by
+  // `createRun`; no update path touches it.
+  //
+  // No standalone index: every owner-scoped query also names `conversationId`,
+  // which prefixes the compound indexes below, so `userId` is a residual filter.
+  @Prop({ required: true, type: Types.ObjectId, ref: 'User' })
+  userId!: Types.ObjectId;
+
   @Prop({ required: true, type: Number })
   runNumber!: number;
 

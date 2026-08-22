@@ -42,11 +42,19 @@ describe('Delete cascade — checkpoint purge (integration)', () => {
   const threadId = (convId: Types.ObjectId, runNumber: number) =>
     `${convId.toString()}:${runNumber}`;
 
-  async function seedRun(convId: Types.ObjectId, runNumber: number, status: AnalysisRunStatus) {
+  const userId = new Types.ObjectId();
+
+  async function seedRun(
+    convId: Types.ObjectId,
+    runNumber: number,
+    status: AnalysisRunStatus,
+    owner: Types.ObjectId = userId
+  ) {
     const thread = threadId(convId, runNumber);
     await model.create({
       xid: `run_${convId.toString()}_${runNumber}`,
       conversationId: convId,
+      userId: owner,
       runNumber,
       status,
       idempotencyKey: `idem_${convId.toString()}_${runNumber}`,
@@ -119,7 +127,7 @@ describe('Delete cascade — checkpoint purge (integration)', () => {
     await seedRun(conversationId, 1, AnalysisRunStatus.COMPLETED);
     await seedRun(conversationId, 2, AnalysisRunStatus.AWAITING_INPUT);
 
-    await service.deleteByConversationIds([conversationId]);
+    await service.deleteByConversationIds([conversationId], userId);
 
     expect(await countFor(threadId(conversationId, 1))).toEqual({ checkpoints: 0, writes: 0 });
     expect(await countFor(threadId(conversationId, 2))).toEqual({ checkpoints: 0, writes: 0 });
@@ -129,7 +137,7 @@ describe('Delete cascade — checkpoint purge (integration)', () => {
     await seedRun(conversationId, 1, AnalysisRunStatus.COMPLETED);
     await seedRun(otherConversationId, 1, AnalysisRunStatus.COMPLETED);
 
-    await service.deleteByConversationIds([conversationId]);
+    await service.deleteByConversationIds([conversationId], userId);
 
     // The purge is thread-scoped; a filter that widened would show up here.
     expect(await countFor(threadId(otherConversationId, 1))).toEqual({
@@ -141,7 +149,7 @@ describe('Delete cascade — checkpoint purge (integration)', () => {
   it('still tombstones the runs, and leaves checkpointsPurgedAt null', async () => {
     await seedRun(conversationId, 1, AnalysisRunStatus.AWAITING_INPUT);
 
-    await service.deleteByConversationIds([conversationId]);
+    await service.deleteByConversationIds([conversationId], userId);
 
     const run = await model.findOne({ conversationId }).lean();
     expect(run!.status).toBe(AnalysisRunStatus.DELETED);
@@ -155,6 +163,40 @@ describe('Delete cascade — checkpoint purge (integration)', () => {
   });
 
   it('is a no-op for a conversation with no runs', async () => {
-    await expect(service.deleteByConversationIds([otherConversationId])).resolves.toBeUndefined();
+    await expect(service.deleteByConversationIds([otherConversationId], userId)).resolves.toBeUndefined();
+  });
+
+  /**
+   * The purge is a HARD delete against collections with no `userId` to filter
+   * on, so its only owner scoping is `findThreadIdsByConversationIds` upstream.
+   * If that predicate is lost, a mixed-owner batch destroys the other user's
+   * graph state irrecoverably — and because the run tombstone beside it IS
+   * scoped, the victim is left with a live run pointing at deleted checkpoints.
+   * No error, no tombstone, no route to notice.
+   *
+   * The batch below is unreachable in production today (the sole caller passes a
+   * single owner-verified id) and that is the point: this is the guard on the
+   * precondition `ArtefactsService.deleteByIds` no longer states.
+   */
+  it("leaves another user's checkpoints AND their run intact in a mixed-owner batch", async () => {
+    const foreignUserId = new Types.ObjectId();
+    await seedRun(conversationId, 1, AnalysisRunStatus.COMPLETED);
+    await seedRun(otherConversationId, 1, AnalysisRunStatus.COMPLETED, foreignUserId);
+
+    await service.deleteByConversationIds([conversationId, otherConversationId], userId);
+
+    // Caller's own data is gone, as normal.
+    expect(await countFor(threadId(conversationId, 1))).toEqual({ checkpoints: 0, writes: 0 });
+
+    // The foreign user's checkpoints survive — this is the irrecoverable half.
+    expect(await countFor(threadId(otherConversationId, 1))).toEqual({
+      checkpoints: 2,
+      writes: 1,
+    });
+
+    // ...and their run is untouched, so purge and tombstone stay in agreement.
+    const foreignRun = await model.findOne({ conversationId: otherConversationId }).lean();
+    expect(foreignRun!.status).toBe(AnalysisRunStatus.COMPLETED);
+    expect(foreignRun!.langGraphThreadId).toBe(threadId(otherConversationId, 1));
   });
 });

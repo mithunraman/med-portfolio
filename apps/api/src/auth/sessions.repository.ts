@@ -55,16 +55,6 @@ export class SessionsRepository implements ISessionRepository {
     }
   }
 
-  async findByXid(xid: string): Promise<Result<SessionRecord | null, DBError>> {
-    try {
-      const session = await this.sessionModel.findOne({ xid }).lean();
-      return ok(session ? toSessionRecord(session) : null);
-    } catch (error) {
-      this.logger.error('Failed to find session by xid', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to find session' });
-    }
-  }
-
   async findRevocationStatus(
     sessionId: string
   ): Promise<Result<SessionRevocationStatus | null, DBError>> {

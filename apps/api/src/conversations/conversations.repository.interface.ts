@@ -51,6 +51,7 @@ export interface UpdateMessageData {
 
 export interface ListMessagesQuery {
   conversation: Types.ObjectId;
+  userId: Types.ObjectId;
 }
 
 export interface ListMessagesResult {
@@ -108,15 +109,23 @@ export interface IConversationsRepository {
   ): Promise<Result<Message, DBError>>;
 
   /**
-   * SYSTEM READ — intentionally NOT scoped by userId. Looks up a message by its
-   * internal _id, which never originates from request input: callers are the
-   * outbox processor (its entry lookup, before any user is known) and
-   * conversation-context computation (user-agnostic). Both pass a server-derived
-   * id. Do NOT wire this to a request-supplied id — use a userId-scoped read for
-   * that. See "Ownership predicate at the persistence layer" in CLAUDE.md.
+   * Owner-scoped. Callers still pass a server-derived `_id` — the outbox
+   * processor (from its job payload) and conversation-context computation — so
+   * the predicate is defence in depth rather than the primary check.
+   *
+   * It was previously unscoped on the argument that those callers make request
+   * input unreachable. That was true and is still true; it stopped being a
+   * sufficient reason once a future caller could wire this to a route with no
+   * compiler or test signal, which is what CLAUDE.md's "Ownership predicate at
+   * the persistence layer" rule exists to prevent. Do not remove the predicate.
+   *
+   * The owner must be the AUTHENTICATED principal, not a `userId` read off a
+   * record the caller just fetched — that would be a tautology. For the outbox
+   * path there is no request, so the principal is the job payload's `userId`.
    */
   findMessageById(
     messageId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Message | null, DBError>>;
 
@@ -132,6 +141,7 @@ export interface IConversationsRepository {
 
   updateMessage(
     messageId: Types.ObjectId,
+    userId: Types.ObjectId,
     data: UpdateMessageData,
     session?: ClientSession
   ): Promise<Result<Message | null, DBError>>;
@@ -155,6 +165,7 @@ export interface IConversationsRepository {
    */
   updateMessageIfRawContentPresent(
     messageId: Types.ObjectId,
+    userId: Types.ObjectId,
     data: UpdateMessageData
   ): Promise<Result<Message | null, DBError>>;
 
@@ -171,6 +182,7 @@ export interface IConversationsRepository {
    */
   hasProcessingMessages(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<boolean, DBError>>;
 
@@ -179,6 +191,7 @@ export interface IConversationsRepository {
    */
   hasCompleteMessages(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<boolean, DBError>>;
 
@@ -188,6 +201,7 @@ export interface IConversationsRepository {
    */
   getLastMessageRole(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<MessageRole | null, DBError>>;
 
@@ -200,6 +214,7 @@ export interface IConversationsRepository {
   hasLaterAssistantMessage(
     conversationId: Types.ObjectId,
     messageId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<boolean, DBError>>;
 
@@ -220,14 +235,18 @@ export interface IConversationsRepository {
    * `specialty` is returned so the caller can resolve `artefactType` to a display
    * label; it is not itself exposed to clients.
    *
-   * SYSTEM READ — intentionally NOT scoped by userId. The sole caller is
-   * conversation-context computation, which is user-agnostic and passes an
-   * owner-verified conversation._id (never request input). Do NOT wire this to
-   * a request-supplied id without adding a userId predicate. See "Ownership
-   * predicate at the persistence layer" in CLAUDE.md.
+   * Owner-scoped, with the predicate in the initial `$match` — before the
+   * artefact populate, so the join never runs for a conversation the caller does
+   * not own.
+   *
+   * Previously unscoped on the argument that the sole caller (conversation-context
+   * computation) passes an owner-verified `conversation._id`. Still the only
+   * caller; the predicate is there so that stops being load-bearing. Do not
+   * remove it.
    */
   findArtefactRefByConversationId(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<ArtefactRef | null, DBError>>;
 
@@ -245,13 +264,18 @@ export interface IConversationsRepository {
   /**
    * Bulk tombstone conversations + scrub fields. Idempotent.
    */
-  markDeleted(ids: Types.ObjectId[], session?: ClientSession): Promise<Result<number, DBError>>;
+  markDeleted(
+    ids: Types.ObjectId[],
+    userId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<Result<number, DBError>>;
 
   /**
    * Resolve live conversation IDs for a set of artefact IDs.
    */
   findIdsByArtefactIds(
     artefactIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Types.ObjectId[], DBError>>;
 
@@ -260,6 +284,7 @@ export interface IConversationsRepository {
    */
   markDeletedMessagesByIds(
     ids: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
 
@@ -268,6 +293,7 @@ export interface IConversationsRepository {
    */
   markDeletedMessagesByConversationIds(
     conversationIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
 

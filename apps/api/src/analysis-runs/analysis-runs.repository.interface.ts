@@ -8,6 +8,7 @@ export const ANALYSIS_RUNS_REPOSITORY = Symbol('ANALYSIS_RUNS_REPOSITORY');
 
 export interface CreateAnalysisRunData {
   conversationId: Types.ObjectId;
+  userId: Types.ObjectId;
   runNumber: number;
   idempotencyKey: string;
   langGraphThreadId: string;
@@ -42,6 +43,7 @@ export interface IAnalysisRunsRepository {
 
   findRunById(
     runId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession,
   ): Promise<Result<AnalysisRun | null, DBError>>;
 
@@ -51,6 +53,7 @@ export interface IAnalysisRunsRepository {
    */
   findRunByIdempotencyKey(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     idempotencyKey: string,
     session?: ClientSession,
   ): Promise<Result<AnalysisRun | null, DBError>>;
@@ -61,6 +64,7 @@ export interface IAnalysisRunsRepository {
    */
   findActiveRun(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession,
   ): Promise<Result<AnalysisRun | null, DBError>>;
 
@@ -72,6 +76,7 @@ export interface IAnalysisRunsRepository {
    */
   findExecutingRun(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession,
   ): Promise<Result<AnalysisRun | null, DBError>>;
 
@@ -81,6 +86,7 @@ export interface IAnalysisRunsRepository {
    */
   findLatestRun(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession,
   ): Promise<Result<AnalysisRun | null, DBError>>;
 
@@ -90,6 +96,7 @@ export interface IAnalysisRunsRepository {
    */
   updateRunStatus(
     runId: Types.ObjectId,
+    userId: Types.ObjectId,
     expectedStatus: AnalysisRunStatus,
     updates: UpdateAnalysisRunData,
     session?: ClientSession,
@@ -101,6 +108,7 @@ export interface IAnalysisRunsRepository {
    */
   getMaxRunNumber(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession,
   ): Promise<Result<number, DBError>>;
 
@@ -110,6 +118,7 @@ export interface IAnalysisRunsRepository {
    */
   updateCurrentStep(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     step: string,
   ): Promise<Result<AnalysisRun | null, DBError>>;
 
@@ -118,6 +127,7 @@ export interface IAnalysisRunsRepository {
    */
   listRuns(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession,
   ): Promise<Result<AnalysisRun[], DBError>>;
 
@@ -172,6 +182,7 @@ export interface IAnalysisRunsRepository {
    */
   findThreadIdsByConversationIds(
     conversationIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<string[], DBError>>;
 
@@ -180,6 +191,7 @@ export interface IAnalysisRunsRepository {
    */
   markDeletedByConversationIds(
     conversationIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
 
@@ -188,6 +200,7 @@ export interface IAnalysisRunsRepository {
    */
   markDeletedByArtefactIds(
     artefactIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
 }

@@ -108,12 +108,14 @@ export class MediaRepository implements IMediaRepository {
 
   async markPendingDeleteByMessageIds(
     messageIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>> {
     try {
       if (messageIds.length === 0) return ok(0);
       const result = await this.mediaModel.updateMany(
         {
+          userId,
           refDocumentId: { $in: messageIds },
           refCollection: MediaRefCollection.MESSAGES,
           status: MediaStatus.ATTACHED,

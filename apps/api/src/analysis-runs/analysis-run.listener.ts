@@ -14,7 +14,8 @@ export class AnalysisRunListener {
   async handleStepStarted(event: AnalysisStepStartedEvent): Promise<void> {
     try {
       const conversationId = new Types.ObjectId(event.conversationId);
-      await this.analysisRunsService.updateCurrentStep(conversationId, event.step);
+      const userId = new Types.ObjectId(event.userId);
+      await this.analysisRunsService.updateCurrentStep(conversationId, userId, event.step);
       this.logger.debug(
         `Updated currentStep to '${event.step}' for conversation ${event.conversationId}`
       );

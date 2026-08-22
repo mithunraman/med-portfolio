@@ -148,6 +148,7 @@ describe('ConversationsService.editMessage', () => {
     );
     expect(mockConversationsRepo.updateMessage).toHaveBeenCalledWith(
       messageOid,
+      userId,
       {
         rawContent: 'call 07700 900123 or test@example.com',
         redactedContent: 'call [PHONE] or [EMAIL]',
@@ -336,6 +337,7 @@ describe('ConversationsService.editMessage', () => {
     // Edit never re-runs transcription nor touches status.
     expect(mockConversationsRepo.updateMessage).toHaveBeenCalledWith(
       messageOid,
+      userId,
       expect.not.objectContaining({ status: expect.anything() }),
       null,
     );

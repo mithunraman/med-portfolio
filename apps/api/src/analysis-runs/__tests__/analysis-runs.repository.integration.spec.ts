@@ -32,12 +32,14 @@ describe('AnalysisRunsRepository — active-run slot (integration)', () => {
   let repo: IAnalysisRunsRepository;
   let model: Model<AnalysisRunDocument>;
 
+  const userId = new Types.ObjectId();
   const conversationId = new Types.ObjectId();
 
   async function insertRun(status: AnalysisRunStatus, runNumber = 1) {
     await model.create({
       xid: `run_${runNumber}_${status}`,
       conversationId,
+      userId,
       runNumber,
       status,
       idempotencyKey: `idem_${runNumber}_${status}`,
@@ -60,6 +62,7 @@ describe('AnalysisRunsRepository — active-run slot (integration)', () => {
   function createNextRun(runNumber: number) {
     return repo.createRun({
       conversationId,
+      userId,
       runNumber,
       idempotencyKey: `idem_new_${runNumber}`,
       langGraphThreadId: `${conversationId.toString()}:${runNumber}`,
@@ -104,7 +107,7 @@ describe('AnalysisRunsRepository — active-run slot (integration)', () => {
     it('no longer reports an active run', async () => {
       await insertRun(AnalysisRunStatus.EXPIRED);
 
-      const result = await repo.findActiveRun(conversationId);
+      const result = await repo.findActiveRun(conversationId, userId);
 
       expect(isOk(result)).toBe(true);
       expect(isOk(result) && result.value).toBeNull();
@@ -124,7 +127,7 @@ describe('AnalysisRunsRepository — active-run slot (integration)', () => {
     it('stops routing graph progress to the dead run', async () => {
       await insertRun(AnalysisRunStatus.EXPIRED);
 
-      const result = await repo.updateCurrentStep(conversationId, 'reflect');
+      const result = await repo.updateCurrentStep(conversationId, userId, 'reflect');
 
       expect(isOk(result) && result.value).toBeNull();
       const run = await model.findOne({ conversationId }).lean();
@@ -141,7 +144,7 @@ describe('AnalysisRunsRepository — active-run slot (integration)', () => {
     // guard to be correct.
     await insertRun(AnalysisRunStatus.DELETED);
 
-    const result = await repo.findActiveRun(conversationId);
+    const result = await repo.findActiveRun(conversationId, userId);
 
     expect(isOk(result) && result.value).toBeNull();
   });
@@ -319,7 +322,7 @@ describe('AnalysisRunsRepository — active-run slot (integration)', () => {
       async (status) => {
         await insertRun(status, 1);
 
-        const active = await repo.findActiveRun(conversationId);
+        const active = await repo.findActiveRun(conversationId, userId);
         expect(isOk(active) && active.value).not.toBeNull();
 
         const created = await createNextRun(2);
@@ -333,12 +336,74 @@ describe('AnalysisRunsRepository — active-run slot (integration)', () => {
       async (status) => {
         await insertRun(status, 1);
 
-        const active = await repo.findActiveRun(conversationId);
+        const active = await repo.findActiveRun(conversationId, userId);
         expect(isOk(active) && active.value).toBeNull();
 
         const created = await createNextRun(2);
         expect(isOk(created)).toBe(true);
       }
     );
+  });
+
+  // ─── Ownership scoping ───
+
+  describe('ownership predicate', () => {
+    const otherUserId = new Types.ObjectId();
+
+    /** A run on the SAME conversation id, owned by someone else. */
+    async function insertForeignRun(status = AnalysisRunStatus.RUNNING) {
+      const [doc] = await model.create([
+        {
+          xid: 'run_foreign',
+          conversationId,
+          userId: otherUserId,
+          runNumber: 99,
+          status,
+          idempotencyKey: 'idem_foreign',
+          langGraphThreadId: `${conversationId.toString()}:99`,
+        },
+      ]);
+      return doc;
+    }
+
+    it('findRunById does not return another user\'s run', async () => {
+      const foreign = await insertForeignRun();
+
+      const result = await repo.findRunById(foreign._id, userId);
+
+      expect(result).toEqual({ ok: true, value: null });
+    });
+
+    it('findActiveRun ignores another user\'s active run on the same conversation', async () => {
+      await insertForeignRun(AnalysisRunStatus.RUNNING);
+
+      const result = await repo.findActiveRun(conversationId, userId);
+
+      expect(isOk(result) && result.value).toBeNull();
+    });
+
+    it('updateRunStatus refuses to transition another user\'s run', async () => {
+      const foreign = await insertForeignRun(AnalysisRunStatus.RUNNING);
+      const before = await model.findById(foreign._id).lean();
+
+      const result = await repo.updateRunStatus(foreign._id, userId, AnalysisRunStatus.RUNNING, {
+        status: AnalysisRunStatus.COMPLETED,
+      });
+
+      // Null result — the optimistic-lock path the service already treats as failure.
+      expect(isOk(result) && result.value).toBeNull();
+      expect(await model.findById(foreign._id).lean()).toEqual(before);
+    });
+
+    it('markDeletedByConversationIds leaves another user\'s run on the same conversation', async () => {
+      await insertRun(AnalysisRunStatus.COMPLETED, 1);
+      const foreign = await insertForeignRun(AnalysisRunStatus.COMPLETED);
+      const before = await model.findById(foreign._id).lean();
+
+      const result = await repo.markDeletedByConversationIds([conversationId], userId);
+
+      expect(result).toEqual({ ok: true, value: 1 });
+      expect(await model.findById(foreign._id).lean()).toEqual(before);
+    });
   });
 });

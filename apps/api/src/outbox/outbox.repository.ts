@@ -240,6 +240,23 @@ export class OutboxRepository implements IOutboxRepository {
     }
   }
 
+  /**
+   * `conversationId` is the whole key here, deliberately.
+   *
+   * DO NOT add `'payload.userId'` (or any other payload field) as a second
+   * required match. Ownership is already satisfied: every `conversationIds` list
+   * reaching this method is resolved through an owner-scoped query
+   * (`findIdsByArtefactIds`, `findConversationIdsByUser`), and a conversation has
+   * exactly one owner — so no other user's job can carry one of these ids.
+   *
+   * The cost of narrowing is asymmetric and points the wrong way. `payload` is
+   * `Record<string, unknown>` with nothing enforcing its shape, so a required
+   * payload field silently *under*-matches when absent. For a destructive write
+   * that direction is safe (you damage less); for a cancellation it means failing
+   * to stop queued work — the opposite of what this method exists to do. A job
+   * type added later that carries `conversationId` but not `userId` would escape
+   * with no compile error and no test failure.
+   */
   async cancelByConversationIds(
     conversationIds: string[],
     session?: ClientSession

@@ -16,6 +16,7 @@ import {
 const ENTITY_TYPE = 'artefact' as never; // VersionHistoryEntity — string-backed
 const userId = new Types.ObjectId();
 const entityId = new Types.ObjectId();
+const foreignUserId = new Types.ObjectId();
 
 async function insertVersion(
   model: Model<VersionHistoryDocument>,
@@ -124,6 +125,20 @@ describe('VersionHistoryRepository (integration)', () => {
       if (isOk(ownResult)) expect(ownResult.value).toBe(2);
       expect(isOk(foreignResult)).toBe(true);
       if (isOk(foreignResult)) expect(foreignResult.value).toBe(0);
+    });
+  });
+
+  describe('anonymizeByEntity — ownership predicate', () => {
+    it("does not scrub another user's snapshot for the same entity id", async () => {
+      await insertVersion(model, { version: 1 });
+      const theirs = await insertVersion(model, { userId: foreignUserId, version: 2 });
+      const before = await model.findById(theirs._id).lean();
+
+      const result = await repo.anonymizeByEntity(ENTITY_TYPE, [entityId], userId);
+
+      expect(result).toEqual({ ok: true, value: 1 });
+      // Their snapshot survives intact — deep-equal, not just present.
+      expect(await model.findById(theirs._id).lean()).toEqual(before);
     });
   });
 });

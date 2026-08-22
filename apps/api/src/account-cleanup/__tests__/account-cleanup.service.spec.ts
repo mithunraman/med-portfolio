@@ -241,9 +241,10 @@ describe('AccountCleanupService', () => {
       expect(repos.outboxRepo.cancelByUser).toHaveBeenCalledWith(targetUserId, [
         convId1.toString(),
       ]);
-      expect(repos.analysisRunsRepo.markDeletedByConversationIds).toHaveBeenCalledWith([
-        convId1,
-      ]);
+      expect(repos.analysisRunsRepo.markDeletedByConversationIds).toHaveBeenCalledWith(
+        [convId1],
+        targetUserId
+      );
     });
 
     it('step 2 hard-deletes LangGraph checkpoint data for the user', async () => {
@@ -263,7 +264,10 @@ describe('AccountCleanupService', () => {
 
       await service.triggerDeletion(targetUserId.toString());
 
-      expect(repos.analysisRunsRepo.findThreadIdsByConversationIds).toHaveBeenCalledWith([convId]);
+      expect(repos.analysisRunsRepo.findThreadIdsByConversationIds).toHaveBeenCalledWith(
+        [convId],
+        targetUserId
+      );
       expect(repos.checkpointRepo.purgeThreads).toHaveBeenCalledWith([
         `${convId.toString()}:1`,
         `${convId.toString()}:2`,

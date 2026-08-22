@@ -41,11 +41,11 @@ export class ProcessingService {
    * Process a message - orchestrates the pipeline based on message type
    * This is called asynchronously after message creation
    */
-  async processMessage(messageId: Types.ObjectId): Promise<void> {
+  async processMessage(messageId: Types.ObjectId, userId: Types.ObjectId): Promise<void> {
     this.logger.info(`Starting processing for message ${messageId}`);
 
     // Fetch message with media populated
-    const findResult = await this.conversationsRepository.findMessageById(messageId);
+    const findResult = await this.conversationsRepository.findMessageById(messageId, userId);
 
     if (isErr(findResult)) {
       this.logger.error(`Failed to find message ${messageId}: ${findResult.error.message}`);
@@ -72,17 +72,20 @@ export class ProcessingService {
     // Look up artefact via conversation to get specialty
     const convResult = await this.conversationsRepository.findConversationById(
       message.conversation,
-      message.userId
+      userId
     );
     if (isErr(convResult) || !convResult.value) {
       this.logger.error(`Conversation not found for message ${messageId}`);
-      await this.markFailed(messageId, 'Conversation not found');
+      await this.markFailed(messageId, userId, 'Conversation not found');
       return;
     }
-    const artefactResult = await this.artefactsRepository.findById(convResult.value.artefact);
+    const artefactResult = await this.artefactsRepository.findById(
+      convResult.value.artefact,
+      userId
+    );
     if (isErr(artefactResult) || !artefactResult.value) {
       this.logger.error(`Artefact not found for message ${messageId}`);
-      await this.markFailed(messageId, 'Artefact not found');
+      await this.markFailed(messageId, userId, 'Artefact not found');
       return;
     }
     const specialty = artefactResult.value.specialty;
@@ -98,33 +101,37 @@ export class ProcessingService {
     try {
       // Determine pipeline based on content type
       if (message.media && context.mediaType === MediaType.AUDIO) {
-        await this.processAudioMessage(message, context);
+        await this.processAudioMessage(message, userId, context);
       } else if (message.rawContent) {
-        await this.processTextMessage(message, context);
+        await this.processTextMessage(message, userId, context);
       } else {
-        await this.markFailed(messageId, 'No content to process');
+        await this.markFailed(messageId, userId, 'No content to process');
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Processing failed for message ${messageId}: ${errorMessage}`);
-      await this.markFailed(messageId, errorMessage);
+      await this.markFailed(messageId, userId, errorMessage);
     }
   }
 
   /**
    * Process audio message: Transcribe → Redact PII → Clean
    */
-  private async processAudioMessage(message: Message, context: StageContext): Promise<void> {
+  private async processAudioMessage(
+    message: Message,
+    userId: Types.ObjectId,
+    context: StageContext
+  ): Promise<void> {
     const messageId = message._id;
     const media = message.media as unknown as Media;
 
     // Update status to TRANSCRIBING
-    if (!(await this.applyUpdate(messageId, { status: MessageStatus.TRANSCRIBING }))) return;
+    if (!(await this.applyUpdate(messageId, userId, { status: MessageStatus.TRANSCRIBING }))) return;
 
     // Get presigned URL for the audio. Short-lived: this URL is sent to the
     // transcription provider and unlocks un-redacted audio.
     const audioUrl = await this.mediaService.getTranscriptionUrl(
-      message.userId.toString(),
+      userId.toString(),
       media.xid
     );
 
@@ -137,7 +144,7 @@ export class ProcessingService {
 
     // Update with raw transcript and transcription metadata. Redaction runs
     // next, so the message enters DEIDENTIFYING.
-    const stillAlive = await this.applyUpdate(messageId, {
+    const stillAlive = await this.applyUpdate(messageId, userId, {
       rawContent: transcriptionResult.text,
       // This IS the moment raw content comes into existence for an audio message
       // — the schema default stamped the anchor at message creation, before the
@@ -155,25 +162,29 @@ export class ProcessingService {
     if (!stillAlive) return;
 
     // Stages 2-3: Redact → Clean → COMPLETE (or REJECTED on injection)
-    await this.redactCleanAndComplete(messageId, transcriptionResult.text, context);
+    await this.redactCleanAndComplete(messageId, userId, transcriptionResult.text, context);
   }
 
   /**
    * Process text message: Redact PII → Clean
    */
-  private async processTextMessage(message: Message, context: StageContext): Promise<void> {
+  private async processTextMessage(
+    message: Message,
+    userId: Types.ObjectId,
+    context: StageContext
+  ): Promise<void> {
     const messageId = message._id;
 
     if (!message.rawContent) {
-      await this.markFailed(messageId, 'No raw content to process');
+      await this.markFailed(messageId, userId, 'No raw content to process');
       return;
     }
 
     // Redaction runs first, so the message enters DEIDENTIFYING.
-    if (!(await this.applyUpdate(messageId, { status: MessageStatus.DEIDENTIFYING }))) return;
+    if (!(await this.applyUpdate(messageId, userId, { status: MessageStatus.DEIDENTIFYING }))) return;
 
     // Stages 1-2: Redact → Clean → COMPLETE (or REJECTED on injection)
-    await this.redactCleanAndComplete(messageId, message.rawContent, context);
+    await this.redactCleanAndComplete(messageId, userId, message.rawContent, context);
   }
 
   /**
@@ -198,6 +209,7 @@ export class ProcessingService {
    */
   private async redactCleanAndComplete(
     messageId: Types.ObjectId,
+    userId: Types.ObjectId,
     input: string,
     context: StageContext
   ): Promise<void> {
@@ -212,7 +224,7 @@ export class ProcessingService {
     // text is retained forever. The precondition is folded into the query so it
     // is atomic with the write.
     if (
-      !(await this.applyDerivedUpdate(messageId, {
+      !(await this.applyDerivedUpdate(messageId, userId, {
         redactedContent: redaction.text,
         status: MessageStatus.CLEANING,
       }))
@@ -223,7 +235,7 @@ export class ProcessingService {
     // raw PHI). Also the injection gate.
     this.logger.info(`Cleaning text for message ${messageId}`);
     const cleaningResult = await this.cleaningStage.execute(redaction.text, context);
-    if (cleaningResult.injectionDetected) return this.markRejected(messageId);
+    if (cleaningResult.injectionDetected) return this.markRejected(messageId, userId);
 
     // Backstop: re-run the offline structured-identifier redactor on the CLEANED
     // text, because cleaning is the last writer to `content` and can CREATE an
@@ -256,7 +268,7 @@ export class ProcessingService {
     }
 
     if (
-      !(await this.applyUpdate(messageId, {
+      !(await this.applyUpdate(messageId, userId, {
         content: backstop.redactedText,
         status: MessageStatus.COMPLETE,
       }))
@@ -273,8 +285,12 @@ export class ProcessingService {
    * still live, false once it's gone — callers short-circuit to stop spending
    * transcription/LLM budget on a doomed message.
    */
-  private async applyUpdate(messageId: Types.ObjectId, data: UpdateMessageData): Promise<boolean> {
-    const result = await this.conversationsRepository.updateMessage(messageId, data);
+  private async applyUpdate(
+    messageId: Types.ObjectId,
+    userId: Types.ObjectId,
+    data: UpdateMessageData
+  ): Promise<boolean> {
+    const result = await this.conversationsRepository.updateMessage(messageId, userId, data);
     if (isErr(result)) {
       throw new Error(result.error.message);
     }
@@ -305,10 +321,12 @@ export class ProcessingService {
    */
   private async applyDerivedUpdate(
     messageId: Types.ObjectId,
+    userId: Types.ObjectId,
     data: UpdateMessageData
   ): Promise<boolean> {
     const result = await this.conversationsRepository.updateMessageIfRawContentPresent(
       messageId,
+      userId,
       data
     );
     if (isErr(result)) {
@@ -318,7 +336,7 @@ export class ProcessingService {
       this.logger.warn(
         `Halting processing for message ${messageId} — raw content deleted or scrubbed mid-pipeline`
       );
-      await this.markFailed(messageId, 'Raw content no longer available');
+      await this.markFailed(messageId, userId, 'Raw content no longer available');
       return false;
     }
     return true;
@@ -336,9 +354,9 @@ export class ProcessingService {
    * deliberate rejection, not an error, so no processingError is set. A null result
    * (message deleted mid-pipeline) is a no-op success, mirroring markFailed.
    */
-  private async markRejected(messageId: Types.ObjectId): Promise<void> {
+  private async markRejected(messageId: Types.ObjectId, userId: Types.ObjectId): Promise<void> {
     this.logger.warn(`Message ${messageId} flagged as prompt injection — marking REJECTED`);
-    const result = await this.conversationsRepository.updateMessage(messageId, {
+    const result = await this.conversationsRepository.updateMessage(messageId, userId, {
       status: MessageStatus.REJECTED,
       content: null,
       redactedContent: null,
@@ -350,8 +368,12 @@ export class ProcessingService {
     }
   }
 
-  private async markFailed(messageId: Types.ObjectId, error: string): Promise<void> {
-    const result = await this.conversationsRepository.updateMessage(messageId, {
+  private async markFailed(
+    messageId: Types.ObjectId,
+    userId: Types.ObjectId,
+    error: string
+  ): Promise<void> {
+    const result = await this.conversationsRepository.updateMessage(messageId, userId, {
       status: MessageStatus.FAILED,
       processingError: error,
     });

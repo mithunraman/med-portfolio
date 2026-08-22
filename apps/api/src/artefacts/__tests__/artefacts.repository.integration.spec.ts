@@ -11,6 +11,7 @@ import { Artefact, ArtefactDocument, ArtefactSchema } from '../schemas/artefact.
 // ── Helpers ──
 
 const userId = new Types.ObjectId();
+const otherUserId = new Types.ObjectId();
 
 async function insertArtefact(
   model: Model<ArtefactDocument>,
@@ -222,7 +223,7 @@ describe('ArtefactsRepository (integration)', () => {
     it('scrubs note text on markDeleted, retaining note identity and timestamps', async () => {
       const doc = await insertWithNotes();
 
-      const result = await repo.markDeleted([doc._id]);
+      const result = await repo.markDeleted([doc._id], userId);
       expect(isOk(result)).toBe(true);
 
       const after = await model.findById(doc._id).lean();
@@ -249,7 +250,7 @@ describe('ArtefactsRepository (integration)', () => {
     it('applies to an artefact with an empty notes array', async () => {
       const doc = await insertArtefact(model);
 
-      const result = await repo.markDeleted([doc._id]);
+      const result = await repo.markDeleted([doc._id], userId);
 
       expect(isOk(result)).toBe(true);
       const after = await model.findById(doc._id).lean();
@@ -266,7 +267,7 @@ describe('ArtefactsRepository (integration)', () => {
       await model.collection.updateOne({ _id: doc._id }, { $unset: { notes: '' } });
       expect(await model.collection.findOne({ _id: doc._id })).not.toHaveProperty('notes');
 
-      const result = await repo.markDeleted([doc._id]);
+      const result = await repo.markDeleted([doc._id], userId);
 
       expect(isOk(result)).toBe(true);
       const after = await model.findById(doc._id).lean();
@@ -292,6 +293,44 @@ describe('ArtefactsRepository (integration)', () => {
         expect(after!.title).toBe('[deleted]');
         expect(after!.notes.every((n) => n.text === '[deleted]')).toBe(true);
       }
+    });
+  });
+
+  // ─── Ownership scoping ───
+
+  describe('ownership predicate', () => {
+    it('markDeleted leaves another user\'s artefact untouched even when its id is in the batch', async () => {
+      const mine = await insertArtefact(model);
+      const theirs = await insertArtefact(model, { userId: otherUserId, title: 'Their entry' });
+      const before = await model.findById(theirs._id).lean();
+
+      const result = await repo.markDeleted([mine._id, theirs._id], userId);
+
+      // Only the caller's entry is counted and tombstoned.
+      expect(result).toEqual({ ok: true, value: 1 });
+      expect((await model.findById(mine._id).lean())!.status).toBe(ArtefactStatus.DELETED);
+      // Deep-equal, not a mere existence check: a survivor that kept its row but
+      // lost a field would pass `toBeTruthy()`.
+      expect(await model.findById(theirs._id).lean()).toEqual(before);
+    });
+
+    it('markDeleted stays idempotent — a re-run modifies nothing and changes nothing', async () => {
+      const doc = await insertArtefact(model);
+      await repo.markDeleted([doc._id], userId);
+      const first = await model.findById(doc._id).lean();
+
+      const second = await repo.markDeleted([doc._id], userId);
+
+      expect(second).toEqual({ ok: true, value: 0 });
+      expect(await model.findById(doc._id).lean()).toEqual(first);
+    });
+
+    it('findById does not return another user\'s artefact', async () => {
+      const theirs = await insertArtefact(model, { userId: otherUserId });
+
+      const result = await repo.findById(theirs._id, userId);
+
+      expect(result).toEqual({ ok: true, value: null });
     });
   });
 });

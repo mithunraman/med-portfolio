@@ -137,7 +137,7 @@ describe('PresentCapabilitiesNode', () => {
 
     expect(deps.eventEmitter.emit).toHaveBeenCalledWith(
       'analysis.step.started',
-      { conversationId: 'conv-123', step: 'present_capabilities' },
+      { conversationId: 'conv-123', userId: 'user-123', step: 'present_capabilities' },
     );
   });
 });

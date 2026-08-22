@@ -52,6 +52,7 @@ export interface IVersionHistoryRepository {
   anonymizeByEntity(
     entityType: VersionHistoryEntity,
     entityIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
 }

@@ -10,6 +10,7 @@ import { TransactionService } from '../../database/transaction.service';
 import { PortfolioGraphService } from '../../portfolio-graph/portfolio-graph.service';
 import { AnalysisCompletionService } from '../analysis-completion.service';
 import type { OutboxHandler } from '../outbox.consumer';
+import { requiredObjectId } from './payload.util';
 
 export interface AnalysisStartPayload {
   analysisRunId: string;
@@ -39,7 +40,10 @@ export class AnalysisStartHandler implements OutboxHandler {
 
   async handle(payload: Record<string, unknown>): Promise<void> {
     const data = payload as unknown as AnalysisStartPayload;
-    const runId = new Types.ObjectId(data.analysisRunId);
+    // Validated, not cast — see `requiredObjectId`. An absent id would otherwise
+    // be minted, match no run, and complete the job as a no-op.
+    const runId = requiredObjectId(payload, 'analysisRunId', this.type);
+    const userOid = requiredObjectId(payload, 'userId', this.type);
     const threadId = data.langGraphThreadId;
 
     // Skip unless the run is in the one status the transition below can start
@@ -50,7 +54,7 @@ export class AnalysisStartHandler implements OutboxHandler {
     // nothing to do. Enumerating terminal statuses covers less than it looks:
     // it misses RUNNING, which a job re-claimed after its 10-minute lock expires
     // (a graph run outlasting DEFAULT_LOCK_DURATION_MS) sees routinely.
-    const run = await this.analysisRunsService.findRunById(runId);
+    const run = await this.analysisRunsService.findRunById(runId, userOid);
     if (!run) return;
     if (run.status !== AnalysisRunStatus.PENDING) {
       // Terminal is routine — a run finished, a queued sibling arrived late.
@@ -67,6 +71,7 @@ export class AnalysisStartHandler implements OutboxHandler {
     // Transition run: PENDING → RUNNING
     await this.analysisRunsService.transitionStatus(
       runId,
+      userOid,
       AnalysisRunStatus.PENDING,
       AnalysisRunStatus.RUNNING,
     );
@@ -85,10 +90,11 @@ export class AnalysisStartHandler implements OutboxHandler {
       });
 
       if (pausedNode) {
-        await this.handleInterrupt(data, runId, threadId);
+        await this.handleInterrupt(runId, userOid, threadId);
       } else {
         await this.completionService.persistCompletion(
           runId,
+          userOid,
           threadId,
           'start-handler-completion',
         );
@@ -101,6 +107,7 @@ export class AnalysisStartHandler implements OutboxHandler {
       try {
         await this.analysisRunsService.transitionStatus(
           runId,
+          userOid,
           AnalysisRunStatus.RUNNING,
           AnalysisRunStatus.FAILED,
           { error: { code: 'GRAPH_START_FAILED', message: errorMessage }, currentStep: null },
@@ -119,8 +126,8 @@ export class AnalysisStartHandler implements OutboxHandler {
    * and transition to AWAITING_INPUT atomically.
    */
   private async handleInterrupt(
-    data: AnalysisStartPayload,
     runId: Types.ObjectId,
+    userOid: Types.ObjectId,
     threadId: string,
   ): Promise<void> {
     const interruptPayload = await this.portfolioGraphService.getInterruptPayload(threadId);
@@ -129,7 +136,6 @@ export class AnalysisStartHandler implements OutboxHandler {
     }
 
     // Check-before-create (idempotency)
-    const userOid = new Types.ObjectId(data.userId);
     const existingResult =
       await this.conversationsRepository.findMessageByIdempotencyKey(
         userOid,
@@ -142,6 +148,7 @@ export class AnalysisStartHandler implements OutboxHandler {
       );
       await this.analysisRunsService.transitionStatus(
         runId,
+        userOid,
         AnalysisRunStatus.RUNNING,
         AnalysisRunStatus.AWAITING_INPUT,
         {
@@ -164,6 +171,7 @@ export class AnalysisStartHandler implements OutboxHandler {
 
         await this.analysisRunsService.transitionStatus(
           runId,
+          userOid,
           AnalysisRunStatus.RUNNING,
           AnalysisRunStatus.AWAITING_INPUT,
           {

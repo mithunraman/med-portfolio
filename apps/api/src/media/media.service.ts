@@ -276,8 +276,11 @@ export class MediaService {
    */
   async markPendingDeleteByMessageIds(
     messageIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<void> {
-    unwrapVoid(await this.mediaRepository.markPendingDeleteByMessageIds(messageIds, session));
+    unwrapVoid(
+      await this.mediaRepository.markPendingDeleteByMessageIds(messageIds, userId, session)
+    );
   }
 }

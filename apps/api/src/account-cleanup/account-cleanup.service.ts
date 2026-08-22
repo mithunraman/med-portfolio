@@ -136,22 +136,24 @@ export class AccountCleanupService {
 
     // Resolver — used by analysis-runs, outbox and checkpoint steps. Runs AFTER
     // lock so the account is already PII-wiped on this attempt. Throws on failure
-    // (rather than returning [], which would silently no-op the analysis-runs
-    // step — analysis_runs has no userId, conversationIds is the only handle).
+    // rather than returning [], which would silently no-op every step keyed on
+    // these ids. `analysis_runs` does carry a `userId` now, but the checkpoint
+    // collections do not, and the outbox only stores conversation ids inside an
+    // untyped payload — so conversationIds remains the handle those steps need.
     const conversationIds = await this.resolveConversationIds(userId);
 
     // Resolved BEFORE the parallel block: the checkpoint collections have no
     // userId and no conversationId, so `langGraphThreadId` on the run records is
     // the only route to them. Resolving up front keeps this step independent of
     // the analysis-runs tombstone that runs alongside it.
-    const threadIds = await this.resolveThreadIds(conversationIds);
+    const threadIds = await this.resolveThreadIds(conversationIds, userId);
 
     // STEP 2 — purge data concurrently. Independent bulk writes, each idempotent.
     // Trivial steps inline directly; the two named methods below carry real
     // logic (outbox: id-to-string adapter, analysisRuns: empty-list guard).
     const steps: Array<{ name: string; fn: () => Promise<unknown> }> = [
       { name: 'outbox',         fn: () => this.purgeOutboxEntriesForAccountDeletion(userId, conversationIds) },
-      { name: 'analysisRuns',   fn: () => this.purgeAnalysisRunsForAccountDeletion(conversationIds) },
+      { name: 'analysisRuns',   fn: () => this.purgeAnalysisRunsForAccountDeletion(conversationIds, userId) },
       // HARD delete, like versionHistory below. LangGraph checkpoints embed the
       // full transcript and the drafted clinical entry in every superstep; a
       // tombstone would leave that content in place. Retention has no route here
@@ -224,9 +226,14 @@ export class AccountCleanupService {
 
   /**
    * Resolve the user's conversation IDs for the analysis-runs and outbox
-   * steps. Throws on lookup failure so the user is left in the retry set
-   * rather than falsely marked complete — analysis_runs has no userId, so
-   * an empty list silently no-ops the step and orphans those documents.
+   * steps. Throws on lookup failure so the user is left in the retry set rather
+   * than falsely marked complete: an empty list silently no-ops both steps and
+   * orphans those documents.
+   *
+   * The analysis-runs tombstone is additionally scoped by `userId`, so this list
+   * narrows it rather than being its only predicate — but the outbox step keys
+   * solely on conversation ids held in an untyped payload, so an empty list
+   * there means queued work survives the erasure.
    */
   private async resolveConversationIds(userId: Types.ObjectId): Promise<Types.ObjectId[]> {
     const result = await this.conversationsRepo.findConversationIdsByUser(userId);
@@ -246,8 +253,17 @@ export class AccountCleanupService {
    * clinical content surviving an erasure request. Better to leave the user in
    * the retry set.
    */
-  private async resolveThreadIds(conversationIds: Types.ObjectId[]): Promise<string[]> {
-    const result = await this.analysisRunsRepo.findThreadIdsByConversationIds(conversationIds);
+  private async resolveThreadIds(
+    conversationIds: Types.ObjectId[],
+    userId: Types.ObjectId
+  ): Promise<string[]> {
+    // `conversationIds` are already this user's own, so the owner predicate
+    // drops nothing here — it is load-bearing for the artefact-delete path, not
+    // this one. See the note on the repository method.
+    const result = await this.analysisRunsRepo.findThreadIdsByConversationIds(
+      conversationIds,
+      userId
+    );
     if (isErr(result)) {
       throw new Error(`failed to resolve thread ids: ${result.error.message}`);
     }
@@ -293,10 +309,11 @@ export class AccountCleanupService {
   }
 
   private async purgeAnalysisRunsForAccountDeletion(
-    conversationIds: Types.ObjectId[]
+    conversationIds: Types.ObjectId[],
+    userId: Types.ObjectId
   ): Promise<void> {
     if (conversationIds.length === 0) return;
-    unwrapVoid(await this.analysisRunsRepo.markDeletedByConversationIds(conversationIds));
+    unwrapVoid(await this.analysisRunsRepo.markDeletedByConversationIds(conversationIds, userId));
   }
 
   // ── STEP 3 ─────────────────────────────────────────────────────────────────

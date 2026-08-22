@@ -57,9 +57,10 @@ describe('ProcessingService.markFailed escalation', () => {
     // markFailed must surface the failed write (throw) rather than swallow it —
     // otherwise processMessage resolves, the outbox marks the job complete, and
     // the message is stranded in a non-terminal state.
-    await expect(service.processMessage(new Types.ObjectId())).rejects.toThrow();
+    await expect(service.processMessage(new Types.ObjectId(), new Types.ObjectId())).rejects.toThrow();
 
     expect(conversationsRepository.updateMessage).toHaveBeenCalledWith(
+      expect.any(Types.ObjectId),
       expect.any(Types.ObjectId),
       expect.objectContaining({ status: MessageStatus.FAILED })
     );
@@ -68,9 +69,10 @@ describe('ProcessingService.markFailed escalation', () => {
   it('resolves silently when the FAILED write succeeds (no spurious escalation)', async () => {
     const { service, conversationsRepository } = createService();
 
-    await expect(service.processMessage(new Types.ObjectId())).resolves.toBeUndefined();
+    await expect(service.processMessage(new Types.ObjectId(), new Types.ObjectId())).resolves.toBeUndefined();
 
     expect(conversationsRepository.updateMessage).toHaveBeenCalledWith(
+      expect.any(Types.ObjectId),
       expect.any(Types.ObjectId),
       expect.objectContaining({
         status: MessageStatus.FAILED,
@@ -85,7 +87,7 @@ describe('ProcessingService.markFailed escalation', () => {
       updateMessage: jest.fn().mockResolvedValue(ok(null)),
     });
 
-    await expect(service.processMessage(new Types.ObjectId())).resolves.toBeUndefined();
+    await expect(service.processMessage(new Types.ObjectId(), new Types.ObjectId())).resolves.toBeUndefined();
   });
 });
 
@@ -146,9 +148,9 @@ describe('ProcessingService injection gate', () => {
       injectionDetected: true,
     });
 
-    await service.processMessage(new Types.ObjectId());
+    await service.processMessage(new Types.ObjectId(), new Types.ObjectId());
 
-    const statuses = updateMessage.mock.calls.map((c) => c[1].status);
+    const statuses = updateMessage.mock.calls.map((c) => c[2].status);
     expect(statuses).toContain(MessageStatus.REJECTED);
     expect(statuses).not.toContain(MessageStatus.COMPLETE);
     // Redaction runs FIRST now, so it did run; the cleaning gate then flagged the
@@ -156,10 +158,10 @@ describe('ProcessingService injection gate', () => {
     // the redactedContent redaction persisted, so no cleaned/redacted copy survives.
     expect(redactionStage.execute).toHaveBeenCalled();
     const rejectedCall = updateMessage.mock.calls.find(
-      (c) => c[1].status === MessageStatus.REJECTED
+      (c) => c[2].status === MessageStatus.REJECTED
     );
-    expect(rejectedCall?.[1].content).toBeNull();
-    expect(rejectedCall?.[1].redactedContent).toBeNull();
+    expect(rejectedCall?.[2].content).toBeNull();
+    expect(rejectedCall?.[2].redactedContent).toBeNull();
   });
 
   it('redacts BEFORE cleaning: redactedContent = redacted text, content = cleaned text', async () => {
@@ -174,7 +176,7 @@ describe('ProcessingService injection gate', () => {
       injectionDetected: false,
     });
 
-    await service.processMessage(new Types.ObjectId());
+    await service.processMessage(new Types.ObjectId(), new Types.ObjectId());
 
     // Order invariant: redaction runs before cleaning (raw PHI never reaches the LLM).
     expect(redactionStage.execute.mock.invocationCallOrder[0]).toBeLessThan(
@@ -187,13 +189,13 @@ describe('ProcessingService injection gate', () => {
     // derived from rawContent and must never land on a row the retention sweep
     // has already scrubbed.
     const cleanedWrite = updateMessageIfRawContentPresent.mock.calls.find(
-      (c) => c[1].status === MessageStatus.CLEANING
+      (c) => c[2].status === MessageStatus.CLEANING
     );
-    expect(cleanedWrite?.[1].redactedContent).toBe('redacted');
+    expect(cleanedWrite?.[2].redactedContent).toBe('redacted');
     const completeWrite = updateMessage.mock.calls.find(
-      (c) => c[1].status === MessageStatus.COMPLETE
+      (c) => c[2].status === MessageStatus.COMPLETE
     );
-    expect(completeWrite?.[1].content).toBe('cleaned text');
+    expect(completeWrite?.[2].content).toBe('cleaned text');
   });
 
   it('completes normally when cleaning does not flag injection', async () => {
@@ -202,9 +204,9 @@ describe('ProcessingService injection gate', () => {
       injectionDetected: false,
     });
 
-    await service.processMessage(new Types.ObjectId());
+    await service.processMessage(new Types.ObjectId(), new Types.ObjectId());
 
-    const statuses = updateMessage.mock.calls.map((c) => c[1].status);
+    const statuses = updateMessage.mock.calls.map((c) => c[2].status);
     expect(statuses).toContain(MessageStatus.COMPLETE);
     expect(statuses).not.toContain(MessageStatus.REJECTED);
   });
@@ -248,13 +250,13 @@ describe('ProcessingService injection gate', () => {
       new LocalPiiService()
     );
 
-    await service.processMessage(new Types.ObjectId());
+    await service.processMessage(new Types.ObjectId(), new Types.ObjectId());
 
     const transcriptWrite = updateMessage.mock.calls.find(
-      (c) => c[1].rawContent === 'spoken words'
+      (c) => c[2].rawContent === 'spoken words'
     );
     expect(transcriptWrite).toBeDefined();
-    expect(transcriptWrite?.[1].rawContentWrittenAt).toBeInstanceOf(Date);
+    expect(transcriptWrite?.[2].rawContentWrittenAt).toBeInstanceOf(Date);
   });
 
   it('HALTS when the retention sweep scrubs the row mid-pipeline, without writing redactedContent', async () => {
@@ -270,15 +272,15 @@ describe('ProcessingService injection gate', () => {
       ok(null)
     );
 
-    await service.processMessage(new Types.ObjectId());
+    await service.processMessage(new Types.ObjectId(), new Types.ObjectId());
 
     // Stops before cleaning — no LLM spend on content whose source is gone.
     expect(cleaningStage.execute).not.toHaveBeenCalled();
     // Lands terminal rather than stranded at a processing status.
-    const statuses = updateMessage.mock.calls.map((c) => c[1].status);
+    const statuses = updateMessage.mock.calls.map((c) => c[2].status);
     expect(statuses).toContain(MessageStatus.FAILED);
     expect(statuses).not.toContain(MessageStatus.COMPLETE);
-    expect(updateMessage.mock.calls.some((c) => c[1].content)).toBe(false);
+    expect(updateMessage.mock.calls.some((c) => c[2].content)).toBe(false);
   });
 
   it('FAILS CLOSED: marks FAILED and never writes content when cleaning throws (e.g. LLM error)', async () => {
@@ -290,12 +292,12 @@ describe('ProcessingService injection gate', () => {
     });
     cleaningStage.execute.mockRejectedValue(new Error('LLM call failed'));
 
-    await service.processMessage(new Types.ObjectId());
+    await service.processMessage(new Types.ObjectId(), new Types.ObjectId());
 
-    const statuses = updateMessage.mock.calls.map((c) => c[1].status);
+    const statuses = updateMessage.mock.calls.map((c) => c[2].status);
     expect(statuses).toContain(MessageStatus.FAILED);
     expect(statuses).not.toContain(MessageStatus.COMPLETE);
-    const wroteContent = updateMessage.mock.calls.some((c) => c[1].content);
+    const wroteContent = updateMessage.mock.calls.some((c) => c[2].content);
     expect(wroteContent).toBe(false);
   });
 
@@ -309,12 +311,12 @@ describe('ProcessingService injection gate', () => {
     });
     redactionStage.execute.mockRejectedValue(new Error('Azure PHI redaction failed'));
 
-    await service.processMessage(new Types.ObjectId());
+    await service.processMessage(new Types.ObjectId(), new Types.ObjectId());
 
-    const statuses = updateMessage.mock.calls.map((c) => c[1].status);
+    const statuses = updateMessage.mock.calls.map((c) => c[2].status);
     expect(statuses).toContain(MessageStatus.FAILED);
     expect(statuses).not.toContain(MessageStatus.COMPLETE);
-    const wroteContent = updateMessage.mock.calls.some((c) => c[1].content);
+    const wroteContent = updateMessage.mock.calls.some((c) => c[2].content);
     expect(wroteContent).toBe(false);
   });
 });
@@ -334,11 +336,11 @@ describe('ProcessingService — post-clean backstop', () => {
       injectionDetected: false,
     });
 
-    await service.processMessage(new Types.ObjectId());
+    await service.processMessage(new Types.ObjectId(), new Types.ObjectId());
 
-    const completed = updateMessage.mock.calls.find((c) => c[1].status === MessageStatus.COMPLETE);
-    expect(completed?.[1].content).toContain('[NHS_NUMBER]');
-    expect(completed?.[1].content).not.toContain('999 131 6760');
+    const completed = updateMessage.mock.calls.find((c) => c[2].status === MessageStatus.COMPLETE);
+    expect(completed?.[2].content).toContain('[NHS_NUMBER]');
+    expect(completed?.[2].content).not.toContain('999 131 6760');
   });
 
   it('persists the backstopped text, not the cleaning stage output', async () => {
@@ -349,11 +351,11 @@ describe('ProcessingService — post-clean backstop', () => {
       injectionDetected: false,
     });
 
-    await service.processMessage(new Types.ObjectId());
+    await service.processMessage(new Types.ObjectId(), new Types.ObjectId());
 
-    const completed = updateMessage.mock.calls.find((c) => c[1].status === MessageStatus.COMPLETE);
+    const completed = updateMessage.mock.calls.find((c) => c[2].status === MessageStatus.COMPLETE);
     expect(cleaningStage.execute).toHaveBeenCalled();
-    expect(completed?.[1].content).not.toBe(NHS_DIGITS);
+    expect(completed?.[2].content).not.toBe(NHS_DIGITS);
   });
 
   it('leaves text containing no structured identifier untouched', async () => {
@@ -365,10 +367,10 @@ describe('ProcessingService — post-clean backstop', () => {
       injectionDetected: false,
     });
 
-    await service.processMessage(new Types.ObjectId());
+    await service.processMessage(new Types.ObjectId(), new Types.ObjectId());
 
-    const completed = updateMessage.mock.calls.find((c) => c[1].status === MessageStatus.COMPLETE);
-    expect(completed?.[1].content).toBe(clean);
+    const completed = updateMessage.mock.calls.find((c) => c[2].status === MessageStatus.COMPLETE);
+    expect(completed?.[2].content).toBe(clean);
   });
 
   it('does not write content at all when cleaning flags injection', async () => {
@@ -378,9 +380,9 @@ describe('ProcessingService — post-clean backstop', () => {
       injectionDetected: true,
     });
 
-    await service.processMessage(new Types.ObjectId());
+    await service.processMessage(new Types.ObjectId(), new Types.ObjectId());
 
-    expect(updateMessage.mock.calls.some((c) => c[1].status === MessageStatus.COMPLETE)).toBe(
+    expect(updateMessage.mock.calls.some((c) => c[2].status === MessageStatus.COMPLETE)).toBe(
       false
     );
   });

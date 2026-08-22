@@ -391,6 +391,7 @@ export function createCheckCompletenessNode(deps: GraphDeps) {
   ): Promise<Partial<PortfolioStateType>> {
     deps.eventEmitter.emit(ANALYSIS_STEP_STARTED, {
       conversationId: state.conversationId,
+      userId: state.userId,
       step: 'check_completeness',
     });
     const cid = state.conversationId;

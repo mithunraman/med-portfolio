@@ -22,7 +22,6 @@ export interface SessionRevocationStatus {
 export interface ISessionRepository {
   create(input: CreateSessionInput): Promise<Result<SessionRecord, DBError>>;
   findById(sessionId: string): Promise<Result<SessionRecord | null, DBError>>;
-  findByXid(xid: string): Promise<Result<SessionRecord | null, DBError>>;
   findRevocationStatus(
     sessionId: string
   ): Promise<Result<SessionRevocationStatus | null, DBError>>;

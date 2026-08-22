@@ -122,8 +122,16 @@ describe('ConversationsService.deleteMessage', () => {
 
     await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).resolves.toBeUndefined();
 
-    expect(mockMediaService.markPendingDeleteByMessageIds).toHaveBeenCalledWith([messageOid], null);
-    expect(mockConversationsRepo.markDeletedMessagesByIds).toHaveBeenCalledWith([messageOid], null);
+    expect(mockMediaService.markPendingDeleteByMessageIds).toHaveBeenCalledWith(
+      [messageOid],
+      userId,
+      null
+    );
+    expect(mockConversationsRepo.markDeletedMessagesByIds).toHaveBeenCalledWith(
+      [messageOid],
+      userId,
+      null
+    );
   });
 
   it('allows deleting a FAILED message', async () => {
@@ -133,7 +141,11 @@ describe('ConversationsService.deleteMessage', () => {
     );
 
     await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).resolves.toBeUndefined();
-    expect(mockConversationsRepo.markDeletedMessagesByIds).toHaveBeenCalledWith([messageOid], null);
+    expect(mockConversationsRepo.markDeletedMessagesByIds).toHaveBeenCalledWith(
+      [messageOid],
+      userId,
+      null
+    );
   });
 
   it('allows deleting a REJECTED (injection-flagged) message', async () => {
@@ -143,7 +155,11 @@ describe('ConversationsService.deleteMessage', () => {
     );
 
     await expect(service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc')).resolves.toBeUndefined();
-    expect(mockConversationsRepo.markDeletedMessagesByIds).toHaveBeenCalledWith([messageOid], null);
+    expect(mockConversationsRepo.markDeletedMessagesByIds).toHaveBeenCalledWith(
+      [messageOid],
+      userId,
+      null
+    );
   });
 
   it('throws NotFoundException when conversation does not exist', async () => {
@@ -261,5 +277,78 @@ describe('ConversationsService.deleteMessage', () => {
       ConflictException,
     );
     expect(mockConversationsRepo.markDeletedMessagesByIds).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The ownership predicate every repository call now takes must come from the
+   * AUTHENTICATED principal, not from a `userId` read off a record the service
+   * just fetched. Passing `conversation.userId` / `message.userId` compiles, and
+   * is indistinguishable in production today because every upstream read is
+   * already owner-scoped — so the two values are provably equal and no
+   * behavioural test can tell them apart.
+   *
+   * These fixtures deliberately break that equality: the stubbed records claim a
+   * DIFFERENT owner than the caller. That is unreachable in production, and that
+   * is the point — it is the only way to make the assertion non-vacuous. If a
+   * call site reverts to the record-derived value, the argument becomes
+   * `foreignOwner` and these fail.
+   *
+   * Asserting on arguments rather than observable state is deliberate here:
+   * "which value was passed" IS the property under test, and there is no
+   * behaviour to observe instead.
+   */
+  describe('ownership predicate comes from the authenticated principal', () => {
+    const foreignOwner = oid();
+
+    beforeEach(() => {
+      primeHappyPath();
+      // Records that claim someone else owns them. Unreachable in production —
+      // findConversationByXid / findMessagesByXids are both owner-scoped.
+      mockConversationsRepo.findConversationByXid.mockResolvedValue(
+        ok(makeConversation({ userId: foreignOwner })),
+      );
+      mockConversationsRepo.findMessagesByXids.mockResolvedValue(
+        ok([makeMessage({ userId: foreignOwner })]),
+      );
+    });
+
+    it('scopes the artefact and executing-run guards by the caller, not the record', async () => {
+      await service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc');
+
+      expect(mockArtefactsRepo.findById).toHaveBeenCalledWith(artefactOid, userId, null);
+      expect(mockAnalysisRunsService.findExecutingRun).toHaveBeenCalledWith(
+        conversationOid,
+        userId,
+        null,
+      );
+    });
+
+    it('scopes the position guard by the caller, not the record', async () => {
+      await service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc');
+
+      expect(mockConversationsRepo.hasLaterAssistantMessage).toHaveBeenCalledWith(
+        conversationOid,
+        messageOid,
+        userId,
+        null,
+      );
+    });
+
+    it('scopes the tombstone cascade by the caller, not the record', async () => {
+      await service.deleteMessage(userIdStr, 'conv_abc', 'msg_abc');
+
+      // Both of these were strict tautologies before the fix: the message was
+      // being filtered by its own userId.
+      expect(mockConversationsRepo.markDeletedMessagesByIds).toHaveBeenCalledWith(
+        [messageOid],
+        userId,
+        null,
+      );
+      expect(mockMediaService.markPendingDeleteByMessageIds).toHaveBeenCalledWith(
+        [messageOid],
+        userId,
+        null,
+      );
+    });
   });
 });

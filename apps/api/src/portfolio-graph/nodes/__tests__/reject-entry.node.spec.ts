@@ -53,6 +53,7 @@ describe('RejectEntryNode (interrupt-only)', () => {
 
     expect(deps.eventEmitter.emit).toHaveBeenCalledWith(ANALYSIS_STEP_STARTED, {
       conversationId: 'conv-xyz',
+      userId: 'user-123',
       step: 'reject_entry',
     });
   });

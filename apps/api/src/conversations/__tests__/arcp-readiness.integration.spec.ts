@@ -46,6 +46,7 @@ type StableRunState = { status: 'awaiting_input'; node: string } | { status: 'co
 async function waitForRunStable(
   harness: TestHarness,
   conversationOid: Types.ObjectId,
+  userOid: Types.ObjectId,
   afterResume = false,
   timeoutMs = 10000,
   pollIntervalMs = 100,
@@ -54,14 +55,14 @@ async function waitForRunStable(
   const deadline = Date.now() + timeoutMs;
 
   if (afterResume) {
-    const initialRun = await harness.analysisRunsService.findLatestRun(conversationOid);
+    const initialRun = await harness.analysisRunsService.findLatestRun(conversationOid, userOid);
     const initialNode =
       initialRun?.status === AnalysisRunStatus.AWAITING_INPUT
         ? initialRun.currentQuestion?.node
         : null;
     if (initialNode) {
       while (Date.now() < deadline) {
-        const run = await harness.analysisRunsService.findLatestRun(conversationOid);
+        const run = await harness.analysisRunsService.findLatestRun(conversationOid, userOid);
         if (!run) break;
         if (
           run.status !== AnalysisRunStatus.AWAITING_INPUT ||
@@ -74,7 +75,7 @@ async function waitForRunStable(
   }
 
   while (Date.now() < deadline) {
-    const run = await harness.analysisRunsService.findLatestRun(conversationOid);
+    const run = await harness.analysisRunsService.findLatestRun(conversationOid, userOid);
     if (!run) {
       await sleep(pollIntervalMs);
       continue;
@@ -84,7 +85,7 @@ async function waitForRunStable(
       run.status === AnalysisRunStatus.COMPLETED
     ) {
       await sleep(settleMs);
-      const confirmed = await harness.analysisRunsService.findLatestRun(conversationOid);
+      const confirmed = await harness.analysisRunsService.findLatestRun(conversationOid, userOid);
       if (confirmed && confirmed.status === run.status) {
         if (confirmed.status === AnalysisRunStatus.COMPLETED) return { status: 'completed' };
         if (confirmed.currentQuestion?.node)
@@ -160,7 +161,7 @@ describe('ARCP Readiness Engine — Integration', () => {
 
     // ── Step 1: Start → completeness clears → present_capabilities ──
     await harness.service.handleAnalysis(TEST_USER_ID_STR, conv.xid, { type: 'start' });
-    const status2 = await waitForRunStable(harness, conv._id);
+    const status2 = await waitForRunStable(harness, conv._id, conv.userId);
     expect(status2).toEqual({ status: 'awaiting_input', node: 'present_capabilities' });
     expect(llmMock.callCount).toBe(2); // completeness + tag (no follow-up loop)
 
@@ -184,7 +185,7 @@ describe('ARCP Readiness Engine — Integration', () => {
       messageId: capabilityMsg.xid,
       value: { selectedKeys: ['C-06'] },
     });
-    const finalStatus = await waitForRunStable(harness, conv._id, true);
+    const finalStatus = await waitForRunStable(harness, conv._id, conv.userId, true);
     expect(finalStatus).toEqual({ status: 'completed' });
     expect(llmMock.callCount).toBe(6); // + justification + reflect + refine + pdp
     llmMock.assertAllConsumed();

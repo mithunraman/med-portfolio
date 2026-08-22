@@ -79,7 +79,6 @@ function makeFindByIdMock(value: unknown) {
 const mockSessionRepo = {
   create: jest.fn(),
   findById: jest.fn(),
-  findByXid: jest.fn(),
   findRevocationStatus: jest.fn(),
   findActiveByRefreshHash: jest.fn(),
   findByPreviousHash: jest.fn(),

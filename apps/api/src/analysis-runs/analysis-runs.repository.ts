@@ -53,20 +53,40 @@ export function analysisRunTombstoneUpdate() {
 }
 
 /**
- * Ownership model — read before adding a userId predicate here.
+ * Ownership model — read before changing how these methods filter.
  *
- * AnalysisRun has NO userId field; it is owned transitively through its
- * `conversationId` (a run belongs to a conversation, which belongs to a user).
- * Reads/mutations therefore scope by conversationId/runId, not userId, and that
- * is correct — there is no userId on the document to filter by.
+ * AnalysisRun carries its own `userId`, denormalised from the parent conversation
+ * and written once by `createRun`. Every request-facing read and mutation below
+ * scopes by it. `findRunsForSweepBatch`, `expireStaleRuns` and
+ * `markCheckpointsPurged` are the documented exceptions — they run on the
+ * retention cron and must cross every user by design; see the block above them.
  *
- * These methods are also SYSTEM-CONTEXT code: every mutating caller is an outbox
- * handler / graph node operating on a server-derived runId or conversationId
- * (from job state or the LangGraph checkpoint), never request input. The
- * conversation's owner is verified upstream in the request-facing services
- * before any run is started or resumed. This is the system/no-user-caller
- * carve-out in CLAUDE.md's "Ownership predicate at the persistence layer" rule —
- * do not plumb userId through the outbox/graph pipeline to "scope" these.
+ * ## Why the field exists, and what it replaced
+ *
+ * Runs were previously owned *transitively* through `conversationId`, with no
+ * `userId` on the document, and that was a deliberate decision rather than an
+ * oversight — the argument being that every caller here is SYSTEM-CONTEXT code
+ * (an outbox handler or graph node acting on a server-derived runId or
+ * conversationId, never on request input) with the conversation's owner already
+ * verified upstream.
+ *
+ * That held only as long as the upstream check held. It is the same
+ * caller-discipline coupling CLAUDE.md's "Ownership predicate at the persistence
+ * layer" rule exists to remove: a future caller wiring one of these methods to a
+ * new route would get no compiler or test signal. The field was added so the
+ * predicate is enforceable in the filter. Do not restore the transitive model.
+ *
+ * The system-context observation is still true, and is now the reason `userId`
+ * is threaded through the outbox payloads and `AnalysisStepStartedEvent` rather
+ * than read from a request: there is no request to read it from.
+ *
+ * ## `userId` is compliance-bearing
+ *
+ * `findThreadIdsByConversationIds` filters by it to build the target list for a
+ * hard delete of LangGraph checkpoints, so account erasure completeness now
+ * depends on this field being correct on every run. It is `required` on the
+ * schema and nothing writes it after creation. Keep it that way — see the note
+ * on that method before making it optional or mutable.
  */
 @Injectable()
 export class AnalysisRunsRepository implements IAnalysisRunsRepository {
@@ -86,6 +106,7 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
         [
           {
             conversationId: data.conversationId,
+            userId: data.userId,
             runNumber: data.runNumber,
             idempotencyKey: data.idempotencyKey,
             langGraphThreadId: data.langGraphThreadId,
@@ -116,11 +137,12 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async findRunById(
     runId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<AnalysisRun | null, DBError>> {
     try {
       const run = await this.analysisRunModel
-        .findById(runId)
+        .findOne({ userId, _id: runId })
         .lean()
         .session(session || null);
       return ok(run);
@@ -132,12 +154,13 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async findRunByIdempotencyKey(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     idempotencyKey: string,
     session?: ClientSession
   ): Promise<Result<AnalysisRun | null, DBError>> {
     try {
       const run = await this.analysisRunModel
-        .findOne({ conversationId, idempotencyKey })
+        .findOne({ userId, conversationId, idempotencyKey })
         .lean()
         .session(session || null);
       return ok(run);
@@ -149,11 +172,13 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async findActiveRun(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<AnalysisRun | null, DBError>> {
     try {
       const run = await this.analysisRunModel
         .findOne({
+          userId,
           conversationId,
           status: { $in: ACTIVE_STATUSES },
         })
@@ -169,11 +194,13 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async findExecutingRun(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<AnalysisRun | null, DBError>> {
     try {
       const run = await this.analysisRunModel
         .findOne({
+          userId,
           conversationId,
           status: { $in: EXECUTING_STATUSES },
         })
@@ -189,11 +216,12 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async findLatestRun(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<AnalysisRun | null, DBError>> {
     try {
       const run = await this.analysisRunModel
-        .findOne({ conversationId })
+        .findOne({ userId, conversationId })
         .sort({ createdAt: -1 })
         .lean()
         .session(session || null);
@@ -206,13 +234,18 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async updateRunStatus(
     runId: Types.ObjectId,
+    userId: Types.ObjectId,
     expectedStatus: AnalysisRunStatus,
     updates: UpdateAnalysisRunData,
     session?: ClientSession
   ): Promise<Result<AnalysisRun | null, DBError>> {
     try {
       const run = await this.analysisRunModel
-        .findOneAndUpdate({ _id: runId, status: expectedStatus }, { $set: updates }, { new: true })
+        .findOneAndUpdate(
+          { userId, _id: runId, status: expectedStatus },
+          { $set: updates },
+          { new: true }
+        )
         .lean()
         .session(session || null);
       return ok(run);
@@ -224,11 +257,12 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async getMaxRunNumber(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>> {
     try {
       const run = await this.analysisRunModel
-        .findOne({ conversationId })
+        .findOne({ userId, conversationId })
         .sort({ runNumber: -1 })
         .select('runNumber')
         .lean()
@@ -242,12 +276,13 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async updateCurrentStep(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     step: string
   ): Promise<Result<AnalysisRun | null, DBError>> {
     try {
       const run = await this.analysisRunModel
         .findOneAndUpdate(
-          { conversationId, status: { $in: ACTIVE_STATUSES } },
+          { userId, conversationId, status: { $in: ACTIVE_STATUSES } },
           { $set: { currentStep: step } },
           { new: true, sort: { createdAt: -1 } }
         )
@@ -261,11 +296,12 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async listRuns(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<AnalysisRun[], DBError>> {
     try {
       const runs = await this.analysisRunModel
-        .find({ conversationId })
+        .find({ userId, conversationId })
         .sort({ runNumber: -1 })
         .lean()
         .session(session || null);
@@ -275,6 +311,11 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
       return err({ code: 'DB_ERROR', message: 'Failed to list analysis runs' });
     }
   }
+
+  // ─── Deliberately NOT owner-scoped ───
+  //
+  // The three sweeper methods below run on the retention cron and must cross every
+  // user by design. `userId` is absent from their filters on purpose — do not add it.
 
   async findRunsForSweepBatch(
     statuses: AnalysisRunStatus[],
@@ -365,23 +406,41 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
     }
   }
 
+  /**
+   * Owner-scoped despite being a read, for the same reason as
+   * `findIdsByArtefactIds`: this list is the target of `purgeThreads`, a HARD
+   * delete against collections that carry no `userId` of their own. A foreign
+   * thread id surviving this query is unrecoverable loss of another user's
+   * graph state, and the run tombstone beside it IS scoped — so the victim
+   * would be left with a live run pointing at deleted checkpoints.
+   *
+   * The `userId` predicate cuts both ways, and the second edge matters:
+   * ERASURE COMPLETENESS NOW DEPENDS ON `AnalysisRun.userId` BEING CORRECT.
+   * The account-deletion path passes the user's own conversations, so the
+   * filter drops nothing there today — but a run with a wrong or missing
+   * `userId` would have its checkpoints survive an Art 17 request. Treat that
+   * field as compliance-bearing: it is `required` on the schema, and nothing
+   * should make it optional or writable after creation.
+   */
   async findThreadIdsByConversationIds(
     conversationIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<string[], DBError>> {
     if (conversationIds.length === 0) return ok([]);
     try {
       const runs = await this.analysisRunModel
-        .find({ conversationId: { $in: conversationIds } })
+        .find({ userId, conversationId: { $in: conversationIds } })
         .select('langGraphThreadId')
         .session(session ?? null)
         .lean();
-      // Unfiltered on purpose. `string[]` — not `(string | null)[]` — is the
-      // guard: if `langGraphThreadId` ever becomes nullable, this line fails to
+      // Not null-filtered. `string[]` — not `(string | null)[]` — is the guard:
+      // if `langGraphThreadId` ever becomes nullable, this line fails to
       // compile. A `.filter((id): id is string => ...)` here would keep
       // compiling and silently shrink the set instead, and the set is what
       // account deletion purges — a dropped id means checkpoint data (full graph
-      // state, trainee clinical content) surviving an erasure request.
+      // state, trainee clinical content) surviving an erasure request. The
+      // owner predicate above is the one deliberate narrowing; see the note.
       return ok(runs.map((r) => r.langGraphThreadId));
     } catch (error) {
       this.logger.error('Failed to resolve thread ids by conversation ids', error);
@@ -394,12 +453,14 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async markDeletedByConversationIds(
     conversationIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>> {
     if (conversationIds.length === 0) return ok(0);
     try {
       const result = await this.analysisRunModel.updateMany(
         {
+          userId,
           conversationId: { $in: conversationIds },
           status: { $ne: AnalysisRunStatus.DELETED },
         },
@@ -418,12 +479,14 @@ export class AnalysisRunsRepository implements IAnalysisRunsRepository {
 
   async markDeletedByArtefactIds(
     artefactIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>> {
     if (artefactIds.length === 0) return ok(0);
     try {
       const result = await this.analysisRunModel.updateMany(
         {
+          userId,
           artefactId: { $in: artefactIds },
           status: { $ne: AnalysisRunStatus.DELETED },
         },

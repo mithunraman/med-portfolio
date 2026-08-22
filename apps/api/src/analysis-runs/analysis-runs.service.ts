@@ -32,12 +32,14 @@ export class AnalysisRunsService {
    */
   async createRun(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     idempotencyKey: string,
     session?: ClientSession
   ): Promise<{ run: AnalysisRun; created: boolean }> {
     // Check for existing run with same idempotency key
     const existingResult = await this.repository.findRunByIdempotencyKey(
       conversationId,
+      userId,
       idempotencyKey,
       session
     );
@@ -49,7 +51,7 @@ export class AnalysisRunsService {
     }
 
     // Determine next run number
-    const maxResult = await this.repository.getMaxRunNumber(conversationId, session);
+    const maxResult = await this.repository.getMaxRunNumber(conversationId, userId, session);
     if (!maxResult.ok) {
       throw new Error(maxResult.error.message);
     }
@@ -59,6 +61,7 @@ export class AnalysisRunsService {
     const createResult = await this.repository.createRun(
       {
         conversationId,
+        userId,
         runNumber,
         idempotencyKey,
         langGraphThreadId,
@@ -81,6 +84,7 @@ export class AnalysisRunsService {
    */
   async transitionStatus(
     runId: Types.ObjectId,
+    userId: Types.ObjectId,
     expectedStatus: AnalysisRunStatus,
     newStatus: AnalysisRunStatus,
     additionalUpdates?: Omit<UpdateAnalysisRunData, 'status'>,
@@ -88,6 +92,7 @@ export class AnalysisRunsService {
   ): Promise<AnalysisRun> {
     const result = await this.repository.updateRunStatus(
       runId,
+      userId,
       expectedStatus,
       { ...additionalUpdates, status: newStatus },
       session
@@ -108,8 +113,12 @@ export class AnalysisRunsService {
    * Update the currentStep field on the active run for a conversation.
    * Used by the event listener to track graph node progress.
    */
-  async updateCurrentStep(conversationId: Types.ObjectId, step: string): Promise<void> {
-    const result = await this.repository.updateCurrentStep(conversationId, step);
+  async updateCurrentStep(
+    conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
+    step: string
+  ): Promise<void> {
+    const result = await this.repository.updateCurrentStep(conversationId, userId, step);
     if (!result.ok) {
       throw new Error(result.error.message);
     }
@@ -117,9 +126,10 @@ export class AnalysisRunsService {
 
   async findLatestRun(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<AnalysisRun | null> {
-    const result = await this.repository.findLatestRun(conversationId, session);
+    const result = await this.repository.findLatestRun(conversationId, userId, session);
     if (!result.ok) {
       throw new Error(result.error.message);
     }
@@ -128,9 +138,10 @@ export class AnalysisRunsService {
 
   async findActiveRun(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<AnalysisRun | null> {
-    const result = await this.repository.findActiveRun(conversationId, session);
+    const result = await this.repository.findActiveRun(conversationId, userId, session);
     if (!result.ok) {
       throw new Error(result.error.message);
     }
@@ -144,25 +155,30 @@ export class AnalysisRunsService {
    */
   async findExecutingRun(
     conversationId: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<AnalysisRun | null> {
-    const result = await this.repository.findExecutingRun(conversationId, session);
+    const result = await this.repository.findExecutingRun(conversationId, userId, session);
     if (!result.ok) {
       throw new Error(result.error.message);
     }
     return result.value;
   }
 
-  async findRunById(runId: Types.ObjectId, session?: ClientSession): Promise<AnalysisRun | null> {
-    const result = await this.repository.findRunById(runId, session);
+  async findRunById(
+    runId: Types.ObjectId,
+    userId: Types.ObjectId,
+    session?: ClientSession
+  ): Promise<AnalysisRun | null> {
+    const result = await this.repository.findRunById(runId, userId, session);
     if (!result.ok) {
       throw new Error(result.error.message);
     }
     return result.value;
   }
 
-  async listRuns(conversationId: Types.ObjectId): Promise<AnalysisRun[]> {
-    const result = await this.repository.listRuns(conversationId);
+  async listRuns(conversationId: Types.ObjectId, userId: Types.ObjectId): Promise<AnalysisRun[]> {
+    const result = await this.repository.listRuns(conversationId, userId);
     if (!result.ok) {
       throw new Error(result.error.message);
     }
@@ -193,10 +209,12 @@ export class AnalysisRunsService {
    */
   async deleteByConversationIds(
     conversationIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<void> {
     const threadIdsResult = await this.repository.findThreadIdsByConversationIds(
       conversationIds,
+      userId,
       session
     );
     // Throws rather than falling back to []: an empty list here would silently
@@ -205,7 +223,7 @@ export class AnalysisRunsService {
     if (isErr(threadIdsResult)) {
       throw new InternalServerErrorException(threadIdsResult.error.message);
     }
-    unwrapVoid(await this.repository.markDeletedByConversationIds(conversationIds, session));
+    unwrapVoid(await this.repository.markDeletedByConversationIds(conversationIds, userId, session));
     // Session forwarded: this is a hard delete, and an aborted cascade must not
     // leave the graph state destroyed for an entry that still exists.
     unwrapVoid(await this.checkpointRepository.purgeThreads(threadIdsResult.value, session));
@@ -222,8 +240,9 @@ export class AnalysisRunsService {
    */
   async deleteByArtefactIds(
     artefactIds: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<void> {
-    unwrapVoid(await this.repository.markDeletedByArtefactIds(artefactIds, session));
+    unwrapVoid(await this.repository.markDeletedByArtefactIds(artefactIds, userId, session));
   }
 }

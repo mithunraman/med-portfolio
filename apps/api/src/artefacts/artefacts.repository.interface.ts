@@ -62,6 +62,7 @@ export interface ArtefactNoteData {
 export interface IArtefactsRepository {
   findById(
     id: Types.ObjectId,
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<Artefact | null, DBError>>;
 
@@ -112,6 +113,7 @@ export interface IArtefactsRepository {
 
   markDeleted(
     ids: Types.ObjectId[],
+    userId: Types.ObjectId,
     session?: ClientSession
   ): Promise<Result<number, DBError>>;
 }

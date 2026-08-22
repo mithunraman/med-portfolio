@@ -242,10 +242,12 @@ describe('ArtefactsService', () => {
       expect(result).toEqual({ message: 'Entry deleted successfully' });
       expect(mockAnalysisRunsService.findExecutingRun).toHaveBeenCalledWith(
         convId,
+        userId,
         expect.anything(),
       );
       expect(mockArtefactsRepo.markDeleted).toHaveBeenCalledWith(
         [artefact._id],
+        userId,
         expect.anything(),
       );
     });
@@ -268,10 +270,12 @@ describe('ArtefactsService', () => {
       expect(result).toEqual({ message: 'Entry deleted successfully' });
       expect(mockArtefactsRepo.markDeleted).toHaveBeenCalledWith(
         [artefact._id],
+        userId,
         expect.anything(),
       );
       expect(mockConversationsService.deleteByArtefactIds).toHaveBeenCalledWith(
         [artefact._id],
+        userId,
         expect.anything(),
       );
       // Owner-scoped: the PDP cascade deletes only this user's unclaimed proposals.
@@ -282,11 +286,13 @@ describe('ArtefactsService', () => {
       );
       expect(mockAnalysisRunsService.deleteByArtefactIds).toHaveBeenCalledWith(
         [artefact._id],
+        userId,
         expect.anything(),
       );
       expect(mockVersionHistoryService.anonymizeByEntity).toHaveBeenCalledWith(
         'artefact',
         [artefact._id],
+        userId,
         expect.anything(),
       );
       expect(mockEventEmitter.emit).toHaveBeenCalled();

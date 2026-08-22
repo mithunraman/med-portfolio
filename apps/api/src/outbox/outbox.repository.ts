@@ -216,6 +216,27 @@ export class OutboxRepository implements IOutboxRepository {
     }
   }
 
+  /**
+   * Account erasure. Unions on two handles (`$or`) because NO single payload
+   * field appears on every job type: `message.process` carries `userId` but no
+   * `conversationId`, while the analysis jobs carry both. Matching on
+   * `conversationId` alone would silently skip every queued message-processing
+   * job for the account.
+   *
+   * The union is also the correct failure direction here. This method must
+   * OVER-match: a job it misses keeps running after erasure, and the content it
+   * touches is trainee clinical text, so a miss is an Art 17 failure rather than
+   * a tidiness problem. Prefer cancelling one job too many.
+   *
+   * Contrast `cancelByConversationIds` below, which keys on `conversationId`
+   * alone and must not under-match for the same reason in reverse. The two are
+   * deliberately asymmetric — do not normalise one to the other.
+   *
+   * Known coupling: `'payload.userId'` is compared against `userId.toString()`,
+   * so a producer that ever enqueues an ObjectId rather than a string silently
+   * stops matching this branch. Nothing enforces the payload's shape today; the
+   * durable fix is typing `enqueue` over a union of payload types.
+   */
   async cancelByUser(
     userId: Types.ObjectId,
     conversationIds: string[],
@@ -256,6 +277,11 @@ export class OutboxRepository implements IOutboxRepository {
    * to stop queued work — the opposite of what this method exists to do. A job
    * type added later that carries `conversationId` but not `userId` would escape
    * with no compile error and no test failure.
+   *
+   * Contrast `cancelByUser` above, which unions (`$or`) on two handles instead.
+   * That method is erasure and must over-match; this one is per-entity deletion
+   * and must not under-match. Opposite directions, both deliberate — do not
+   * normalise one to the other.
    */
   async cancelByConversationIds(
     conversationIds: string[],

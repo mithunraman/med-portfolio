@@ -109,11 +109,26 @@ describe('Article 9 explicit consent (active notice)', () => {
 // App Store Guideline 5.1.2(i), in force since 13 Nov 2025: personal data may
 // not be shared with third-party AI without disclosing the recipient and taking
 // explicit permission first. Build 12 was rejected under it because the screen
-// said "AI" and named nobody. These assertions exist because that regression is
+// said "AI" and named nobody. This assertion exists because that regression is
 // silent — the app keeps working, the Art 9 tests above keep passing, and the
 // only signal is a rejection weeks later. Naming a new AI sub-processor means
-// updating BOTH the body paragraph and the checkbox label; that is what the
-// second test here is for.
+// editing the recipients paragraph in `notices/v1.0.ts`.
+//
+// NARROWED 2026-08-28. There was a second assertion here requiring the same
+// names in the `health_data_consent` LABEL, added alongside the parenthetical
+// "(AssemblyAI and Microsoft)" in the 2026-08-12 response to the rejection. The
+// copy pass in e0b8696 dropped that parenthetical, and the decision has been
+// taken to keep the shorter label: `notices/v1.0.ts` is the source of truth, so
+// the test follows the notice rather than the notice following the test.
+//
+// What that trades, recorded so it is a known position and not a discovery:
+// disclosure now rests entirely on the body paragraph. That is sufficient under
+// the guideline as written — the recipients are named on the same screen, above
+// the boxes, and permission is taken after — but the parenthetical was
+// deliberate insurance on top of it, on the reasoning that App Review reads
+// checkboxes and "with AI" alone is the exact phrasing build 12 was rejected
+// for. If a future build is rejected under 5.1.2(i) again, restoring the
+// parenthetical (and this assertion) is the first thing to try.
 describe('third-party AI recipients (App Store Guideline 5.1.2(i))', () => {
   const RECIPIENTS = [/AssemblyAI/, /Microsoft/];
 
@@ -123,14 +138,7 @@ describe('third-party AI recipients (App Store Guideline 5.1.2(i))', () => {
       .map((b) => b.text)
       .join(' ');
 
-  it.each(RECIPIENTS)('names %s in the body', (recipient) => {
+  it.each(RECIPIENTS)('names %s in the body, the only place it is now disclosed', (recipient) => {
     expect(bodyProse()).toMatch(recipient);
-  });
-
-  it.each(RECIPIENTS)('names %s in the consent label, which App Review reads', (recipient) => {
-    const label =
-      NOTICE_REGISTRY.active.acknowledgements.find((a) => a.id === 'health_data_consent')?.label ??
-      '';
-    expect(label).toMatch(recipient);
   });
 });

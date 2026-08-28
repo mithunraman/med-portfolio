@@ -130,6 +130,41 @@ const CONV = {
   markMsgByConv: '          userId,\n          conversation: { $in: conversationIds },\n',
 };
 
+const VERSIONS = {
+  byEntity: '.find({ entityType, entityId, userId })',
+  oneVersion: '.findOne({ entityType, entityId, userId, version })',
+  count: '.countDocuments({ entityType, entityId, userId })',
+  anonymize: '{ userId, entityType, entityId: { $in: entityIds } },',
+  deleteByUser: '.deleteMany({ userId })',
+};
+
+const RUNS = {
+  byId: '.findOne({ userId, _id: runId })',
+  byIdem: '.findOne({ userId, conversationId, idempotencyKey })',
+  active: '          userId,\n          conversationId,\n          status: { $in: ACTIVE_STATUSES },',
+  executing:
+    '          userId,\n          conversationId,\n          status: { $in: EXECUTING_STATUSES },',
+  latest: '.findOne({ userId, conversationId })\n        .sort({ createdAt: -1 })',
+  maxRunNumber: '.findOne({ userId, conversationId })\n        .sort({ runNumber: -1 })',
+  updateStatus: '{ userId, _id: runId, status: expectedStatus },',
+  currentStep: '{ userId, conversationId, status: { $in: ACTIVE_STATUSES } },',
+  listRuns: '.find({ userId, conversationId })',
+  threadIds: '.find({ userId, conversationId: { $in: conversationIds } })',
+  markByConv: '          userId,\n          conversationId: { $in: conversationIds },\n',
+  markByArtefact: '          userId,\n          artefactId: { $in: artefactIds },\n',
+};
+
+const MEDIA = {
+  byXid: '.findOne({ xid, userId })',
+  updateStatus: '.findOneAndUpdate({ xid, userId }, { $set: updateData }, { new: true })',
+  byUser: ".find({ userId }).select('bucket key')",
+  pendingByMessages:
+    '          userId,\n          refDocumentId: { $in: messageIds },\n',
+  pendingByUser:
+    '          userId: new Types.ObjectId(userId),\n' +
+    '          status: { $in: [MediaStatus.ATTACHED, MediaStatus.PENDING] },',
+};
+
 const REPOS = [
   {
     name: 'ArtefactsRepository',
@@ -291,6 +326,116 @@ const REPOS = [
         ".find({}).distinct('_id')"],
       ['markDeletedByUserId — drop userId', 'both', CONV.markConvByUser,
         '{ status: { $ne: ConversationStatus.DELETED } },'],
+    ],
+  },
+  {
+    name: 'VersionHistoryRepository',
+    file: 'src/version-history/version-history.repository.ts',
+    spec: 'src/version-history/__tests__/version-history.repository',
+    mutations: [
+      // Drop the owner predicate.
+      ['findByEntity — drop userId', 'foreign', VERSIONS.byEntity,
+        '.find({ entityType, entityId })'],
+      ['findVersion — drop userId', 'foreign', VERSIONS.oneVersion,
+        '.findOne({ entityType, entityId, version })'],
+      ['countByEntity — drop userId', 'foreign', VERSIONS.count,
+        '.countDocuments({ entityType, entityId })'],
+      ['anonymizeByEntity — drop userId', 'foreign', VERSIONS.anonymize,
+        '{ entityType, entityId: { $in: entityIds } },'],
+
+      // Drop the record id — widens onto the caller's other entities.
+      ['findByEntity — drop entityId', 'both', VERSIONS.byEntity,
+        '.find({ entityType, userId })'],
+      ['findVersion — drop entityId', 'both', VERSIONS.oneVersion,
+        '.findOne({ entityType, userId, version })'],
+      ['countByEntity — drop entityId', 'both', VERSIONS.count,
+        '.countDocuments({ entityType, userId })'],
+      ['anonymizeByEntity — drop entityId', 'both', VERSIONS.anonymize, '{ userId, entityType },'],
+
+      // Drop the entity-type discriminator. Not a live leak — entity ids are
+      // ObjectIds, so cross-entity collision is not a practical risk — but this
+      // collection is entity-agnostic by design and the discriminator must keep
+      // working when a second entity type ships.
+      ['findByEntity — drop entityType', 'owner', VERSIONS.byEntity,
+        '.find({ entityId, userId })'],
+      ['countByEntity — drop entityType', 'owner', VERSIONS.count,
+        '.countDocuments({ entityId, userId })'],
+      ['anonymizeByEntity — drop entityType', 'owner', VERSIONS.anonymize,
+        '{ userId, entityId: { $in: entityIds } },'],
+
+      // Owner-axis hard delete — over-deletion here is unrecoverable.
+      ['deleteByUserId — drop userId', 'both', VERSIONS.deleteByUser, '.deleteMany({})'],
+    ],
+  },
+  {
+    name: 'AnalysisRunsRepository',
+    file: 'src/analysis-runs/analysis-runs.repository.ts',
+    spec: 'src/analysis-runs/__tests__/analysis-runs.repository',
+    mutations: [
+      // Drop the owner predicate.
+      ['findRunById — drop userId', 'foreign', RUNS.byId, '.findOne({ _id: runId })'],
+      ['findRunByIdempotencyKey — drop userId', 'foreign', RUNS.byIdem,
+        '.findOne({ conversationId, idempotencyKey })'],
+      ['findActiveRun — drop userId', 'foreign', RUNS.active,
+        '          conversationId,\n          status: { $in: ACTIVE_STATUSES },'],
+      ['findExecutingRun — drop userId', 'foreign', RUNS.executing,
+        '          conversationId,\n          status: { $in: EXECUTING_STATUSES },'],
+      ['findLatestRun — drop userId', 'foreign', RUNS.latest,
+        '.findOne({ conversationId })\n        .sort({ createdAt: -1 })'],
+      ['getMaxRunNumber — drop userId', 'foreign', RUNS.maxRunNumber,
+        '.findOne({ conversationId })\n        .sort({ runNumber: -1 })'],
+      ['listRuns — drop userId', 'foreign', RUNS.listRuns, '.find({ conversationId })'],
+      ['findThreadIdsByConversationIds — drop userId', 'foreign', RUNS.threadIds,
+        '.find({ conversationId: { $in: conversationIds } })'],
+      ['updateRunStatus — drop userId', 'foreign', RUNS.updateStatus,
+        '{ _id: runId, status: expectedStatus },'],
+      ['updateCurrentStep — drop userId', 'foreign', RUNS.currentStep,
+        '{ conversationId, status: { $in: ACTIVE_STATUSES } },'],
+      ['markDeletedByConversationIds — drop userId', 'foreign', RUNS.markByConv,
+        '          conversationId: { $in: conversationIds },\n'],
+      ['markDeletedByArtefactIds — drop userId', 'foreign', RUNS.markByArtefact,
+        '          artefactId: { $in: artefactIds },\n'],
+
+      // Drop the record predicate — widens onto the caller's own other runs.
+      ['findRunById — drop _id', 'both', RUNS.byId, '.findOne({ userId })'],
+      ['listRuns — drop conversationId', 'both', RUNS.listRuns, '.find({ userId })'],
+      ['findThreadIdsByConversationIds — drop conversationId', 'both', RUNS.threadIds,
+        '.find({ userId })'],
+      ['updateRunStatus — drop _id', 'both', RUNS.updateStatus,
+        '{ userId, status: expectedStatus },'],
+      ['updateCurrentStep — drop conversationId', 'both', RUNS.currentStep,
+        '{ userId, status: { $in: ACTIVE_STATUSES } },'],
+      ['markDeletedByConversationIds — drop conversationId', 'both', RUNS.markByConv,
+        '          userId,\n'],
+      ['markDeletedByArtefactIds — drop artefactId', 'both', RUNS.markByArtefact,
+        '          userId,\n'],
+
+      // The compare-and-set precondition must not be what enforces ownership:
+      // dropping it alone should change nothing the ownership cases assert.
+      ['updateRunStatus — drop expectedStatus', 'none', RUNS.updateStatus, '{ userId, _id: runId },'],
+    ],
+  },
+  {
+    name: 'MediaRepository',
+    file: 'src/media/media.repository.ts',
+    spec: 'src/media/__tests__/media.repository',
+    mutations: [
+      // Drop the owner predicate.
+      ['findByXid — drop userId', 'foreign', MEDIA.byXid, '.findOne({ xid })'],
+      ['updateStatus — drop userId', 'foreign', MEDIA.updateStatus,
+        '.findOneAndUpdate({ xid }, { $set: updateData }, { new: true })'],
+      ['findByUser — drop userId', 'both', MEDIA.byUser, ".find({}).select('bucket key')"],
+      ['markPendingDeleteByMessageIds — drop userId', 'foreign', MEDIA.pendingByMessages,
+        '          refDocumentId: { $in: messageIds },\n'],
+      ['markPendingDeleteByUser — drop userId', 'both', MEDIA.pendingByUser,
+        '          status: { $in: [MediaStatus.ATTACHED, MediaStatus.PENDING] },'],
+
+      // Drop the record predicate — widens onto the caller's own other recordings.
+      ['findByXid — drop xid', 'both', MEDIA.byXid, '.findOne({ userId })'],
+      ['updateStatus — drop xid', 'both', MEDIA.updateStatus,
+        '.findOneAndUpdate({ userId }, { $set: updateData }, { new: true })'],
+      ['markPendingDeleteByMessageIds — drop refDocumentId', 'both', MEDIA.pendingByMessages,
+        '          userId,\n'],
     ],
   },
 ];

@@ -162,9 +162,11 @@ interface Decoys<TTarget> {
   baseline: Snapshot;
 }
 
-async function seedDecoys<TRepo, TOwner, TTarget>(
+async function seedDecoys<TOwner, TTarget>(
   connection: Connection,
-  spec: OwnershipSpec<TRepo, TOwner, TTarget>,
+  // Narrowed to what seeding actually needs, so it stays independent of the
+  // spec's result type.
+  spec: { seed: (owner: TOwner) => Promise<TTarget> },
   owner: TOwner,
   stranger: TOwner
 ): Promise<Decoys<TTarget>> {
@@ -199,6 +201,134 @@ async function seedDecoys<TRepo, TOwner, TTarget>(
     strangerKeys: diffSnapshots(afterSiblings, afterStranger).touched,
     baseline: afterStranger,
   };
+}
+
+/**
+ * What the harness's own structural rules can find wrong with a case.
+ *
+ * These are returned as DATA rather than asserted in place, so the harness can be
+ * tested by something other than itself: `ownership-harness.integration.spec.ts`
+ * drives the evaluators below against deliberately broken repositories and checks
+ * the right code comes back. Without that, a refactor that made a rule vacuous
+ * would leave every repository suite green while asserting nothing.
+ *
+ * Codes rather than prose so the self-test asserts on identity, leaving the
+ * human-readable `detail` free to change.
+ */
+export type ViolationCode =
+  /** A mutating method wrote nothing on its own happy path — every isolation
+   *  rule below would then be vacuously satisfied. */
+  | 'NO_WRITE'
+  /** A read changed something. */
+  | 'UNEXPECTED_WRITE'
+  /** Touched a record belonging to another owner. */
+  | 'STRANGER_TOUCHED'
+  /** Touched one of the caller's OWN other records — a lost record predicate. */
+  | 'SIBLING_TOUCHED'
+  /** Touched something outside the target that is neither sibling nor stranger,
+   *  e.g. a write into a collection the seed never created. */
+  | 'OUTSIDE_TARGET_TOUCHED'
+  /** A foreign caller changed something, anywhere. */
+  | 'FOREIGN_WRITE'
+  /** A foreign caller reached the owner's records. */
+  | 'OWNER_RECORDS_TOUCHED';
+
+export interface Violation {
+  code: ViolationCode;
+  detail: string;
+}
+
+export interface CaseOutcome<TTarget, TResult> {
+  target: TTarget;
+  result: TResult;
+  violations: Violation[];
+}
+
+const violation = (code: ViolationCode, keys: readonly string[]): Violation => ({
+  code,
+  detail: keys.length ? keys.join(', ') : '(none)',
+});
+
+/**
+ * Seeds decoys, runs the method as its rightful owner, and reports what the
+ * harness's structural rules make of the resulting blast radius.
+ *
+ * The spec's own `assertOwnerResult` is deliberately NOT run here — that belongs
+ * to the spec author and stays in the test body. Only the harness's rules move,
+ * because only those need testing independently of the specs that use them.
+ */
+export async function evaluateOwnerCase<TRepo, TOwner, TTarget, TResult>(
+  ctx: OwnershipContext<TRepo>,
+  spec: OwnershipSpec<TRepo, TOwner, TTarget, TResult>,
+  owner: TOwner,
+  stranger: TOwner
+): Promise<CaseOutcome<TTarget, TResult>> {
+  const decoys = await seedDecoys(ctx.connection, spec, owner, stranger);
+
+  const result = await spec.call(ctx.repo, decoys.target, owner);
+  const { touched } = diffSnapshots(decoys.baseline, await snapshotAll(ctx.connection));
+
+  const violations: Violation[] = [];
+
+  if (spec.mutates) {
+    if (touched.length === 0) violations.push(violation('NO_WRITE', []));
+  } else if (touched.length > 0) {
+    violations.push(violation('UNEXPECTED_WRITE', touched));
+  }
+
+  // Another owner's records are out of scope on both axes.
+  const strangerHits = intersect(touched, decoys.strangerKeys);
+  if (strangerHits.length) violations.push(violation('STRANGER_TOUCHED', strangerHits));
+
+  if (spec.axis === 'record') {
+    // The case hand-written suites miss: a filter that kept the owner predicate
+    // but lost the record id widens onto the caller's OWN other records.
+    const siblingHits = intersect(touched, decoys.siblingKeys);
+    if (siblingHits.length) violations.push(violation('SIBLING_TOUCHED', siblingHits));
+
+    // Stronger than the two above — also catches writes into collections the seed
+    // never created.
+    const outside = touched.filter(
+      (key) =>
+        !decoys.targetKeys.includes(key) &&
+        !decoys.siblingKeys.includes(key) &&
+        !decoys.strangerKeys.includes(key)
+    );
+    if (outside.length) violations.push(violation('OUTSIDE_TARGET_TOUCHED', outside));
+  }
+
+  return { target: decoys.target, result, violations };
+}
+
+/**
+ * Same seeding, but the method is called by someone who does not own the target.
+ *
+ * On the `record` axis an unscoped filter matches here and nowhere else, so the
+ * rule is absolute: nothing may change, anywhere. On the `owner` axis a stranger
+ * legitimately acts on their own records, so the rule narrows to "the owner's
+ * records are untouched".
+ */
+export async function evaluateForeignCase<TRepo, TOwner, TTarget, TResult>(
+  ctx: OwnershipContext<TRepo>,
+  spec: OwnershipSpec<TRepo, TOwner, TTarget, TResult>,
+  owner: TOwner,
+  stranger: TOwner
+): Promise<CaseOutcome<TTarget, TResult>> {
+  const decoys = await seedDecoys(ctx.connection, spec, owner, stranger);
+
+  const result = await spec.call(ctx.repo, decoys.target, stranger);
+  const { touched } = diffSnapshots(decoys.baseline, await snapshotAll(ctx.connection));
+
+  const violations: Violation[] = [];
+
+  if (spec.axis === 'record') {
+    if (touched.length) violations.push(violation('FOREIGN_WRITE', touched));
+  } else {
+    const ownerHits = intersect(touched, [...decoys.targetKeys, ...decoys.siblingKeys]);
+    if (ownerHits.length) violations.push(violation('OWNER_RECORDS_TOUCHED', ownerHits));
+  }
+
+  return { target: decoys.target, result, violations };
 }
 
 function specTitle<TRepo, TOwner>(spec: AnyOwnershipSpec<TRepo, TOwner>): string {
@@ -242,32 +372,10 @@ export function describeOwnershipSuite<TRepo extends object, TOwner>(
             ? 'owner call writes the target and nothing else'
             : 'owner call resolves the target and writes nothing',
           async () => {
-            const decoys = await seedDecoys(ctx!.connection, spec, config.owner, config.stranger);
+            const outcome = await evaluateOwnerCase(ctx!, spec, config.owner, config.stranger);
 
-            const result = await spec.call(ctx!.repo, decoys.target, config.owner);
-            const { touched } = diffSnapshots(decoys.baseline, await snapshotAll(ctx!.connection));
-
-            spec.assertOwnerResult?.(result, decoys.target);
-
-            if (spec.mutates) {
-              // A method that wrote nothing on its own happy path would make every
-              // isolation assertion below vacuously true.
-              expect(touched.length).toBeGreaterThan(0);
-            } else {
-              expect(touched).toEqual([]);
-            }
-
-            // Another owner's records are out of scope on both axes.
-            expect(intersect(touched, decoys.strangerKeys)).toEqual([]);
-
-            if (spec.axis === 'record') {
-              // The case hand-written suites miss: a filter that kept `userId` but
-              // lost the record id widens onto the caller's OWN other records.
-              expect(intersect(touched, decoys.siblingKeys)).toEqual([]);
-              // Stronger than the two above — also catches writes into collections
-              // the seed never created.
-              expect(touched.filter((key) => !decoys.targetKeys.includes(key))).toEqual([]);
-            }
+            spec.assertOwnerResult?.(outcome.result, outcome.target);
+            expect(outcome.violations).toEqual([]);
           }
         );
 
@@ -276,20 +384,10 @@ export function describeOwnershipSuite<TRepo extends object, TOwner>(
             ? 'foreign caller is refused and changes nothing, anywhere'
             : "foreign caller never touches the owner's records",
           async () => {
-            const decoys = await seedDecoys(ctx!.connection, spec, config.owner, config.stranger);
+            const outcome = await evaluateForeignCase(ctx!, spec, config.owner, config.stranger);
 
-            // The owner's own target, called by a stranger — an unscoped filter
-            // matches here and nowhere else.
-            const result = await spec.call(ctx!.repo, decoys.target, config.stranger);
-            const { touched } = diffSnapshots(decoys.baseline, await snapshotAll(ctx!.connection));
-
-            spec.assertForeignResult(result, decoys.target);
-
-            if (spec.axis === 'record') {
-              expect(touched).toEqual([]);
-            } else {
-              expect(intersect(touched, [...decoys.targetKeys, ...decoys.siblingKeys])).toEqual([]);
-            }
+            spec.assertForeignResult(outcome.result, outcome.target);
+            expect(outcome.violations).toEqual([]);
           }
         );
       });

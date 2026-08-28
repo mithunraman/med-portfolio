@@ -81,7 +81,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       // Best-effort revoke — do not let a DB failure mask the rejection. The
       // outcome is the same: this token is refused. The session, if it survives
       // a transient repo error, will still be caught by the next mismatch check.
-      await this.sessionRepo.revoke(payload.sid, SessionRevokedReason.SUSPICIOUS);
+      // Unscoped deliberately: the session's owner differing from the token's
+      // `sub` IS the signal here, so scoping by `sub` would make this a no-op
+      // exactly when it fires. See revokeIgnoringOwner's docblock.
+      await this.sessionRepo.revokeIgnoringOwner(payload.sid, SessionRevokedReason.SUSPICIOUS);
       throw new UnauthorizedException({
         code: AuthErrorCode.TOKEN_INVALID,
         message: 'Token does not match session',

@@ -28,9 +28,9 @@ function makeStatus(
   };
 }
 
-const mockSessionRepo: jest.Mocked<Pick<ISessionRepository, 'findRevocationStatus' | 'revoke'>> = {
+const mockSessionRepo: jest.Mocked<Pick<ISessionRepository, 'findRevocationStatus' | 'revokeIgnoringOwner'>> = {
   findRevocationStatus: jest.fn(),
-  revoke: jest.fn(),
+  revokeIgnoringOwner: jest.fn(),
 };
 
 const mockConfigService = {
@@ -46,7 +46,7 @@ describe('JwtStrategy', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockSessionRepo.revoke.mockResolvedValue(ok(undefined));
+    mockSessionRepo.revokeIgnoringOwner.mockResolvedValue(ok(undefined));
     strategy = createStrategy();
   });
 
@@ -121,7 +121,7 @@ describe('JwtStrategy', () => {
       response: { code: AuthErrorCode.TOKEN_INVALID },
     });
 
-    expect(mockSessionRepo.revoke).toHaveBeenCalledWith(
+    expect(mockSessionRepo.revokeIgnoringOwner).toHaveBeenCalledWith(
       sessionId.toString(),
       SessionRevokedReason.SUSPICIOUS
     );
@@ -136,6 +136,6 @@ describe('JwtStrategy', () => {
       response: { code: AuthErrorCode.SESSION_REVOKED },
     });
 
-    expect(mockSessionRepo.revoke).not.toHaveBeenCalled();
+    expect(mockSessionRepo.revokeIgnoringOwner).not.toHaveBeenCalled();
   });
 });

@@ -134,8 +134,9 @@ export class AuthService {
     // Revoke the guest's current session — best-effort. If this fails (DB
     // glitch), the stale session dies at its 90-day TTL. We log and continue
     // because the primary action (claim) is already successful.
-    const revokeResult = await this.sessionRepo.revoke(
+    const revokeResult = await this.sessionRepo.revokeOwnedBySessionId(
       guestSessionId,
+      guestUserId,
       SessionRevokedReason.SUPERSEDED
     );
     if (isErr(revokeResult)) {
@@ -189,6 +190,7 @@ export class AuthService {
         const replay = replayResult.value;
         await this.sessionRepo.revokeFamily(
           replay.refreshTokenFamily,
+          replay.userId,
           SessionRevokedReason.ROTATION_REPLAY
         );
         this.logger.warn(
@@ -248,13 +250,19 @@ export class AuthService {
 
   // ── Logout ──
 
-  async logout(sessionId: string): Promise<{ message: string }> {
-    const result = await this.sessionRepo.revoke(sessionId, SessionRevokedReason.LOGOUT);
+  async logout(sessionId: string, userId: string): Promise<{ message: string }> {
+    const result = await this.sessionRepo.revokeOwnedBySessionId(
+      sessionId,
+      userId,
+      SessionRevokedReason.LOGOUT
+    );
     if (isErr(result)) {
       this.logger.error(`Failed to revoke session ${sessionId}`);
     } else {
       this.logger.log(`auth.logout sessionId=${sessionId}`);
     }
+    // Always "Logged out", including when nothing matched: the response must not
+    // disclose whether the session existed or belonged to the caller.
     return { message: 'Logged out' };
   }
 

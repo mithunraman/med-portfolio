@@ -78,14 +78,13 @@ function makeFindByIdMock(value: unknown) {
 
 const mockSessionRepo = {
   create: jest.fn(),
-  findById: jest.fn(),
   findRevocationStatus: jest.fn(),
   findActiveByRefreshHash: jest.fn(),
   findByPreviousHash: jest.fn(),
-  findActiveByUserAndDevice: jest.fn(),
   listActiveByUser: jest.fn(),
   rotate: jest.fn(),
-  revoke: jest.fn(),
+  revokeOwnedBySessionId: jest.fn(),
+  revokeIgnoringOwner: jest.fn(),
   revokeActiveByUserAndDevice: jest.fn(),
   revokeOwnedByUserXid: jest.fn(),
   revokeAllByUser: jest.fn(),
@@ -127,9 +126,8 @@ describe('AuthService', () => {
     mockTokenService.generateRefreshToken.mockReturnValue({ raw: 'raw_r1', hash: 'hash_r1' });
     mockTokenService.generateFamily.mockReturnValue('fam_new');
     mockTokenService.hashRefreshToken.mockImplementation((raw: string) => `hash_${raw}`);
-    mockSessionRepo.findActiveByUserAndDevice.mockResolvedValue(ok(null));
     mockSessionRepo.revokeActiveByUserAndDevice.mockResolvedValue(ok(0));
-    mockSessionRepo.revoke.mockResolvedValue(ok(undefined));
+    mockSessionRepo.revokeOwnedBySessionId.mockResolvedValue(ok(true));
     mockSessionRepo.create.mockImplementation((input) =>
       Promise.resolve(ok(makeSessionDoc({ refreshTokenHash: input.refreshTokenHash })))
     );
@@ -208,6 +206,7 @@ describe('AuthService', () => {
       });
       expect(mockSessionRepo.revokeFamily).toHaveBeenCalledWith(
         'fam_1',
+        expect.any(String),
         SessionRevokedReason.ROTATION_REPLAY
       );
     });
@@ -260,8 +259,9 @@ describe('AuthService', () => {
 
       expect(guestDoc.role).toBe(UserRole.USER);
       expect(guestDoc.email).toBe('real@example.com');
-      expect(mockSessionRepo.revoke).toHaveBeenCalledWith(
+      expect(mockSessionRepo.revokeOwnedBySessionId).toHaveBeenCalledWith(
         sessionIdStr,
+        userIdStr,
         SessionRevokedReason.SUPERSEDED
       );
       expect(result.refreshToken).toBe('raw_r1');
@@ -340,9 +340,13 @@ describe('AuthService', () => {
 
   describe('logout / logoutAll / revokeSession', () => {
     it('logout revokes the current session', async () => {
-      mockSessionRepo.revoke.mockResolvedValue(ok(undefined));
-      await service.logout(sessionIdStr);
-      expect(mockSessionRepo.revoke).toHaveBeenCalledWith(sessionIdStr, SessionRevokedReason.LOGOUT);
+      mockSessionRepo.revokeOwnedBySessionId.mockResolvedValue(ok(true));
+      await service.logout(sessionIdStr, userIdStr);
+      expect(mockSessionRepo.revokeOwnedBySessionId).toHaveBeenCalledWith(
+        sessionIdStr,
+        userIdStr,
+        SessionRevokedReason.LOGOUT
+      );
     });
 
     it('logoutAll revokes all sessions for the user', async () => {

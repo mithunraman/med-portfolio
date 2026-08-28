@@ -1,8 +1,9 @@
 import { SessionRevokedReason } from '@acme/shared';
-import { getModelToken, MongooseModule } from '@nestjs/mongoose';
+import { MongooseModule, getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
-import { Model, Types } from 'mongoose';
+import { Connection, Model, Types } from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { diffSnapshots, snapshotAll } from '../../common/testing/blast-radius';
 import { isErr, isOk } from '../../common/utils/result.util';
 import { Session, SessionDocument, SessionSchema } from '../schemas/session.schema';
 import { SessionsRepository } from '../sessions.repository';
@@ -26,6 +27,7 @@ describe('SessionsRepository (integration)', () => {
   let module: TestingModule;
   let repo: SessionsRepository;
   let model: Model<SessionDocument>;
+  let connection: Connection;
 
   beforeAll(async () => {
     mongod = await MongoMemoryServer.create();
@@ -41,6 +43,7 @@ describe('SessionsRepository (integration)', () => {
 
     repo = module.get(SessionsRepository);
     model = module.get(getModelToken(Session.name));
+    connection = module.get<Connection>(getConnectionToken());
   });
 
   afterAll(async () => {
@@ -71,7 +74,11 @@ describe('SessionsRepository (integration)', () => {
       const created = await repo.create(makeInput({ refreshTokenHash: 'H1' }));
       if (!isOk(created)) throw new Error('create failed');
 
-      await repo.revoke(created.value.id, SessionRevokedReason.LOGOUT);
+      await repo.revokeOwnedBySessionId(
+        created.value.id,
+        created.value.userId,
+        SessionRevokedReason.LOGOUT
+      );
 
       const result = await repo.findActiveByRefreshHash('H1');
       expect(isOk(result)).toBe(true);
@@ -173,17 +180,21 @@ describe('SessionsRepository (integration)', () => {
     });
   });
 
-  describe('U-SR-06 revoke idempotency', () => {
+  describe('U-SR-06 revokeOwnedBySessionId idempotency', () => {
     it('does not overwrite an existing revocation', async () => {
       const created = await repo.create(makeInput());
       if (!isOk(created)) throw new Error('create failed');
       const id = created.value.id;
 
-      await repo.revoke(id, SessionRevokedReason.LOGOUT);
+      await repo.revokeOwnedBySessionId(id, created.value.userId, SessionRevokedReason.LOGOUT);
       const firstRev = await model.findById(id).lean();
 
       await new Promise((r) => setTimeout(r, 5));
-      await repo.revoke(id, SessionRevokedReason.LOGOUT_ALL);
+      await repo.revokeOwnedBySessionId(
+        id,
+        created.value.userId,
+        SessionRevokedReason.LOGOUT_ALL
+      );
       const secondRev = await model.findById(id).lean();
 
       expect(secondRev!.revokedReason).toBe(SessionRevokedReason.LOGOUT);
@@ -210,10 +221,10 @@ describe('SessionsRepository (integration)', () => {
         throw new Error('seed failed');
       }
 
-      await repo.revoke(f1revoked.value.id, SessionRevokedReason.LOGOUT);
+      await repo.revokeOwnedBySessionId(f1revoked.value.id, userA, SessionRevokedReason.LOGOUT);
       const preexistingRev = (await model.findById(f1revoked.value.id).lean())!.revokedAt!;
 
-      const result = await repo.revokeFamily('F1', SessionRevokedReason.ROTATION_REPLAY);
+      const result = await repo.revokeFamily('F1', userA, SessionRevokedReason.ROTATION_REPLAY);
       if (!isOk(result)) throw new Error('revokeFamily failed');
       expect(result.value).toBe(1);
 
@@ -231,6 +242,36 @@ describe('SessionsRepository (integration)', () => {
       // Other family untouched
       expect(f2activeAfter!.revokedAt).toBeNull();
     });
+
+    it('does not revoke another user’s session that shares the family value', async () => {
+      // Unreachable today: `generateFamily()` is a per-login UUID and `rotate`
+      // never rewrites it, so a family belongs to one user by construction. But
+      // `refreshTokenFamily` is neither unique nor user-scoped on the schema, so
+      // nothing enforces that — and this method is the replay response, which
+      // fires on a security event. The owner predicate is what stops a collision
+      // cascading across accounts, and this is the case that proves it is there.
+      const userA = new Types.ObjectId().toString();
+      const userB = new Types.ObjectId().toString();
+
+      const mine = await repo.create(
+        makeInput({ userId: userA, refreshTokenFamily: 'SHARED', refreshTokenHash: 'a-shared' })
+      );
+      const theirs = await repo.create(
+        makeInput({ userId: userB, refreshTokenFamily: 'SHARED', refreshTokenHash: 'b-shared' })
+      );
+      if (!isOk(mine) || !isOk(theirs)) throw new Error('seed failed');
+
+      const result = await repo.revokeFamily(
+        'SHARED',
+        userA,
+        SessionRevokedReason.ROTATION_REPLAY
+      );
+      if (!isOk(result)) throw new Error('revokeFamily failed');
+      expect(result.value).toBe(1);
+
+      expect((await model.findById(mine.value.id).lean())!.revokedAt).not.toBeNull();
+      expect((await model.findById(theirs.value.id).lean())!.revokedAt).toBeNull();
+    });
   });
 
   describe('U-SR-08 revokeAllByUser scope', () => {
@@ -245,7 +286,7 @@ describe('SessionsRepository (integration)', () => {
 
       if (!isOk(a3) || !isOk(b1) || !isOk(a1) || !isOk(a2)) throw new Error('seed failed');
 
-      await repo.revoke(a3.value.id, SessionRevokedReason.LOGOUT); // already revoked
+      await repo.revokeOwnedBySessionId(a3.value.id, userA, SessionRevokedReason.LOGOUT); // already revoked
 
       const result = await repo.revokeAllByUser(userA, SessionRevokedReason.LOGOUT_ALL);
       if (!isOk(result)) throw new Error('revokeAllByUser failed');
@@ -275,7 +316,7 @@ describe('SessionsRepository (integration)', () => {
       );
       if (!isOk(active) || !isOk(revoked) || !isOk(expired)) throw new Error('seed failed');
 
-      await repo.revoke(revoked.value.id, SessionRevokedReason.LOGOUT);
+      await repo.revokeOwnedBySessionId(revoked.value.id, user, SessionRevokedReason.LOGOUT);
 
       const result = await repo.listActiveByUser(user);
       if (!isOk(result)) throw new Error('list failed');
@@ -284,33 +325,96 @@ describe('SessionsRepository (integration)', () => {
     });
   });
 
-  describe('U-SR-10 findActiveByUserAndDevice', () => {
-    it('finds an active session matching (userId, deviceId)', async () => {
-      const user = new Types.ObjectId().toString();
-      await repo.create(makeInput({ userId: user, deviceId: 'D1', refreshTokenHash: 'h1' }));
-      await repo.create(makeInput({ userId: user, deviceId: 'D2', refreshTokenHash: 'h2' }));
-
-      const result = await repo.findActiveByUserAndDevice(user, 'D1');
-      if (!isOk(result)) throw new Error('lookup failed');
-      expect(result.value).not.toBeNull();
-      expect(result.value!.deviceId).toBe('D1');
+  describe('U-SR-11 session id input validation', () => {
+    it('returns ok(false) for a malformed object id — does not throw', async () => {
+      // A garbage session id in a token is "no session", not a 500. Both
+      // id-taking revokes share `toObjectIdOrNull`, so this covers the parse.
+      const result = await repo.revokeOwnedBySessionId(
+        'not-an-objectid',
+        new Types.ObjectId().toString(),
+        SessionRevokedReason.LOGOUT
+      );
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) expect(result.value).toBe(false);
     });
 
-    it('returns null when none exists', async () => {
-      const result = await repo.findActiveByUserAndDevice(
-        new Types.ObjectId().toString(),
-        'ghost'
+    it('revokeIgnoringOwner tolerates a malformed object id too', async () => {
+      const result = await repo.revokeIgnoringOwner(
+        'not-an-objectid',
+        SessionRevokedReason.SUSPICIOUS
       );
-      if (!isOk(result)) throw new Error('lookup failed');
-      expect(result.value).toBeNull();
+      expect(isOk(result)).toBe(true);
     });
   });
 
-  describe('U-SR-11 findById input validation', () => {
-    it('returns ok(null) for a malformed object id — does not throw', async () => {
-      const result = await repo.findById('not-an-objectid');
-      expect(isOk(result)).toBe(true);
-      if (isOk(result)) expect(result.value).toBeNull();
+  // ─── U-SR-13 blast radius for the two methods that take no owner ───
+  //
+  // `rotate` and `revokeIgnoringOwner` are exempt from the generated ownership
+  // suite for documented security reasons (see the exemption block in
+  // sessions.repository.blast-radius.integration.spec.ts). Exempt from OWNERSHIP
+  // is not exempt from "touched only what it should" — these cover that half.
+  //
+  // Reuses the harness's snapshot primitives rather than naming decoys: the
+  // assertion is that the delta across the WHOLE database is exactly one
+  // document, which also catches a write nobody thought to look for.
+
+  describe('U-SR-13 blast radius', () => {
+    /**
+     * Seeds a session for each of two users. The target sits in the MIDDLE of the
+     * owner's rows on purpose: a filter that loses its record predicate lands on
+     * whichever row the planner reaches first or last, so a target at either end
+     * could be hit correctly by accident. Same reasoning as the sibling placement
+     * in `ownership-harness.ts`.
+     */
+    async function seedTrio(userA: string, userB: string) {
+      const before = await repo.create(makeInput({ userId: userA, refreshTokenHash: 'H_before' }));
+      const target = await repo.create(makeInput({ userId: userA, refreshTokenHash: 'H_target' }));
+      const after = await repo.create(makeInput({ userId: userA, refreshTokenHash: 'H_after' }));
+      const other = await repo.create(makeInput({ userId: userB, refreshTokenHash: 'H_other' }));
+      if (!isOk(before) || !isOk(target) || !isOk(after) || !isOk(other)) {
+        throw new Error('seed failed');
+      }
+      return { target: target.value, ids: [before.value.id, after.value.id, other.value.id] };
+    }
+
+    it('rotate touches exactly one session', async () => {
+      const userA = new Types.ObjectId().toString();
+      const userB = new Types.ObjectId().toString();
+      const { target } = await seedTrio(userA, userB);
+
+      const snapshot = await snapshotAll(connection);
+      const result = await repo.rotate(target.id, 'H_target', 'H_rotated');
+      if (!isOk(result)) throw new Error('rotate failed');
+      const { touched } = diffSnapshots(snapshot, await snapshotAll(connection));
+
+      expect(touched).toEqual([`sessions:${target.id}`]);
+    });
+
+    it('revokeIgnoringOwner revokes exactly one session', async () => {
+      const userA = new Types.ObjectId().toString();
+      const userB = new Types.ObjectId().toString();
+      const { target } = await seedTrio(userA, userB);
+
+      const snapshot = await snapshotAll(connection);
+      const result = await repo.revokeIgnoringOwner(target.id, SessionRevokedReason.SUSPICIOUS);
+      if (!isOk(result)) throw new Error('revokeIgnoringOwner failed');
+      const { touched } = diffSnapshots(snapshot, await snapshotAll(connection));
+
+      expect(touched).toEqual([`sessions:${target.id}`]);
+    });
+
+    it('revokeIgnoringOwner revokes a session belonging to someone else — by design', async () => {
+      // The property that makes it dangerous is also the property JwtStrategy
+      // needs: on a forged token the session's owner is NOT the caller, so a
+      // scoped revoke would no-op precisely when it matters.
+      const userA = new Types.ObjectId().toString();
+      const userB = new Types.ObjectId().toString();
+      const { target } = await seedTrio(userA, userB);
+
+      await repo.revokeIgnoringOwner(target.id, SessionRevokedReason.SUSPICIOUS);
+
+      const after = await model.findById(target.id).lean();
+      expect(after!.revokedReason).toBe(SessionRevokedReason.SUSPICIOUS);
     });
   });
 

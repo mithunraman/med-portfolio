@@ -129,10 +129,43 @@ derives everything else. Pick the axis by how the method is keyed:
   owner's rows are untouched.
 
 If a method genuinely has no ownership surface, add an `Exemption` with a `kind`
-— `global-by-design` (sweepers, retention scans), `payload-scoped` (inserts,
-where the owner arrives in the payload), `private-helper` — and a `reason` that
-says **what makes the query safe**, not merely that it is unscoped. That list is
-the audit of every deliberate cross-user query, so keep it honest.
+and a `reason` that says **what makes the query safe**, not merely that it is
+unscoped. Four kinds, and the distinction between the first two is the one that
+matters:
+
+- `global-by-design` — the query **should** reach every user; that is the feature.
+  Retention sweeps, worker queue heads, ops gauges. An owner predicate would break it.
+- `guarded-otherwise` — the query should **not** reach another user's data, but the
+  predicate ensuring that lives elsewhere: in the caller that resolved the ids, or
+  in a credential the filter already demands. **This is the group to watch** — a
+  break in that external guard turns them into cross-user writes with nothing local
+  to catch it. The reason must name the guard.
+- `payload-scoped` — inserts, where the owner arrives in the payload.
+- `private-helper` — TypeScript `private`, covered through its callers.
+
+#### Some queries must NOT be owner-scoped
+
+The rule above has real exceptions, and they are load-bearing. Scope by owner
+**unless** the caller's purpose is to detect an owner mismatch, or the method
+already demands proof of ownership stronger than an id:
+
+- **`SessionsRepository.findRevocationStatus`** returns `userId` alongside the
+  revocation state so `JwtStrategy` can compare it against the token's `sub` and
+  catch a validly-signed token pointing at someone else's session. Scoping the
+  query would collapse "wrong owner" into "not found" and silently delete that
+  forgery check.
+- **`SessionsRepository.revokeIgnoringOwner`** exists for that same path. On a
+  forged token the session's owner is *by definition* not the caller, so scoping
+  by the token's `sub` would no-op the revoke precisely when it fires.
+- **`SessionsRepository.rotate`** pins `refreshTokenHash`, which is unique on the
+  schema and derived from the raw refresh token. A caller cannot reach it without
+  already holding the session's live credential — a stronger guarantee than a
+  `userId` predicate, which only asserts a claim.
+
+Before "fixing" an unscoped query, check whether it is one of these. The mutation
+table encodes both halves for `rotate`: dropping `_id` changes nothing (the hash
+already pins the session), while dropping the hash fails — which is the argument,
+executable.
 
 Two traps, both found the hard way:
 
@@ -151,7 +184,8 @@ Two traps, both found the hard way:
 one predicate at a time from a real query, runs that repository's suites and
 checks the expected case went red, restoring the file afterwards. Run it from a
 clean tree after changing a repository query — and add a mutation for any new
-filter, or nothing verifies it.
+filter, or nothing verifies it. `--allow-dirty` verifies a change before you
+commit it; it prints a warning, and you should check `git diff` afterwards.
 
 ### ID strategy
 

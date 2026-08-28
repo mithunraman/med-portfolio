@@ -97,9 +97,27 @@ export function ownershipSpecFactory<TRepo, TOwner>() {
 /**
  * Why a method is not covered by a spec.
  *
- * The `kind` is what keeps this list an audit of deliberate cross-user queries
- * rather than a junk drawer, and `reason` must say what makes the query safe —
- * not merely restate that it is unscoped.
+ * The `kind` is what keeps this list an audit rather than a junk drawer, and
+ * `reason` must say what makes the query safe — not merely restate that it is
+ * unscoped.
+ *
+ * The distinction that matters most is between the first two:
+ *
+ * - **`global-by-design`** — the query SHOULD reach every user; that is the
+ *   feature. Retention sweeps, worker queue heads, ops gauges. Adding an owner
+ *   predicate would break it.
+ * - **`guarded-otherwise`** — the query should NOT reach another user's data, but
+ *   the predicate that ensures it lives somewhere other than this filter: in the
+ *   caller that resolved the ids, or in a credential the filter already demands.
+ *   These are the ones that need ongoing scrutiny, because a break in that
+ *   external guard turns them into cross-user writes with nothing local to catch
+ *   it. The `reason` must name the guard.
+ *
+ * Collapsing the two would hide exactly the group worth watching.
+ *
+ * - **`payload-scoped`** — inserts, where the owner arrives in the payload and no
+ *   existing record is reachable.
+ * - **`private-helper`** — TypeScript `private`, covered through its callers.
  *
  * `method` is a bare string, not `keyof TRepo`: TypeScript `private` members are
  * absent from `keyof` but present on the prototype at runtime, so private helpers
@@ -108,7 +126,7 @@ export function ownershipSpecFactory<TRepo, TOwner>() {
  */
 export interface Exemption {
   method: string;
-  kind: 'global-by-design' | 'payload-scoped' | 'private-helper';
+  kind: 'global-by-design' | 'guarded-otherwise' | 'payload-scoped' | 'private-helper';
   reason: string;
 }
 

@@ -422,7 +422,7 @@ const EXEMPT: Exemption[] = [
   },
   {
     method: 'findMessageIdsByConversationIds',
-    kind: 'global-by-design',
+    kind: 'guarded-otherwise',
     reason:
       'Takes conversation ids already resolved under user scope by findIdsByArtefactIds ' +
       'or findConversationIdsByUser, and is used only as the input to a cascade whose ' +

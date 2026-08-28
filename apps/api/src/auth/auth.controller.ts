@@ -92,7 +92,7 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   async logout(@CurrentUser() user: CurrentUserPayload): Promise<{ message: string }> {
-    return this.authService.logout(user.sessionId);
+    return this.authService.logout(user.sessionId, user.userId);
   }
 
   @Post('logout-all')

@@ -43,18 +43,6 @@ export class SessionsRepository implements ISessionRepository {
     }
   }
 
-  async findById(sessionId: string): Promise<Result<SessionRecord | null, DBError>> {
-    try {
-      const oid = toObjectIdOrNull(sessionId);
-      if (!oid) return ok(null);
-      const session = await this.sessionModel.findById(oid).lean();
-      return ok(session ? toSessionRecord(session) : null);
-    } catch (error) {
-      this.logger.error('Failed to find session by id', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to find session' });
-    }
-  }
-
   async findRevocationStatus(
     sessionId: string
   ): Promise<Result<SessionRevocationStatus | null, DBError>> {
@@ -95,25 +83,6 @@ export class SessionsRepository implements ISessionRepository {
       return ok(session ? toSessionRecord(session) : null);
     } catch (error) {
       this.logger.error('Failed to find session by previous hash', error);
-      return err({ code: 'DB_ERROR', message: 'Failed to find session' });
-    }
-  }
-
-  async findActiveByUserAndDevice(
-    userId: string,
-    deviceId: string
-  ): Promise<Result<SessionRecord | null, DBError>> {
-    try {
-      const session = await this.sessionModel
-        .findOne({
-          userId: new Types.ObjectId(userId),
-          deviceId,
-          revokedAt: null,
-        })
-        .lean();
-      return ok(session ? toSessionRecord(session) : null);
-    } catch (error) {
-      this.logger.error('Failed to find active session by user+device', error);
       return err({ code: 'DB_ERROR', message: 'Failed to find session' });
     }
   }
@@ -187,7 +156,34 @@ export class SessionsRepository implements ISessionRepository {
     }
   }
 
-  async revoke(sessionId: string, reason: SessionRevokedReason): Promise<Result<void, DBError>> {
+  async revokeOwnedBySessionId(
+    sessionId: string,
+    userId: string,
+    reason: SessionRevokedReason
+  ): Promise<Result<boolean, DBError>> {
+    try {
+      const oid = toObjectIdOrNull(sessionId);
+      if (!oid) return ok(false);
+      // Ownership predicate at the persistence layer — defence in depth. Callers
+      // reach here with a sessionId from a verified JWT, which JwtStrategy has
+      // already matched against the user; this covers the future caller that
+      // sources it from somewhere else.
+      const result = await this.sessionModel.updateOne(
+        { _id: oid, userId: new Types.ObjectId(userId), revokedAt: null },
+        { revokedAt: new Date(), revokedReason: reason }
+      );
+      return ok(result.modifiedCount === 1);
+    } catch (error) {
+      this.logger.error('Failed to revoke owned session', error);
+      return err({ code: 'DB_ERROR', message: 'Failed to revoke session' });
+    }
+  }
+
+  /** ⚠️ Unscoped by design — see the interface docblock before using this. */
+  async revokeIgnoringOwner(
+    sessionId: string,
+    reason: SessionRevokedReason
+  ): Promise<Result<void, DBError>> {
     try {
       const oid = toObjectIdOrNull(sessionId);
       if (!oid) return ok(undefined);
@@ -258,11 +254,16 @@ export class SessionsRepository implements ISessionRepository {
 
   async revokeFamily(
     family: string,
+    userId: string,
     reason: SessionRevokedReason
   ): Promise<Result<number, DBError>> {
     try {
+      // Ownership predicate at the persistence layer — defence in depth. A family
+      // belongs to one user by construction (per-login UUID, never rewritten by
+      // rotate), so this drops nothing today; it bounds the blast radius if that
+      // ever stops holding, since refreshTokenFamily is not unique on the schema.
       const result = await this.sessionModel.updateMany(
-        { refreshTokenFamily: family, revokedAt: null },
+        { refreshTokenFamily: family, userId: new Types.ObjectId(userId), revokedAt: null },
         { revokedAt: new Date(), revokedReason: reason }
       );
       return ok(result.modifiedCount);

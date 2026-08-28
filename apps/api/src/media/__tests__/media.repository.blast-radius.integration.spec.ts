@@ -186,7 +186,7 @@ const EXEMPT: Exemption[] = [
   },
   {
     method: 'markDeleted',
-    kind: 'global-by-design',
+    kind: 'guarded-otherwise',
     reason:
       'Takes ids with NO owner predicate — the same shape as CheckpointRepository. Safe ' +
       'because the ids are never caller-supplied: they come from findPendingDeleteBatch in ' +
@@ -195,7 +195,7 @@ const EXEMPT: Exemption[] = [
   },
   {
     method: 'incrementDeleteAttempts',
-    kind: 'global-by-design',
+    kind: 'guarded-otherwise',
     reason:
       'Same chain and the same guard as markDeleted: the id comes from ' +
       'findPendingDeleteBatch, and `status: PENDING_DELETE` bounds the write. It touches ' +

@@ -283,7 +283,7 @@ const EXEMPT: Exemption[] = [
   },
   {
     method: 'markCheckpointsPurged',
-    kind: 'global-by-design',
+    kind: 'guarded-otherwise',
     reason:
       'Stamps checkpointsPurgedAt on run ids produced by findRunsForSweepBatch in the ' +
       'same tick. Deliberately unscoped because its supplier is: the sweeper is ' +

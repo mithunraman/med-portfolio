@@ -165,6 +165,22 @@ const MEDIA = {
     '          status: { $in: [MediaStatus.ATTACHED, MediaStatus.PENDING] },',
 };
 
+const SESSIONS = {
+  listActive:
+    '          userId: new Types.ObjectId(userId),\n          revokedAt: null,\n' +
+    '          expiresAt: { $gt: new Date() },',
+  rotateCas:
+    '            _id: oid,\n            refreshTokenHash: expectedOldHash,\n' +
+    '            revokedAt: null,',
+  revokeOwnedById: '{ _id: oid, userId: new Types.ObjectId(userId), revokedAt: null },',
+  revokeByDevice: '{ userId: new Types.ObjectId(userId), deviceId, revokedAt: null },',
+  revokeOwnedByXid:
+    '          xid: sessionXid,\n          userId: new Types.ObjectId(userId),\n',
+  revokeAll: '{ userId: new Types.ObjectId(userId), revokedAt: null },',
+  revokeFamily:
+    '{ refreshTokenFamily: family, userId: new Types.ObjectId(userId), revokedAt: null },',
+};
+
 const REPOS = [
   {
     name: 'ArtefactsRepository',
@@ -438,6 +454,47 @@ const REPOS = [
         '          userId,\n'],
     ],
   },
+  {
+    name: 'SessionsRepository',
+    file: 'src/auth/sessions.repository.ts',
+    spec: 'src/auth/__tests__/sessions.repository',
+    mutations: [
+      // Drop the owner predicate.
+      ['listActiveByUser — drop userId', 'both', SESSIONS.listActive,
+        '          revokedAt: null,\n          expiresAt: { $gt: new Date() },'],
+      ['revokeOwnedBySessionId — drop userId', 'foreign', SESSIONS.revokeOwnedById,
+        '{ _id: oid, revokedAt: null },'],
+      ['revokeActiveByUserAndDevice — drop userId', 'foreign', SESSIONS.revokeByDevice,
+        '{ deviceId, revokedAt: null },'],
+      ['revokeOwnedByUserXid — drop userId', 'foreign', SESSIONS.revokeOwnedByXid,
+        '          xid: sessionXid,\n'],
+      ['revokeAllByUser — drop userId', 'both', SESSIONS.revokeAll, '{ revokedAt: null },'],
+      ['revokeFamily — drop userId', 'foreign', SESSIONS.revokeFamily,
+        '{ refreshTokenFamily: family, revokedAt: null },'],
+
+      // Drop the record predicate — the caller's own other sessions become reachable.
+      ['revokeOwnedBySessionId — drop _id', 'both', SESSIONS.revokeOwnedById,
+        '{ userId: new Types.ObjectId(userId), revokedAt: null },'],
+      ['revokeActiveByUserAndDevice — drop deviceId', 'both', SESSIONS.revokeByDevice,
+        '{ userId: new Types.ObjectId(userId), revokedAt: null },'],
+      ['revokeOwnedByUserXid — drop xid', 'both', SESSIONS.revokeOwnedByXid,
+        '          userId: new Types.ObjectId(userId),\n'],
+      ['revokeFamily — drop family', 'both', SESSIONS.revokeFamily,
+        '{ userId: new Types.ObjectId(userId), revokedAt: null },'],
+
+      // rotate's CAS: the two halves of the exemption argument.
+      //
+      // Dropping `_id` changes nothing, because refreshTokenHash is unique and
+      // therefore already identifies the session on its own — which is precisely
+      // why rotate needs no userId predicate.
+      ['rotate — drop _id (CAS alone still pins the session)', 'none', SESSIONS.rotateCas,
+        '            refreshTokenHash: expectedOldHash,\n            revokedAt: null,'],
+      // Dropping the hash instead removes the ownership proof entirely — any
+      // presented token could rotate a session whose id is known. This must fail.
+      ['rotate — drop refreshTokenHash (removes the proof)', 'any', SESSIONS.rotateCas,
+        '            _id: oid,\n            revokedAt: null,'],
+    ],
+  },
 ];
 
 // ── Mechanism ──────────────────────────────────────────────────────────────────
@@ -548,7 +605,16 @@ function runRepo(repo, jest) {
   return missed;
 }
 
-const only = process.argv[2];
+const args = process.argv.slice(2);
+/**
+ * Escape hatch for verifying a repository change BEFORE committing it — the case
+ * this script is most useful for, and the one the clean-tree guard would
+ * otherwise block. Restore is from an in-memory copy in a `finally` plus signal
+ * handlers, so it survives a failed run or a Ctrl-C; the guard exists for the
+ * residual case where it does not. Check `git diff` afterwards when you use this.
+ */
+const allowDirty = args.includes('--allow-dirty');
+const only = args.find((arg) => !arg.startsWith('--'));
 const selected = only ? REPOS.filter((r) => r.name === only) : REPOS;
 
 if (!selected.length) {
@@ -558,12 +624,19 @@ if (!selected.length) {
 
 for (const repo of selected) {
   if (isDirty(repo.file)) {
-    console.error(
-      `Refusing to run: ${repo.file} has uncommitted changes.\n` +
-        'This script edits that file and restores it; run it from a clean tree so a\n' +
-        'failed restore is never confused with your own work.'
+    if (!allowDirty) {
+      console.error(
+        `Refusing to run: ${repo.file} has uncommitted changes.\n` +
+          'This script edits that file and restores it; run it from a clean tree so a\n' +
+          'failed restore is never confused with your own work.\n' +
+          'Pass --allow-dirty to verify a change you are actively making, then check git diff.'
+      );
+      process.exit(2);
+    }
+    console.warn(
+      `⚠️  ${repo.file} has uncommitted changes and --allow-dirty was passed.\n` +
+        '   Verify `git diff` on that file once this finishes.'
     );
-    process.exit(2);
   }
 }
 

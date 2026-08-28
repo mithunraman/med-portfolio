@@ -1,4 +1,4 @@
-import { ArtefactStatus } from '@acme/shared';
+import { ArtefactStatus, Specialty } from '@acme/shared';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
@@ -331,6 +331,76 @@ describe('ArtefactsRepository (integration)', () => {
       const result = await repo.findById(theirs._id, userId);
 
       expect(result).toEqual({ ok: true, value: null });
+    });
+  });
+
+  // ─── upsertArtefact on an artefactId that already exists ───
+  //
+  // The only repository method whose filter carries no `userId`: it matches on
+  // `artefactId` alone. Ownership is encoded in the key instead — `artefactId` is
+  // `{userId}_{clientGeneratedId}` — so this sits outside the ownership-predicate
+  // protocol in `artefacts.repository.blast-radius.integration.spec.ts`, which
+  // exempts it and points here.
+  //
+  // These are characterisation tests: they pin what the method actually does to a
+  // record it did not create, so the exposure is a decided position rather than an
+  // assumption about how `$setOnInsert` behaves.
+
+  describe('upsertArtefact on an existing artefactId', () => {
+    const foreignPayload = (artefactId: string) => ({
+      artefactId,
+      userId: otherUserId,
+      specialty: Specialty.PSYCHIATRY,
+      trainingStage: 'ST9',
+      title: 'Overwritten title',
+      artefactType: 'LEADERSHIP',
+    });
+
+    it('overwrites no substantive field — $setOnInsert does not apply to a match', async () => {
+      const doc = await insertArtefact(model, { title: 'Consultation with Mrs P' });
+
+      const result = await repo.upsertArtefact(foreignPayload(doc.artefactId));
+
+      expect(isOk(result)).toBe(true);
+      const after = await model.findById(doc._id).lean();
+      expect(after!.userId.toString()).toBe(userId.toString());
+      expect(after!.title).toBe('Consultation with Mrs P');
+      expect(after!.trainingStage).toBe('ST1');
+      expect(after!.artefactType).toBe('CLINICAL_CASE_REVIEW');
+      expect(after!.specialty).toBe(doc.specialty);
+    });
+
+    it('bumps updatedAt and changes nothing else', async () => {
+      // Mongoose `timestamps: true` writes updatedAt on every findOneAndUpdate,
+      // including a no-op upsert — so the call is not inert, and a non-owner
+      // presenting a known artefactId can move another user's updatedAt.
+      // Reaching it requires the victim's internal _id, which responses never
+      // return (they carry xid only). Asserting updatedAt is the ONLY delta is
+      // the point: if anything worse starts changing, this fails loudly.
+      const doc = await insertArtefact(model);
+      const raw = model.collection;
+      const before = await raw.findOne({ _id: doc._id });
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await repo.upsertArtefact(foreignPayload(doc.artefactId));
+
+      const after = await raw.findOne({ _id: doc._id });
+      const changed = [...new Set([...Object.keys(before!), ...Object.keys(after!)])].filter(
+        (key) => JSON.stringify(before![key]) !== JSON.stringify(after![key])
+      );
+
+      expect(changed).toEqual(['updatedAt']);
+    });
+
+    it('returns the existing artefact to a caller who is not its owner', async () => {
+      // Documents the read-back: the guard is the unguessability of artefactId,
+      // not the filter. Recorded so a future reader weighs that deliberately.
+      const doc = await insertArtefact(model, { title: 'Consultation with Mrs P' });
+
+      const result = await repo.upsertArtefact(foreignPayload(doc.artefactId));
+
+      expect(isOk(result) && result.value._id.toString()).toBe(doc._id.toString());
+      expect(isOk(result) && result.value.userId.toString()).toBe(userId.toString());
     });
   });
 });

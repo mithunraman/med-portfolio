@@ -110,6 +110,49 @@ Any repository method that **reads or mutates a user-owned record must scope its
 - Do **not** add unscoped sibling methods (`findByXidInternal(xid)`); if a genuine system/no-user caller ever needs one, name it to scream the hazard and document why.
 - Reference implementations: `saveGoal` / `updateGoal` (`pdp-goals.repository.ts`), `updateArtefactById` (`artefacts.repository.ts`), `updateStatus` / `findByXid` (`media.repository.ts`).
 
+#### The rule is enforced by a test harness — a new method needs a spec or an exemption
+
+`common/testing/ownership-harness.ts` generates the same four checks for every
+repository method from a small declaration table, and each suite ends with an
+**exhaustiveness test**: add a method to a covered repository without adding a
+spec or an exemption and that test fails, naming the method. Covered today:
+artefacts, pdp-goals, conversations (`*.blast-radius.integration.spec.ts`).
+
+A spec says how to build one record and how to call the method; the harness
+derives everything else. Pick the axis by how the method is keyed:
+
+- **`record`** — takes a record id plus the caller (`updateArtefactById`,
+  `saveGoal`). A foreign caller passing the owner's id must be refused **and
+  change nothing, anywhere**.
+- **`owner`** — keyed by the owner alone (`markDeletedByUserId`, `listArtefacts`).
+  A stranger legitimately acts on their own rows, so the assertion is that the
+  owner's rows are untouched.
+
+If a method genuinely has no ownership surface, add an `Exemption` with a `kind`
+— `global-by-design` (sweepers, retention scans), `payload-scoped` (inserts,
+where the owner arrives in the payload), `private-helper` — and a `reason` that
+says **what makes the query safe**, not merely that it is unscoped. That list is
+the audit of every deliberate cross-user query, so keep it honest.
+
+Two traps, both found the hard way:
+
+- **Fixture position matters.** A filter that loses its record predicate but keeps
+  the owner one degrades to "any record of this owner", and a single-document
+  write then lands on whichever record the planner reaches first or last. The
+  harness seeds siblings *either side* of the target so neither end is the target.
+  Hand-written tests need the same care — see the sandwiched proposals in
+  `pdp-goals.repository.integration.spec.ts`.
+- **A fixture can make a case unfalsifiable.** If owner and stranger get the same
+  answer for a legitimate reason (every message COMPLETE when testing
+  `hasProcessingMessages`), the case passes with the predicate removed. Give that
+  spec a fixture whose answer differs.
+
+`pnpm verify:ownership [RepositoryName]` proves the specs actually bite: it drops
+one predicate at a time from a real query, runs that repository's suites and
+checks the expected case went red, restoring the file afterwards. Run it from a
+clean tree after changing a repository query — and add a mutation for any new
+filter, or nothing verifies it.
+
 ### ID strategy
 
 - **xid**: external id, 21-char nanoid (`nanoidAlphanumeric()`), visible to customers in API routes and responses.

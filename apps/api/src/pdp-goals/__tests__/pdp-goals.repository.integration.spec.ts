@@ -94,13 +94,21 @@ async function insertGoal(
  */
 async function insertArtefact(
   model: Model<PdpGoalDocument>,
-  overrides: { _id: Types.ObjectId; xid: string; title?: string | null; status?: ArtefactStatus },
+  overrides: {
+    _id: Types.ObjectId;
+    xid: string;
+    title?: string | null;
+    status?: ArtefactStatus;
+    /** Only the cross-owner citation fixture needs this; the join ignores it. */
+    userId?: Types.ObjectId;
+  },
 ) {
   await model.db.collection('artefacts').insertOne({
     _id: overrides._id,
     xid: overrides.xid,
     title: overrides.title === undefined ? 'An entry' : overrides.title,
     status: overrides.status ?? ArtefactStatus.COMPLETED,
+    ...(overrides.userId ? { userId: overrides.userId } : {}),
   });
 }
 
@@ -357,6 +365,54 @@ describe('PdpGoalsRepository (integration)', () => {
       expect(other!.actions[0].status).toBe(PdpGoalStatus.PROPOSED);
     });
 
+    it('finalises only the named goal when the same artefact proposed several', async () => {
+      // The common shape in production, and the one the sibling tests miss: analysis
+      // proposes SEVERAL goals from one entry, so `artefactId` alone does not
+      // identify which to write — only `xid` does. The other boundary tests here
+      // vary the artefact or the owner, which leaves `xid` doing no work in either;
+      // drop it from the guard and they all still pass.
+      //
+      // The target is seeded BETWEEN the two decoys deliberately. `updateOne` with a
+      // guard that lost its `xid` matches whichever proposal the planner reaches
+      // first or last, so a target at either end would be hit anyway and the test
+      // would pass while testing nothing. Sandwiched, a widened guard lands on a
+      // decoy. Same reasoning as the sibling placement in `ownership-harness.ts`.
+      const proposal = (xid: string, actionXid: string) => ({
+        xid,
+        userId,
+        artefactId,
+        status: PdpGoalStatus.PROPOSED,
+        actions: [
+          { xid: actionXid, action: 'A', intendedEvidence: 'E', status: PdpGoalStatus.PROPOSED },
+        ],
+      });
+
+      await insertGoal(model, proposal('goal_decoy_before', 'act_before'));
+      await insertGoal(model, proposal('goal_target', 'act_target'));
+      await insertGoal(model, proposal('goal_decoy_after', 'act_after'));
+
+      const result = await repo.updateProposalForArtefact(
+        'goal_target',
+        userId,
+        artefactId,
+        { status: PdpGoalStatus.STARTED },
+        [{ actionXid: 'act_target', status: PdpGoalStatus.STARTED }],
+      );
+
+      expect(isOk(result)).toBe(true);
+
+      const adopted = await model.findOne({ xid: 'goal_target' }).lean();
+      expect(adopted!.status).toBe(PdpGoalStatus.STARTED);
+      expect(adopted!.actions[0].status).toBe(PdpGoalStatus.STARTED);
+
+      // Every other proposal from the SAME entry is untouched.
+      for (const xid of ['goal_decoy_before', 'goal_decoy_after']) {
+        const untouched = await model.findOne({ xid }).lean();
+        expect(untouched!.status).toBe(PdpGoalStatus.PROPOSED);
+        expect(untouched!.actions[0].status).toBe(PdpGoalStatus.PROPOSED);
+      }
+    });
+
     it('does not mutate a goal owned by another user even with a matching artefactId and returns NOT_FOUND', async () => {
       const otherUserId = new Types.ObjectId();
       await insertGoal(model, {
@@ -475,6 +531,44 @@ describe('PdpGoalsRepository (integration)', () => {
       expect(result.value.linkedArtefacts).toHaveLength(1);
       expect(result.value.linkedArtefacts[0].title).toBeNull();
       expect(result.value.linkedArtefacts[0].xid).toBe('art_untitled');
+    });
+
+    it('projects a cited artefact owned by someone else — the join carries no owner predicate', async () => {
+      // Characterisation, not a desired behaviour. ARTEFACT_LOOKUP_PIPELINE filters
+      // on tombstone status ONLY, so a link pointing at another user's entry
+      // resolves and that entry's title is projected into the response.
+      //
+      // Unreachable today: links are written by analysis from the trainee's own
+      // artefact, in the same transaction that creates the goal. Nothing in the
+      // schema or types enforces that, though — links are append-only ObjectIds
+      // with no ownership constraint — so this pins the exposure rather than
+      // leaving it to be rediscovered. The ownership rule in CLAUDE.md exists
+      // precisely for callers that forget, and a $lookup is such a caller.
+      //
+      // Closing it means adding `userId` to the $lookup's inner $match. That is a
+      // behavioural change to the citation list, so it is a decision to take
+      // deliberately rather than a side effect of adding a test.
+      const strangersArtefact = new Types.ObjectId();
+      const strangerId = new Types.ObjectId();
+      await insertArtefact(model, {
+        _id: strangersArtefact,
+        xid: 'art_of_another_trainee',
+        title: "Another trainee's entry",
+        userId: strangerId,
+      });
+      await insertGoal(model, {
+        xid: 'goal_cross_owner',
+        userId,
+        artefactId: strangersArtefact,
+      });
+
+      const result = await repo.findOneWithArtefacts('goal_cross_owner', userId);
+
+      expect(isOk(result)).toBe(true);
+      if (!isOk(result) || !result.value) return;
+      expect(result.value.linkedArtefacts).toHaveLength(1);
+      expect(result.value.linkedArtefacts[0].xid).toBe('art_of_another_trainee');
+      expect(result.value.linkedArtefacts[0].title).toBe("Another trainee's entry");
     });
 
     it('excludes a tombstoned entry but keeps an archived one', async () => {

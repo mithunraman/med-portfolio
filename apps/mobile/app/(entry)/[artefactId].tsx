@@ -1185,7 +1185,7 @@ export default function EntryDetailScreen() {
         tone="error"
         icon="trash-outline"
         title="Delete entry"
-        message="This permanently deletes the entry, its conversation and linked goals. This can't be undone."
+        message="This permanently deletes the entry, its conversation and related data. This can't be undone."
         buttons={[
           { label: 'Delete', onPress: handleConfirmDelete, variant: 'destructive' },
           { label: 'Cancel', onPress: () => setDeleteDialogVisible(false), variant: 'secondary' },

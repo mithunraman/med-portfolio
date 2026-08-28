@@ -13,6 +13,7 @@
     "test": "jest --config jest.unit.config.ts && jest --config jest.config.ts --runInBand",
     "test:unit": "jest --config jest.unit.config.ts",
     "test:integration": "jest --config jest.config.ts --runInBand",
+    "verify:ownership": "node scripts/verify-ownership-tests.mjs",
     "db:dump": "node scripts/dump-artefact.js"
   },
   "dependencies": {

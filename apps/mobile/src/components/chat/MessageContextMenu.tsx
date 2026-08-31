@@ -16,6 +16,14 @@ const COPY_ACTION: Action = { id: 'copy', label: 'Copy', icon: 'copy-outline' };
 const EDIT_ACTION: Action = { id: 'edit', label: 'Edit', icon: 'create-outline' };
 const DELETE_ACTION: Action = { id: 'delete', label: 'Delete', icon: 'trash-outline' };
 
+/**
+ * MVP: message editing is hidden from the context menu. The whole edit path is
+ * intact and still authorized end-to-end (canEditMessage, MessageEditorModal,
+ * the editMessage thunk, PATCH .../messages/:id) - only the entry point is
+ * withheld. Flip to false to bring "Edit" back; nothing else needs changing.
+ */
+const HIDE_EDIT_FOR_MVP = true;
+
 interface Props {
   message: Message | null;
   /** Artefact lifecycle status for the conversation (gates edit/delete). Null = unresolved → not editable. */
@@ -41,7 +49,10 @@ export const MessageContextMenu = memo(function MessageContextMenu({
     const items: Action[] = [COPY_ACTION];
     // Hide (don't disable) inapplicable actions - the global "analysing" state
     // and the "AI already replied" lock are conveyed by their absence.
-    if (canEditMessage(message, artefactStatus, isAnalysing, latestAssistantMessageAt))
+    if (
+      !HIDE_EDIT_FOR_MVP &&
+      canEditMessage(message, artefactStatus, isAnalysing, latestAssistantMessageAt)
+    )
       items.push(EDIT_ACTION);
     if (canDeleteMessage(message, artefactStatus, isAnalysing, latestAssistantMessageAt))
       items.push(DELETE_ACTION);

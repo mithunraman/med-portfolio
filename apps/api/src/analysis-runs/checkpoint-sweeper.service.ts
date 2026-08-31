@@ -10,7 +10,7 @@ import {
   STALE_AWAITING_INPUT_RUN_MS,
   STALE_EXECUTING_RUN_MS,
 } from '../common/checkpoint-retention.constants';
-import { CRON_SCHEDULES } from '../common/cron.constants';
+import { CRON_OPTIONS, CRON_SCHEDULES } from '../common/cron.constants';
 import { isErr } from '../common/utils/result.util';
 import {
   CHECKPOINT_REPOSITORY,
@@ -80,7 +80,7 @@ export class CheckpointSweeperService {
     private readonly checkpointRepository: ICheckpointRepository
   ) {}
 
-  @Cron(CRON_SCHEDULES.CHECKPOINT_SWEEP)
+  @Cron(CRON_SCHEDULES.CHECKPOINT_SWEEP, CRON_OPTIONS)
   async runSweep(): Promise<void> {
     if (this.processing) {
       this.logger.debug('Checkpoint sweep in progress, skipping');

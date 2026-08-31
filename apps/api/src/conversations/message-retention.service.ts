@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { CRON_SCHEDULES } from '../common/cron.constants';
+import { CRON_OPTIONS, CRON_SCHEDULES } from '../common/cron.constants';
 import { retentionCutoff } from '../common/retention.constants';
 import { isErr } from '../common/utils/result.util';
 import {
@@ -52,7 +52,7 @@ export class MessageRetentionService {
     private readonly conversationsRepository: IConversationsRepository
   ) {}
 
-  @Cron(CRON_SCHEDULES.MESSAGE_RETENTION)
+  @Cron(CRON_SCHEDULES.MESSAGE_RETENTION, CRON_OPTIONS)
   async runSweep(): Promise<void> {
     if (this.processing) {
       this.logger.debug('Retention sweep in progress, skipping');

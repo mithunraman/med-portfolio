@@ -142,7 +142,7 @@ No tests. No cross-module dependencies.
 | Module | [media.module.ts](../apps/api/src/media/media.module.ts) — imports Database, Storage; exports `MediaService`, `MEDIA_REPOSITORY` |
 | Controller | [media.controller.ts](../apps/api/src/media/media.controller.ts) — POST `/media/initiate` (quota: `upload`), GET `/:mediaId` |
 | Service | [media.service.ts](../apps/api/src/media/media.service.ts) — presigned URLs (1 h), validates ≤20 MB; uses StorageService + MediaRepository |
-| **Cron** | [media-sweeper.service.ts](../apps/api/src/media/media-sweeper.service.ts) — `@Cron('0 0 * * * *')` hourly; sweeps orphaned/pending-delete media, dead-letters after 24 failed attempts |
+| **Cron** | [media-sweeper.service.ts](../apps/api/src/media/media-sweeper.service.ts) — `@Cron(CRON_SCHEDULES.MEDIA_SWEEP)` hourly at :50 (Europe/London); expires audio past the 48 h retention window, then sweeps orphaned/pending-delete media, dead-letters after 24 failed attempts |
 | Repository | [media.repository.ts](../apps/api/src/media/media.repository.ts) + [interface](../apps/api/src/media/media.repository.interface.ts) |
 | Schema | [schemas/media.schema.ts](../apps/api/src/media/schemas/media.schema.ts) — `Media` (`media`): xid, bucket, key, status, polymorphic `refCollection`+`refDocumentId`, mediaType, sizeBytes, durationMs |
 | DTO | `InitiateUploadDto` |
@@ -401,7 +401,7 @@ Consumed by `init`. (Distinct from the `notices` module below.)
 | ---- | ---- |
 | Module | [account-cleanup.module.ts](../apps/api/src/account-cleanup/account-cleanup.module.ts) — imports Auth, Artefacts, Conversations, Media, PdpGoals, ReviewPeriods, AnalysisRuns, Items, VersionHistory, Outbox |
 | Controller | [account-cleanup.controller.ts](../apps/api/src/account-cleanup/account-cleanup.controller.ts) — POST `/dev/account-cleanup/:userId` (`@DevOnly()` + `@Public()`) |
-| **Cron** | [account-cleanup.service.ts](../apps/api/src/account-cleanup/account-cleanup.service.ts) — `@Cron('0 0 5 * * *')` daily 5 AM UTC; 3-step: lock+PII-wipe → parallel purge of 9 repos → mark anonymized; idempotent, safety-gated |
+| **Cron** | [account-cleanup.service.ts](../apps/api/src/account-cleanup/account-cleanup.service.ts) — `@Cron(CRON_SCHEDULES.ACCOUNT_CLEANUP)` daily 05:05 Europe/London; 3-step: lock+PII-wipe → parallel purge of 9 repos → mark anonymized; idempotent, safety-gated |
 
 ---
 

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { CRON_SCHEDULES } from '../common/cron.constants';
+import { CRON_OPTIONS, CRON_SCHEDULES } from '../common/cron.constants';
 import { retentionCutoff } from '../common/retention.constants';
 import { isErr } from '../common/utils/result.util';
 import { StorageService } from '../storage/storage.service';
@@ -26,7 +26,7 @@ export class MediaSweeperService {
     private readonly storageService: StorageService
   ) {}
 
-  @Cron(CRON_SCHEDULES.MEDIA_SWEEP)
+  @Cron(CRON_SCHEDULES.MEDIA_SWEEP, CRON_OPTIONS)
   async runSweep(): Promise<void> {
     if (this.processing) {
       this.logger.debug('Sweep in progress, skipping');

@@ -5,6 +5,13 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+/**
+ * The weekly bar is hidden until usage reaches this fraction of the limit.
+ * Weekly credits are a ceiling most trainees never approach, so showing an
+ * almost-empty second bar reads as a paywall meter rather than information.
+ */
+const WEEKLY_VISIBILITY_THRESHOLD = 0.7;
+
 function formatTimeRemaining(resetsAt: string | null): string {
   if (!resetsAt) return 'Rolling window';
 
@@ -67,6 +74,9 @@ export function QuotaUsageSection() {
 
   if (!quota) return null;
 
+  const weekly = quota.weeklyWindow;
+  const showWeekly = weekly.limit > 0 && weekly.used / weekly.limit >= WEEKLY_VISIBILITY_THRESHOLD;
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
@@ -83,8 +93,12 @@ export function QuotaUsageSection() {
       </View>
       <View style={[styles.sectionContent, { backgroundColor: colors.surface }]}>
         <QuotaBar label="Session credits" window={quota.shortWindow} />
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <QuotaBar label="Weekly credits" window={quota.weeklyWindow} />
+        {showWeekly && (
+          <>
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <QuotaBar label="Weekly credits" window={weekly} />
+          </>
+        )}
       </View>
     </View>
   );

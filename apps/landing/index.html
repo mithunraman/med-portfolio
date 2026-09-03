@@ -199,28 +199,176 @@
         font-weight: 600;
       }
 
-      /* ── App screenshots ── */
-      .screenshots {
+      /* ── App screenshot carousel ──
+         Two layers, deliberately. The rules below are already a working CSS
+         scroll-snap carousel, so the hero still swipes if embla-carousel fails
+         to load or JS is off. Init sets [data-embla-ready], which hands control
+         to Embla (transform-driven) and switches native snapping off. */
+      .carousel {
         margin-top: 64px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 24px;
-        flex-wrap: wrap;
       }
 
-      .screenshot {
+      .carousel-viewport {
+        overflow-x: auto;
+        overscroll-behavior-x: contain; /* stops the iOS back-swipe at the ends */
+        scroll-snap-type: x mandatory;
+        scrollbar-width: none;
+        /* Full-bleed: cancel the section's gutter, then re-inset so the first
+           and last slide still line up with the container. Driven by the shared
+           --section-gutter token because that value changes at the 768px
+           breakpoint - hardcoding it overflows the page by 4px on mobile.
+           100vw is avoided deliberately: it includes the scrollbar. */
+        margin-inline: calc(var(--section-gutter) * -1);
+        padding-inline: var(--section-gutter);
+        scroll-padding-inline: var(--section-gutter);
+      }
+
+      .carousel-viewport::-webkit-scrollbar {
+        display: none;
+      }
+
+      /* Embla is driving from here on. */
+      .carousel-viewport[data-embla-ready] {
+        overflow: hidden;
+        scroll-snap-type: none;
+      }
+
+      .carousel-viewport:focus-visible {
+        outline: 2px solid var(--color-primary);
+        outline-offset: 4px;
+        border-radius: var(--radius-lg);
+      }
+
+      .carousel-container {
+        display: flex;
+        gap: 24px;
+      }
+
+      .carousel-slide {
+        flex: 0 0 auto;
         width: 240px;
+        min-width: 0; /* required: stops flex items overflowing the track */
+        scroll-snap-align: center;
+      }
+
+      .carousel-slide img {
+        display: block;
+        width: 100%;
         height: auto;
-        /* Matches the intrinsic size of the App Store frames, so nothing is
-           cropped. No bezel border: each frame already contains a device
-           mockup, and adding one would render a phone inside a phone. */
+        /* Intrinsic size of the App Store frames, so nothing is cropped - and
+           so Embla can measure slide geometry before the lazy frames arrive.
+           No bezel border: each frame already contains a device mockup, and
+           adding one would render a phone inside a phone. */
         aspect-ratio: 1242 / 2688;
         border-radius: 20px;
         box-shadow:
           var(--shadow-lg),
           0 0 0 1px rgba(0, 0, 0, 0.05);
         object-fit: contain;
+      }
+
+      /* ── Carousel controls ──
+         Rendered [hidden] and revealed by the init script, so a failed script
+         leaves no dead UI behind. */
+      .carousel-controls:not([hidden]) {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        margin-top: 28px;
+      }
+
+      .carousel-arrow {
+        display: none; /* pointer devices only - see media query below */
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 50%;
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        box-shadow: var(--elevation-1);
+        transition:
+          box-shadow var(--duration-short) var(--ease-standard),
+          color var(--duration-short) var(--ease-standard);
+      }
+
+      .carousel-arrow svg {
+        width: 20px;
+        height: 20px;
+        fill: currentColor;
+      }
+
+      .carousel-arrow:hover:not(:disabled) {
+        box-shadow: var(--elevation-3);
+        color: var(--color-primary);
+      }
+
+      .carousel-arrow:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+
+      .carousel-arrow:focus-visible,
+      .carousel-dot:focus-visible {
+        outline: 2px solid var(--color-primary);
+        outline-offset: 2px;
+      }
+
+      .carousel-dots {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+      }
+
+      /* The button is a 24px hit target (WCAG 2.5.8); the visible dot is the
+         8px ::before inside it. */
+      .carousel-dot {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        background: none;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+      }
+
+      .carousel-dot::before {
+        content: '';
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--color-border);
+        transition:
+          background var(--duration-short) var(--ease-standard),
+          transform var(--duration-short) var(--ease-standard);
+      }
+
+      .carousel-dot:hover::before {
+        background: var(--color-text-muted);
+      }
+
+      .carousel-dot[aria-current='true']::before {
+        background: var(--color-primary);
+        transform: scale(1.4);
+      }
+
+      @media (hover: hover) and (pointer: fine) {
+        .carousel-arrow {
+          display: inline-flex;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .carousel-dot::before {
+          transition: none;
+        }
       }
 
       /* ── eportfolio bridge ── */
@@ -771,12 +919,14 @@
           grid-template-columns: 1fr;
         }
 
-        .screenshots {
+        .carousel-container {
           gap: 16px;
         }
 
-        .screenshot {
-          width: 180px;
+        /* Sized so the next frame peeks past the edge - the affordance that
+           says "this swipes". */
+        .carousel-slide {
+          width: min(78vw, 260px);
         }
       }
 
@@ -852,35 +1002,132 @@
         </p>
         -->
 
-
         <!-- App Store marketing frames. Each already contains its own device
              mockup and caption, so the CSS deliberately adds no bezel. Intrinsic
-             size is set on every image to reserve layout space and avoid CLS. -->
-        <div class="screenshots">
-          <img
-            class="screenshot"
-            src="assets/screen1.png"
-            width="1242"
-            height="2688"
-            alt="LOGDit welcome screen, captioned: Five minutes. One complete entry."
-            loading="lazy"
-          />
-          <img
-            class="screenshot"
-            src="assets/screen2.png"
-            width="1242"
-            height="2688"
-            alt="A trainee dictating a clinical case into LOGDit, captioned: Just talk it through — your voice note after clinic is all it takes."
-            loading="lazy"
-          />
-          <img
-            class="screenshot"
-            src="assets/screen4.png"
-            width="1242"
-            height="2688"
-            alt="LOGDit asking a follow-up question with a worked example answer and an entry readiness score of 4 out of 10, captioned: The AI asks. You just answer."
-            loading="lazy"
-          />
+             size is set on every image to reserve layout space: it avoids CLS
+             and lets Embla measure slide geometry before the lazy frames land.
+             Slide 1 loads eagerly - it is the hero's LCP candidate. -->
+        <div class="carousel" data-carousel>
+          <div
+            class="carousel-viewport"
+            data-carousel-viewport
+            role="region"
+            aria-roledescription="carousel"
+            aria-label="LOGDit app screenshots"
+            tabindex="0"
+          >
+            <div class="carousel-container">
+              <div class="carousel-slide">
+                <img
+                  src="assets/slice-1.png"
+                  width="1242"
+                  height="2688"
+                  alt="LOGDit app screenshot 1"
+                  loading="eager"
+                  fetchpriority="high"
+                  decoding="async"
+                />
+                <!-- TODO: real alt text -->
+              </div>
+              <div class="carousel-slide">
+                <img
+                  src="assets/slice-2.png"
+                  width="1242"
+                  height="2688"
+                  alt="LOGDit app screenshot 2"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <!-- TODO: real alt text -->
+              </div>
+              <div class="carousel-slide">
+                <img
+                  src="assets/slice-4.png"
+                  width="1242"
+                  height="2688"
+                  alt="LOGDit app screenshot 3"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <!-- TODO: real alt text -->
+              </div>
+              <div class="carousel-slide">
+                <img
+                  src="assets/slice-6.png"
+                  width="1242"
+                  height="2688"
+                  alt="LOGDit app screenshot 4"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <!-- TODO: real alt text -->
+              </div>
+              <div class="carousel-slide">
+                <img
+                  src="assets/slice-7.png"
+                  width="1242"
+                  height="2688"
+                  alt="LOGDit app screenshot 5"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <!-- TODO: real alt text -->
+              </div>
+              <div class="carousel-slide">
+                <img
+                  src="assets/slice-8.png"
+                  width="1242"
+                  height="2688"
+                  alt="LOGDit app screenshot 6"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <!-- TODO: real alt text -->
+              </div>
+              <div class="carousel-slide">
+                <img
+                  src="assets/slice-9.png"
+                  width="1242"
+                  height="2688"
+                  alt="LOGDit app screenshot 7"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <!-- TODO: real alt text -->
+              </div>
+            </div>
+          </div>
+          <!-- A div, not a <nav>: these are widget controls, not a navigation
+               landmark, and styles.css styles the bare `nav` selector as the
+               fixed site header. -->
+          <div
+            class="carousel-controls"
+            role="group"
+            aria-label="Screenshot carousel controls"
+            hidden
+          >
+            <button
+              class="carousel-arrow"
+              type="button"
+              data-carousel-prev
+              aria-label="Previous screenshot"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+              </svg>
+            </button>
+            <div class="carousel-dots" data-carousel-dots></div>
+            <button
+              class="carousel-arrow"
+              type="button"
+              data-carousel-next
+              aria-label="Next screenshot"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -1095,7 +1342,9 @@
         <h2>Questions trainees ask us</h2>
         <div class="faq-list">
           <details class="faq-item">
-            <summary class="has-state">Does <span class="brand">LOGDit</span> replace my eportfolio?</summary>
+            <summary class="has-state">
+              Does <span class="brand">LOGDit</span> replace my eportfolio?
+            </summary>
             <div class="faq-item-body">
               No. <span class="brand">LOGDit</span> drafts the entry so you don't start from a blank
               box - export it as a PDF and paste the structured output into whichever eportfolio
@@ -1105,9 +1354,9 @@
           <details class="faq-item">
             <summary class="has-state">Which specialties do you support?</summary>
             <div class="faq-item-body">
-              Today: General Practice (RCGP) only. Internal Medicine (JRCPTB), Psychiatry
-              (RCPsych), Emergency Medicine and Paediatrics are on the roadmap. Email us with your
-              specialty and we'll prioritise based on demand.
+              Today: General Practice (RCGP) only. Internal Medicine (JRCPTB), Psychiatry (RCPsych),
+              Emergency Medicine and Paediatrics are on the roadmap. Email us with your specialty
+              and we'll prioritise based on demand.
             </div>
           </details>
           <details class="faq-item">
@@ -1204,5 +1453,95 @@
         </div>
       </div>
     </footer>
+
+    <!-- Vendored, not CDN-loaded: the landing page adds no third-party origin. -->
+    <script defer src="assets/embla-carousel.umd.js"></script>
+    <script>
+      /* Progressive enhancement. The carousel already works via CSS scroll-snap;
+         this upgrades it to Embla - drag with a mouse as well as by touch, and
+         no slide-skipping on a hard flick - and reveals the controls. If the
+         library never loads we return early and the scroll-snap layer stands. */
+      (function () {
+        function initCarousel(root) {
+          var viewport = root.querySelector('[data-carousel-viewport]');
+          var controls = root.querySelector('.carousel-controls');
+          var dotsHost = root.querySelector('[data-carousel-dots]');
+          var prev = root.querySelector('[data-carousel-prev]');
+          var next = root.querySelector('[data-carousel-next]');
+          if (!viewport || !controls || !dotsHost || !prev || !next) return;
+
+          var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          var embla = EmblaCarousel(viewport, {
+            align: 'center',
+            loop: false,
+            skipSnaps: false, // a hard flick advances one slide, not several
+            containScroll: 'trimSnaps',
+            duration: reduce ? 0 : 25,
+          });
+
+          viewport.dataset.emblaReady = '';
+          controls.hidden = false;
+
+          var dots = [];
+
+          /* Dots map to snap points, not slides: with several frames visible at
+             desktop width there are fewer snaps than slides, and one dot per
+             slide would render dots that can never become current. The snap
+             count changes with the breakpoint, so this reruns on reInit. */
+          function renderDots() {
+            dotsHost.textContent = '';
+            dots = embla.scrollSnapList().map(function (_, index) {
+              var dot = document.createElement('button');
+              dot.type = 'button';
+              dot.className = 'carousel-dot';
+              dot.setAttribute('aria-label', 'Go to screenshot ' + (index + 1));
+              dot.addEventListener('click', function () {
+                embla.scrollTo(index, reduce);
+              });
+              dotsHost.appendChild(dot);
+              return dot;
+            });
+          }
+
+          function syncState() {
+            var selected = embla.selectedScrollSnap();
+            dots.forEach(function (dot, index) {
+              if (index === selected) dot.setAttribute('aria-current', 'true');
+              else dot.removeAttribute('aria-current');
+            });
+            prev.disabled = !embla.canScrollPrev();
+            next.disabled = !embla.canScrollNext();
+          }
+
+          prev.addEventListener('click', function () {
+            embla.scrollPrev(reduce);
+          });
+          next.addEventListener('click', function () {
+            embla.scrollNext(reduce);
+          });
+
+          embla.on('select', syncState).on('reInit', function () {
+            renderDots();
+            syncState();
+          });
+
+          renderDots();
+          syncState();
+        }
+
+        function start() {
+          // Guard, not an assumption: a failed library load leaves the fallback.
+          if (typeof EmblaCarousel !== 'function') return;
+          document.querySelectorAll('[data-carousel]').forEach(initCarousel);
+        }
+
+        // The library is deferred, so it has run by DOMContentLoaded.
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', start);
+        } else {
+          start();
+        }
+      })();
+    </script>
   </body>
 </html>

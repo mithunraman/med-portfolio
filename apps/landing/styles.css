@@ -49,6 +49,10 @@
   --state-focus: 0.1;
   --state-pressed: 0.12;
   --max-width: 1120px;
+  /* Horizontal gutter every section is inset by. Exposed as a token so
+     full-bleed children (e.g. the hero carousel) can cancel it exactly
+     instead of hardcoding the value and drifting at the breakpoint. */
+  --section-gutter: 24px;
 }
 
 /* ── State layer (Material) — semi-transparent overlay of the element's own
@@ -186,7 +190,7 @@ footer .logo-mark {
 
 /* ── Sections / container ── */
 section {
-  padding: 80px 24px;
+  padding: 80px var(--section-gutter);
 }
 
 .container {
@@ -371,8 +375,12 @@ footer {
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
+  :root {
+    --section-gutter: 20px;
+  }
+
   section {
-    padding: 64px 20px;
+    padding: 64px var(--section-gutter);
   }
 
   .legal {

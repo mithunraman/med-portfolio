@@ -1,5 +1,6 @@
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useKeepAwake } from 'expo-keep-awake';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -177,6 +178,8 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
     getPermissionStatus,
   } = useAudioRecorder();
 
+  useKeepAwake();
+
   const [maxDurationReached, setMaxDurationReached] = useState(false);
   const stoppedResultRef = useRef<AudioRecordingResult | null>(null);
   const hasStartedRef = useRef(false);
@@ -278,14 +281,29 @@ export const VoiceNoteRecorderBar = memo(function VoiceNoteRecorderBar({
       return;
     }
 
+    // Read before stopping. `duration` derives from the recorder state that
+    // stopRecording() tears down, and the two failure modes below need to be told
+    // apart - so this must not be moved after the await.
+    const wasTooShort = duration < 1;
+
     const result = await stopRecording();
     if (result) {
       onSend(result);
-    } else {
-      // Recording too short or failed
-      onDiscard();
+      return;
     }
-  }, [stopRecording, onSend, onDiscard, maxDurationReached]);
+
+    // Nothing came back. A sub-second clip is a mis-tap. Anything longer means the
+    // recorder was torn down (call, manual lock, app switch) and the trainee just
+    // lost real content - closing the bar silently, as this used to, left them with
+    // no idea their entry never sent.
+    Alert.alert(
+      wasTooShort ? 'Recording too short' : "Couldn't save recording",
+      wasTooShort
+        ? 'Hold on a moment longer before sending.'
+        : 'Something interrupted the recording and it could not be saved. Nothing was sent.',
+      [{ text: 'OK', onPress: onDiscard }]
+    );
+  }, [stopRecording, onSend, onDiscard, maxDurationReached, duration]);
 
   // Memoized icons
   const trashIcon = useMemo(

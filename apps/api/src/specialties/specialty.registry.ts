@@ -1,5 +1,7 @@
 import {
   EntryTypeOption,
+  PdpGoalStatus,
+  SampleCaseDefinition,
   SampleCaseResponse,
   SampleCaseResponseSchema,
   Specialty,
@@ -110,8 +112,13 @@ export function getTemplateForEntryType(config: SpecialtyConfig, entryTypeCode: 
  * capability is reflected without touching the sample. An unresolvable code is a
  * config bug (guarded by `sample-case.integrity.spec.ts`), so it throws rather than
  * serving a half-labelled sample.
+ *
+ * PDP review dates are relative to `now`, so the sample never shows a stale date.
  */
-export function getSampleCase(specialty: Specialty): SampleCaseResponse | null {
+export function getSampleCase(
+  specialty: Specialty,
+  now: Date = new Date()
+): SampleCaseResponse | null {
   const entry = SPECIALTY_CONFIGS[specialty];
   const sample = entry?.isActive ? entry.config.sampleCase : undefined;
   if (!entry || !sample) return null;
@@ -135,8 +142,36 @@ export function getSampleCase(specialty: Specialty): SampleCaseResponse | null {
       ...c,
       name: requireLabel(capabilityNames, c.code, 'capability'),
     })),
+    pdpGoals: sample.pdpGoals.map((goal, index) => toSampleGoal(goal, index, now)),
     conversation: sample.conversation,
   });
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Project a sample goal onto the real `PdpGoal` shape as an adopted goal: STARTED,
+ * with every action tracked — how a finished entry shows a goal the trainee kept.
+ * Ids are synthetic and never reach a store.
+ */
+function toSampleGoal(goal: SampleCaseDefinition['pdpGoals'][number], index: number, now: Date) {
+  const id = `sample-goal-${index}`;
+  return {
+    id,
+    goal: goal.goal,
+    status: PdpGoalStatus.STARTED,
+    reviewDate: new Date(now.getTime() + goal.reviewAfterDays * DAY_MS).toISOString(),
+    completedAt: null,
+    completionReview: null,
+    actions: goal.actions.map((a, actionIndex) => ({
+      id: `${id}-action-${actionIndex}`,
+      action: a.action,
+      intendedEvidence: a.intendedEvidence,
+      status: PdpGoalStatus.STARTED,
+      dueDate: null,
+      completionReview: null,
+    })),
+  };
 }
 
 function requireLabel(labels: Map<string, string>, code: string, kind: string): string {

@@ -54,11 +54,23 @@ describe('sample case integrity', () => {
       }
     });
 
+    it('gives every PDP goal at least one action and a whole-day review window', () => {
+      for (const goal of sample.pdpGoals) {
+        expect(goal.actions.length).toBeGreaterThan(0);
+        expect(Number.isInteger(goal.reviewAfterDays)).toBe(true);
+        expect(goal.reviewAfterDays).toBeGreaterThan(0);
+      }
+    });
+
     it('has no empty text and no redaction placeholders', () => {
       const texts = [
         sample.title,
         ...sample.sections.map((s) => s.text),
         ...sample.capabilities.flatMap((c) => [c.evidence, c.justification]),
+        ...sample.pdpGoals.flatMap((g) => [
+          g.goal,
+          ...g.actions.flatMap((a) => [a.action, a.intendedEvidence]),
+        ]),
         ...sample.conversation.map((t) => t.text),
         ...sample.conversation.flatMap((t) => (t.question === undefined ? [] : [t.question])),
       ];

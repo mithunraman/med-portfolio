@@ -9,7 +9,12 @@ import {
 import { GuestDataBanner } from '@/components/GuestDataBanner';
 import { GuestLimitBanner } from '@/components/GuestLimitBanner';
 import { NoticeBanner } from '@/components/NoticeBanner';
-import { useAppDispatch, useAppSelector, useCanCreateArtefact } from '@/hooks';
+import {
+  prefetchSampleCase,
+  useAppDispatch,
+  useAppSelector,
+  useCanCreateArtefact,
+} from '@/hooks';
 import { useNetworkRecovery } from '@/hooks/useNetworkRecovery';
 import { useOfflineAwareInsets } from '@/hooks/useOfflineAwareInsets';
 import {
@@ -32,7 +37,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { randomUUID } from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router/react-navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // ─── Module A: Start New Entry ────────────────────────────────────────────────
@@ -510,6 +515,17 @@ export default function HomeScreen() {
     [router]
   );
 
+  // Warm the sample while the first-run card is on screen, so tapping "See a sample
+  // case" usually opens instantly. A failure is surfaced (with retry) by the screen.
+  const specialtyCode = user?.specialty?.code ?? null;
+  useEffect(() => {
+    if (showWelcome && specialtyCode !== null) prefetchSampleCase(specialtyCode);
+  }, [showWelcome, specialtyCode]);
+
+  const handleSeeSample = useCallback(() => {
+    router.push('/(sample)/entry');
+  }, [router]);
+
   const handleEntryPress = useCallback(
     (item: Artefact) => {
       if (item.status >= ArtefactStatus.IN_REVIEW) {
@@ -594,6 +610,7 @@ export default function HomeScreen() {
             specialtyLabel={specialtyLabel}
             stageLabel={stageLabel}
             onStartFirstEntry={handleStartNew}
+            onSeeSample={handleSeeSample}
           />
         ) : isInitialLoad ? (
           <HomeSkeleton />

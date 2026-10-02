@@ -12,3 +12,4 @@ export { useBannerVisibility } from './useBannerVisibility';
 export { useCanCreateArtefact } from './useCanCreateArtefact';
 export { useEntryTypes, useEntryTypeLabel } from './useEntryTypes';
 export { useGuestDeletion } from './useGuestDeletion';
+export { prefetchSampleCase, useSampleCase, type SampleCaseState } from './useSampleCase';

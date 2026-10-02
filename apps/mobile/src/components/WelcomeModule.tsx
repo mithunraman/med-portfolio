@@ -13,12 +13,14 @@ interface WelcomeModuleProps {
   specialtyLabel: string | null;
   stageLabel: string | null;
   onStartFirstEntry: () => void;
+  onSeeSample: () => void;
 }
 
 export function WelcomeModule({
   specialtyLabel,
   stageLabel,
   onStartFirstEntry,
+  onSeeSample,
 }: WelcomeModuleProps) {
   const { colors } = useTheme();
   const setupLine =
@@ -67,6 +69,20 @@ export function WelcomeModule({
       >
         <Text style={styles.ctaText}>Record your first case</Text>
         <Ionicons name="arrow-forward" size={18} color="#fff" />
+      </TouchableOpacity>
+
+      {/* Secondary: a text link, so it never competes with the primary CTA above */}
+      <TouchableOpacity
+        style={styles.secondaryLink}
+        onPress={onSeeSample}
+        activeOpacity={0.6}
+        hitSlop={8}
+        accessibilityRole="link"
+        accessibilityLabel="See a sample case"
+      >
+        <Text style={[styles.secondaryLinkText, { color: colors.primary }]}>
+          See a sample case
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -142,6 +158,13 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  secondaryLink: {
+    paddingVertical: 6,
+  },
+  secondaryLinkText: {
     fontSize: 15,
     fontWeight: '600',
   },

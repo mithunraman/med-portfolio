@@ -51,6 +51,26 @@ export const GP_SAMPLE_CASE: SampleCaseDefinition = {
         'I reasoned toward the diagnosis of postural hypotension by weighing the differentials — mechanical trip, cardiac event — and linking it to the recent addition of tamsulosin alongside her ramipril, which shows my reasoning toward a diagnosis and how I handled diagnostic uncertainty.',
     },
   ],
+  pdpGoals: [
+    {
+      goal: 'I will develop a systematic approach to prescribing antihypertensives and alpha-blockers in older patients, incorporating falls risk assessment before starting new medications.',
+      reviewAfterDays: 14,
+      actions: [
+        {
+          action:
+            'I will read the STOPP/START criteria relevant to cardiovascular medications in older adults and summarise the key points in a one-page reference sheet for my clinical use.',
+          intendedEvidence:
+            'A one-page summary of STOPP/START criteria for cardiovascular medications, uploaded to my portfolio.',
+        },
+        {
+          action:
+            'I will perform a lying and standing blood pressure measurement before starting or adding any antihypertensive or alpha-blocker in my next five patients aged 65 or older, and document the result and my clinical reasoning in the consultation notes.',
+          intendedEvidence:
+            'A reflective log entry covering the five cases, including the BP readings and how the result influenced my prescribing decision.',
+        },
+      ],
+    },
+  ],
   conversation: [
     {
       role: MessageRole.USER,

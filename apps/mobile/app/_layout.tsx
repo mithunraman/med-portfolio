@@ -254,6 +254,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(messages)" options={{ presentation: 'card' }} />
         <Stack.Screen name="(entry)" options={{ presentation: 'card' }} />
+        <Stack.Screen name="(sample)" options={{ presentation: 'card' }} />
         <Stack.Screen name="(pdp-goal)" options={{ presentation: 'card' }} />
         <Stack.Screen name="(review-period)" options={{ presentation: 'card' }} />
         <Stack.Screen name="(profile-settings)" options={{ presentation: 'card' }} />

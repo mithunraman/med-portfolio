@@ -1,4 +1,4 @@
-import { leafProbes, Specialty } from '@acme/shared';
+import { leafProbes, PdpGoalStatus, Specialty } from '@acme/shared';
 import {
   getAllRegisteredConfigs,
   getAllSpecialtyOptions,
@@ -241,6 +241,20 @@ describe('SpecialtyRegistry', () => {
         ['C-06', 'Decision-making and diagnosis'],
       ]);
       expect(sample.conversation.length).toBeGreaterThan(0);
+    });
+
+    it('resolves PDP goals as adopted goals reviewed 14 days from now', () => {
+      const now = new Date('2026-10-02T12:00:00.000Z');
+      const [goal, ...rest] = getSampleCase(Specialty.GP, now)!.pdpGoals;
+
+      expect(rest).toHaveLength(0);
+      expect(goal.status).toBe(PdpGoalStatus.STARTED);
+      expect(goal.reviewDate).toBe('2026-10-16T12:00:00.000Z');
+      expect(goal.actions).toHaveLength(2);
+      expect(goal.actions.every((a) => a.status === PdpGoalStatus.STARTED)).toBe(true);
+
+      const ids = [goal.id, ...goal.actions.map((a) => a.id)];
+      expect(new Set(ids).size).toBe(ids.length);
     });
 
     it.each([Specialty.PSYCHIATRY, Specialty.INTERNAL_MEDICINE])(

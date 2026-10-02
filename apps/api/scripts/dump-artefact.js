@@ -17,7 +17,7 @@
  *   conversations.artefact      = artefact._id   (prefers the ACTIVE one, else newest)
  *   messages.conversation       = conversation._id
  *   analysis_runs.artefactId    = artefact._id   (also OR'd on conversationId)
- *   pdp_goals.artefactId        = artefact._id
+ *   pdp_goals.links.artefactId  ∋ artefact._id   (a goal links to many artefacts)
  *   version_history.entityId    = artefact._id   (entityType 'artefact')
  *   media._id                   ∈ messages[].media
  *   users._id                   = artefact.userId
@@ -137,7 +137,9 @@ async function gather(db, artefact) {
   const [user, conversation, pdpGoals, versionHistory] = await Promise.all([
     db.collection('users').findOne({ _id: artefact.userId }),
     findConversation(db, oid),
-    db.collection('pdp_goals').find({ artefactId: oid }).toArray(),
+    // Same path as LINK_ARTEFACT_PATH in pdp-goal.schema.ts; the old top-level
+    // `artefactId` is no longer written, so querying it silently returns nothing.
+    db.collection('pdp_goals').find({ 'links.artefactId': oid }).toArray(),
     db.collection('version_history').find({ entityId: oid }).sort({ version: 1 }).toArray(),
   ]);
 

@@ -220,6 +220,12 @@ export interface SampleCaseDefinition {
   sections: { sectionId: string; text: string }[];
   /** Confirmed capabilities, by code */
   capabilities: { code: string; evidence: string; justification: string }[];
+  /** Adopted PDP goals; the review date is resolved as `reviewAfterDays` from the request */
+  pdpGoals: {
+    goal: string;
+    reviewAfterDays: number;
+    actions: { action: string; intendedEvidence: string }[];
+  }[];
   /** Assistant turns carry the follow-up `question`; `text` is its lead-in line */
   conversation: {
     role: MessageRole.USER | MessageRole.ASSISTANT;

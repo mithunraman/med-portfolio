@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { MessageRole } from '../enums/message-role.enum';
 import { Specialty } from '../enums/specialty.enum';
-import { CapabilitySchema, ComposedDocumentFieldSchema } from './artefact.dto';
+import { CapabilitySchema, ComposedDocumentFieldSchema, PdpGoalSchema } from './artefact.dto';
 
 export const TrainingStageSchema = z.object({
   code: z.string(),
@@ -60,6 +60,7 @@ export const SampleCaseResponseSchema = z.object({
   title: z.string(),
   sections: z.array(ComposedDocumentFieldSchema),
   capabilities: z.array(CapabilitySchema),
+  pdpGoals: z.array(PdpGoalSchema),
   conversation: z.array(SampleTurnSchema),
 });
 

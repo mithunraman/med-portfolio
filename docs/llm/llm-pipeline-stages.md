@@ -278,8 +278,9 @@ Each row: purpose · model (temp / maxTokens) · schema · source.
 #### 4.2 generate_followup
 - **Purpose.** Generate a single, leverage-ranked Socratic follow-up question targeting the weakest unmet rubric dimension, with anti-redundancy against previously asked questions. **The stage that helps the author think and complete their portfolio.**
 - **Model.** `gpt-4.1` — temp `0.3`, maxTokens `1000`.
-- **Prompt architecture.** Composed from a static, cacheable `FOLLOWUP_SYSTEM_INSTRUCTIONS` prefix + a per-call `FOLLOWUP_CONTEXT` (assembled in `followupPrompt`). One question per round (`MAX_QUESTIONS_PER_ROUND = 1`); falls back to default questions on failure.
-- **Output schema.** `followupQuestionsResponseSchema` → array of `{ sectionId, unmetDimension, question, hints.examples }`.
+- **Prompt architecture.** Composed from a static, cacheable `FOLLOWUP_SYSTEM_INSTRUCTIONS` prefix + a per-call `FOLLOWUP_CONTEXT` (assembled in `followupPrompt`), versioned `followup-v2-case-hints`. One question per round (`MAX_QUESTIONS_PER_ROUND = 1`); falls back to default questions on failure.
+- **Hints.** Written about the trainee's own case, in the first person. `examples[0]` is a complete worked answer at Target depth and may add plausible clinical detail the trainee did not state; later examples use only stated facts, with `[bracketed]` descriptions for the rest. Hints never enter the transcript, so graders and compose never see them. Accepted MVP risk: a trainee who repeats `examples[0]` back gets it graded and composed as their own.
+- **Output schema.** `followupQuestionsResponseSchema` → array of `{ sectionId, coverageState, unmetDimension, question, hints.examples }`.
 - **Source.** [`nodes/generate-followup.node.ts`](../../apps/api/src/portfolio-graph/nodes/generate-followup.node.ts).
 
 #### 4.3 tag_capabilities

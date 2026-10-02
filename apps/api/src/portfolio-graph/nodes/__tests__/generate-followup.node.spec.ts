@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { contextualisedQuestionSchema, createGenerateFollowupNode } from '../generate-followup.node';
 import { DEFAULT_MAX_FOLLOWUP_ROUNDS } from '../../portfolio-graph.state';
 import type { GraphDeps } from '../../graph-deps';
@@ -572,6 +573,44 @@ describe('GenerateFollowupNode', () => {
         'analysis.step.started',
         { conversationId: 'conv-123', userId: 'user-123', step: 'generate_followup' }
       );
+    });
+  });
+
+  describe('telemetry', () => {
+    // Log lines are exported to Grafana (pino → OTLP). The question, the model's
+    // gap analysis and the hints all quote the trainee's case, so none of them may
+    // reach a log line — only ids, enums and counts.
+    it('never logs question text, unmetDimension, or hint text', async () => {
+      const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const markers = ['MARKER_QUESTION', 'MARKER_GAP', 'MARKER_HINT'];
+      const deps = makeDeps();
+      (deps.llmService.invokeStructured as jest.Mock).mockResolvedValue({
+        data: {
+          questions: [
+            {
+              sectionId: 'clinical_reasoning',
+              coverageState: 'shallow',
+              unmetDimension: 'MARKER_GAP no differentials',
+              question: 'MARKER_QUESTION what else did you consider?',
+              hints: { examples: ['MARKER_HINT I considered...', '[MARKER_HINT a cause]'] },
+            },
+          ],
+        },
+      });
+
+      try {
+        await createGenerateFollowupNode(deps)(makeState({ missingSections: ['clinical_reasoning'] }));
+
+        const logged = [...logSpy.mock.calls, ...warnSpy.mock.calls].map((c) => String(c[0]));
+        expect(logged.length).toBeGreaterThan(0);
+        for (const marker of markers) {
+          expect(logged.filter((line) => line.includes(marker))).toEqual([]);
+        }
+      } finally {
+        logSpy.mockRestore();
+        warnSpy.mockRestore();
+      }
     });
   });
 });

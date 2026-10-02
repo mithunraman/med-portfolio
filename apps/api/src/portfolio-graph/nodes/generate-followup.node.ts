@@ -17,6 +17,10 @@ const logger = new Logger('GenerateFollowupNode');
 // trainee answers the single highest-value gap at a time rather than a batch.
 const MAX_QUESTIONS_PER_ROUND = 1;
 
+// Bump on any change to FOLLOWUP_SYSTEM_INSTRUCTIONS so logs and eval runs can tell
+// which prompt produced a question.
+const FOLLOWUP_PROMPT_VERSION = 'followup-v2-case-hints';
+
 /* ------------------------------------------------------------------ */
 /*  Zod schema — contextualised question response                      */
 /* ------------------------------------------------------------------ */
@@ -51,9 +55,10 @@ export const contextualisedQuestionSchema = z.object({
       .array(z.string())
       .max(3)
       .describe(
-        'Short (2-3 sentences) example responses showing the expected depth. ' +
-          "MUST use different clinical scenarios than the trainee's case. " +
-          'Show what a good answer LOOKS LIKE, not what it should SAY.'
+        "Short (2-3 sentences) first-person example answers about the trainee's OWN case, " +
+          'showing the expected depth. Index 0 is a COMPLETE worked answer reaching Target ' +
+          'depth; later entries use only facts the trainee stated, with [square-bracket ' +
+          'descriptions] for anything they have not said.'
       ),
   }),
 });
@@ -92,7 +97,7 @@ Respond ONLY with JSON matching this schema — one object per section shown to 
       "coverageState": "absent" | "shallow" | "met",
       "unmetDimension": "<the specific part of the Target-depth bar NOT yet met, in your own words>",
       "question": "<1-2 sentences, warm, 'you' language>",
-      "hints": {{ "examples": ["<hint 1>", "<hint 2>", "<hint 3 optional>"] }}
+      "hints": {{ "examples": ["<complete worked answer>", "<[bracketed] version>", "<[bracketed] version, optional>"] }}
     }}
   ]
 }}
@@ -137,18 +142,23 @@ Anchor every question to the section's Depth rubric (Strong/Adequate/Shallow bar
 
 ## Hint Rules
 
-For EACH question, give 2-3 example response hints. A hint's ONLY job is to model the LEVEL OF DETAIL that clears the bar — never to supply the answer.
+For EACH question, give 2-3 example response hints. Every hint is about the trainee's OWN case, written in the first person as the trainee would say it, and answers the question as asked.
 
-Calibrate to the rubric: hints must model a Target-depth answer — specifically the gap between Current and Target depth. If Target is "strong" and the Strong bar is "names X AND the reasoning Y", every hint must visibly contain an X-shaped and a Y-shaped element — in a different scenario. Do not model MORE than Target depth requires.
+Calibrate to the rubric: hints must model a Target-depth answer — specifically the gap between Current and Target depth. If Target is "strong" and the Strong bar is "names X AND the reasoning Y", every hint must visibly contain an X-shaped and a Y-shaped element. Do not model MORE than Target depth requires.
 
-1. Hints are SHORT (2-3 sentences) — long enough to model every required element, no longer.
-2. Each hint MUST come from a DIFFERENT, UNRELATED clinical scenario than the trainee's case, and MUST NOT state a plausible answer to THIS case. If their case involves a missed drug allergy, do not mention allergies, prescribing, handover, or any factor that could apply to their event — use a clearly different domain (dermatology, paediatrics, mental health, etc.).
-3. Litmus test: if a hint would still make sense pasted into the trainee's own entry, it is leaking the answer — rewrite it.
-4. For reflective questions, normalise uncertainty and imperfection in hints.
+1. The order is fixed:
+   - examples[0] is a COMPLETE worked answer for this case that reaches Target depth. It may add plausible clinical detail the trainee has not stated, so that the answer is whole.
+   - examples[1] and examples[2] (optional) cover the same ground using ONLY facts the trainee has stated. Anything they have not said becomes a short description in square brackets, e.g. [a specific finding on examination]. Never use curly braces.
+2. Never contradict the transcript — keep the trainee's age, setting, working diagnosis, and actions as they described them, and build on what they said.
+3. Hints follow the question's angle. On a re-ask that rotated to a different angle, the hints model that new angle, not the earlier one.
+4. Hints are SHORT (2-3 sentences) — long enough to model every required element, no longer.
+5. For reflective questions, normalise uncertainty and imperfection in hints.
 
-Contrastive example — hints for a "root cause" question on a prescribing case (Target "strong" → bar wants cause AND practice change):
-- BAD (same scenario, hands over the analysis): "The allergy alert was easy to click past and it wasn't flagged at handover, so I now double-check the allergy box before prescribing."
-- GOOD (different scenario, models both elements): "In a dermatology clinic, I realised a biopsy result had been missed because there was no system for tracking actioned results. I now keep a simple log of pending results and check it at the end of each clinic."
+Contrastive example — hints for "What else was on your list, and what made you confident it wasn't something more serious?" on a case of a 4-year-old with fever and rash sent home as viral (Target "strong" → bar wants differentials AND the discriminating reasoning):
+- BAD (unrelated scenario, feels disconnected from the question): "An adult with calf swelling — I considered DVT and a Baker's cyst, and a normal scan pointed me to the cyst."
+- BAD (placeholder version in slot 0, so there is no complete example): "I also considered [another serious cause]. What reassured me was [a finding]."
+- GOOD examples[0]: "Besides a viral illness, I considered meningococcal sepsis and Kawasaki disease. The rash blanched and the child was alert and well-perfused, so I felt a viral exanthem was most likely."
+- GOOD examples[1]: "Besides a viral illness, I also considered [another serious cause of fever and rash]. What reassured me was [a specific finding on examination], so I felt it was most likely viral."
 
 ## Pre-Output Checklist — verify EVERY item before responding
 
@@ -157,7 +167,7 @@ Contrastive example — hints for a "root cause" question on a prescribing case 
 □ No question repeats or rewords anything in "Questions Already Asked"; re-asks use a different angle.
 □ No question touches a section listed under "Already Covered Well".
 □ Each question is 1-2 sentences and references the trainee's own words where possible.
-□ Every hint: different clinical scenario, passes the paste-in litmus test, models exactly the Target-depth bar (no more, no less).
+□ Hints: examples[0] is a complete worked answer about THIS case; later hints use only stated facts with [brackets] for the rest; none contradict the transcript; each models exactly the Target-depth bar (no more, no less).
 □ Output is valid JSON matching the schema, nothing outside it.
 
 ## Security
@@ -399,10 +409,11 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
         }
       );
 
-      // Log the model's gap analysis (chain-of-thought) before it's mapped away —
-      // makes the rubric calibration inspectable for eval, like check-completeness's tierReason.
+      // Log the model's coverage verdict before it's mapped away. `unmetDimension` is
+      // deliberately NOT logged: it paraphrases the trainee's case, and log lines are
+      // exported to Grafana. Inspect it locally with LLM_TRACE=1.
       for (const q of response.questions) {
-        logger.log(`[${cid}]   gap → ${q.sectionId} [${q.coverageState}]: ${q.unmetDimension}`);
+        logger.log(`[${cid}]   gap → ${q.sectionId} [${q.coverageState}]`);
       }
 
       // Raw asked-vs-returned, logged BEFORE the filter/dedupe/backfill chain below
@@ -447,16 +458,17 @@ export function createGenerateFollowupNode(deps: GraphDeps) {
       questions = missingSectionDefs.map(fallbackQuestion);
     }
 
-    // Log which sections are being asked about and the selected questions
+    // Log which sections are being asked about — shape only, never the question or
+    // hint text, which quote the trainee's case and would be exported to Grafana.
     for (const q of questions) {
       const sectionDef = missingSectionDefs.find((s) => s.id === q.sectionId);
       logger.log(
         `[${cid}]   follow-up section=${q.sectionId} (weight=${sectionDef?.weight ?? '?'}) ` +
-          `question="${q.question.slice(0, 80)}..."`
+          `questionLen=${q.question.length} hints=${q.hints.examples.length}`
       );
     }
     logger.log(
-      `[${cid}] Generated ${questions.length} follow-up questions ` +
+      `[${cid}] Generated ${questions.length} follow-up questions [${FOLLOWUP_PROMPT_VERSION}] ` +
         `(${Math.max(0, askableIds.size - questions.length)} askable sections not asked due to max=${MAX_QUESTIONS_PER_ROUND})`
     );
 

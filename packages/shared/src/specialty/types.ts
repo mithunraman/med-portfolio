@@ -1,3 +1,4 @@
+import { MessageRole } from '../enums/message-role.enum';
 import { Specialty } from '../enums/specialty.enum';
 
 /** Readiness tier a probe/section must reach to count as complete. */
@@ -198,4 +199,31 @@ export interface SpecialtyConfig {
   capabilities: CapabilityDefinition[];
   /** Training stages for this specialty (e.g., ST1-ST3 for GP, CT1-CT3 + ST4-ST6 for Psychiatry) */
   trainingStages: TrainingStageDefinition[];
+  /** A worked example shown to new trainees. Optional — not every specialty has one. */
+  sampleCase?: SampleCaseDefinition;
+}
+
+/**
+ * A fictional, finished entry plus the conversation that produced it, shown on
+ * first run so a trainee can see the output before investing in their own.
+ *
+ * Stores codes, never display labels: section labels come from the entry type's
+ * template and capability names from `capabilities`, resolved when served, so a
+ * rename in config cannot leave the sample stale. Served publicly and cached —
+ * the content must be fictional (see `sample-case.integrity.spec.ts`).
+ */
+export interface SampleCaseDefinition {
+  /** Entry-type code; must be an entry type of the owning specialty */
+  entryType: string;
+  title: string;
+  /** Composed document fields, in template section order */
+  sections: { sectionId: string; text: string }[];
+  /** Confirmed capabilities, by code */
+  capabilities: { code: string; evidence: string; justification: string }[];
+  /** Assistant turns carry the follow-up `question`; `text` is its lead-in line */
+  conversation: {
+    role: MessageRole.USER | MessageRole.ASSISTANT;
+    text: string;
+    question?: string;
+  }[];
 }

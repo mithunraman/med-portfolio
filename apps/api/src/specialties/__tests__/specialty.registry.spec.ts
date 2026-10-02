@@ -2,6 +2,7 @@ import { leafProbes, Specialty } from '@acme/shared';
 import {
   getAllRegisteredConfigs,
   getAllSpecialtyOptions,
+  getSampleCase,
   getSpecialtyConfig,
   isValidEntryType,
   isValidTrainingStage,
@@ -221,5 +222,36 @@ describe('SpecialtyRegistry', () => {
         expect(new Set(codes).size).toBe(codes.length);
       }
     );
+  });
+
+  describe('getSampleCase', () => {
+    it('resolves the GP sample with labels from config', () => {
+      const sample = getSampleCase(Specialty.GP)!;
+
+      expect(sample.specialty).toBe(Specialty.GP);
+      expect(sample.entryTypeLabel).toBe('Clinical Case Review');
+      expect(sample.sections.map((s) => s.label)).toEqual([
+        'Brief Description',
+        'Reflection',
+        'Learning Needs',
+      ]);
+      expect(sample.capabilities.map((c) => [c.code, c.name])).toEqual([
+        ['C-01', 'Fitness to practise'],
+        ['C-04', 'Data gathering and interpretation'],
+        ['C-06', 'Decision-making and diagnosis'],
+      ]);
+      expect(sample.conversation.length).toBeGreaterThan(0);
+    });
+
+    it.each([Specialty.PSYCHIATRY, Specialty.INTERNAL_MEDICINE])(
+      'returns null for inactive specialty %s',
+      (specialty) => {
+        expect(getSampleCase(specialty)).toBeNull();
+      }
+    );
+
+    it('returns null for an unknown specialty', () => {
+      expect(getSampleCase(999 as Specialty)).toBeNull();
+    });
   });
 });

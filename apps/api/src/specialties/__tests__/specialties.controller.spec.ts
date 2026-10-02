@@ -1,4 +1,6 @@
 import { Specialty } from '@acme/shared';
+import { NotFoundException } from '@nestjs/common';
+import type { Response } from 'express';
 import { SpecialtiesController } from '../specialties.controller';
 
 describe('SpecialtiesController', () => {
@@ -73,5 +75,34 @@ describe('SpecialtiesController', () => {
         }
       }
     });
+
+    it('should not expose the sample case in the specialty list', () => {
+      for (const specialty of controller.getSpecialties().specialties) {
+        expect((specialty as Record<string, unknown>)['sampleCase']).toBeUndefined();
+      }
+    });
+  });
+
+  describe('getSampleCase', () => {
+    const mockResponse = () => ({ setHeader: jest.fn() }) as unknown as Response;
+
+    it('should return the GP sample case with a public cache header', () => {
+      const res = mockResponse();
+      const result = controller.getSampleCase(Specialty.GP, res);
+
+      expect(result.specialty).toBe(Specialty.GP);
+      expect(result.sections.length).toBeGreaterThan(0);
+      expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'public, max-age=3600');
+    });
+
+    it.each([Specialty.PSYCHIATRY, 999])(
+      'should 404 for specialty %s with no sample, without making it cacheable',
+      (s) => {
+        const res = mockResponse();
+
+        expect(() => controller.getSampleCase(s, res)).toThrow(NotFoundException);
+        expect(res.setHeader).not.toHaveBeenCalled();
+      }
+    );
   });
 });

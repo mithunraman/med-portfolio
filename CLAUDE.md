@@ -304,8 +304,9 @@ those responses.
 `Cache-Control: no-store` on every response as a **default-deny**. A route may
 opt back in with an explicit `@Header('Cache-Control', ...)`, and that write wins
 because it runs after the middleware — but only do so for routes that are
-`@Public()` and return no personal data. `quota.controller.ts` is the only such
-route today.
+`@Public()` and return no personal data. The routes that do so today are
+`quota.controller.ts` and `specialties.controller.ts` (the specialty list and the
+fictional sample case).
 
 Two things follow:
 

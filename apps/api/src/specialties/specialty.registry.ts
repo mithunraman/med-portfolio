@@ -1,5 +1,7 @@
 import {
   EntryTypeOption,
+  SampleCaseResponse,
+  SampleCaseResponseSchema,
   Specialty,
   SpecialtyConfig,
   SpecialtyOption,
@@ -98,6 +100,51 @@ export function getTemplateForEntryType(config: SpecialtyConfig, entryTypeCode: 
     throw new Error(`Template "${entryType.templateId}" not found in specialty "${config.name}"`);
   }
   return template;
+}
+
+/**
+ * The specialty's worked example with display labels resolved from its config, or
+ * null when the specialty is inactive, unknown, or has no sample.
+ *
+ * The fixture stores codes only; labels are looked up here so a renamed section or
+ * capability is reflected without touching the sample. An unresolvable code is a
+ * config bug (guarded by `sample-case.integrity.spec.ts`), so it throws rather than
+ * serving a half-labelled sample.
+ */
+export function getSampleCase(specialty: Specialty): SampleCaseResponse | null {
+  const entry = SPECIALTY_CONFIGS[specialty];
+  const sample = entry?.isActive ? entry.config.sampleCase : undefined;
+  if (!entry || !sample) return null;
+
+  const { config } = entry;
+  const template = getTemplateForEntryType(config, sample.entryType);
+  const sectionLabels = new Map(template.sections.map((s) => [s.id, s.label]));
+  const capabilityNames = new Map(config.capabilities.map((c) => [c.code, c.name]));
+
+  return SampleCaseResponseSchema.parse({
+    specialty,
+    entryType: sample.entryType,
+    entryTypeLabel: resolveEntryTypeLabel(specialty, sample.entryType),
+    title: sample.title,
+    sections: sample.sections.map((s) => ({
+      sectionId: s.sectionId,
+      label: requireLabel(sectionLabels, s.sectionId, 'section'),
+      text: s.text,
+    })),
+    capabilities: sample.capabilities.map((c) => ({
+      ...c,
+      name: requireLabel(capabilityNames, c.code, 'capability'),
+    })),
+    conversation: sample.conversation,
+  });
+}
+
+function requireLabel(labels: Map<string, string>, code: string, kind: string): string {
+  const label = labels.get(code);
+  if (label === undefined) {
+    throw new Error(`Sample case references unknown ${kind} "${code}"`);
+  }
+  return label;
 }
 
 /** @internal — exposes all registered configs regardless of isActive, for test data integrity checks. */

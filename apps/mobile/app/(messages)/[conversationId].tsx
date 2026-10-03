@@ -61,7 +61,7 @@ const chatLogger = logger.createScope('ChatScreen');
 /** Minimum user words before "Start Analysis" is available */
 const INITIAL_WORD_THRESHOLD = 100;
 /** Minimum user words (since the question) before "Continue Analysis" is available */
-const FOLLOWUP_WORD_THRESHOLD = 30;
+const FOLLOWUP_WORD_THRESHOLD = 15;
 
 // Phase-aware polling intervals (ms). null = no polling.
 function getPollInterval(

@@ -23,13 +23,20 @@
  *   users._id                   = artefact.userId
  *
  * Usage:
- *   node scripts/dump-artefact.js <artefactId> [--full] [--out <file>] [--section <id>]
+ *   node scripts/dump-artefact.js <artefactId> [--env <name>] [--full] [--out <file>] [--section <id>]
  *
+ *   --env <name>     read MONGODB_URI from apps/api/.env.<name>.local ONLY (e.g. --env prod)
  *   --full           also print the entire dump as JSON to stdout
  *   --out <file>     write the entire dump as JSON to <file>
  *   --section <id>   when summarising reflectTrace, expand this section's probes
  *
- * Reads MONGODB_URI from apps/api/.env.local then .env (same precedence as the app).
+ * Without --env, reads MONGODB_URI from apps/api/.env.local then .env (same
+ * precedence as the app). With --env, the app's files are never consulted, so a
+ * typo can't silently fall back to a different database.
+ *
+ * --env prod expects a read-only Atlas user (see .env.prod.local). The dump is
+ * real trainee content, so --out refuses any path inside the repo, where it
+ * could be committed.
  */
 
 const fs = require('fs');
@@ -40,25 +47,49 @@ const { MongoClient, ObjectId } = require('mongodb');
 /*  Env + args                                                         */
 /* ------------------------------------------------------------------ */
 
-function loadUri() {
-  const apiRoot = path.resolve(__dirname, '..');
-  for (const file of ['.env.local', '.env']) {
-    const full = path.join(apiRoot, file);
+const API_ROOT = path.resolve(__dirname, '..');
+const REPO_ROOT = path.resolve(API_ROOT, '..', '..');
+
+function loadUri(envName) {
+  const files = envName ? [`.env.${envName}.local`] : ['.env.local', '.env'];
+  for (const file of files) {
+    const full = path.join(API_ROOT, file);
     if (!fs.existsSync(full)) continue;
     const line = fs
       .readFileSync(full, 'utf8')
       .split('\n')
       .find((l) => l.trim().startsWith('MONGODB_URI='));
-    if (line) return line.slice(line.indexOf('=') + 1).trim().replace(/^["']|["']$/g, '');
+    if (!line) continue;
+    const uri = line.slice(line.indexOf('=') + 1).trim().replace(/^["']|["']$/g, '');
+    if (/<[^>]+>/.test(uri)) {
+      throw new Error(`MONGODB_URI in apps/api/${file} still contains <placeholders>`);
+    }
+    return uri;
   }
-  throw new Error('MONGODB_URI not found in apps/api/.env.local or .env');
+  throw new Error(`MONGODB_URI not found in ${files.map((f) => `apps/api/${f}`).join(' or ')}`);
+}
+
+/** host/db only — the URI's userinfo is a credential and must never be printed. */
+function describeUri(uri) {
+  const m = uri.match(/^mongodb(?:\+srv)?:\/\/(?:[^@/]*@)?([^/?]+)/);
+  return `${m ? m[1] : '(unparseable host)'} / ${dbNameFromUri(uri)}`;
+}
+
+function assertOutOutsideRepo(out) {
+  const rel = path.relative(REPO_ROOT, path.resolve(out));
+  if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
+    throw new Error(
+      `--out ${out} is inside the repo; with --env, write the dump outside it (e.g. /tmp/dump.json)`
+    );
+  }
 }
 
 function parseArgs(argv) {
-  const args = { id: null, full: false, out: null, section: null };
+  const args = { id: null, env: null, full: false, out: null, section: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--full') args.full = true;
+    if (a === '--env') args.env = argv[++i];
+    else if (a === '--full') args.full = true;
     else if (a === '--out') args.out = argv[++i];
     else if (a === '--section') args.section = argv[++i];
     else if (!a.startsWith('--') && !args.id) args.id = a;
@@ -268,11 +299,16 @@ function printSummary(dump, section) {
 (async () => {
   const args = parseArgs(process.argv.slice(2));
   if (!args.id) {
-    console.error('Usage: node scripts/dump-artefact.js <artefactId> [--full] [--out <file>] [--section <id>]');
+    console.error(
+      'Usage: node scripts/dump-artefact.js <artefactId> [--env <name>] [--full] [--out <file>] [--section <id>]'
+    );
     process.exit(1);
   }
+  if (args.env && args.out) assertOutOutsideRepo(args.out);
 
-  const uri = loadUri();
+  const uri = loadUri(args.env);
+  // stderr, so it never ends up inside --full JSON piped to a file.
+  console.error(`[dump-artefact] env=${args.env || 'dev'}  ${describeUri(uri)}`);
   const client = new MongoClient(uri);
   await client.connect();
   try {

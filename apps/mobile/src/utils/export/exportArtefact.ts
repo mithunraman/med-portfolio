@@ -128,10 +128,9 @@ export async function shareAsPdf(artefact: Artefact): Promise<void> {
     const dir = uri.substring(0, uri.lastIndexOf('/'));
     const tempFile = new File(uri);
     const dest = new File(`${dir}/${fileName}`);
-    if (dest.exists) {
-      dest.delete();
-    }
-    tempFile.move(dest);
+    // `move` is async since SDK 57. Unawaited, `shareAsync` raced it and found no
+    // file at `dest`, which expo-sharing reports as "You don't have access".
+    await tempFile.move(dest, { overwrite: true });
     // Share `dest.uri`, not `tempFile.uri` - `dest` points at the destination by
     // construction, so this holds whether or not `move()` mutates the receiver.
     await Sharing.shareAsync(dest.uri, {

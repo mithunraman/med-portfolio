@@ -2,13 +2,53 @@ import { Logger } from '@nestjs/common';
 import { GraphDeps, emitStepStarted } from '../graph-deps';
 import { ThinkingStep } from '../thinking-step.enum';
 import { DraftStatus, PortfolioStateType } from '../portfolio-graph.state';
+import { normaliseTypography } from './typography.util';
+
+type OutputTextFields = Pick<
+  PortfolioStateType,
+  'title' | 'composedDocument' | 'capabilities' | 'pdpGoals'
+>;
 
 /**
- * Validation gate before graph completion.
+ * Normalise AI-typical typography (em dashes, curly quotes, invisible
+ * characters…) in every model-written field the artefact persists.
  *
- * Asserts all required fields are present in graph state before the graph
- * reaches END. No DB writes — the handler performs all saves in a single
- * transaction after graph.invoke() returns (Phase 3/4).
+ * The field list is explicit on purpose: `capabilities[].quote` is verbatim
+ * transcript evidence and must stay byte-identical; `reasoning` is never
+ * persisted; section `label`s come from template config, not the model.
+ * `refineTrace` keeps the raw model output for debugging and evals, so its
+ * `after` text will legitimately differ from the saved section.
+ */
+function normaliseOutputText(state: PortfolioStateType): OutputTextFields {
+  return {
+    title: state.title && normaliseTypography(state.title),
+    composedDocument: (state.composedDocument ?? []).map((s) => ({
+      ...s,
+      text: normaliseTypography(s.text),
+    })),
+    capabilities: state.capabilities.map((c) => ({
+      ...c,
+      justification: c.justification && normaliseTypography(c.justification),
+    })),
+    pdpGoals: state.pdpGoals.map((g) => ({
+      goal: normaliseTypography(g.goal),
+      actions: g.actions.map((a) => ({
+        action: normaliseTypography(a.action),
+        intendedEvidence: normaliseTypography(a.intendedEvidence),
+      })),
+    })),
+  };
+}
+
+/**
+ * Validation and output-normalisation gate before graph completion.
+ *
+ * Asserts all required fields are present in graph state, then returns the
+ * model-written text fields with AI-typical typography normalised — here, at
+ * the single node every completed run passes through, so the checkpointed final
+ * state and the persisted artefact are identical. No DB writes — the handler
+ * performs all saves in a single transaction after graph.invoke() returns
+ * (Phase 3/4).
  *
  * Graph topology: `generate_pdp → save → END`
  */
@@ -37,6 +77,6 @@ export function createSaveNode(deps: GraphDeps) {
       `[${cid}] Validation passed for artefact ${state.artefactId} ` +
         `(readiness ${state.readinessScore}/10, status=${draftStatus})`
     );
-    return { draftStatus };
+    return { draftStatus, ...normaliseOutputText(state) };
   };
 }

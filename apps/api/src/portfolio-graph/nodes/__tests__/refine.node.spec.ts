@@ -36,7 +36,9 @@ function makeDeps(response: unknown, opts: { throws?: boolean } = {}): GraphDeps
         ? jest.fn().mockRejectedValue(new Error('LLM down'))
         : jest.fn().mockResolvedValue({ data: response }),
     } as any,
-    modelConfig: { resolve: jest.fn(() => ({ provider: 'openai', pool: 'openai', model: 'test-model' })) } as any,
+    modelConfig: {
+      resolve: jest.fn(() => ({ provider: 'openai', pool: 'openai', model: 'test-model' })),
+    } as any,
     eventEmitter: { emit: jest.fn() } as any,
   };
 }
@@ -57,8 +59,8 @@ describe('refineNode', () => {
     const result = await createRefineNode(
       makeDeps({
         sections: [
-          { sectionId: 'learning', text: merged },
-          { sectionId: 'reflection', text: REFLECT_DOCUMENT[1].text },
+          { sectionId: 'learning', paragraphs: [merged] },
+          { sectionId: 'reflection', paragraphs: [REFLECT_DOCUMENT[1].text] },
         ],
       })
     )(makeState());
@@ -71,8 +73,8 @@ describe('refineNode', () => {
     const result = await createRefineNode(
       makeDeps({
         sections: [
-          { sectionId: 'learning', text: REFLECT_DOCUMENT[0].text },
-          { sectionId: 'reflection', text: REFLECT_DOCUMENT[1].text },
+          { sectionId: 'learning', paragraphs: [REFLECT_DOCUMENT[0].text] },
+          { sectionId: 'reflection', paragraphs: [REFLECT_DOCUMENT[1].text] },
         ],
       })
     )(makeState());
@@ -85,7 +87,7 @@ describe('refineNode', () => {
     const result = await createRefineNode(
       makeDeps({
         sections: [
-          { sectionId: 'learning', text: '' }, // blanked
+          { sectionId: 'learning', paragraphs: [''] }, // blanked
           // reflection omitted entirely
         ],
       })
@@ -113,12 +115,19 @@ describe('refineNode', () => {
 
   it('excludes empty sections from the LLM call and leaves them empty (no few-shot regurgitation)', async () => {
     const doc = [
-      { sectionId: 'reflection', label: 'Reflection', text: 'I was pleased I tackled the risk factors.' },
+      {
+        sectionId: 'reflection',
+        label: 'Reflection',
+        text: 'I was pleased I tackled the risk factors.',
+      },
       { sectionId: 'learning', label: 'Learning Needs', text: '' }, // trainee never provided it
     ];
     const deps = makeDeps({
       sections: [
-        { sectionId: 'reflection', text: 'I was pleased I tackled all the risk factors together.' },
+        {
+          sectionId: 'reflection',
+          paragraphs: ['I was pleased I tackled all the risk factors together.'],
+        },
       ],
     });
     const result = await createRefineNode(deps)(makeState(doc));
@@ -145,7 +154,25 @@ describe('refineNode', () => {
     expect(result.refineTrace!.every((t) => t.source === 'fallback')).toBe(true);
   });
 
-  describe('prompt (v2)', () => {
+  it('joins the model paragraphs with blank lines, dropping blank paragraphs', async () => {
+    const result = await createRefineNode(
+      makeDeps({
+        sections: [
+          {
+            sectionId: 'learning',
+            paragraphs: [' My learning need is around targets. ', '', 'I will read NICE NG28.\n'],
+          },
+          { sectionId: 'reflection', paragraphs: [REFLECT_DOCUMENT[1].text] },
+        ],
+      })
+    )(makeState());
+
+    expect(section(result, 'learning').text).toBe(
+      'My learning need is around targets.\n\nI will read NICE NG28.'
+    );
+  });
+
+  describe('prompt (v3)', () => {
     async function renderedSystemPrompt(): Promise<string> {
       const deps = makeDeps({ sections: [] });
       await createRefineNode(deps)(makeState());
@@ -174,6 +201,14 @@ describe('refineNode', () => {
     it('reframes lazy pass-through as a failure (anti-under-editing)', async () => {
       const prompt = await renderedSystemPrompt();
       expect(prompt).toContain('pass-through is not the safe default');
+    });
+
+    it('asks for paragraphs at topic shifts without licensing reordering', async () => {
+      const prompt = await renderedSystemPrompt();
+      expect(prompt).toContain('"paragraphs": [');
+      expect(prompt).toContain('A section of 1-3 sentences stays a single paragraph');
+      expect(prompt).toContain('MUST be split');
+      expect(prompt).toContain('paragraphing alone never justifies moving content');
     });
   });
 });

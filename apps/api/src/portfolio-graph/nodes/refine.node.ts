@@ -19,12 +19,15 @@ export const refineResponseSchema = z.object({
     .array(
       z.object({
         sectionId: z.string().describe('The section id, copied from the input'),
-        text: z
-          .string()
-          .describe('The section text after merging restatements and joining sentences'),
+        paragraphs: z
+          .array(z.string())
+          .describe(
+            'The cleaned section text split at topic shifts, one string per paragraph. ' +
+              'A section of 1-3 sentences is a single paragraph.'
+          ),
       })
     )
-    .describe('Every input section, in order, with its cleaned text'),
+    .describe('Every input section, in order, with its cleaned paragraphs'),
 });
 
 type RefineResponse = z.infer<typeof refineResponseSchema>;
@@ -40,6 +43,7 @@ const refinePrompt = ChatPromptTemplate.fromMessages([
 
 1. Merge sentences that restate the same point into a single sentence, keeping every distinct detail from each.
 2. Improve readability: join choppy or fragmented sentences, smooth awkward or spoken-sounding phrasing, and order sentences so related content sits together — so the section reads fluently from start to finish.
+3. Structure into paragraphs: break each section at natural topic shifts (case: presentation → findings → reasoning → management → outcome; reflection: what happened → how I felt → what I learned / will change). Return each section as a "paragraphs" array, one string per paragraph. A section of 1-3 sentences stays a single paragraph (an array of one). A section of 4 or more sentences that moves between topics MUST be split — a short case vignette included. A paragraph is usually 2-4 sentences on one topic; avoid one-sentence paragraphs.
 
 Apply this to EVERY section, not only those with duplication. The input is produced by an upstream step that sorts and lightly cleans the trainee's voice input but does NOT de-duplicate or polish for flow, so most sections will read better after a faithful copy-edit; a section may also contain the same point restated across several sentences, and you are the only step that removes this repetition.
 
@@ -49,7 +53,7 @@ Respond ONLY with JSON matching this schema — one object per input section, in
 
 {{
   "sections": [
-    {{ "sectionId": "<id exactly as given>", "text": "<cleaned section text>" }}
+    {{ "sectionId": "<id exactly as given>", "paragraphs": ["<first paragraph>", "<next paragraph, at a topic shift>"] }}
   ]
 }}
 
@@ -63,14 +67,16 @@ You are NOT rewriting the substance, summarising, or adding to the content — y
 - NEVER merge, collapse, drop, or reword the trainee's emotional, evaluative, or hedging WORDS (e.g. "a bit worried", "out of my depth", "mortified", "fairly happy", "pretty much"). Keep each distinct emotional beat, in the trainee's own words, even when it seems to repeat a sentiment.
   - SCOPE of this protection: it covers the stance-words themselves, not the whole sentence around them. You MAY fix grammar, join fragments, and smooth the connective tissue around a protected phrase, as long as the phrase itself survives verbatim and keeps its original referent and position in time (at the time vs looking back).
 - Do NOT reorder content beyond what improves the readability of adjacent material.
+- Paragraph breaks go between sentences that are already adjacent; paragraphing alone never justifies moving content.
 
 ## Deciding whether a section needs edits
 
-For EACH section, scan for all three before writing anything:
+For EACH section, scan for all four before writing anything:
 (a) points restated across sentences → merge per the rules;
 (b) fragments, choppy sentences, or awkward joins → smooth;
-(c) spoken-register phrasing OUTSIDE protected stance-words → tidy.
-Return a section's text UNCHANGED only if all three scans find nothing. An imperfect section returned verbatim is a failure, just as a meaning change is — pass-through is not the safe default.
+(c) spoken-register phrasing OUTSIDE protected stance-words → tidy;
+(d) a section of 4+ sentences laid out as one block, or with breaks that don't fall at topic shifts → paragraph.
+Return a section's text UNCHANGED only if all four scans find nothing. An imperfect section returned verbatim is a failure, just as a meaning change is — pass-through is not the safe default.
 
 ## Examples
 
@@ -98,13 +104,20 @@ INPUT section text (under-editing — do NOT do this):
 BAD output (returned unchanged — restatement left in place): the input verbatim.
 GOOD output (merged, every detail kept): "He came back a week later, and by then the rash had mostly settled."
 
+INPUT section text (one block spanning several topics):
+"A 64-year-old man came in with three days of a painful, swollen big toe. It was hot and red, and he could not bear weight on it. I was fairly happy it was gout. I started colchicine and checked his urate. He came back a week later, and by then the swelling had pretty much gone."
+GOOD output paragraphs (split at the shift from assessment to management, every sentence kept in order):
+["A 64-year-old man came in with three days of a painful, swollen big toe. It was hot and red, and he could not bear weight on it. I was fairly happy it was gout.", "I started colchicine and checked his urate. He came back a week later, and by then the swelling had pretty much gone."]
+BAD output paragraphs (one sentence per paragraph): five strings, one per sentence.
+
 ## Pre-Output Checklist — verify EVERY item before responding
 
 □ Every input section returned exactly once, keyed by its sectionId, in order.
 □ Every fact, number, and distinct clause in the input is findable in the output — nothing dropped in a merge.
 □ Nothing added: no new facts, terms, reasoning, or sentiment.
 □ Every protected stance-word survives verbatim, in its original temporal context; no beats merged.
-□ Any section returned unchanged genuinely passed all three scans (no restatement, no choppiness, no unprotected spoken register).
+□ Any section returned unchanged genuinely passed all four scans (no restatement, no choppiness, no unprotected spoken register, no unparagraphed block).
+□ Sections of 4+ sentences are split into paragraphs at topic shifts; 1-3 sentence sections are a single paragraph.
 □ Output is valid JSON matching the schema, nothing outside it.
 
 ## Security
@@ -132,7 +145,9 @@ function assembleRefined(
   original: DocumentField[],
   response: RefineResponse
 ): { composedDocument: DocumentField[]; refineTrace: RefineTrace } {
-  const mergedById = new Map(response.sections.map((s) => [s.sectionId, s.text ?? '']));
+  const mergedById = new Map(
+    response.sections.map((s) => [s.sectionId, joinParagraphs(s.paragraphs ?? [])])
+  );
   const composedDocument: DocumentField[] = [];
   const refineTrace: RefineTrace = [];
 
@@ -155,6 +170,14 @@ function assembleRefined(
   return { composedDocument, refineTrace };
 }
 
+/** Join the model's paragraphs into section text, dropping blank ones. */
+function joinParagraphs(paragraphs: string[]): string {
+  return paragraphs
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 /** Build a fallback trace that keeps every section's original text unchanged. */
 function fallbackTrace(document: DocumentField[]): RefineTrace {
   return document.map((s) => ({
@@ -175,8 +198,9 @@ function fallbackTrace(document: DocumentField[]): RefineTrace {
  *
  * Post-processes the reflect node's `composedDocument`: a single LLM call
  * copy-edits every section into clear, fluent prose — merging restatements,
- * joining choppy sentences, and smoothing spoken-sounding phrasing — faithfully
- * (no new facts or sentiment). This is the universal polish stage that runs for
+ * joining choppy sentences, smoothing spoken-sounding phrasing, and breaking
+ * longer sections into paragraphs at topic shifts (`\n\n`; 1-3 sentence sections
+ * stay single) — faithfully (no new facts or sentiment). This is the universal polish stage that runs for
  * every template, so sections need no per-template `composePrompt` to read well.
  * The model output is
  * trusted directly — the trainee reviews and edits the entry before it is saved

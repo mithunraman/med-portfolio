@@ -305,10 +305,11 @@ Each row: purpose · model (temp / maxTokens) · schema · source.
 - **Source.** [`nodes/reflect.node.ts`](../../apps/api/src/portfolio-graph/nodes/reflect.node.ts).
 
 #### 4.6 refine
-- **Purpose.** Final prose polish — merge restatements and smooth the composed document per section, faithfully (no new facts or sentiment). The only stage on the flagship model.
+- **Purpose.** Final prose polish — merge restatements, smooth the composed document per section, and split sections of 4+ sentences into paragraphs at topic shifts (1–3 sentence sections stay single), faithfully (no new facts or sentiment). The only stage on the flagship model.
 - **Model.** `gpt-5.4` — temp `0`, maxTokens dynamic (`max(wordCount × 2, 1000)`).
 - **Prompt architecture.** `refinePrompt` (per-section polish with faithfulness constraints). Keeps the original section text if a section is omitted/blank; falls back to reflect output on failure.
-- **Output schema.** `refineResponseSchema` → `{ sections[] (sectionId, text) }` → updates `composedDocument`.
+- **Output schema.** `refineResponseSchema` → `{ sections[] (sectionId, paragraphs[]) }` → paragraphs joined with `\n\n` → updates `composedDocument`. Paragraphs are an array rather than `\n\n` inside a string because DeepSeek V4 Flash (variant PROD) almost never emitted the escape when asked to; the array shape makes the split an explicit decision per section.
+- **Typography.** Section text is passed through `normaliseTypography` in the `save` node (em dashes, curly quotes, invisible characters → plain keyboard characters); `refineTrace` keeps the raw model output.
 - **Source.** [`nodes/refine.node.ts`](../../apps/api/src/portfolio-graph/nodes/refine.node.ts).
 
 #### 4.7 generate_pdp

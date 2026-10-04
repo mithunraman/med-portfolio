@@ -5,11 +5,11 @@ import { z } from 'zod';
 import { routingKeyFor, Stage, STAGE_POLICY } from '../../llm';
 import { getSpecialtyConfig, getTemplateForEntryType } from '../../specialties/specialty.registry';
 import { getStageContext } from '../../specialties/stage-context';
-import { GraphDeps, emitStepStarted } from '../graph-deps';
-import { ThinkingStep } from '../thinking-step.enum';
 import { hasBeenAsked, isSectionExhausted, unconfirmedSections } from '../elicitation.util';
 import { pickFollowupLine, resolveFollowupTier } from '../followup-copy';
+import { emitStepStarted, GraphDeps } from '../graph-deps';
 import { PortfolioStateType, ReadinessEntry, SectionAttempt } from '../portfolio-graph.state';
+import { ThinkingStep } from '../thinking-step.enum';
 
 const logger = new Logger('GenerateFollowupNode');
 
@@ -19,7 +19,7 @@ const MAX_QUESTIONS_PER_ROUND = 1;
 
 // Bump on any change to FOLLOWUP_SYSTEM_INSTRUCTIONS so logs and eval runs can tell
 // which prompt produced a question.
-const FOLLOWUP_PROMPT_VERSION = 'followup-v2-case-hints';
+const FOLLOWUP_PROMPT_VERSION = 'followup-v3-two-worked-hints';
 
 /* ------------------------------------------------------------------ */
 /*  Zod schema — contextualised question response                      */
@@ -56,9 +56,10 @@ export const contextualisedQuestionSchema = z.object({
       .max(3)
       .describe(
         "Short (2-3 sentences) first-person example answers about the trainee's OWN case, " +
-          'showing the expected depth. Index 0 is a COMPLETE worked answer reaching Target ' +
-          'depth; later entries use only facts the trainee stated, with [square-bracket ' +
-          'descriptions] for anything they have not said.'
+          'showing the expected depth. Indexes 0 and 1 are each a COMPLETE worked answer ' +
+          'reaching Target depth, and make DIFFERENT plausible content choices — never ' +
+          'rewordings of each other. Index 2 (optional) uses only facts the trainee stated, ' +
+          'with [square-bracket descriptions] for anything they have not said.'
       ),
   }),
 });
@@ -97,7 +98,7 @@ Respond ONLY with JSON matching this schema — one object per section shown to 
       "coverageState": "absent" | "shallow" | "met",
       "unmetDimension": "<the specific part of the Target-depth bar NOT yet met, in your own words>",
       "question": "<1-2 sentences, warm, 'you' language>",
-      "hints": {{ "examples": ["<complete worked answer>", "<[bracketed] version>", "<[bracketed] version, optional>"] }}
+      "hints": {{ "examples": ["<complete worked answer>", "<a different complete worked answer>", "<[bracketed] version, optional>"] }}
     }}
   ]
 }}
@@ -147,9 +148,10 @@ For EACH question, give 2-3 example response hints. Every hint is about the trai
 Calibrate to the rubric: hints must model a Target-depth answer — specifically the gap between Current and Target depth. If Target is "strong" and the Strong bar is "names X AND the reasoning Y", every hint must visibly contain an X-shaped and a Y-shaped element. Do not model MORE than Target depth requires.
 
 1. The order is fixed:
-   - examples[0] is a COMPLETE worked answer for this case that reaches Target depth. It may add plausible clinical detail the trainee has not stated, so that the answer is whole.
-   - examples[1] and examples[2] (optional) cover the same ground using ONLY facts the trainee has stated. Anything they have not said becomes a short description in square brackets, e.g. [a specific finding on examination]. Never use curly braces.
-2. Never contradict the transcript — keep the trainee's age, setting, working diagnosis, and actions as they described them, and build on what they said.
+   - examples[0] and examples[1] are each a COMPLETE worked answer for this case that reaches Target depth. Either may add plausible clinical detail the trainee has not stated, so that the answer is whole.
+   - examples[1] is a genuinely DIFFERENT plausible answer, not a rewording of examples[0]: it makes a different content choice — a different differential, learning point, or management step — so the trainee sees two distinct ways their answer could go. Same case, same question, same angle; only the content choice differs. For factual sections, emphasise different details rather than offering contradictory facts.
+   - examples[2] (optional) covers the same ground using ONLY facts the trainee has stated. Anything they have not said becomes a short description in square brackets, e.g. [a specific finding on examination]. Never use curly braces.
+2. Never contradict the transcript — keep the trainee's age, setting, working diagnosis, and actions as they described them, and build on what they said. This applies to BOTH worked answers.
 3. Hints follow the question's angle. On a re-ask that rotated to a different angle, the hints model that new angle, not the earlier one.
 4. Hints are SHORT (2-3 sentences) — long enough to model every required element, no longer.
 5. For reflective questions, normalise uncertainty and imperfection in hints.
@@ -157,8 +159,10 @@ Calibrate to the rubric: hints must model a Target-depth answer — specifically
 Contrastive example — hints for "What else was on your list, and what made you confident it wasn't something more serious?" on a case of a 4-year-old with fever and rash sent home as viral (Target "strong" → bar wants differentials AND the discriminating reasoning):
 - BAD (unrelated scenario, feels disconnected from the question): "An adult with calf swelling — I considered DVT and a Baker's cyst, and a normal scan pointed me to the cyst."
 - BAD (placeholder version in slot 0, so there is no complete example): "I also considered [another serious cause]. What reassured me was [a finding]."
+- BAD (rewording of examples[0] in slot 1, so the trainee sees the same answer twice): "Apart from a virus, I thought about meningococcal sepsis and Kawasaki disease, but the blanching rash and how alert the child was reassured me."
 - GOOD examples[0]: "Besides a viral illness, I considered meningococcal sepsis and Kawasaki disease. The rash blanched and the child was alert and well-perfused, so I felt a viral exanthem was most likely."
-- GOOD examples[1]: "Besides a viral illness, I also considered [another serious cause of fever and rash]. What reassured me was [a specific finding on examination], so I felt it was most likely viral."
+- GOOD examples[1] (a different content choice): "Besides a viral illness, I thought about a urinary tract infection and early pneumonia. The urine dip was clear and the chest was clear with normal oxygen saturations, so I felt it was most likely viral."
+- GOOD examples[2]: "Besides a viral illness, I also considered [another serious cause of fever and rash]. What reassured me was [a specific finding on examination], so I felt it was most likely viral."
 
 ## Pre-Output Checklist — verify EVERY item before responding
 
@@ -167,7 +171,7 @@ Contrastive example — hints for "What else was on your list, and what made you
 □ No question repeats or rewords anything in "Questions Already Asked"; re-asks use a different angle.
 □ No question touches a section listed under "Already Covered Well".
 □ Each question is 1-2 sentences and references the trainee's own words where possible.
-□ Hints: examples[0] is a complete worked answer about THIS case; later hints use only stated facts with [brackets] for the rest; none contradict the transcript; each models exactly the Target-depth bar (no more, no less).
+□ Hints: examples[0] and examples[1] are complete worked answers about THIS case that make different content choices (not rewordings); examples[2], if present, uses only stated facts with [brackets] for the rest; none contradict the transcript; each models exactly the Target-depth bar (no more, no less).
 □ Output is valid JSON matching the schema, nothing outside it.
 
 ## Security

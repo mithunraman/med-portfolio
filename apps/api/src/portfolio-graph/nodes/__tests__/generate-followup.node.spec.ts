@@ -189,6 +189,24 @@ describe('GenerateFollowupNode', () => {
         expect(prefix).toContain(`"${value}"`);
       }
     });
+
+    it('advertises two different complete worked answers before the bracketed hint', async () => {
+      const [systemInstructions] = await promptFor(makeState());
+      const prefix = String(systemInstructions.content);
+
+      // The slot contract lives in three places (Output Format, Hint Rules, schema
+      // description); pin the first and last so they cannot drift from each other.
+      expect(prefix).toContain(
+        '"examples": ["<complete worked answer>", "<a different complete worked answer>", ' +
+          '"<[bracketed] version, optional>"]'
+      );
+
+      const examplesDescription =
+        contextualisedQuestionSchema.shape.hints.shape.examples.description ?? '';
+      expect(examplesDescription).toContain('Indexes 0 and 1 are each a COMPLETE worked answer');
+      expect(examplesDescription).toContain('DIFFERENT');
+      expect(examplesDescription).toContain('Index 2 (optional)');
+    });
   });
 
   describe('covered-list excludes below-threshold sections (Phase 1)', () => {

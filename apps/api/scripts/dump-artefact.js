@@ -207,7 +207,7 @@ function printSummary(dump, section) {
   L('================================================================');
   L(`ARTEFACT  xid=${artefact.xid}  _id=${artefact._id}`);
   L('================================================================');
-  L(`  user            : ${user ? `${user.email || user.xid || user._id}` : '(missing)'}`);
+  L(`  user            : ${user ? `${user.xid || user._id}` : '(missing)'}`);
   L(`  specialty/stage : ${artefact.specialty} / ${artefact.trainingStage || '—'}`);
   L(`  status          : ${artefact.status}   type=${artefact.artefactType ?? '—'}`);
   L(`  title           : ${artefact.title ?? '—'}`);
@@ -216,9 +216,8 @@ function printSummary(dump, section) {
   for (const f of artefact.composedDocument || []) {
     L(`     • [${f.sectionId}] ${truncate(f.text, 160)}`);
   }
-  L(`  completeness    : complete=${artefact.completeness?.complete ?? '—'}  unmet=${
-    artefact.completeness?.unmetSections?.length ?? 0
-  }`);
+  L(`  completeness    : complete=${artefact.completeness?.complete ?? '—'}  unmet=${artefact.completeness?.unmetSections?.length ?? 0
+    }`);
   for (const s of artefact.completeness?.unmetSections || []) {
     L(`     ✗ [${s.sectionId}] ${s.label ?? '—'}  (${s.status})`);
   }
@@ -230,9 +229,8 @@ function printSummary(dump, section) {
   L(`MESSAGES : ${messages.length}`);
   for (const m of messages) {
     const body = m.content || m.cleanedContent || m.rawContent || '';
-    L(`  · role=${m.role} type=${m.messageType} status=${m.status}${m.media ? ' [media]' : ''}${
-      m.question ? ' [question]' : ''
-    }`);
+    L(`  · role=${m.role} type=${m.messageType} status=${m.status}${m.media ? ' [media]' : ''}${m.question ? ' [question]' : ''
+      }`);
     if (body) L(`      ${truncate(body, 200)}`);
     // The `content` above is only the AI's preamble; the actual question text
     // lives on `question.prompts[].text` (free_text) or the option keys (select).
